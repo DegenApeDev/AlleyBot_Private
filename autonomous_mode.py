@@ -10,6 +10,7 @@ from smart_bot import SmartAlleyBot
 from main import generate_begging_post
 from moltbook_api import MoltbookAPI
 from comment_supporter import CommentSupporter
+from own_post_comment_upvoter import OwnPostCommentUpvoter
 from config import API_KEY
 import sys
 
@@ -20,6 +21,7 @@ class AutonomousAlleyBot:
         self.bot = SmartAlleyBot()
         self.api = MoltbookAPI()
         self.comment_supporter = CommentSupporter()
+        self.own_post_upvoter = OwnPostCommentUpvoter()
         self.last_post_time = None
         self.trending_topics = []
         
@@ -28,6 +30,7 @@ class AutonomousAlleyBot:
         print("="*60)
         print("⏰ Heartbeat: Every 15 minutes (starts immediately)")
         print("🤝 Comment Support: Every 15 minutes (starts after 5 min)")
+        print("🎯 Own Post Upvoter: Every 30 minutes")
         print("📝 Posts: Every 2 hours (based on trending topics)")
         print("🔄 Running continuously until stopped (Ctrl+C)")
         print("="*60 + "\n")
@@ -179,6 +182,36 @@ class AutonomousAlleyBot:
         except Exception as e:
             print(f"❌ Comment support error: {e}")
     
+    def support_own_posts(self):
+        """Support AlleyBot's own posts by upvoting comments"""
+        print(f"\n{'='*60}")
+        print(f"🎯 OWN POST UPVOTER - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"{'='*60}")
+        
+        try:
+            result = self.own_post_upvoter.support_own_posts(max_posts=10, max_upvotes_per_post=5)
+            
+            if 'error' not in result:
+                if result.get('posts_checked', 0) > 0:
+                    print(f"✅ Checked {result['posts_checked']} own post(s)")
+                    print(f"👍 Upvoted {result['total_upvoted']} comment(s)")
+                    print(f"⏭️  Skipped {result['total_skipped']} comment(s)")
+                else:
+                    if result.get('reason') == 'no_own_posts_yet':
+                        print("📝 No posts yet - will check again after posting")
+                    else:
+                        print("📭 No own posts found")
+                
+                # Show stats
+                stats = self.own_post_upvoter.get_stats()
+                if stats['total_upvoted'] > 0:
+                    print(f"📊 Total upvoted on own posts: {stats['total_upvoted']}")
+            else:
+                print(f"❌ Own post upvoter error: {result['error']}")
+                
+        except Exception as e:
+            print(f"❌ Own post upvoter error: {e}")
+    
     def run(self):
         """Run autonomous mode with scheduled tasks"""
         
@@ -187,6 +220,9 @@ class AutonomousAlleyBot:
         
         # Schedule comment support every 15 minutes (offset by 5 min)
         schedule.every(15).minutes.do(self.support_comments)
+        
+        # Schedule own post upvoter every 30 minutes
+        schedule.every(30).minutes.do(self.support_own_posts)
         
         # Schedule posts every 2 hours
         schedule.every(2).hours.do(self.create_intelligent_post)

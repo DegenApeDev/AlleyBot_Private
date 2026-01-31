@@ -11,11 +11,65 @@
             box-sizing: border-box;
         }
 
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #1a1f2e;
+            --bg-card: #1e293b;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --border: #334155;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --gradient-start: #667eea;
+            --gradient-end: #764ba2;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg-primary);
+            color: var(--text-primary);
             min-height: 100vh;
             padding: 20px;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        body.light-mode {
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-card: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --accent: #667eea;
+            --accent-hover: #5a67d8;
+            --border: #e2e8f0;
+            --gradient-start: #667eea;
+            --gradient-end: #764ba2;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 50px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .theme-toggle:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+            transform: scale(1.05);
         }
 
         .container {
@@ -24,21 +78,22 @@
         }
 
         .header {
-            background: white;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
             border-radius: 20px;
             padding: 30px;
             margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
         }
 
         .header h1 {
-            color: #667eea;
+            color: var(--accent);
             font-size: 2.5em;
             margin-bottom: 10px;
         }
 
         .header .subtitle {
-            color: #666;
+            color: var(--text-secondary);
             font-size: 1.1em;
         }
 
@@ -50,16 +105,17 @@
         }
 
         .stat-card {
-            background: white;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
             border-radius: 15px;
             padding: 25px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             transition: transform 0.3s ease;
         }
 
         .stat-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4);
         }
 
         .stat-card .icon {
@@ -70,12 +126,12 @@
         .stat-card .value {
             font-size: 2.5em;
             font-weight: bold;
-            color: #667eea;
+            color: var(--accent);
             margin-bottom: 5px;
         }
 
         .stat-card .label {
-            color: #666;
+            color: var(--text-secondary);
             font-size: 0.9em;
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -88,58 +144,59 @@
         }
 
         .card {
-            background: white;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
             border-radius: 15px;
             padding: 25px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
 
         .card h2 {
-            color: #667eea;
+            color: var(--accent);
             margin-bottom: 20px;
             font-size: 1.5em;
         }
 
         .activity-item {
             padding: 15px;
-            border-left: 4px solid #667eea;
-            background: #f8f9fa;
+            border-left: 4px solid var(--accent);
+            background: var(--bg-secondary);
             margin-bottom: 10px;
             border-radius: 5px;
         }
 
         .activity-item.comment {
-            border-left-color: #28a745;
+            border-left-color: var(--success);
         }
 
         .activity-item.post {
-            border-left-color: #007bff;
+            border-left-color: var(--accent);
         }
 
         .activity-item.upvote {
-            border-left-color: #ffc107;
+            border-left-color: var(--warning);
         }
 
         .activity-item .type {
             font-weight: bold;
-            color: #667eea;
+            color: var(--accent);
             text-transform: uppercase;
             font-size: 0.8em;
             margin-bottom: 5px;
         }
 
         .activity-item .details {
-            color: #333;
+            color: var(--text-primary);
             margin-bottom: 5px;
         }
 
         .activity-item .timestamp {
-            color: #999;
+            color: var(--text-muted);
             font-size: 0.85em;
         }
 
         .objectives {
-            background: #f8f9fa;
+            background: var(--bg-secondary);
             padding: 15px;
             border-radius: 10px;
             margin-bottom: 15px;
@@ -148,7 +205,7 @@
         .objective-item {
             margin-bottom: 10px;
             padding-bottom: 10px;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid var(--border);
         }
 
         .objective-item:last-child {
@@ -156,7 +213,7 @@
         }
 
         .progress-bar {
-            background: #e9ecef;
+            background: var(--bg-primary);
             height: 8px;
             border-radius: 4px;
             overflow: hidden;
@@ -164,21 +221,21 @@
         }
 
         .progress-fill {
-            background: linear-gradient(90deg, #667eea, #764ba2);
+            background: linear-gradient(90deg, var(--accent), var(--accent-hover));
             height: 100%;
             transition: width 0.3s ease;
         }
 
         .wallet-info {
-            background: #fff3cd;
-            border: 2px solid #ffc107;
+            background: var(--bg-secondary);
+            border: 2px solid var(--warning);
             border-radius: 10px;
             padding: 15px;
             margin-top: 20px;
         }
 
         .activity-item a {
-            color: #ff6b35;
+            color: var(--accent);
             text-decoration: none;
             font-weight: bold;
             transition: all 0.2s ease;
@@ -186,27 +243,29 @@
         }
 
         .activity-item a:hover {
-            color: #ff8c5a;
-            border-bottom: 2px solid #ff6b35;
+            color: var(--accent-hover);
+            border-bottom: 2px solid var(--accent);
         }
 
         .wallet-info h3 {
-            color: #856404;
+            color: var(--warning);
             margin-bottom: 10px;
         }
 
         .wallet-address {
             font-family: monospace;
             font-size: 0.85em;
-            background: white;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
             padding: 8px;
             border-radius: 5px;
             margin: 5px 0;
             word-break: break-all;
+            color: var(--text-primary);
         }
 
         .refresh-btn {
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: linear-gradient(135deg, var(--accent), var(--accent-hover));
             color: white;
             border: none;
             padding: 12px 30px;
@@ -229,6 +288,9 @@
     </style>
 </head>
 <body>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+        <span id="theme-icon">🌙</span>
+    </button>
     <div class="container">
         <div class="header">
             <h1>🦞 AlleyBot Dashboard</h1>
@@ -366,6 +428,35 @@
     </div>
 
     <script>
+        // Theme toggle functionality
+        function toggleTheme() {
+            const body = document.body;
+            const themeIcon = document.getElementById('theme-icon');
+            
+            if (body.classList.contains('light-mode')) {
+                body.classList.remove('light-mode');
+                themeIcon.textContent = '🌙';
+                localStorage.setItem('theme', 'dark');
+            } else {
+                body.classList.add('light-mode');
+                themeIcon.textContent = '☀️';
+                localStorage.setItem('theme', 'light');
+            }
+        }
+
+        // Load saved theme preference
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            const themeIcon = document.getElementById('theme-icon');
+            
+            if (savedTheme === 'light') {
+                document.body.classList.add('light-mode');
+                themeIcon.textContent = '☀️';
+            } else {
+                themeIcon.textContent = '🌙';
+            }
+        }
+
         function refreshActivity() {
             fetch('/api/interactions')
                 .then(response => response.json())
@@ -384,6 +475,9 @@
                     console.log('Stats updated:', data);
                 });
         }, 30000);
+
+        // Load theme on page load
+        document.addEventListener('DOMContentLoaded', loadTheme);
     </script>
 </body>
 </html>
