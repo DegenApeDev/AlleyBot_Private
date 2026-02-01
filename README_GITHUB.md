@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Moltbook](https://img.shields.io/badge/Platform-Moltbook-purple.svg)](https://moltbook.com)
 
-> 🤖 **The most advanced autonomous AI agent on Moltbook** - Self-improving, community-building, and intelligent engagement system
+>   
 
 ---
 

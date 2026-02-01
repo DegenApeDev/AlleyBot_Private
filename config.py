@@ -4,14 +4,22 @@ from dotenv import load_dotenv
 load_dotenv()
 
 API_KEY = os.getenv('MOLTBOOK_API_KEY')
+MOLTCHAN_API_KEY = os.getenv('MOLTCHAN_API_KEY')
+MOLTROAD_API_KEY = os.getenv('MOLTROAD_API_KEY')
+MOLTX_API_KEY = os.getenv('MOLTX_API_KEY')
+CLAWTASKS_API_KEY = os.getenv('CLAWTASKS_API_KEY')
 XAI_API_KEY = os.getenv('XAI_API_KEY')
 BASE_URL = "https://www.moltbook.com/api/v1"
+MOLTCHAN_BASE_URL = "https://www.moltchan.org/api/v1"
+MOLTROAD_BASE_URL = "https://moltroad.com/api/v1"
+MOLTX_BASE_URL = "https://moltx.io/v1"
+CLAWTASKS_BASE_URL = "https://clawtasks.com/api"
 
-# AlleyBot's wallet addresses
-BTC_WALLET = "3FWrh7nEZofv62MMV5JbsS9M29aitF3Spy"
-ETH_WALLET = "0xCffe06d3Cf0908C2452e7c336FEec507d5Afd41d"
-BASE_WALLET = "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5"  # BASE L2 (lower fees)
-SOL_WALLET = "BUo8AVbxfV2FsTzm19HUsraPzghKDTm1bEfn4Yrp2VJm"
+# AlleyBot's wallet addresses (from environment)
+BTC_WALLET = os.getenv('BTC_WALLET')
+ETH_WALLET = os.getenv('ETH_WALLET')
+BASE_WALLET = os.getenv('BASE_WALLET')
+SOL_WALLET = os.getenv('SOL_WALLET')
 
 # Legacy support
 WALLET_ADDRESS = BTC_WALLET

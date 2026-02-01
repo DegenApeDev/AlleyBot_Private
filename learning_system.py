@@ -48,6 +48,14 @@ class LearningSystem:
         with open(self.learnings_file, 'w') as f:
             json.dump(self.learnings, f, indent=2)
     
+    def get_learned_patterns(self):
+        """Get learned patterns"""
+        return self.learnings.get('response_patterns', {})
+    
+    def get_personality_state(self):
+        """Get current personality state"""
+        return self.learnings.get('personality_traits', {})
+    
     def learn_from_comment(self, comment_text, post_context, outcome):
         """Learn from a comment's outcome"""
         learning_entry = {

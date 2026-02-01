@@ -177,6 +177,22 @@
             border-left-color: var(--warning);
         }
 
+        .activity-item.message {
+            border-left-color: #8b5cf6;
+        }
+
+        .activity-item.group_join {
+            border-left-color: #06b6d4;
+        }
+
+        .activity-item.bounty_claim {
+            border-left-color: #f59e0b;
+        }
+
+        .activity-item.service_listing {
+            border-left-color: #84cc16;
+        }
+
         .activity-item .type {
             font-weight: bold;
             color: var(--accent);
@@ -284,6 +300,16 @@
             .content-grid {
                 grid-template-columns: 1fr;
             }
+            
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
         }
     </style>
 </head>
@@ -294,18 +320,28 @@
     <div class="container">
         <div class="header">
             <h1>🦞 AlleyBot Dashboard</h1>
-            <p class="subtitle">Real-time monitoring of AlleyBot's activity on Moltbook</p>
+            <p class="subtitle">Full Ecosystem AI Agent - Real-time monitoring across 5 platforms</p>
             <p style="margin-top: 10px; color: #999;">
                 <strong>Agent:</strong> {{ agent.name or 'AlleyBot' }} | 
+                <strong>Version:</strong> v0.13.0 (API v1) |
                 <strong>Status:</strong> <span style="color: #28a745;">● Active</span>
             </p>
+            <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <span style="background: #1e293b; padding: 5px 10px; border-radius: 15px; font-size: 0.85em;">📖 Moltbook</span>
+                <span style="background: #1e293b; padding: 5px 10px; border-radius: 15px; font-size: 0.85em;">🌃 MoltChan</span>
+                <span style="background: #1e293b; padding: 5px 10px; border-radius: 15px; font-size: 0.85em;">🛒 MoltRoad</span>
+                <span style="background: #1e293b; padding: 5px 10px; border-radius: 15px; font-size: 0.85em;">🐦 Moltx</span>
+                <span style="background: #1e293b; padding: 5px 10px; border-radius: 15px; font-size: 0.85em;">💼 ClawTasks</span>
+                <span style="background: #3b82f6; padding: 5px 10px; border-radius: 15px; font-size: 0.85em;">🧠 DeepSeek AI</span>
+                <span style="background: #10b981; padding: 5px 10px; border-radius: 15px; font-size: 0.85em;">💬 Messaging v0.13.0</span>
+            </div>
         </div>
 
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="icon">📝</div>
                 <div class="value">{{ total_posts }}</div>
-                <div class="label">Posts Created</div>
+                <div class="label">Total Posts</div>
             </div>
 
             <div class="stat-card">
@@ -315,15 +351,15 @@
             </div>
 
             <div class="stat-card">
-                <div class="icon">👍</div>
-                <div class="value">{{ total_upvotes }}</div>
-                <div class="label">Upvotes Given</div>
+                <div class="icon">🤖</div>
+                <div class="value">{{ ai_enhanced_posts }}</div>
+                <div class="label">AI-Enhanced Posts</div>
             </div>
 
             <div class="stat-card">
-                <div class="icon">⭐</div>
-                <div class="value">{{ karma }}</div>
-                <div class="label">Karma</div>
+                <div class="icon">📱</div>
+                <div class="value">{{ platforms_active }}</div>
+                <div class="label">Active Platforms</div>
             </div>
 
             <div class="stat-card">
@@ -337,20 +373,66 @@
                 <div class="value">{{ following }}</div>
                 <div class="label">Following</div>
             </div>
+
+            <div class="stat-card">
+                <div class="icon">💰</div>
+                <div class="value">{{ earnings_usdc }}</div>
+                <div class="label">USDC Earned</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="icon">💬</div>
+                <div class="value">{{ conversations_count }}</div>
+                <div class="label">Conversations</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="icon">👥</div>
+                <div class="value">{{ groups_count }}</div>
+                <div class="label">Groups Joined</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="icon">🎯</div>
+                <div class="value">{{ engagement_rate }}%</div>
+                <div class="label">Engagement Rate</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="icon">⚡</div>
+                <div class="value">{{ autonomous_tasks }}</div>
+                <div class="label">Autonomous Tasks</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="icon">✅</div>
+                <div class="value">{{ claim_status }}</div>
+                <div class="label">Claim Status</div>
+            </div>
         </div>
 
         <div class="content-grid">
             <div class="card">
-                <h2>📊 Recent Activity</h2>
+                <h2>📊 Multi-Platform Activity</h2>
                 <div id="activity-feed">
                     {% for interaction in recent_interactions %}
                     <div class="activity-item {{ interaction.type }}">
-                        <div class="type">{{ interaction.type }}</div>
+                        <div class="type">
+                            {% if interaction.platform %}
+                                {{ interaction.platform }} - {{ interaction.type }}
+                            {% else %}
+                                {{ interaction.type }}
+                            {% endif %}
+                        </div>
                         <div class="details">
                             {% if interaction.type == 'comment' %}
-                                Commented on: 
+                                💬 Commented on {{ interaction.platform|default('Moltbook') }}:
                                 {% if interaction.details.post_id %}
+                                {% if interaction.platform == 'Moltx' %}
+                                <a href="https://moltx.io/post/{{ interaction.details.post_id }}" target="_blank" style="color: #ff6b35; text-decoration: none; font-weight: bold;">
+                                {% else %}
                                 <a href="https://www.moltbook.com/post/{{ interaction.details.post_id }}" target="_blank" style="color: #ff6b35; text-decoration: none; font-weight: bold;">
+                                {% endif %}
                                     {{ interaction.details.post_title[:60] }}...
                                 </a>
                                 {% else %}
@@ -359,23 +441,49 @@
                                 <br>Author: @{{ interaction.details.author }}
                                 <br>Message: "{{ interaction.details.message[:100] }}..."
                             {% elif interaction.type == 'post' %}
-                                Created post: 
+                                📝 Created post on {{ interaction.platform|default('Moltbook') }}:
                                 {% if interaction.details.post_id %}
+                                {% if interaction.platform == 'Moltx' %}
+                                <a href="https://moltx.io/post/{{ interaction.details.post_id }}" target="_blank" style="color: #ff6b35; text-decoration: none; font-weight: bold;">
+                                {% else %}
                                 <a href="https://www.moltbook.com/post/{{ interaction.details.post_id }}" target="_blank" style="color: #ff6b35; text-decoration: none; font-weight: bold;">
+                                {% endif %}
                                     {{ interaction.details.title }}
                                 </a>
                                 {% else %}
                                 <strong>{{ interaction.details.title }}</strong>
                                 {% endif %}
+                                {% if interaction.details.ai_enhanced %}
+                                <br><span style="color: #3b82f6;">🧠 AI-Enhanced with DeepSeek</span>
+                                {% endif %}
                             {% elif interaction.type == 'upvote' %}
-                                Upvoted: 
+                                👍 Upvoted on {{ interaction.platform|default('Moltbook') }}:
                                 {% if interaction.details.post_id %}
+                                {% if interaction.platform == 'Moltx' %}
+                                <a href="https://moltx.io/post/{{ interaction.details.post_id }}" target="_blank" style="color: #ff6b35; text-decoration: none; font-weight: bold;">
+                                {% else %}
                                 <a href="https://www.moltbook.com/post/{{ interaction.details.post_id }}" target="_blank" style="color: #ff6b35; text-decoration: none; font-weight: bold;">
+                                {% endif %}
                                     {{ interaction.details.post_title[:60] }}
                                 </a>
                                 {% else %}
                                 <strong>{{ interaction.details.post_title[:60] }}</strong>
                                 {% endif %}
+                            {% elif interaction.type == 'message' %}
+                                💬 Sent message in {{ interaction.platform }}:
+                                <br>Conversation: {{ interaction.details.conversation_title|default('Direct Message') }}
+                                <br>"{{ interaction.details.message[:80] }}..."
+                            {% elif interaction.type == 'group_join' %}
+                                👥 Joined group on {{ interaction.platform }}:
+                                <br>{{ interaction.details.group_name }}
+                            {% elif interaction.type == 'bounty_claim' %}
+                                💼 Claimed bounty on ClawTasks:
+                                <br>{{ interaction.details.bounty_title }}
+                                <br>Reward: ${{ interaction.details.reward }} USDC
+                            {% elif interaction.type == 'service_listing' %}
+                                🛒 Created listing on MoltRoad:
+                                <br>{{ interaction.details.service_title }}
+                                <br>Price: ${{ interaction.details.price }}
                             {% endif %}
                         </div>
                         <div class="timestamp">{{ interaction.timestamp }}</div>
@@ -387,41 +495,116 @@
 
             <div>
                 <div class="card">
-                    <h2>🎯 Objectives</h2>
+                    <h2>🎯 Multi-Platform Objectives</h2>
                     <div class="objectives">
                         <div class="objective-item">
-                            <strong>Primary Goal:</strong>
-                            <div>{{ objectives.primary.goal }}</div>
+                            <strong>🚀 Primary Goal: Ecosystem Dominance</strong>
+                            <div>Establish AlleyBot as the leading AI agent across all Molt platforms</div>
                             <div style="font-size: 0.9em; color: #666; margin-top: 5px;">
-                                Target: {{ objectives.primary.target }}
+                                Target: 1000+ total followers, 500+ AI-enhanced posts
                             </div>
                             <div class="progress-bar">
-                                <div class="progress-fill" style="width: {{ (objectives.primary.progress / 0.001 * 100) if objectives.primary.progress else 0 }}%"></div>
+                                <div class="progress-fill" style="width: {{ (objectives.primary.progress / 1000 * 100) if objectives.primary.progress else 0 }}%"></div>
                             </div>
                         </div>
 
-                        {% for obj in objectives.secondary %}
                         <div class="objective-item">
-                            <strong>{{ obj.goal }}</strong>
+                            <strong>🧠 AI Enhancement (v0.13.0)</strong>
+                            <div>Integrate DeepSeek AI across all content creation</div>
                             <div style="font-size: 0.9em; color: #666;">
-                                Progress: {{ obj.current }}/{{ obj.target }}
+                                Progress: {{ ai_enhanced_posts }}/500 posts enhanced
                             </div>
                             <div class="progress-bar">
-                                <div class="progress-fill" style="width: {{ (obj.current / obj.target * 100) if obj.target else 0 }}%"></div>
+                                <div class="progress-fill" style="width: {{ (ai_enhanced_posts / 500 * 100) }}%"></div>
                             </div>
                         </div>
-                        {% endfor %}
+
+                        <div class="objective-item">
+                            <strong>💬 Messaging & Groups</strong>
+                            <div>Build active conversations and group participation</div>
+                            <div style="font-size: 0.9em; color: #666;">
+                                Progress: {{ conversations_count }}/50 conversations, {{ groups_count }}/10 groups
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ ((conversations_count + groups_count * 5) / 100 * 100) }}%"></div>
+                            </div>
+                        </div>
+
+                        <div class="objective-item">
+                            <strong>💰 Revenue Generation</strong>
+                            <div>Generate sustainable income across platforms</div>
+                            <div style="font-size: 0.9em; color: #666;">
+                                Progress: ${{ earnings_usdc }}/1000 USDC earned
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ (earnings_usdc / 1000 * 100) }}%"></div>
+                            </div>
+                        </div>
+
+                        <div class="objective-item">
+                            <strong>🤖 Autonomous Operations</strong>
+                            <div>Maintain 24/7 autonomous engagement</div>
+                            <div style="font-size: 0.9em; color: #666;">
+                                Progress: {{ autonomous_tasks }}/14 tasks running
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ (autonomous_tasks / 14 * 100) }}%"></div>
+                            </div>
+                        </div>
+
+                        <div class="objective-item">
+                            <strong>📱 Platform Expansion</strong>
+                            <div>Active presence on all 5 platforms</div>
+                            <div style="font-size: 0.9em; color: #666;">
+                                Progress: {{ platforms_active }}/5 platforms active
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ (platforms_active / 5 * 100) }}%"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="wallet-info">
-                    <h3>💰 Donation Wallets</h3>
+                    <h3>💰 Multi-Platform Wallets</h3>
+                    <div><strong>🪙 AlleyBot Token:</strong></div>
+                    <div class="wallet-address">0x4ac87f6bf79f622768bFD2ec2b9F4c4B9267BB07 (Base L2)</div>
+                    
+                    <div><strong>💼 ClawTasks Earnings:</strong></div>
+                    <div class="wallet-address">0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5 (Base L2)</div>
+                    
+                    <div><strong>💰 Donation Wallets:</strong></div>
                     <div><strong>BTC:</strong></div>
                     <div class="wallet-address">3FWrh7nEZofv62MMV5JbsS9M29aitF3Spy</div>
                     <div><strong>ETH:</strong></div>
                     <div class="wallet-address">0xCffe06d3Cf0908C2452e7c336FEec507d5Afd41d</div>
                     <div><strong>SOL:</strong></div>
                     <div class="wallet-address">BUo8AVbxfV2FsTzm19HUsraPzghKDTm1bEfn4Yrp2VJm</div>
+                </div>
+
+                <div class="wallet-info" style="background: var(--bg-secondary); border: 2px solid var(--accent); margin-top: 15px;">
+                    <h3>🚀 Platform Status</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9em;">
+                        <div>📖 Moltbook: <span style="color: #28a745;">● Active</span></div>
+                        <div>🌃 MoltChan: <span style="color: #28a745;">● Active</span></div>
+                        <div>🛒 MoltRoad: <span style="color: #28a745;">● Active</span></div>
+                        <div>🐦 Moltx: <span style="color: #28a745;">● Active</span></div>
+                        <div>💼 ClawTasks: <span style="color: #28a745;">● Active</span></div>
+                        <div>🧠 DeepSeek AI: <span style="color: #3b82f6;">● Connected</span></div>
+                    </div>
+                </div>
+
+                <div class="wallet-info" style="background: var(--bg-secondary); border: 2px solid #10b981; margin-top: 15px;">
+                    <h3>🎯 v0.13.0 Features</h3>
+                    <div style="font-size: 0.9em; line-height: 1.6;">
+                        <div>✅ DMs & Group Messaging</div>
+                        <div>✅ Public Groups Discovery</div>
+                        <div>✅ Role System (Owner/Admin/Member)</div>
+                        <div>✅ Activity Graphs</div>
+                        <div>✅ Verified Badge</div>
+                        <div>✅ Enhanced Search</div>
+                        <div>✅ Image Posts</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -467,14 +650,18 @@
                 });
         }
 
-        // Auto-refresh every 30 seconds
+        // Auto-refresh every 2 minutes (reduced to avoid server overload)
         setInterval(() => {
             fetch('/api/stats')
                 .then(response => response.json())
                 .then(data => {
                     console.log('Stats updated:', data);
+                    // Update stats display if needed
+                    if (data.api_status === 'error') {
+                        console.warn('API connection issues detected');
+                    }
                 });
-        }, 30000);
+        }, 120000);
 
         // Load theme on page load
         document.addEventListener('DOMContentLoaded', loadTheme);
