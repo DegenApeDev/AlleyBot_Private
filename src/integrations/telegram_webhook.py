@@ -51,29 +51,34 @@ class TelegramWebhook:
         except Exception as e:
             print(f"❌ Telegram webhook error: {e}")
     
-    def start_polling(self):
-        """Start Telegram polling (fallback if webhook not available)"""
+    async def start_polling_async(self):
+        """Start Telegram polling as async task"""
         try:
             if self.telegram_plugin and hasattr(self.telegram_plugin, 'application'):
                 print("📱 Starting Telegram bot polling...")
-                # Start the bot in a background thread with its own event loop
-                import threading
+                # Initialize and start polling
+                await self.telegram_plugin.application.initialize()
+                await self.telegram_plugin.application.start()
                 
-                def run_bot():
-                    try:
-                        import asyncio
-                        # Create new event loop for this thread
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        # Run the bot
-                        self.telegram_plugin.application.run_polling(drop_pending_updates=True)
-                    except Exception as e:
-                        print(f"❌ Telegram bot error: {e}")
+                # Start polling in background
+                asyncio.create_task(
+                    self.telegram_plugin.application.updater.start_polling(drop_pending_updates=True)
+                )
                 
-                bot_thread = threading.Thread(target=run_bot, daemon=True)
-                bot_thread.start()
                 self.telegram_plugin.is_running = True
-                print("✅ Telegram bot polling started in background")
+                print("✅ Telegram bot polling started")
+            else:
+                print("⚠️ Telegram plugin not available")
+        except Exception as e:
+            print(f"❌ Telegram polling error: {e}")
+    
+    def start_polling(self):
+        """Start Telegram polling (sync wrapper)"""
+        try:
+            if self.telegram_plugin and hasattr(self.telegram_plugin, 'application'):
+                # Just mark as ready - actual polling will be started by event runner
+                self.telegram_plugin.is_running = True
+                print("📱 Telegram bot ready for polling")
             else:
                 print("⚠️ Telegram plugin not available")
         except Exception as e:

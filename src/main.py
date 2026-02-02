@@ -70,8 +70,8 @@ class ProductionAlleyBot:
             print("  • Webhook-Ready Integrations")
             print("="*60 + "\n")
             
-            # Start Telegram polling (will be replaced with webhook in production)
-            self.telegram_webhook.start_polling()
+            # Start Telegram polling asynchronously
+            await self.telegram_webhook.start_polling_async()
             
             # Start event runner
             await self.event_runner.start()
