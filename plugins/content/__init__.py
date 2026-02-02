@@ -1,3 +1,0 @@
-"""
-Content Plugins for AlleyBot
-"""
