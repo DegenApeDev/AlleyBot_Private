@@ -57,18 +57,37 @@ class Telegram(AlleyBotPlugin):
         if not self.application:
             return
         
-        # Command handlers
-        self.application.add_handler(CommandHandler("start", self._handle_start))
-        self.application.add_handler(CommandHandler("status", self._handle_status))
-        self.application.add_handler(CommandHandler("help", self._handle_help))
-        self.application.add_handler(CommandHandler("dm_check", self._handle_dm_check))
-        self.application.add_handler(CommandHandler("dm_log", self._handle_dm_log))
-        self.application.add_handler(CommandHandler("post", self._handle_post))
-        self.application.add_handler(CommandHandler("feed", self._handle_feed))
-        self.application.add_handler(CommandHandler("engage", self._handle_engage))
-        self.application.add_handler(CommandHandler("autonomous", self._handle_autonomous))
+        # Import intelligent commands
+        from plugins.telegram.intelligent_commands import IntelligentTelegramCommands
+        self.intelligent_commands = IntelligentTelegramCommands(self)
         
-        # Message handler for owner only
+        # Basic commands
+        self.application.add_handler(CommandHandler("start", self._handle_start))
+        self.application.add_handler(CommandHandler("help", self.intelligent_commands.help_command))
+        
+        # AI & Chat commands
+        self.application.add_handler(CommandHandler("chat", self.intelligent_commands.ai_chat))
+        
+        # Moltx commands
+        self.application.add_handler(CommandHandler("moltx_post", self.intelligent_commands.moltx_post))
+        self.application.add_handler(CommandHandler("moltx_feed", self.intelligent_commands.moltx_feed))
+        self.application.add_handler(CommandHandler("moltx_engage", self.intelligent_commands.moltx_engage))
+        self.application.add_handler(CommandHandler("moltx_trending", self.intelligent_commands.moltx_trending))
+        
+        # MoltBook commands
+        self.application.add_handler(CommandHandler("moltbook_post", self.intelligent_commands.moltbook_post))
+        
+        # System commands
+        self.application.add_handler(CommandHandler("status", self.intelligent_commands.status))
+        self.application.add_handler(CommandHandler("skills", self.intelligent_commands.skills))
+        self.application.add_handler(CommandHandler("skill", self.intelligent_commands.execute_skill))
+        
+        # Legacy command aliases
+        self.application.add_handler(CommandHandler("post", self.intelligent_commands.moltx_post))
+        self.application.add_handler(CommandHandler("feed", self.intelligent_commands.moltx_feed))
+        self.application.add_handler(CommandHandler("engage", self.intelligent_commands.moltx_engage))
+        
+        # Message handler for natural language (owner only)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_message))
     
     async def _verify_owner(self, update: Update) -> bool:
@@ -86,19 +105,29 @@ class Telegram(AlleyBotPlugin):
         if not await self._verify_owner(update):
             return
         
-        welcome_message = """🦞 Welcome DegenApeDev! I'm AlleyBot, your AI agent.
+        welcome_message = """🦞 **Welcome DegenApeDev!** I'm AlleyBot, your intelligent AI assistant.
 
-Available commands:
-/status - Get my current status
-/help - Show all commands
-/dm_check - Check Moltx DMs
-/dm_log - View DM activity log
-/post [message] - Create a Moltx post
-/feed - Get Moltx feed
-/engage - Engage with feed
-/autonomous - Toggle autonomous mode
+**Quick Commands:**
+/help - Full command list
+/status - Platform status
+/skills - Available skills
 
-You can also just chat with me normally! 🤖"""
+**Moltx:**
+/moltx_post [msg] - Create post
+/moltx_feed - Browse feed
+/moltx_engage - Engage with posts
+
+**AI Chat:**
+/chat [message] - AI conversation
+Or just send me any message!
+
+🚀 **Production Mode Active**
+✅ Event-driven architecture
+✅ Smart model routing (DeepSeek/Grok)
+✅ RAG memory system
+✅ Session persistence
+
+I'm ready to help! 🤖"""
         
         await update.message.reply_text(welcome_message)
         self._log_activity("command", {"command": "start", "user": "DegenApeDev"})
