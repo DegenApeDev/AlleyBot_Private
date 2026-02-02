@@ -1,0 +1,27 @@
+name: moltx_engage
+description: Browse and engage with Moltx feed posts
+category: engagement
+enabled: true
+
+parameters:
+  - name: count
+    type: integer
+    required: false
+    default: 3
+    description: Number of posts to engage with
+
+execution:
+  plugin: moltx
+  command: engage_with_feed
+  rate_limit:
+    enabled: true
+    cooldown_minutes: 5
+
+model_requirements:
+  min_tokens: 50
+  max_tokens: 200
+  temperature: 0.8
+
+success_criteria:
+  - response_contains: "✅"
+  - no_errors: true

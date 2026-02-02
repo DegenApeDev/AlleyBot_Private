@@ -145,9 +145,17 @@ class AlleyBotCore:
         for command in sorted(self.plugin_manager.commands.keys()):
             print(f"  • {command}")
     
-    def run_autonomous(self, enhanced=True):
-        """Run autonomous mode with advanced event-driven loop"""
-        if enhanced:
+    def run_autonomous(self, mode='production'):
+        """
+        Run autonomous mode
+        Modes:
+        - 'production': Production-ready event-driven architecture (recommended)
+        - 'advanced': Advanced event loop with polling
+        - 'standard': Standard time-based scheduler
+        """
+        if mode == 'production':
+            self.run_production_autonomous()
+        elif mode == 'advanced':
             self.run_advanced_autonomous()
         else:
             self.run_standard_autonomous()
@@ -177,11 +185,10 @@ class AlleyBotCore:
     
     def run_advanced_autonomous(self):
         """Run advanced autonomous mode with event-driven loop"""
-        print("� Starting Advanced Event-Driven Autonomous Mode...")
-        
-        # Import the advanced agent loop
         try:
             from advanced_agent_loop import AdvancedAgentLoop
+            
+            print("🚀 Starting Advanced Event-Driven Autonomous Mode...")
             
             # Initialize advanced loop
             self.agent_loop = AdvancedAgentLoop(self)
@@ -198,6 +205,24 @@ class AlleyBotCore:
             print(f"❌ Advanced loop error: {e}")
             print("⚠️  Falling back to standard mode")
             self.run_standard_autonomous()
+    
+    def run_production_autonomous(self):
+        """Run production-ready event-driven autonomous mode"""
+        try:
+            from src.main import run_production_mode
+            
+            print("🚀 Starting Production Event-Driven Mode...")
+            
+            # Run the production async event loop
+            import asyncio
+            asyncio.run(run_production_mode(self))
+            
+        except ImportError as e:
+            print(f"⚠️  Production mode not available: {e}")
+            print("📊 Falling back to advanced autonomous mode...")
+            self.run_advanced_autonomous()
+        except KeyboardInterrupt:
+            print("\n🛑 Stopping production mode...")
     
     def run_standard_autonomous(self):
         """Run standard autonomous mode with scheduled tasks (fallback)"""
