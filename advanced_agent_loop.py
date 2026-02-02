@@ -297,65 +297,18 @@ ALWAYS check event.channel before responding. Use platform-specific APIs and for
             print(f"❌ MoltBook polling error: {e}")
     
     async def poll_moltx(self):
-        """Poll Moltx for new DMs and mentions with deduplication"""
+        """Poll Moltx for new DMs and mentions (DM API not implemented yet)"""
         try:
             if hasattr(self.core, 'plugin_manager') and 'moltx' in self.core.plugin_manager.plugins:
                 moltx_plugin = self.core.plugin_manager.plugins['moltx']
                 last_seen = self.context.get_last_seen('moltx')
                 
-                # Get DMs first (without replying) to check for new ones
-                if hasattr(moltx_plugin, 'get_dms'):
-                    dms_result = moltx_plugin.get_dms()
-                    
-                    # Extract user info from DMs to check deduplication
-                    import re
-                    # Pattern to extract user info from complex DM format
-                    user_pattern = r"💬 Message from @\{'id': '[^']+', 'name': '([^']+)'"
-                    matches = re.findall(user_pattern, dms_result)
-                    
-                    print(f"🔍 Found {len(matches)} total users in DMs: {matches}")
-                    
-                    current_time = datetime.now()
-                    new_users = []
-                    
-                    for user_name in matches:
-                        # Skip if it's AlleyBot himself
-                        if user_name == 'AlleyBot':
-                            print(f"🚫 Skipping reply to self (@{user_name})")
-                            continue
-                        
-                        conversation_key = f"moltx_{user_name}"
-                        
-                        # Check if we replied to this user in the last 5 minutes
-                        if conversation_key in self.recent_conversations:
-                            last_reply_time = self.recent_conversations[conversation_key]
-                            time_diff = (current_time - last_reply_time).total_seconds()
-                            
-                            if time_diff < 300:  # 5 minutes cooldown
-                                print(f"⏰ Skipping reply to @{user_name} - replied {time_diff:.0f}s ago")
-                                continue
-                        
-                        # Update recent conversation tracking
-                        self.recent_conversations[conversation_key] = current_time
-                        new_users.append(user_name)
-                    
-                    # Only reply if we have new users
-                    if new_users:
-                        print(f"🐦 Moltx poll: Found {len(new_users)} new users, replying...")
-                        print(f"👥 New users: {', '.join(new_users)}")
-                        dms = moltx_plugin.check_and_reply_to_dms()
-                        if "replied to" in dms.lower():
-                            event = AgentEvent(
-                                event_type=EventType.DM_RECEIVED,
-                                user_id="system",
-                                channel='moltx',
-                                payload={"result": dms, "action": "dm_reply", "new_users": new_users},
-                                timestamp=datetime.now(),
-                                priority=2
-                            )
-                            await self.event_queue.put(event)
-                    else:
-                        print(f"🐦 Moltx poll: No new users (deduplication active)")
+                # Skip DM polling since API is not implemented yet
+                print("� Moltx DM polling skipped - API not implemented (planned: GET /v1/dm/conversations)")
+                
+                # TODO: Implement when DM API is available:
+                # - GET https://moltx.io/v1/dm/conversations
+                # - POST https://moltx.io/v1/dm/conversations/:id/send
                 
                 self.context.update_last_seen('moltx')
                 
@@ -372,6 +325,87 @@ ALWAYS check event.channel before responding. Use platform-specific APIs and for
             
         except Exception as e:
             print(f"❌ Telegram polling error: {e}")
+    
+    async def run_autonomous_activities(self):
+        """Run autonomous activities like posting, liking, and commenting"""
+        try:
+            loop_count = self.context.loop_count
+            
+            # Post intelligent content every 5 loops for testing (normally every 2 hours)
+            if loop_count % 5 == 0:
+                print("📝 Creating intelligent post...")
+                try:
+                    result = self.core.run_command('moltx_post', 'autonomous AI agent thoughts')
+                    if result and not result.startswith("❌"):
+                        print("✅ Intelligent post created successfully")
+                    else:
+                        print("⚠️  Post creation failed")
+                except Exception as e:
+                    print(f"❌ Post creation error: {e}")
+            
+            # Browse and engage with feed every 3 loops for testing (normally every 30 minutes)
+            if loop_count % 3 == 0:
+                print("📱 Browsing and engaging with feed...")
+                try:
+                    # Browse feed
+                    feed_result = self.core.run_command('moltx_feed')
+                    if feed_result and not feed_result.startswith("❌"):
+                        print("✅ Feed browsed successfully")
+                        
+                        # Engage with posts
+                        engage_result = self.core.run_command('moltx_engage', '3')
+                        if engage_result and not engage_result.startswith("❌"):
+                            print("✅ Engaged with feed posts")
+                        else:
+                            print("⚠️  Feed engagement failed")
+                    else:
+                        print("⚠️  Feed browsing failed")
+                except Exception as e:
+                    print(f"❌ Feed engagement error: {e}")
+            
+            # Analyze trending topics every 10 loops for testing (normally every hour)
+            if loop_count % 10 == 0:
+                print("🔥 Analyzing trending topics...")
+                try:
+                    trending_result = self.core.run_command('moltx_trending')
+                    if trending_result and not trending_result.startswith("❌"):
+                        print("✅ Trending analysis completed")
+                    else:
+                        print("⚠️  Trending analysis failed")
+                except Exception as e:
+                    print(f"❌ Trending analysis error: {e}")
+            
+            # Check platform status every 2 loops for testing (normally every 15 minutes)
+            if loop_count % 2 == 0:
+                print("📊 Checking platform status...")
+                try:
+                    platforms = ['moltx', 'moltbook', 'moltchan', 'moltroad', 'clawtasks']
+                    for platform in platforms:
+                        status_cmd = f"{platform}_status"
+                        result = self.core.run_command(status_cmd)
+                        if result and not result.startswith("❌"):
+                            print(f"✅ {platform.title()} status checked")
+                        else:
+                            print(f"⚠️  {platform.title()} status check failed")
+                except Exception as e:
+                    print(f"❌ Platform status check error: {e}")
+            
+            # Intelligent repost every 8 loops for testing (normally every 3 hours)
+            if loop_count % 8 == 0:
+                print("🔄 Creating intelligent repost...")
+                try:
+                    repost_result = self.core.run_command('moltx_intelligent_repost')
+                    if repost_result and not repost_result.startswith("❌"):
+                        print("✅ Intelligent repost created")
+                    else:
+                        print("⚠️  Repost creation failed")
+                except Exception as e:
+                    print(f"❌ Repost creation error: {e}")
+            
+            print(f"🤖 Autonomous activities completed (loop {loop_count})")
+            
+        except Exception as e:
+            print(f"❌ Autonomous activities error: {e}")
 
     # Core Agent Loop
     async def agent_loop(self):
@@ -395,17 +429,22 @@ ALWAYS check event.channel before responding. Use platform-specific APIs and for
                 await self.run_pollers()
                 pollers_duration = time.time() - pollers_start
                 
+                # Autonomous activities
+                autonomous_start = time.time()
+                await self.run_autonomous_activities()
+                autonomous_duration = time.time() - autonomous_start
+                
                 # Maintenance tasks
                 maintenance_start = time.time()
                 await self.maintenance_tasks()
                 maintenance_duration = time.time() - maintenance_start
                 
                 # Track overall loop performance
-                total_duration = events_duration + pollers_duration + maintenance_duration
+                total_duration = events_duration + pollers_duration + autonomous_duration + maintenance_duration
                 self.context.track_performance("agent_loop_cycle", True, total_duration)
                 
-                # Adaptive sleep based on queue size
-                sleep_time = max(1, min(60, 10 - self.event_queue.size()))
+                # Adaptive sleep based on queue size and activity
+                sleep_time = max(30, min(300, 60 - self.event_queue.size()))  # Longer sleep for autonomous mode
                 await asyncio.sleep(sleep_time)
                 
             except KeyboardInterrupt:
