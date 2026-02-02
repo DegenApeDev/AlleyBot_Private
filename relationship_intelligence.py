@@ -27,6 +27,17 @@ class RelationshipIntelligence:
         with open(self.relationships_file, 'w') as f:
             json.dump(self.relationships, f, indent=2)
     
+    def update_from_memory(self):
+        """Update relationships from memory data"""
+        try:
+            # This method can be used to sync relationship data with other memory systems
+            # For now, just ensure data is saved
+            self.save()
+            return True
+        except Exception as e:
+            print(f"❌ Failed to update relationships from memory: {e}")
+            return False
+    
     def track_interaction(self, username, interaction_type, content, sentiment='neutral'):
         """Track an interaction with a molty"""
         if username not in self.relationships:

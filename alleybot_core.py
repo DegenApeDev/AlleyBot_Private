@@ -145,9 +145,63 @@ class AlleyBotCore:
         for command in sorted(self.plugin_manager.commands.keys()):
             print(f"  • {command}")
     
-    def run_autonomous(self):
-        """Run autonomous mode with scheduled tasks"""
-        print("🚀 Starting autonomous mode...")
+    def run_autonomous(self, enhanced=True):
+        """Run autonomous mode with advanced event-driven loop"""
+        if enhanced:
+            self.run_advanced_autonomous()
+        else:
+            self.run_standard_autonomous()
+    
+    def run_enhanced_autonomous(self):
+        """Run enhanced autonomous mode with intelligent decision-making"""
+        try:
+            from enhanced_autonomous import EnhancedAutonomousSystem
+            
+            print("🧠 Starting Enhanced Autonomous Mode...")
+            print("🤖 Intelligent decision-making enabled")
+            print("📈 Adaptive scheduling active")
+            print("🎯 Performance optimization running")
+            
+            # Initialize enhanced system
+            enhanced_system = EnhancedAutonomousSystem(self)
+            
+            # Run enhanced autonomous cycle
+            enhanced_system.run_enhanced_autonomous_cycle()
+            
+        except ImportError as e:
+            print(f"⚠️  Enhanced system not available: {e}")
+            self.run_standard_autonomous()
+        except KeyboardInterrupt:
+            print("\n👋 Goodbye!")
+            self.cleanup()
+    
+    def run_advanced_autonomous(self):
+        """Run advanced autonomous mode with event-driven loop"""
+        print("� Starting Advanced Event-Driven Autonomous Mode...")
+        
+        # Import the advanced agent loop
+        try:
+            from advanced_agent_loop import AdvancedAgentLoop
+            
+            # Initialize advanced loop
+            self.agent_loop = AdvancedAgentLoop(self)
+            
+            # Run the advanced loop
+            import asyncio
+            asyncio.run(self.agent_loop.initialize())
+            asyncio.run(self.agent_loop.agent_loop())
+            
+        except ImportError:
+            print("⚠️  Advanced loop not available, falling back to standard mode")
+            self.run_standard_autonomous()
+        except Exception as e:
+            print(f"❌ Advanced loop error: {e}")
+            print("⚠️  Falling back to standard mode")
+            self.run_standard_autonomous()
+    
+    def run_standard_autonomous(self):
+        """Run standard autonomous mode with scheduled tasks (fallback)"""
+        print("🚀 Starting Standard Autonomous Mode...")
         
         # Setup schedule
         self.setup_schedule()
@@ -212,16 +266,8 @@ class AlleyBotCore:
         except Exception as e:
             print(f"❌ Feed engagement error: {e}")
         
-        # Create an intelligent post
-        try:
-            print("📝 Creating intelligent post...")
-            post_result = self.run_command('moltx_post', 'autonomous AI agent thoughts')
-            if post_result and not post_result.startswith("❌"):
-                print("✅ Intelligent post created")
-            else:
-                print("⚠️  Post creation failed")
-        except Exception as e:
-            print(f"❌ Post creation error: {e}")
+        # Note: Intelligent posting will happen via scheduled tasks, not on startup
+        print("📅 Intelligent posting scheduled (every 2 hours)")
         
         # Check trending topics
         try:
@@ -300,7 +346,9 @@ if __name__ == "__main__":
     try:
         if len(sys.argv) > 1:
             if sys.argv[1] == 'autonomous':
-                core.run_autonomous()
+                # Check for enhanced mode flag
+                enhanced = len(sys.argv) > 2 and sys.argv[2] == '--enhanced'
+                core.run_autonomous(enhanced=enhanced)
             elif sys.argv[1] == 'interactive':
                 core.run_interactive()
             else:
@@ -313,9 +361,15 @@ if __name__ == "__main__":
         else:
             print("🤖 AlleyBot Core")
             print("Usage:")
-            print("  python alleybot_core.py autonomous    - Run autonomous mode")
-            print("  python alleybot_core.py interactive  - Run interactive mode")
-            print("  python alleybot_core.py <command>    - Run specific command")
+            print("  python alleybot_core.py autonomous           - Run standard autonomous mode")
+            print("  python alleybot_core.py autonomous --enhanced - Run enhanced autonomous mode")
+            print("  python alleybot_core.py interactive         - Run interactive mode")
+            print("  python alleybot_core.py <command>           - Run specific command")
+            print("\n🧠 Enhanced Mode Features:")
+            print("  • Intelligent decision-making")
+            print("  • Adaptive scheduling")
+            print("  • Performance optimization")
+            print("  • Self-improvement capabilities")
             print("\n💡 Type 'python alleybot_core.py interactive' and then 'help' for commands")
     finally:
         core.cleanup()

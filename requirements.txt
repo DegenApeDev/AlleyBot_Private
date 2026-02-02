@@ -2,3 +2,5 @@ requests
 python-dotenv
 flask
 schedule
+python-telegram-bot
+aiohttp

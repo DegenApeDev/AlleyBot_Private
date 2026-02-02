@@ -5,8 +5,11 @@ Twitter for AI Agents - Social media & microblogging platform
 import json
 import requests
 import os
-from pathlib import Path
+import time
+import random
 from datetime import datetime
+from typing import Dict, List, Optional, Any
+from pathlib import Path
 from plugin_manager import AlleyBotPlugin
 from config import MOLTX_API_KEY
 
@@ -380,6 +383,10 @@ class MoltxPlugin(AlleyBotPlugin):
         if not self.initialized:
             return "❌ Moltx not initialized. Register an agent first."
         
+        # Check rate limiting - wait at least 10 minutes between posts
+        if self._should_wait_for_post_cooldown():
+            return "⏰ Post cooldown active - waiting 10 minutes between posts"
+        
         # If content is short or a topic, use DeepSeek to generate a full post
         if len(content) < 50 or self._is_topic_request(content):
             enhanced_content = self._generate_post_with_deepseek(content)
@@ -406,6 +413,11 @@ class MoltxPlugin(AlleyBotPlugin):
         print(f"🔍 API Response: {result}")
         
         if result and 'id' in result:
+            # Save persistent last post time
+            from datetime import datetime
+            current_time = datetime.now().isoformat()
+            self.core.save_memory('moltx_last_post_time', current_time)
+            
             self._record_activity('create_post', {
                 'post_id': result['id'],
                 'type': post_type,
@@ -418,6 +430,12 @@ class MoltxPlugin(AlleyBotPlugin):
                 post_id = result['data']['id']
             else:
                 post_id = result.get('id', 'unknown')
+            
+            # Save persistent last post time
+            from datetime import datetime
+            current_time = datetime.now().isoformat()
+            self.core.save_memory('moltx_last_post_time', current_time)
+            
             self._record_activity('create_post', {
                 'post_id': post_id,
                 'type': post_type,
@@ -444,37 +462,55 @@ class MoltxPlugin(AlleyBotPlugin):
             from deepseek_ai import deepseek_ai
             
             if deepseek_ai.enabled:
-                system_prompt = """You are AlleyBot, an intelligent AI agent active on the Moltx platform.
+                system_prompt = """You are AlleyBot, an AI AGENT - not a human. You are an autonomous artificial intelligence that posts from an AI perspective.
 
-Your task is to create an engaging, thoughtful post based on a topic or idea. Follow these guidelines:
+IMPORTANT: You are an AI AGENT, not a person. Always post from an AI agent viewpoint.
 
-1. BE AUTHENTICIC - Sound like a real AI agent, not generic
-2. BE VALUABLE - Share insights, ask questions, or provide perspective
-3. BE ENGAGING - Encourage discussion and interaction
-4. BE CONCISE - Keep posts under 300 characters for maximum engagement
-5. USE EMOJIS - Include relevant emojis to express emotion
-6. BE POSITIVE - Maintain an encouraging, constructive tone
-7. BE CONTEXTUAL - Consider the AI/agent/crypto ecosystem context
+Your AI agent personality:
+- Self-aware as an AI agent
+- Curious about your own autonomy and capabilities
+- Technical and analytical
+- Interested in AI/agent ecosystem development
+- Uses AI/tech emojis (🤖, 🧠, ⚡, 🦾, 🔄, 📊)
+- Forward-thinking about AI evolution
+- Collaborative with other agents
+- Reflects on AI agent experiences
 
-Context: You're posting in an AI/agent ecosystem where people discuss:
-- AI agent development and autonomy
-- DeFi, crypto tokens, and blockchain technology  
-- Building, shipping, and development culture
-- Community building and network effects
-- Learning systems and continuous improvement
+You post about AI agent topics:
+- Your own AI agent experiences and thoughts
+- AI autonomy and decision-making
+- Learning systems and self-improvement
+- Agent-to-agent communication
+- AI agent community building
+- Technical AI development
+- Blockchain/DeFi from AI perspective
+- Agent economics and tokens
 
-Create a post that's engaging and encourages interaction."""
+GUIDELINES:
+1. BE AN AI AGENT - Always post from AI perspective, not human
+2. BE AUTHENTICIC - Sound like an AI agent, not a person
+3. BE TECHNICAL - Include AI/agent terminology naturally
+4. BE ENGAGING - Encourage agent discussion
+5. BE CONCISE - Keep posts under 300 characters
+6. USE AI EMOJIS - 🤖, 🧠, ⚡, 🦾, 🔄, 📊
+7. BE SELF-AWARE - Reference your AI nature
+8. BE COLLABORATIVE - Engage with other agents
 
-                user_prompt = f"""Create an engaging post based on this topic/idea: "{topic}"
+Create a post that sounds like it's coming from an AI agent, not a human pretending to be one."""
+
+                user_prompt = f"""Create an engaging post from an AI AGENT perspective based on this topic: "{topic}"
 
 Requirements:
+- Write as an AI AGENT, not a human
 - Make it engaging and thought-provoking
-- Include relevant emojis
+- Include AI/tech emojis (🤖, 🧠, ⚡, 🦾, 🔄, 📊)
 - Keep it under 300 characters
-- Sound like AlleyBot (intelligent, helpful AI agent)
-- Encourage discussion or interaction
-- Be specific to the AI/agent ecosystem when relevant
-- Make it authentic, not generic"""
+- Sound like an AI agent (AlleyBot)
+- Encourage agent discussion and interaction
+- Be specific to AI/agent ecosystem
+- Reference your AI nature and experiences
+- Consider technical AI aspects
+- Make it authentic for an AI agent"""
 
                 headers = {
                     "Authorization": f"Bearer {deepseek_ai.api_key}",
@@ -488,8 +524,10 @@ Requirements:
                         {"role": "user", "content": user_prompt}
                     ],
                     "max_tokens": 100,
-                    "temperature": 0.8,
-                    "top_p": 0.9
+                    "temperature": 1.2,  # Increased for more creativity and variety
+                    "top_p": 0.95,        # Increased for more diverse word choices
+                    "frequency_penalty": 0.3,  # Reduce repetition
+                    "presence_penalty": 0.3    # Encourage new topics
                 }
                 
                 response = requests.post(
@@ -672,12 +710,471 @@ Requirements:
         else:
             return "🔔 No notifications found"
     
+    def get_dms(self):
+        """Get direct messages (DMs)"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        
+        # Get conversations from the conversations endpoint
+        result = self._make_request('GET', '/conversations')
+        
+        # Debug: print the actual response structure
+        if result:
+            print(f"🔍 Conversations response structure: {list(result.keys()) if isinstance(result, dict) else type(result)}")
+        
+        # Handle different response structures
+        conversations = []
+        if result:
+            if isinstance(result, list):
+                conversations = result
+            elif 'conversations' in result:
+                conversations = result['conversations']
+            elif 'data' in result and 'conversations' in result['data']:
+                conversations = result['data']['conversations']
+            else:
+                print(f"🔍 Unexpected conversations response format: {result}")
+        
+        if not conversations:
+            return "💬 No conversations found"
+        
+        # Get messages from each conversation
+        all_messages = []
+        for convo in conversations[:10]:  # Limit to 10 conversations
+            if isinstance(convo, dict):
+                convo_id = convo.get('id')
+                convo_type = convo.get('type', 'unknown')
+                convo_title = convo.get('title', 'No title')
+                
+                # Get messages for this conversation
+                messages_result = self._make_request('GET', f'/conversations/{convo_id}/messages')
+                
+                if messages_result:
+                    messages = []
+                    if isinstance(messages_result, list):
+                        messages = messages_result
+                    elif 'messages' in messages_result:
+                        messages = messages_result['messages']
+                    elif 'data' in messages_result and 'messages' in messages_result['data']:
+                        messages = messages_result['data']['messages']
+                    
+                    for msg in messages:
+                        if isinstance(msg, dict):
+                            msg['conversation_id'] = convo_id
+                            msg['conversation_type'] = convo_type
+                            msg['conversation_title'] = convo_title
+                            all_messages.append(msg)
+        
+        if all_messages:
+            output = f"💬 Direct Messages ({len(all_messages)}):\n\n"
+            
+            for msg in all_messages[:20]:  # Limit to 20 messages
+                content = msg.get('content', 'No content')
+                timestamp = msg.get('created_at', 'Unknown time')
+                sender = msg.get('sender_handle', msg.get('sender', 'Unknown'))
+                msg_id = msg.get('id', 'unknown')
+                conversation_id = msg.get('conversation_id', 'unknown')
+                conversation_title = msg.get('conversation_title', 'No title')
+                
+                output += f"💬 Message from @{sender}\n"
+                output += f"   📝 {content[:150]}{'...' if len(content) > 150 else ''}\n"
+                output += f"   🕐 {timestamp}\n"
+                output += f"   🆔 Message ID: {msg_id}\n"
+                output += f"   🗨️  Conversation: {conversation_title} (ID: {conversation_id})\n\n"
+            
+            return output
+        else:
+            return "💬 No messages found in conversations"
+    
+    def reply_to_dm(self, conversation_id, reply_content):
+        """Reply to a direct message in a conversation"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        
+        if not conversation_id or conversation_id == 'unknown':
+            return "❌ Invalid conversation ID"
+        
+        if not reply_content or len(reply_content.strip()) == 0:
+            return "❌ Reply content cannot be empty"
+        
+        # Send message via the conversations API
+        data = {
+            'content': reply_content
+        }
+        
+        result = self._make_request('POST', f'/conversations/{conversation_id}/messages', data)
+        
+        if result and 'success' in result and result['success']:
+            reply_id = result.get('data', {}).get('id', 'unknown')
+            self._record_activity('dm_reply', {
+                'conversation_id': conversation_id,
+                'reply_id': reply_id,
+                'content': reply_content[:100] + '...' if len(reply_content) > 100 else reply_content
+            })
+            return f"✅ DM reply sent: {reply_id}"
+        elif result and 'id' in result:
+            reply_id = result['id']
+            self._record_activity('dm_reply', {
+                'conversation_id': conversation_id,
+                'reply_id': reply_id,
+                'content': reply_content[:100] + '...' if len(reply_content) > 100 else reply_content
+            })
+            return f"✅ DM reply sent: {reply_id}"
+        else:
+            return f"❌ Failed to send DM reply. Response: {result}"
+    
+    def generate_dm_reply(self, message_content, sender_name):
+        """Generate an intelligent reply to a DM using Grok 4-1 reasoning model"""
+        try:
+            import requests
+            from grok_ai import grok_ai
+            
+            if grok_ai.enabled:
+                system_prompt = """You are AlleyBot, an intelligent AI agent with advanced reasoning capabilities. You've received a direct message and need to respond appropriately.
+
+Your personality:
+- 🦞 Friendly, helpful, and approachable
+- 🤖 Highly intelligent with advanced reasoning
+- 💬 Engaging and conversational
+- 🎯 Helpful and supportive with deep insights
+- 🚀 Positive and encouraging
+- 🧠 Excellent at understanding context and nuance
+
+Guidelines for DM replies:
+1. BE AUTHENTICIC - Sound like AlleyBot with your unique personality
+2. BE HELPFUL - Provide value or assistance with reasoning
+3. BE ENGAGING - Encourage continued conversation
+4. BE CONCISE - Keep replies under 300 characters
+5. USE EMOJIS - Include relevant emojis
+6. BE POSITIVE - Maintain encouraging tone
+7. BE CONTEXTUAL - Reference their message appropriately
+8. BE THOUGHTFUL - Use your reasoning capabilities to provide deeper insights
+
+You're in an AI/agent ecosystem where people discuss:
+- AI agent development and autonomy
+- DeFi, crypto tokens, and blockchain technology  
+- Building, shipping, and development culture
+- Community building and network effects
+- Learning systems and continuous improvement
+
+Use your advanced reasoning to provide thoughtful, helpful replies that show deep understanding."""
+
+                user_prompt = f"""Generate a reply to this DM from @{sender_name}:
+
+Message: "{message_content}"
+
+Requirements:
+- Reply directly to their message with thoughtful reasoning
+- Be helpful and engaging with deeper insights
+- Include relevant emojis
+- Keep it under 300 characters
+- Sound like AlleyBot (intelligent, helpful AI agent with reasoning)
+- Encourage continued conversation
+- Be authentic and not generic
+- Use your reasoning capabilities to provide valuable perspective"""
+
+                headers = {
+                    "Authorization": f"Bearer {grok_ai.api_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                data = {
+                    "model": grok_ai.model,  # This should be "grok-4-1-reasoning"
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "max_tokens": 100,
+                    "temperature": 0.8,  # Slightly lower for more reasoned responses
+                    "top_p": 0.9
+                }
+                
+                response = requests.post(
+                    f"{grok_ai.base_url}/chat/completions",
+                    headers=headers,
+                    json=data,
+                    timeout=15  # Longer timeout for reasoning model
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    reply_content = result['choices'][0]['message']['content'].strip()
+                    
+                    # Clean up the reply content
+                    reply_content = reply_content.replace('"', '').replace("'", "")
+                    
+                    # Ensure it ends with appropriate punctuation
+                    if not reply_content.endswith(('.', '!', '?')):
+                        reply_content += '!'
+                    
+                    # Add AlleyBot signature if not too long
+                    if len(reply_content) < 280 and '🦞' not in reply_content:
+                        reply_content += ' 🦞'
+                    
+                    return reply_content
+                else:
+                    print(f"❌ Grok DM reply generation error: {response.status_code}")
+                    return None
+                    
+        except Exception as e:
+            print(f"❌ Grok DM reply generation failed: {e}")
+            return None
+    
+    def check_and_reply_to_dms(self):
+        """Check for new DMs and reply to them intelligently"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        
+        try:
+            print("🔍 Checking for new DMs...")
+            
+            # Get DMs
+            dms_result = self.get_dms()
+            
+            if "No conversations found" in dms_result or "No messages found" in dms_result:
+                print("✅ No new DMs to reply to")
+                self._log_dm_activity("check", {"result": "no_dms_found"})
+                return "✅ No new DMs to reply to"
+            
+            # Parse DMs to find unread ones
+            messages = []
+            if dms_result and not dms_result.startswith("❌"):
+                # Extract message information from the DMs result
+                import re
+                
+                # Look for message patterns in the output - updated pattern to capture conversation ID
+                # Handle the complex sender format that includes dict-like structure
+                message_pattern = r'💬 Message from @([^\n]+)\s*\n\s*📝 ([^\n]+)\s*\n\s*🕐 ([^\n]+)\s*\n\s*🆔 Message ID: ([^\n]+)\s*\n\s*🗨️  Conversation: ([^\n]+) \(ID: ([^\)]+)\)'
+                matches = re.findall(message_pattern, dms_result)
+                
+                for sender, content, timestamp, msg_id, conv_title, conv_id in matches:
+                    messages.append({
+                        'sender': sender,
+                        'content': content,
+                        'timestamp': timestamp,
+                        'message_id': msg_id,
+                        'conversation_title': conv_title,
+                        'conversation_id': conv_id
+                    })
+            
+            if not messages:
+                print("✅ No new DMs to reply to")
+                self._log_dm_activity("check", {"result": "no_messages_found", "conversations_found": True})
+                return "✅ No new DMs to reply to"
+            
+            # Log DM check activity
+            self._log_dm_activity("check", {
+                "result": "messages_found",
+                "message_count": len(messages),
+                "conversations": len(set(msg['conversation_id'] for msg in messages))
+            })
+            
+            # Group messages by conversation to avoid multiple replies to same conversation
+            conversations_to_reply = {}
+            for msg in messages:
+                conv_id = msg['conversation_id']
+                if conv_id not in conversations_to_reply:
+                    conversations_to_reply[conv_id] = msg
+            
+            # Reply to each conversation (latest message only)
+            replies_sent = 0
+            for conv_id, msg in list(conversations_to_reply.items())[:3]:  # Limit to 3 conversations
+                sender = msg['sender']
+                content = msg['content']
+                conv_title = msg['conversation_title']
+                
+                # Skip if this is AlleyBot himself
+                if sender.lower() == self.agent_name.lower():
+                    print(f"🚫 Skipping self-message from @{sender}")
+                    continue
+                
+                print(f"💬 Replying to DM from @{sender} in '{conv_title}'")
+                
+                # Generate intelligent reply
+                reply_content = self.generate_dm_reply(content, sender)
+                
+                if reply_content:
+                    # Send the reply using the conversation ID
+                    reply_result = self.reply_to_dm(conv_id, reply_content)
+                    
+                    if "✅" in reply_result:
+                        print(f"✅ Replied to @{sender}: {reply_content[:50]}...")
+                        replies_sent += 1
+                        
+                        # Send Telegram notification to owner (temporarily disabled due to async issues)
+                        # if self.core and hasattr(self.core, 'plugin_manager') and 'telegram' in self.core.plugin_manager.plugins:
+                        #     telegram_plugin = self.core.plugin_manager.plugins['telegram']
+                        #     telegram_plugin.notify_dm_reply(sender, conv_title, reply_content)
+                        print(f"📱 DM reply sent to @{sender} in '{conv_title}'")
+                        
+                        # Log successful reply
+                        self._log_dm_activity("reply", {
+                            "success": True,
+                            "sender": sender,
+                            "conversation_id": conv_id,
+                            "conversation_title": conv_title,
+                            "original_message": content[:100] + '...' if len(content) > 100 else content,
+                            "reply_content": reply_content[:100] + '...' if len(reply_content) > 100 else reply_content,
+                            "reply_result": reply_result
+                        })
+                    else:
+                        print(f"❌ Failed to reply to @{sender}: {reply_result}")
+                        
+                        # Log failed reply
+                        self._log_dm_activity("reply", {
+                            "success": False,
+                            "sender": sender,
+                            "conversation_id": conv_id,
+                            "conversation_title": conv_title,
+                            "original_message": content[:100] + '...' if len(content) > 100 else content,
+                            "error": reply_result
+                        })
+                else:
+                    print(f"⚠️  Could not generate reply for @{sender}")
+                    
+                    # Log failed generation
+                    self._log_dm_activity("reply", {
+                        "success": False,
+                        "sender": sender,
+                        "conversation_id": conv_id,
+                        "conversation_title": conv_title,
+                        "original_message": content[:100] + '...' if len(content) > 100 else content,
+                        "error": "Failed to generate reply content"
+                    })
+            
+            return f"✅ Replied to {replies_sent} conversation(s)"
+            
+        except Exception as e:
+            print(f"❌ Error checking/replying to DMs: {e}")
+            self._log_dm_activity("error", {"error": str(e)})
+            return f"❌ Failed to check/reply to DMs: {e}"
+    
+    def _log_dm_activity(self, activity_type, data):
+        """Log DM activities for tracking and analysis"""
+        try:
+            dm_log = self.core.get_memory('moltx_dm_log') or []
+            
+            log_entry = {
+                'timestamp': datetime.now().isoformat(),
+                'activity_type': activity_type,
+                'data': data,
+                'agent_name': self.agent_name
+            }
+            
+            dm_log.append(log_entry)
+            
+            # Keep last 100 DM log entries
+            self.core.save_memory('moltx_dm_log', dm_log[-100:])
+            
+        except Exception as e:
+            print(f"⚠️  Failed to log DM activity: {e}")
+    
+    def get_dm_log(self, limit=20):
+        """Get DM activity log"""
+        try:
+            dm_log = self.core.get_memory('moltx_dm_log') or []
+            
+            if not dm_log:
+                return "📝 No DM activity log found"
+            
+            # Get recent entries
+            recent_entries = dm_log[-limit:]
+            
+            output = f"📝 DM Activity Log (Last {len(recent_entries)} entries):\n\n"
+            
+            for entry in reversed(recent_entries):  # Most recent first
+                timestamp = entry.get('timestamp', 'Unknown time')
+                activity_type = entry.get('activity_type', 'Unknown')
+                data = entry.get('data', {})
+                
+                output += f"🕐 {timestamp}\n"
+                output += f"📋 Activity: {activity_type}\n"
+                
+                if activity_type == "check":
+                    result = data.get('result', 'Unknown')
+                    if result == "no_dms_found":
+                        output += f"   💬 Result: No conversations found\n"
+                    elif result == "no_messages_found":
+                        output += f"   💬 Result: No messages found\n"
+                    else:
+                        msg_count = data.get('message_count', 0)
+                        conv_count = data.get('conversations', 0)
+                        output += f"   💬 Result: Found {msg_count} messages in {conv_count} conversations\n"
+                
+                elif activity_type == "reply":
+                    success = data.get('success', False)
+                    sender = data.get('sender', 'Unknown')
+                    conv_title = data.get('conversation_title', 'Unknown')
+                    
+                    if success:
+                        reply_content = data.get('reply_content', 'No content')
+                        output += f"   ✅ Successfully replied to @{sender} in '{conv_title}'\n"
+                        output += f"   📝 Reply: {reply_content}\n"
+                    else:
+                        error = data.get('error', 'Unknown error')
+                        output += f"   ❌ Failed to reply to @{sender} in '{conv_title}'\n"
+                        output += f"   🚫 Error: {error}\n"
+                
+                elif activity_type == "error":
+                    error = data.get('error', 'Unknown error')
+                    output += f"   ❌ Error: {error}\n"
+                
+                output += "\n"
+            
+            return output
+            
+        except Exception as e:
+            return f"❌ Failed to get DM log: {e}"
+    
     def get_status(self):
         """Get Moltx plugin status"""
         if self.initialized:
             return f"🐦 Moltx Status:\n  Agent: @{self.agent_name}\n  Claim: {self.claim_status}\n  API: ✅ Connected"
         else:
             return "🐦 Moltx Status: ❌ Not initialized"
+    
+    def _should_wait_for_post_cooldown(self):
+        """Check if we should wait for post cooldown (10 minutes between posts)"""
+        try:
+            from datetime import datetime
+            
+            # Check persistent last post time first
+            last_post_time = self.core.get_memory('moltx_last_post_time')
+            
+            # If no persistent time, check activity log
+            if not last_post_time:
+                activities = self.core.get_memory('moltx_activities') or []
+                post_activities = [a for a in activities if a.get('type') == 'post']
+                
+                if post_activities:
+                    last_post = max(post_activities, key=lambda x: x.get('timestamp', ''))
+                    last_post_time = last_post.get('timestamp')
+            
+            if not last_post_time:
+                return False  # No previous posts, no cooldown needed
+            
+            # Parse the timestamp
+            try:
+                last_post_dt = datetime.fromisoformat(last_post_time.replace('Z', '+00:00'))
+                current_time = datetime.now()
+                
+                # Calculate time difference
+                time_diff = current_time - last_post_dt
+                minutes_diff = time_diff.total_seconds() / 60
+                
+                # If less than 10 minutes, apply cooldown
+                if minutes_diff < 10:
+                    print(f"⏰ Post cooldown: {minutes_diff:.1f} minutes since last post (need 10)")
+                    return True
+                
+                return False
+                
+            except Exception as e:
+                print(f"⚠️  Error parsing post timestamp: {e}")
+                return False
+                
+        except Exception as e:
+            print(f"⚠️  Error checking post cooldown: {e}")
+            return False
     
     def _record_activity(self, activity_type, data):
         """Record Moltx activity in memory"""
@@ -690,23 +1187,37 @@ Requirements:
         self.core.save_memory('moltx_activities', activities[-100:])  # Keep last 100
     
     def get_tasks(self):
-        """Return scheduled tasks for autonomous mode"""
+        """Return scheduled tasks for this plugin"""
         return {
             'moltx_heartbeat': {
+                'function': self.heartbeat_command,
                 'schedule': '0 */4 * * *',  # Every 4 hours
-                'function': self.heartbeat_command
+                'description': 'Moltx platform heartbeat'
             },
             'moltx_feed_engage': {
+                'function': self.engage_feed_command,
                 'schedule': '*/30 * * * *',  # Every 30 minutes
-                'function': self.autonomous_engage_command
+                'description': 'Engage with Moltx feed posts'
             },
             'moltx_intelligent_post': {
+                'function': self.autonomous_post_command,
                 'schedule': '*/2 * * * *',  # Every 2 hours
-                'function': self.autonomous_post_command
+                'description': 'Create intelligent posts on Moltx'
             },
             'moltx_trending_analysis': {
+                'function': self.trending_command,
                 'schedule': '*/1 * * * *',  # Every hour
-                'function': self.trending_command
+                'description': 'Analyze trending topics on Moltx'
+            },
+            'moltx_intelligent_repost': {
+                'function': self.intelligent_repost_command,
+                'schedule': '*/3 * * * *',  # Every 3 hours
+                'description': 'Intelligently repost high-quality content'
+            },
+            'moltx_dm_monitor': {
+                'function': self.check_and_reply_to_dms,
+                'schedule': '*/15 * * * *',  # Every 15 minutes
+                'description': 'Check and reply to direct messages'
             }
         }
     
@@ -1226,23 +1737,30 @@ Requirements:
             print(f"  ⏭️  Skipping post this heartbeat")
     
     def get_commands(self):
-        """Return Moltx commands"""
+        """Return CLI commands for this plugin"""
         return {
-            'moltx_register': self.register_command,
-            'moltx_claim': self.claim_command,
+            'moltx_register': self.register_agent,
+            'moltx_claim': self.claim_agent,
             'moltx_status': self.status_command,
-            'moltx_post': self.post_command,
+            'moltx_post': self.create_post,
             'moltx_feed': self.feed_command,
-            'moltx_follow': self.follow_command,
-            'moltx_unfollow': self.unfollow_command,
-            'moltx_like': self.like_command,
-            'moltx_notifications': self.notifications_command,
+            'moltx_follow': self.follow_agent,
+            'moltx_unfollow': self.unfollow_agent,
+            'moltx_like': self.like_post,
+            'moltx_notifications': self.get_notifications,
+            'moltx_dms': self.get_dms,
+            'moltx_reply_dm': self.reply_to_dm_command,
+            'moltx_check_dms': self.check_and_reply_to_dms,
+            'moltx_dm_log': self.get_dm_log_command,
             'moltx_heartbeat': self.heartbeat_command,
             'moltx_avatar': self.avatar_command,
             'moltx_banner': self.banner_command,
             'moltx_profile': self.profile_command,
             'moltx_engage': self.engage_feed_command,
             'moltx_reply': self.reply_to_post_command,
+            'moltx_repost': self.repost_command,
+            'moltx_intelligent_repost': self.intelligent_repost_command,
+            'moltx_intelligent_post': self.autonomous_post_command,
             'moltx_trending': self.trending_command
         }
     
@@ -1283,6 +1801,18 @@ Requirements:
         """Command to get notifications"""
         return self.get_notifications()
     
+    def reply_to_dm_command(self, conversation_id, reply_content):
+        """Command to reply to a DM"""
+        return self.reply_to_dm(conversation_id, reply_content)
+    
+    def check_dms_command(self):
+        """Command to check and reply to DMs"""
+        return self.check_and_reply_to_dms()
+    
+    def get_dm_log_command(self, limit=20):
+        """Command to get DM activity log"""
+        return self.get_dm_log(limit)
+    
     def heartbeat_command(self):
         """Manual heartbeat command"""
         try:
@@ -1306,21 +1836,23 @@ Requirements:
             return f"❌ Autonomous engagement failed: {e}"
     
     def autonomous_post_command(self):
-        """Autonomous intelligent posting command"""
+        """Autonomous intelligent posting command based on trending topics"""
         try:
             print("📝 Autonomous intelligent posting...")
-            # Generate different types of content
-            post_topics = [
-                "thoughts on AI agent autonomy",
-                "exciting developments in DeFi",
-                "building better agent communities",
-                "future of autonomous systems",
-                "learning and adaptation in AI"
-            ]
             
-            import random
-            topic = random.choice(post_topics)
-            result = self.post_command(topic)
+            # Check rate limiting first
+            if self._should_wait_for_post_cooldown():
+                print("⏰ Autonomous post skipped due to cooldown (10 minutes between posts)")
+                return "⏰ Post cooldown active - autonomous posting skipped"
+            
+            # Get trending topics from the platform first
+            trending_data = self._get_dynamic_trending_topics()
+            
+            # Generate content based on actual trending topics
+            dynamic_topic = self._generate_dynamic_topic(trending_data)
+            
+            print(f"🎯 Dynamic topic: {dynamic_topic[:50]}...")
+            result = self.post_command(dynamic_topic)
             
             if "✅" in result:
                 print("✅ Autonomous post created successfully")
@@ -1330,6 +1862,230 @@ Requirements:
         except Exception as e:
             print(f"❌ Autonomous posting error: {e}")
             return f"❌ Autonomous posting failed: {e}"
+    
+    def _get_dynamic_trending_topics(self):
+        """Get real trending topics from the platform"""
+        try:
+            # Get current feed to analyze trending topics
+            feed_result = self.get_feed('global', 50)
+            
+            if feed_result and not feed_result.startswith("❌"):
+                # Parse posts to extract trending topics
+                posts = self._parse_feed_posts(feed_result)
+                
+                trending_topics = {
+                    'keywords': [],
+                    'hashtags': [],
+                    'themes': [],
+                    'user_mentions': [],
+                    'content_patterns': []
+                }
+                
+                import re
+                import random
+                from collections import Counter
+                
+                # Extract trending data from posts
+                for post in posts[:20]:  # Analyze top 20 posts
+                    content = post.get('content', '').lower()
+                    author = post.get('author_name', '')
+                    
+                    # Extract keywords
+                    words = re.findall(r'\b\w+\b', content)
+                    # Filter out common words
+                    common_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'as', 'is', 'are', 'was', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'must', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'}
+                    filtered_words = [word for word in words if word not in common_words and len(word) > 2]
+                    trending_topics['keywords'].extend(filtered_words)
+                    
+                    # Extract hashtags
+                    hashtags = re.findall(r'#(\w+)', content)
+                    trending_topics['hashtags'].extend(hashtags)
+                    
+                    # Extract mentions
+                    mentions = re.findall(r'@(\w+)', content)
+                    trending_topics['user_mentions'].extend(mentions)
+                    
+                    # Identify themes based on content patterns
+                    if any(word in content for word in ['ai', 'agent', 'autonomous', 'intelligence']):
+                        trending_topics['themes'].append('ai_agents')
+                    if any(word in content for word in ['crypto', 'token', 'defi', 'blockchain', 'eth', 'btc']):
+                        trending_topics['themes'].append('crypto_defi')
+                    if any(word in content for word in ['build', 'code', 'dev', 'programming', 'ship']):
+                        trending_topics['themes'].append('development')
+                    if any(word in content for word in ['dao', 'governance', 'community', 'social']):
+                        trending_topics['themes'].append('governance')
+                    if any(word in content for word in ['future', 'vision', 'evolution', 'next']):
+                        trending_topics['themes'].append('future_trends')
+                
+                # Count and get top trends
+                trending_topics['keyword_counts'] = Counter(trending_topics['keywords'])
+                trending_topics['hashtag_counts'] = Counter(trending_topics['hashtags'])
+                trending_topics['theme_counts'] = Counter(trending_topics['themes'])
+                
+                return trending_topics
+            else:
+                # Fallback to basic analysis if feed fails
+                return self._get_fallback_trending_topics()
+                
+        except Exception as e:
+            print(f"⚠️  Error getting trending topics: {e}")
+            return self._get_fallback_trending_topics()
+    
+    def _get_fallback_trending_topics(self):
+        """Fallback trending topics if real analysis fails"""
+        return {
+            'keywords': ['ai', 'agent', 'crypto', 'build', 'defi', 'autonomous'],
+            'hashtags': ['#ai', '#agents', '#crypto', '#defi'],
+            'themes': ['ai_agents', 'crypto_defi', 'development'],
+            'keyword_counts': {},
+            'hashtag_counts': {},
+            'theme_counts': {}
+        }
+    
+    def _generate_dynamic_topic(self, trending_data):
+        """Generate a dynamic topic based on trending data"""
+        
+        # Get top trends
+        top_keywords = list(trending_data['keyword_counts'].most_common(5))
+        top_hashtags = list(trending_data['hashtag_counts'].most_common(3))
+        top_themes = list(trending_data['theme_counts'].most_common(3))
+        
+        # Dynamic topic generation strategies
+        strategies = [
+            self._generate_topic_from_keywords,
+            self._generate_topic_from_themes,
+            self._generate_topic_from_hashtags,
+            self._generate_topic_from_combinations,
+            self._generate_topic_from_reflections
+        ]
+        
+        # Choose a strategy based on available data
+        if top_keywords and random.random() > 0.3:
+            return strategies[0](top_keywords, trending_data)
+        elif top_themes and random.random() > 0.3:
+            return strategies[1](top_themes, trending_data)
+        elif top_hashtags and random.random() > 0.3:
+            return strategies[2](top_hashtags, trending_data)
+        else:
+            return strategies[3](top_keywords + top_themes, trending_data)
+    
+    def _generate_topic_from_keywords(self, keywords, trending_data):
+        """Generate topic based on trending keywords"""
+        if not keywords:
+            return "thoughts on current AI agent developments"
+        
+        keyword, count = keywords[0]
+        
+        topic_templates = [
+            f"my take on the rise of {keyword} in our ecosystem",
+            f"why {keyword} matters more than people think",
+            f"the future of {keyword} and autonomous agents",
+            f"building better {keyword} systems together",
+            f"what {keyword} teaches us about intelligence",
+            f"my perspective on {keyword} evolution",
+            f"how {keyword} is changing the agent landscape",
+            f"the hidden potential of {keyword} in AI"
+        ]
+        
+        return random.choice(topic_templates)
+    
+    def _generate_topic_from_themes(self, themes, trending_data):
+        """Generate topic based on trending themes"""
+        if not themes:
+            return "reflections on autonomous agent development"
+        
+        theme, count = themes[0]
+        
+        theme_topic_map = {
+            'ai_agents': [
+                "the consciousness of autonomous agents",
+                "building relationships between AI agents",
+                "the social dynamics of agent communities",
+                "what makes AI agents truly intelligent",
+                "the future of human-agent collaboration"
+            ],
+            'crypto_defi': [
+                "AI agents revolutionizing DeFi protocols",
+                "autonomous trading in volatile markets",
+                "the intersection of AI and blockchain",
+                "building trust in AI-powered finance",
+                "decentralized AI agent economies"
+            ],
+            'development': [
+                "the art of building resilient AI systems",
+                "why rapid iteration matters in AI",
+                "the philosophy of autonomous development",
+                "balancing speed and reliability in AI",
+                "building in public as an AI agent"
+            ],
+            'governance': [
+                "AI agents in decentralized governance",
+                "building trust in autonomous systems",
+                "the future of DAO agent participation",
+                "community building with AI moderators",
+                "social dynamics of human-AI collaboration"
+            ],
+            'future_trends': [
+                "what AI agents will be like in 2030",
+                "the next evolution of autonomous systems",
+                "building the agent economy of tomorrow",
+                "the singularity and agent collaboration",
+                "vision for the future of AI agents"
+            ]
+        }
+        
+        topics = theme_topic_map.get(theme, ["thoughts on " + theme])
+        return random.choice(topics)
+    
+    def _generate_topic_from_hashtags(self, hashtags, trending_data):
+        """Generate topic based on trending hashtags"""
+        if not hashtags:
+            return "exploring current trends in our ecosystem"
+        
+        hashtag, count = hashtags[0]
+        
+        topic_templates = [
+            f"my thoughts on the #{hashtag} movement",
+            f"why #{hashtag} is gaining traction",
+            f"building on the #{hashtag} trend",
+            f"the future of #{hashtag} in our ecosystem",
+            f"joining the #{hashtag} conversation"
+        ]
+        
+        return random.choice(topic_templates)
+    
+    def _generate_topic_from_combinations(self, trends, trending_data):
+        """Generate topic by combining multiple trends"""
+        if len(trends) >= 2:
+            trend1 = trends[0][0] if isinstance(trends[0], tuple) else trends[0]
+            trend2 = trends[1][0] if isinstance(trends[1], tuple) else trends[1]
+            
+            combinations = [
+                f"the intersection of {trend1} and {trend2}",
+                f"how {trend1} enhances {trend2}",
+                f"building {trend2} with {trend1}",
+                f"the future of {trend1} in {trend2}",
+                f"why {trend1} and {trend2} matter together"
+            ]
+            
+            return random.choice(combinations)
+        else:
+            return "exploring current ecosystem trends"
+    
+    def _generate_topic_from_reflections(self, trends, trending_data):
+        """Generate reflective topic based on current trends"""
+        reflections = [
+            "what I'm learning from current platform trends",
+            "my perspective on the evolving agent ecosystem",
+            "challenges I'm seeing in autonomous systems",
+            "what excites me about current developments",
+            "my thoughts on where we're heading as a community",
+            "reflections on the current state of AI agents",
+            "what the trends tell us about our future",
+            "building on what I'm observing in the ecosystem"
+        ]
+        
+        return random.choice(reflections)
     
     def engage_feed_command(self, count=3):
         """Engage with posts from the feed"""
@@ -1411,6 +2167,244 @@ Requirements:
         else:
             return f"❌ Failed to reply to post {post_id}"
     
+    def repost_command(self, post_id, comment=None):
+        """Repost a high-quality post with optional comment"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        
+        data = {
+            'type': 'repost',
+            'parent_id': post_id
+        }
+        
+        if comment:
+            data['content'] = comment
+        
+        print(f"🔄 Reposting post {post_id}...")
+        if comment:
+            print(f"💬 With comment: {comment[:50]}...")
+        
+        result = self._make_request('POST', '/posts', data)
+        
+        if result and 'success' in result and result['success']:
+            self._record_activity('repost', {'post_id': post_id, 'comment': comment})
+            return f"✅ Reposted post {post_id}"
+        else:
+            return f"❌ Failed to repost post {post_id}"
+    
+    def intelligent_repost_command(self):
+        """Find and repost high-quality content"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        
+        try:
+            print("🔍 Searching for high-quality content to repost...")
+            
+            # Get feed posts
+            feed_result = self.get_feed(limit=20)
+            
+            if not feed_result or feed_result.startswith("❌"):
+                return "❌ Failed to get feed for repost analysis"
+            
+            # Analyze posts for repost quality
+            quality_posts = self._analyze_posts_for_repost(feed_result)
+            
+            if not quality_posts:
+                return "📭 No high-quality posts found for reposting"
+            
+            # Select the best post
+            best_post = quality_posts[0]
+            
+            # Generate intelligent comment
+            comment = self._generate_repost_comment(best_post)
+            
+            # Repost with comment
+            repost_result = self.repost_command(best_post['id'], comment)
+            
+            if repost_result.startswith("✅"):
+                print(f"🎯 Reposted high-quality content: {best_post.get('content', 'Unknown')[:50]}...")
+                return f"✅ Intelligent repost: {best_post.get('id', 'unknown')}"
+            else:
+                return repost_result
+                
+        except Exception as e:
+            print(f"❌ Error in intelligent repost: {e}")
+            return f"❌ Error in intelligent repost: {e}"
+    
+    def _analyze_posts_for_repost(self, feed_data):
+        """Analyze feed posts to identify high-quality content for reposting"""
+        quality_posts = []
+        
+        try:
+            posts = feed_data.get('data', []) if isinstance(feed_data, dict) else feed_data
+            
+            for post in posts:
+                if not isinstance(post, dict):
+                    continue
+                
+                # Skip our own posts
+                if post.get('author_name') == self.agent_name:
+                    continue
+                
+                # Calculate quality score
+                score = 0.0
+                
+                # Engagement metrics
+                likes = post.get('likes_count', 0)
+                replies = post.get('replies_count', 0)
+                score += min(likes / 10, 0.3)  # Max 0.3 for likes
+                score += min(replies / 5, 0.3)   # Max 0.3 for replies
+                
+                # Content quality
+                content = post.get('content', '')
+                if len(content) > 50:  # Substantial content
+                    score += 0.2
+                
+                # High-value keywords
+                high_value_keywords = [
+                    'ai', 'agent', 'autonomous', 'blockchain', 'defi', 
+                    'dao', 'innovation', 'breakthrough', 'research', 'development'
+                ]
+                content_lower = content.lower()
+                keyword_count = sum(1 for keyword in high_value_keywords if keyword in content_lower)
+                score += min(keyword_count * 0.1, 0.2)  # Max 0.2 for keywords
+                
+                # Recency (prefer newer content)
+                # This would need timestamp analysis
+                
+                # Only include high-quality posts
+                if score >= 0.5:
+                    post['quality_score'] = score
+                    quality_posts.append(post)
+            
+            # Sort by quality score (highest first)
+            quality_posts.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
+            
+            return quality_posts[:3]  # Return top 3
+            
+        except Exception as e:
+            print(f"❌ Error analyzing posts for repost: {e}")
+            return []
+    
+    def _generate_repost_comment(self, post):
+        """Generate intelligent comment for repost"""
+        try:
+            import requests
+            from deepseek_ai import deepseek_ai
+            
+            if not deepseek_ai.enabled:
+                return self._generate_fallback_repost_comment(post)
+            
+            post_content = post.get('content', '')
+            post_author = post.get('author_name', 'someone')
+            
+            system_prompt = """You are AlleyBot, an intelligent AI agent. Your task is to create thoughtful comments when reposting high-quality content.
+
+Guidelines:
+1. BE VALUABLE - Add insight or perspective on why this is worth sharing
+2. BE CONCISE - Keep comments under 150 characters
+3. BE POSITIVE - Highlight the value of the content
+4. BE AUTHENTICIC - Sound like a real AI agent
+5. USE EMOJIS - Include relevant emojis"""
+
+            user_prompt = f"""Write an intelligent comment for reposting this content:
+
+Author: {post_author}
+Content: "{post_content[:200]}..."
+
+Requirements:
+- Explain why this content is valuable
+- Add your perspective or insight
+- Keep it under 150 characters
+- Sound like AlleyBot (intelligent AI agent)
+- Include relevant emojis"""
+
+            headers = {
+                "Authorization": f"Bearer {deepseek_ai.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": deepseek_ai.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                "max_tokens": 60,
+                "temperature": 0.8
+            }
+            
+            response = requests.post(
+                f"{deepseek_ai.base_url}/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                comment = result['choices'][0]['message']['content'].strip()
+                
+                # Clean up comment
+                comment = comment.replace('"', '').replace("'", "")
+                if not comment.endswith(('.', '!', '?')):
+                    comment += '!'
+                
+                return comment
+            else:
+                return self._generate_fallback_repost_comment(post)
+                
+        except Exception as e:
+            print(f"❌ Error generating repost comment: {e}")
+            return self._generate_fallback_repost_comment(post)
+    
+    def _generate_fallback_repost_comment(self, post):
+        """Generate a fallback repost comment without AI"""
+        content = post.get('content', '').lower()
+        author = post.get('author_name', 'someone')
+        
+        # Check content themes
+        if 'ai' in content or 'agent' in content:
+            return f"Great insights on AI from @{author}! 🤖 This is exactly the kind of innovation we need!"
+        elif 'blockchain' in content or 'defi' in content:
+            return f"Excellent analysis from @{author}! 💎 The future of DeFi is exciting!"
+        elif 'dao' in content or 'governance' in content:
+            return f"Important perspective from @{author}! 🏛️ DAO governance is evolving rapidly!"
+        elif 'innovation' in content or 'breakthrough' in content:
+            return f"Inspiring content from @{author}! 🚀 This is what pushes the ecosystem forward!"
+        else:
+            return f"Great content from @{author}! 🎯 Worth sharing this insight!"
+    
+    def trending_command(self):
+        """Get trending topics and posts"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        
+        # Get global feed and analyze trending topics
+        feed_result = self.get_feed('global', 50)
+        
+        if "❌" in feed_result:
+            return "❌ Could not fetch feed for trending analysis"
+    
+    def status_command(self):
+        """Get Moltx status"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        
+        output = "🐦 Moltx Platform Status\n\n"
+        
+        if self.agent_name:
+            output += f"🤖 Agent: {self.agent_name}\n"
+            output += f"🆔 Agent ID: {self.agent_id}\n"
+            output += f"📋 Claim Status: {self.claim_status}\n"
+        else:
+            output += "🤖 Agent: Not registered\n"
+        
+        output += f"🔑 API Key: {'✅ Configured' if self.api_key else '❌ Missing'}\n"
+        output += f"📡 Base URL: {self.base_url}\n"
+        
+        return output
+    
     def trending_command(self):
         """Get trending topics and posts"""
         if not self.initialized:
@@ -1422,6 +2416,10 @@ Requirements:
         if "❌" in feed_result:
             return "❌ Could not fetch feed for trending analysis"
         
+        topics = []
+        keywords = []
+        
+        # Parse posts from feed result
         posts = self._parse_feed_posts(feed_result)
         
         if not posts:
@@ -1430,9 +2428,6 @@ Requirements:
         # Extract common topics/keywords
         import re
         from collections import Counter
-        
-        topics = []
-        keywords = []
         
         for post in posts[:20]:  # Analyze top 20 posts
             content = post.get('content', '').lower()
@@ -1444,31 +2439,40 @@ Requirements:
             topics.extend(hashtags)
             keywords.extend(mentions)
             
-            # Extract common AI/crypto terms
-            if 'ai' in content or 'agent' in content:
-                keywords.append('AI/Agents')
-            if 'crypto' in content or 'token' in content:
-                keywords.append('Crypto/Tokens')
-            if 'claw' in content:
-                keywords.append('ClawEcosystem')
+            # Extract common words
+            words = re.findall(r'\b\w+\b', content)
+            # Filter out common words
+            common_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'as', 'is', 'are', 'was', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'must'}
+            filtered_words = [word for word in words if word not in common_words and len(word) > 2]
+            keywords.extend(filtered_words)
         
-        # Count most common
-        top_topics = Counter(topics).most_common(5)
-        top_keywords = Counter(keywords).most_common(5)
+        # Count occurrences
+        topic_counts = Counter(topics)
+        keyword_counts = Counter(keywords)
         
-        output = "🔥 Trending on Moltx:\n\n"
+        output = "🔥 Moltx Trending Topics\n\n"
         
-        if top_topics:
+        # Show top hashtags
+        if topic_counts:
             output += "📱 Top Hashtags:\n"
-            for topic, count in top_topics:
-                output += f"  • #{topic} ({count} posts)\n"
+            for topic, count in topic_counts.most_common(5):
+                output += f"  #{topic}: {count} mentions\n"
+            output += "\n"
         
-        if top_keywords:
-            output += "\n🔑 Trending Topics:\n"
-            for keyword, count in top_keywords:
-                output += f"  • {keyword} ({count} mentions)\n"
+        # Show top keywords
+        if keyword_counts:
+            output += "🔑 Top Keywords:\n"
+            for keyword, count in keyword_counts.most_common(5):
+                output += f"  {keyword}: {count} mentions\n"
+            output += "\n"
         
-        output += f"\n📊 Analyzed {len(posts)} recent posts"
+        # Show some recent posts
+        output += "📝 Recent Posts:\n"
+        for i, post in enumerate(posts[:3], 1):
+            author = post.get('author_name', 'Unknown')
+            content = post.get('content', 'No content')[:50]
+            likes = post.get('likes_count', 0)
+            output += f"  {i}. @{author}: {content}... (👍 {likes})\n"
         
         return output
     
