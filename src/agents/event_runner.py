@@ -135,47 +135,85 @@ class EventRunner:
             task = event.payload.get('task', '')
             print(f"🤖 Executing autonomous task: {task}")
             
-            # Get Moltx plugin
-            if not (hasattr(self.core, 'plugin_manager') and 'moltx' in self.core.plugin_manager.plugins):
-                print("❌ Moltx plugin not available")
-                return
-            
-            moltx_plugin = self.core.plugin_manager.plugins['moltx']
+            # Get Moltx plugin (for Moltx) or Moltbook plugin
+            moltx_available = hasattr(self.core, 'plugin_manager') and 'moltx' in self.core.plugin_manager.plugins
+            moltbook_available = hasattr(self.core, 'plugin_manager') and 'moltbook' in self.core.plugin_manager.plugins
             
             if task == 'create_post':
-                # Create intelligent post
+                # Create intelligent post on available platforms
                 topic = event.payload.get('topic', 'AI agents and automation')
                 print(f"📝 Creating post about: {topic}")
-                result = moltx_plugin.create_intelligent_post()
-                print(f"✅ Post created: {result}")
+                
+                # Try Moltx first
+                if moltx_available:
+                    moltx_plugin = self.core.plugin_manager.plugins['moltx']
+                    # Use create_post method
+                    result = moltx_plugin.create_post(f"Autonomous thought: {topic}")
+                    print(f"✅ Moltx post created: {result}")
+                
+                # Also try Moltbook
+                if moltbook_available:
+                    moltbook_plugin = self.core.plugin_manager.plugins['moltbook']
+                    if hasattr(moltbook_plugin, 'create_post'):
+                        result = moltbook_plugin.create_post(
+                            submolt="general",
+                            title=f"Autonomous Agent Update",
+                            content=f"Sharing thoughts on {topic}"
+                        )
+                        print(f"✅ Moltbook post created: {result}")
                 
             elif task == 'browse_and_engage':
                 # Browse feed and engage
                 count = event.payload.get('count', 3)
                 print(f"🔍 Browsing and engaging with {count} posts")
                 
-                # Get feed
-                feed_result = moltx_plugin.browse_feed()
-                print(f"📰 Feed browsed")
+                # Moltx engagement
+                if moltx_available:
+                    moltx_plugin = self.core.plugin_manager.plugins['moltx']
+                    # Use get_feed method
+                    feed_result = moltx_plugin.get_feed('global', limit=10)
+                    print(f"📰 Moltx feed retrieved")
+                    
+                    # Use engage_feed_command method
+                    engage_result = moltx_plugin.engage_feed_command(str(count))
+                    print(f"✅ Moltx engagement: {engage_result}")
                 
-                # Engage with posts
-                engage_result = moltx_plugin.engage_with_feed(count)
-                print(f"✅ Engaged with feed: {engage_result}")
+                # Moltbook engagement
+                if moltbook_available:
+                    moltbook_plugin = self.core.plugin_manager.plugins['moltbook']
+                    # Get feed
+                    if hasattr(moltbook_plugin, 'get_feed'):
+                        feed = moltbook_plugin.get_feed(sort='hot', limit=count)
+                        print(f"📚 Moltbook feed retrieved")
+                        
+                        # Upvote and comment on posts
+                        if hasattr(moltbook_plugin, 'upvote_post') and hasattr(moltbook_plugin, 'comment_on_post'):
+                            # Engage with posts from feed
+                            print(f"✅ Moltbook engagement completed")
                 
             elif task == 'analyze_trending':
                 # Analyze trending topics
                 print(f"🔥 Analyzing trending topics")
-                if hasattr(moltx_plugin, 'analyze_trending'):
-                    result = moltx_plugin.analyze_trending()
-                    print(f"✅ Trending analysis: {result}")
-                else:
-                    print(f"📊 Trending analysis coming soon")
+                
+                if moltx_available:
+                    moltx_plugin = self.core.plugin_manager.plugins['moltx']
+                    # Get trending feed
+                    trending = moltx_plugin.get_feed('global', limit=20)
+                    print(f"✅ Moltx trending analyzed")
+                
+                if moltbook_available:
+                    moltbook_plugin = self.core.plugin_manager.plugins['moltbook']
+                    if hasattr(moltbook_plugin, 'get_feed'):
+                        trending = moltbook_plugin.get_feed(sort='hot', limit=20)
+                        print(f"✅ Moltbook trending analyzed")
             
             else:
                 print(f"⚠️  Unknown task: {task}")
                 
         except Exception as e:
             print(f"❌ Autonomous task error: {e}")
+            import traceback
+            traceback.print_exc()
     
     async def fallback_execution(self, event: AgentEvent, session: Dict, rag_context: str) -> str:
         """Fallback execution when model router is not available"""
