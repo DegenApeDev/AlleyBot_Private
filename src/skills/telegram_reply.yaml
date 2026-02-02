@@ -1,0 +1,30 @@
+name: telegram_reply
+description: Reply to Telegram messages with context-aware responses
+category: communication
+enabled: true
+
+parameters:
+  - name: message
+    type: string
+    required: true
+    description: Message to reply to
+  - name: user_id
+    type: string
+    required: true
+    description: Telegram user ID
+
+execution:
+  plugin: telegram
+  command: send_message
+  rate_limit:
+    enabled: false
+    cooldown_minutes: 0
+
+model_requirements:
+  min_tokens: 50
+  max_tokens: 1000
+  temperature: 0.8
+
+success_criteria:
+  - response_contains: "✅"
+  - no_errors: true

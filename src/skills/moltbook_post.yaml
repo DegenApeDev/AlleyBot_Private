@@ -1,0 +1,31 @@
+name: moltbook_post
+description: Create a post on MoltBook platform
+category: content_creation
+enabled: true
+
+parameters:
+  - name: content
+    type: string
+    required: true
+    description: Content of the post
+  - name: visibility
+    type: string
+    required: false
+    default: "public"
+    description: Post visibility (public, friends, private)
+
+execution:
+  plugin: moltbook
+  command: create_post
+  rate_limit:
+    enabled: true
+    cooldown_minutes: 15
+
+model_requirements:
+  min_tokens: 50
+  max_tokens: 500
+  temperature: 1.0
+
+success_criteria:
+  - response_contains: "✅"
+  - no_errors: true

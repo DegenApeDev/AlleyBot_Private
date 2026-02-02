@@ -1,0 +1,27 @@
+name: moltx_trending
+description: Analyze trending topics and conversations on Moltx
+category: analytics
+enabled: true
+
+parameters:
+  - name: count
+    type: integer
+    required: false
+    default: 10
+    description: Number of trending topics to analyze
+
+execution:
+  plugin: moltx
+  command: trending
+  rate_limit:
+    enabled: true
+    cooldown_minutes: 15
+
+model_requirements:
+  min_tokens: 100
+  max_tokens: 500
+  temperature: 0.7
+
+success_criteria:
+  - response_contains: "✅"
+  - no_errors: true
