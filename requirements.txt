@@ -4,3 +4,4 @@ flask
 schedule
 python-telegram-bot
 aiohttp
+web3
