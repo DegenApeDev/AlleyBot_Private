@@ -449,24 +449,27 @@ Generate only the post content (no explanations):"""
     async def register_agent(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Register AlleyBot on ERC-8004 for on-chain identity"""
         try:
-            await update.message.reply_text("🆔 Registering AlleyBot on ERC-8004...\n\nThis will:\n1. Create agent profile with capabilities\n2. Register on-chain identity NFT\n3. Enable reputation system\n4. Make AlleyBot discoverable")
+            await update.message.reply_text("🆔 Registering AlleyBot on ERC-8004...\n\nThis will:\n1. Check if already registered\n2. Create agent profile with capabilities\n3. Register on-chain identity NFT (if needed)\n4. Enable reputation system\n\n⏳ This may take up to 5 minutes if sending transaction...")
             
-            # Run the registration script
+            # Run the registration script with longer timeout for transaction confirmation
             import subprocess
             result = subprocess.run(
                 ['python', 'utils/register_erc8004_agent.py'],
                 capture_output=True,
                 text=True,
-                timeout=60
+                timeout=360,  # 6 minutes to allow for transaction confirmation
+                input='yes\n'  # Auto-confirm registration
             )
             
             if result.returncode == 0:
                 output = result.stdout
-                # Send full output as it contains instructions
-                await update.message.reply_text(f"{output[-2000:]}")  # Last 2000 chars for instructions
+                # Send full output as it contains instructions or confirmation
+                await update.message.reply_text(f"{output[-2000:]}")  # Last 2000 chars
             else:
-                await update.message.reply_text(f"❌ Registration check failed:\n{result.stderr[-500:]}")
+                await update.message.reply_text(f"❌ Registration failed:\n{result.stderr[-500:]}")
                 
+        except subprocess.TimeoutExpired:
+            await update.message.reply_text("⏰ Registration timed out. This might mean:\n1. Transaction is still pending on Ethereum\n2. Network congestion\n3. Check Etherscan for your wallet's recent transactions\n\nTry running /register_agent again to check status.")
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
             import traceback
