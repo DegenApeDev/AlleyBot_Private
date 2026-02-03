@@ -10,6 +10,12 @@ from typing import Dict, Any, Optional
 from enum import Enum
 from dataclasses import dataclass
 from .trending_analyzer import TrendingAnalyzer
+from pathlib import Path
+import sys
+
+# Add monitoring to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from monitoring.activity_logger import ActivityLogger
 
 
 class EventType(Enum):
@@ -42,6 +48,7 @@ class EventRunner:
         self.session_manager = None  # Will be injected
         self.model_router = None  # Will be injected
         self.trending_analyzer = TrendingAnalyzer()
+        self.activity_logger = ActivityLogger()
         
     async def start(self):
         """Start the event-driven agent loop"""
@@ -152,6 +159,12 @@ class EventRunner:
                     # Use create_post method
                     result = moltx_plugin.create_post(f"Autonomous thought: {topic}")
                     print(f"✅ Moltx post created: {result}")
+                    
+                    # Log activity
+                    self.activity_logger.log_activity('post', 'moltx', {
+                        'topic': topic,
+                        'result': str(result)[:100]
+                    })
                 
                 # Also try Moltbook
                 if moltbook_available:
@@ -165,6 +178,12 @@ class EventRunner:
                             )
                             if result:
                                 print(f"✅ Moltbook post created: {result}")
+                                
+                                # Log activity
+                                self.activity_logger.log_activity('post', 'moltbook', {
+                                    'topic': topic,
+                                    'submolt': 'general'
+                                })
                             else:
                                 print(f"⚠️  Moltbook post failed - no response")
                         except Exception as e:
@@ -187,6 +206,12 @@ class EventRunner:
                     # Use engage_feed_command method
                     engage_result = moltx_plugin.engage_feed_command(str(count))
                     print(f"✅ Moltx engagement: {engage_result}")
+                    
+                    # Log activity
+                    self.activity_logger.log_activity('engage', 'moltx', {
+                        'count': count,
+                        'result': str(engage_result)[:100]
+                    })
                 
                 # Moltbook engagement
                 if moltbook_available:
@@ -207,11 +232,22 @@ class EventRunner:
                                         moltbook_plugin.api.upvote_post(post_id)
                                         print(f"  ✅ Upvoted Moltbook post {post_id}")
                                         
+                                        # Log upvote activity
+                                        self.activity_logger.log_activity('upvote', 'moltbook', {
+                                            'post_id': post_id
+                                        })
+                                        
                                         # Add comment (simple for now)
                                         try:
                                             comment = "Interesting perspective! 🦞"
                                             moltbook_plugin.api.add_comment(post_id, comment)
                                             print(f"  💬 Commented on Moltbook post {post_id}")
+                                            
+                                            # Log comment activity
+                                            self.activity_logger.log_activity('comment', 'moltbook', {
+                                                'post_id': post_id,
+                                                'comment': comment
+                                            })
                                         except:
                                             pass
                                 

@@ -51,7 +51,8 @@ class AnalyticsPlugin(AlleyBotPlugin):
             '/': self.dashboard_index,
             '/api/stats': self.api_stats,
             '/api/metrics': self.api_metrics,
-            '/api/activity': self.api_activity
+            '/api/activity': self.api_activity,
+            '/api/recent_activity': self.api_recent_activity
         }
     
     def _setup_dashboard(self):
@@ -217,6 +218,28 @@ class AnalyticsPlugin(AlleyBotPlugin):
                     activity_by_date[date]['upvotes'] += 1
             
             return jsonify({'success': True, 'activity': activity_by_date})
+            
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
+    
+    def api_recent_activity(self):
+        """API endpoint for recent activity feed"""
+        try:
+            # Try to get activity logger from event runner
+            activity_data = []
+            stats = {}
+            
+            if hasattr(self.core, 'event_runner') and hasattr(self.core.event_runner, 'activity_logger'):
+                activity_logger = self.core.event_runner.activity_logger
+                activity_data = activity_logger.get_recent_activities(limit=100)
+                stats = activity_logger.get_stats()
+            
+            return jsonify({
+                'success': True,
+                'activities': activity_data,
+                'stats': stats,
+                'timestamp': datetime.now().isoformat()
+            })
             
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)})
