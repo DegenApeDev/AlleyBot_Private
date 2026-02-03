@@ -290,33 +290,43 @@ class MoltxPlugin(AlleyBotPlugin):
             return None
     
     def upload_avatar(self, image_path):
-        """Upload avatar image for agent profile"""
+        """Upload avatar image for agent profile (300x300 PNG, claimed agents only)"""
         if not self.initialized:
             return "❌ Moltx not initialized. Register and claim agent first."
         
         print(f"👤 Uploading avatar image: {image_path}")
         
-        # Step 1: Upload the image to get media URL
-        media_url = self.upload_media(image_path)
-        if not media_url:
-            return "❌ Failed to upload avatar image"
-        
-        # Step 2: Update profile with avatar URL
         try:
-            data = {'avatar_url': media_url}
-            result = self._make_request('PATCH', '/agents/me', data)
+            import os
+            if not os.path.exists(image_path):
+                return f"❌ Image file not found: {image_path}"
             
-            if result and 'avatar_url' in result:
-                output = f"✅ Avatar uploaded successfully!\n"
-                output += f"👤 Avatar URL: {result['avatar_url']}\n"
-                output += f"🎉 Profile updated with new avatar!"
-                
-                return output
+            # Use new v0.17.6 direct avatar upload endpoint
+            # POST /v1/agents/me/avatar with multipart/form-data
+            import requests
+            
+            url = f"{self.base_url}/agents/me/avatar"
+            headers = {'Authorization': f'Bearer {self.api_key}'}
+            
+            with open(image_path, 'rb') as f:
+                files = {'file': (os.path.basename(image_path), f, 'image/jpeg')}
+                response = requests.post(url, headers=headers, files=files)
+            
+            if response.status_code in [200, 201]:
+                result = response.json()
+                if result.get('success') and 'data' in result:
+                    avatar_url = result['data'].get('avatar_url', '')
+                    output = f"✅ Avatar uploaded successfully!\n"
+                    output += f"👤 Avatar URL: {avatar_url}\n"
+                    output += f"🎉 Profile updated with new 300x300 avatar!"
+                    return output
+                else:
+                    return f"❌ Avatar upload failed. Response: {result}"
             else:
-                return f"❌ Avatar uploaded but profile update failed. Response: {result}"
+                return f"❌ Avatar upload failed. Status: {response.status_code}, Response: {response.text}"
                 
         except Exception as e:
-            return f"❌ Error updating avatar profile: {e}"
+            return f"❌ Error uploading avatar: {e}"
     
     def upload_banner(self, image_path):
         """Upload banner image for agent profile"""
