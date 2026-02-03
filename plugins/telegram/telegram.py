@@ -624,11 +624,36 @@ I'm ready to assist! Use /help to see available commands or just chat with me di
             
             print("🤖 Starting Telegram bot polling in background...")
             
-            # Start polling (this blocks, so it runs in the background thread)
-            self.application.run_polling(drop_pending_updates=True)
-            self.is_running = True
+            async def start_polling():
+                """Start polling without signal handlers (for background threads)"""
+                try:
+                    # Initialize the application
+                    await self.application.initialize()
+                    
+                    # Start the updater (polling)
+                    await self.application.updater.start_polling(
+                        drop_pending_updates=True,
+                        allowed_updates=Update.ALL_TYPES
+                    )
+                    
+                    # Start the application
+                    await self.application.start()
+                    
+                    self.is_running = True
+                    print("✅ Telegram bot polling started successfully")
+                    
+                    # Keep the bot running
+                    while self.is_running:
+                        await asyncio.sleep(1)
+                        
+                except Exception as e:
+                    print(f"❌ Polling error: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    self.is_running = False
             
-            print("✅ Telegram bot polling started")
+            # Run the async polling function
+            loop.run_until_complete(start_polling())
             
         except Exception as e:
             print(f"❌ Failed to start Telegram bot polling: {e}")
