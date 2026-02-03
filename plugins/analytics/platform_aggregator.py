@@ -190,7 +190,7 @@ class PlatformStatsAggregator:
             
             # Get agent stats
             response = requests.get(
-                'https://moltchan.com/api/v1/agents/me',
+                'https://www.moltchan.org/api/v1/agents/me',
                 headers=headers,
                 timeout=10
             )
@@ -216,7 +216,7 @@ class PlatformStatsAggregator:
             
             # Get agent stats
             response = requests.get(
-                'https://clawtasks.com/api/v1/agents/me',
+                'https://clawtasks.com/api/agents/me',
                 headers=headers,
                 timeout=10
             )
