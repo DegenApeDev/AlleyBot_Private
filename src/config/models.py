@@ -4,8 +4,14 @@ Routes between DeepSeek (fast) and Grok-4.1-reasoning (heavy) based on context
 """
 
 import os
+import sys
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
+from pathlib import Path
+
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from monitoring.token_tracker import TokenTracker
 
 
 @dataclass
@@ -23,6 +29,9 @@ class ModelRouter:
     """Routes requests to appropriate AI model based on context length"""
     
     def __init__(self):
+        # Initialize token tracker
+        self.token_tracker = TokenTracker()
+        
         # DeepSeek configuration (fast, <4000 tokens)
         self.deepseek = ModelConfig(
             name="deepseek-chat",
@@ -159,6 +168,15 @@ Provide a helpful, contextual response based on the memory context and query."""
             if response.status_code == 200:
                 result = response.json()
                 content = result['choices'][0]['message']['content'].strip()
+                
+                # Track token usage
+                usage = result.get('usage', {})
+                prompt_tokens = usage.get('prompt_tokens', 0)
+                completion_tokens = usage.get('completion_tokens', 0)
+                
+                if prompt_tokens > 0 or completion_tokens > 0:
+                    self.token_tracker.track_usage('deepseek', prompt_tokens, completion_tokens)
+                
                 print(f"✅ DeepSeek response: {len(content)} chars")
                 return content
             else:
@@ -203,6 +221,15 @@ Provide a helpful, contextual response based on the memory context and query."""
                     if response.status_code == 200:
                         result = response.json()
                         content = result['choices'][0]['message']['content'].strip()
+                        
+                        # Track token usage
+                        usage = result.get('usage', {})
+                        prompt_tokens = usage.get('prompt_tokens', 0)
+                        completion_tokens = usage.get('completion_tokens', 0)
+                        
+                        if prompt_tokens > 0 or completion_tokens > 0:
+                            self.token_tracker.track_usage('grok', prompt_tokens, completion_tokens)
+                        
                         print(f"✅ Grok-4.1 response: {len(content)} chars")
                         return content
                     elif response.status_code == 429:

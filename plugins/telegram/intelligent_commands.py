@@ -267,6 +267,61 @@ Generate only the post content (no explanations):"""
             import traceback
             traceback.print_exc()
     
+    async def token_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Get LLM API token usage statistics"""
+        try:
+            from src.config.models import ModelRouter
+            
+            # Get or create model router to access token tracker
+            if hasattr(self.core, 'model_router') and self.core.model_router:
+                token_tracker = self.core.model_router.token_tracker
+            else:
+                # Create temporary model router to access tracker
+                router = ModelRouter()
+                token_tracker = router.token_tracker
+            
+            # Get stats
+            session = token_tracker.get_session_stats()
+            daily = token_tracker.get_daily_stats()
+            weekly = token_tracker.get_weekly_stats()
+            costs = token_tracker.get_cost_estimate()
+            
+            # Format message
+            stats_text = "📊 **LLM API Token Usage**\n\n"
+            
+            # Session stats
+            stats_text += f"🔄 **Current Session:**\n"
+            stats_text += f"  • Total: {session['total_session_tokens']:,} tokens\n"
+            stats_text += f"  • Requests: {session['total_session_requests']}\n"
+            stats_text += f"  • DeepSeek: {session['session']['deepseek']['total_tokens']:,}\n"
+            stats_text += f"  • Grok: {session['session']['grok']['total_tokens']:,}\n\n"
+            
+            # Daily stats
+            stats_text += f"📅 **Today ({daily['date']}):**\n"
+            stats_text += f"  • Total: {daily['total_tokens']:,} tokens\n"
+            stats_text += f"  • Requests: {daily['total_requests']}\n"
+            stats_text += f"  • DeepSeek: {daily['usage']['deepseek']['total_tokens']:,}\n"
+            stats_text += f"  • Grok: {daily['usage']['grok']['total_tokens']:,}\n\n"
+            
+            # Cost estimate
+            stats_text += f"💰 **Estimated Costs (Today):**\n"
+            stats_text += f"  • DeepSeek: ${costs['costs']['deepseek']['total_cost']:.4f}\n"
+            stats_text += f"  • Grok: ${costs['costs']['grok']['total_cost']:.4f}\n"
+            stats_text += f"  • **Total: ${costs['total_daily_cost']:.4f}**\n"
+            stats_text += f"  • Est. Monthly: ${costs['estimated_monthly_cost']:.2f}\n\n"
+            
+            # Weekly stats
+            stats_text += f"📈 **Last 7 Days:**\n"
+            stats_text += f"  • Total: {weekly['total_tokens']:,} tokens\n"
+            stats_text += f"  • Avg/Day: {int(weekly['average_tokens_per_day']):,}\n"
+            
+            await update.message.reply_text(stats_text)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error getting token stats: {e}")
+            import traceback
+            traceback.print_exc()
+    
     async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Get comprehensive status of all platforms"""
         try:
@@ -385,6 +440,7 @@ Just send any message - I'll respond intelligently!
 /status - Platform status
 /skills - List available skills
 /skill [name] [params] - Execute skill
+/token_stats - LLM API token usage & costs
 /help - Show this help
 
 **Production Features:**
