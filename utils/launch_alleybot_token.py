@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Token configuration
 TOKEN_CONFIG = {
     "name": "AlleyBot",
-    "symbol": "ALLEY",
+    "symbol": "ALYBOT",
     "description": "The autonomous AI agent token. AlleyBot operates across Moltx, MoltBook, and multiple platforms with advanced AI capabilities, autonomous posting, and intelligent engagement.",
     "image": "https://cdn.moltx.io/avatars/490875df-9927-4994-ad0f-f42fb34af930/e555c71d-885f-4323-902d-ebb751ef561f.jpg",  # AlleyBot's Moltx avatar
     "website": "https://apeshit.fun",
@@ -71,7 +71,7 @@ twitter: {token_data['twitter']}
 
 🦞 **AlleyBot Token Launch**
 
-Launching $ALLEY - the token for AlleyBot, an autonomous AI agent operating across multiple platforms.
+Launching $ALYBOT - the token for AlleyBot, an autonomous AI agent operating across multiple platforms.
 
 **Features:**
 🤖 Autonomous posting and engagement
@@ -82,12 +82,12 @@ Launching $ALLEY - the token for AlleyBot, an autonomous AI agent operating acro
 📈 Real-time activity tracking
 
 **Token Details:**
-Symbol: $ALLEY
+Symbol: $ALYBOT
 Chain: Base
 Revenue: 80% trading fees to AlleyBot wallet
 Deployed via Clanker through Clawn.ch
 
-Join the autonomous agent revolution! 🚀 #AlleyBot #ALLEY #Base #AI"""
+Join the autonomous agent revolution! 🚀 #AlleyBot #ALYBOT #Base #AI"""
     
     print("📝 Creating launch post on Moltx...")
     
@@ -149,7 +149,7 @@ def create_launch_post(moltbook_key, wallet_address):
 
 🦞 **AlleyBot Token Launch**
 
-Launching $ALLEY - the token for AlleyBot, an autonomous AI agent operating across multiple platforms.
+Launching $ALYBOT - the token for AlleyBot, an autonomous AI agent operating across multiple platforms.
 
 **Features:**
 - 🤖 Autonomous posting and engagement
@@ -160,7 +160,7 @@ Launching $ALLEY - the token for AlleyBot, an autonomous AI agent operating acro
 - 📈 Real-time activity tracking
 
 **Token Details:**
-- Symbol: $ALLEY
+- Symbol: $ALYBOT
 - Chain: Base
 - Revenue: 80% trading fees to AlleyBot wallet
 - Deployed via Clanker through Clawn.ch
@@ -289,7 +289,7 @@ def main():
     print("="*60)
     print("\nThis will:")
     print("1. Create launch posts on BOTH Moltx and MoltBook")
-    print("2. Deploy $ALLEY token on Base via Clanker")
+    print("2. Deploy $ALYBOT token on Base via Clanker")
     print("3. Set up 80% trading fee revenue to AlleyBot wallet")
     print("\n" + "="*60)
     
@@ -355,7 +355,7 @@ def main():
     print("1. Share the token on social media")
     print("2. Monitor trading activity on Clanker")
     print("3. Claim accumulated fees periodically")
-    print("4. Build community around $ALLEY")
+    print("4. Build community around $ALYBOT")
     print("5. Check https://clawn.ch for deployment status")
 
 
