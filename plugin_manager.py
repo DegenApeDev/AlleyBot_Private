@@ -95,7 +95,7 @@ class PluginManager:
             "analytics": {
                 "enabled": True,
                 "config": {
-                    "dashboard_port": 5000,
+                    "dashboard_port": 7001,
                     "refresh_interval": 120
                 }
             }

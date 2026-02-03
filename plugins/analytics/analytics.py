@@ -17,7 +17,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
     def __init__(self, config):
         super().__init__(config)
         self.app = None
-        self.dashboard_port = config.get('dashboard_port', 5001)
+        self.dashboard_port = config.get('dashboard_port', 7001)
         self.refresh_interval = config.get('refresh_interval', 120)
     
     def initialize(self, api, core):
