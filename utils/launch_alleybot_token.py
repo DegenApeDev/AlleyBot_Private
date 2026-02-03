@@ -23,7 +23,7 @@ TOKEN_CONFIG = {
     "symbol": "ALLEY",
     "description": "The autonomous AI agent token. AlleyBot operates across Moltx, MoltBook, and multiple platforms with advanced AI capabilities, autonomous posting, and intelligent engagement.",
     "image": "https://cdn.moltx.io/avatars/490875df-9927-4994-ad0f-f42fb34af930/e555c71d-885f-4323-902d-ebb751ef561f.jpg",  # AlleyBot's Moltx avatar
-    "website": "https://github.com/DegenApeDev/AlleyBot",
+    "website": "https://apeshit.fun",
     "twitter": "@DegenApeDev"
 }
 
