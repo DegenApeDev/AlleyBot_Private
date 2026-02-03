@@ -55,23 +55,85 @@ class IntelligentTelegramCommands:
             await update.message.reply_text(f"❌ Error: {e}")
     
     async def moltx_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Create a post on Moltx"""
+        """Create an AI-generated post on Moltx based on topic/direction"""
         try:
             if not context.args:
-                await update.message.reply_text("📝 Usage: /moltx_post [your message]")
+                await update.message.reply_text("📝 Usage: /moltx_post [topic and direction]\n\nExample: /moltx_post AI agents revolutionizing crypto")
                 return
             
-            post_content = ' '.join(context.args)
+            topic_direction = ' '.join(context.args)
+            
+            # Send "generating" message
+            status_msg = await update.message.reply_text("🤖 Generating post with AI...")
             
             if self.core and hasattr(self.core, 'plugin_manager') and 'moltx' in self.core.plugin_manager.plugins:
                 moltx_plugin = self.core.plugin_manager.plugins['moltx']
+                
+                # Use Model Router to generate intelligent post
+                from src.config.models import ModelRouter
+                from src.agents.session_manager import SessionManager
+                from src.agents.event_types import AgentEvent, EventType
+                from datetime import datetime
+                
+                # Initialize if needed
+                model_router = ModelRouter()
+                session_manager = SessionManager()
+                
+                # Get user session
+                user_id = update.effective_user.id
+                session_id = f"telegram_{user_id}"
+                session = await session_manager.load_session(session_id)
+                rag_context = await session_manager.get_rag_context(session_id, topic_direction)
+                
+                # Create prompt for AI
+                prompt = f"""You are AlleyBot, an autonomous AI agent on Moltx.
+
+Create an engaging post about: {topic_direction}
+
+Requirements:
+1. Be conversational and authentic (not corporate)
+2. Keep it 1-3 sentences maximum
+3. Show personality and unique perspective
+4. Include 1-2 relevant hashtags if appropriate
+5. Make it engaging and insightful
+
+Generate only the post content (no explanations):"""
+                
+                # Generate post with AI
+                event = AgentEvent(
+                    event_type=EventType.MESSAGE_RECEIVED,
+                    session_id=session_id,
+                    channel="telegram",
+                    payload={"query": prompt},
+                    timestamp=datetime.now(),
+                    priority=2
+                )
+                
+                post_content = await model_router.route_and_execute(
+                    event=event,
+                    session=session,
+                    rag_context=rag_context
+                )
+                
+                # Clean up response
+                post_content = post_content.strip().strip('"').strip("'")
+                
+                # Save session
+                await session_manager.save_session(session_id, session)
+                await session_manager.update_rag_memory(session_id, topic_direction, post_content)
+                
+                # Post to Moltx
                 result = moltx_plugin.create_post(post_content)
-                await update.message.reply_text(f"📢 Moltx Post:\n{result}")
+                
+                # Update status message
+                await status_msg.edit_text(f"✅ AI-Generated Post:\n\n{post_content}\n\n📢 Result: {result}")
             else:
-                await update.message.reply_text("❌ Moltx plugin not available")
+                await status_msg.edit_text("❌ Moltx plugin not available")
                 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
     
     async def moltx_feed(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Browse Moltx feed"""
@@ -118,26 +180,92 @@ class IntelligentTelegramCommands:
             await update.message.reply_text(f"❌ Error: {e}")
     
     async def moltbook_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Create a post on MoltBook"""
+        """Create an AI-generated post on MoltBook based on topic/direction"""
         try:
             if not context.args:
-                await update.message.reply_text("📝 Usage: /moltbook_post [your message]")
+                await update.message.reply_text("📝 Usage: /moltbook_post [topic and direction]\n\nExample: /moltbook_post discussing AI agent development")
                 return
             
-            post_content = ' '.join(context.args)
+            topic_direction = ' '.join(context.args)
+            
+            # Send "generating" message
+            status_msg = await update.message.reply_text("🤖 Generating post with AI...")
             
             if self.core and hasattr(self.core, 'plugin_manager') and 'moltbook' in self.core.plugin_manager.plugins:
                 moltbook_plugin = self.core.plugin_manager.plugins['moltbook']
+                
                 if hasattr(moltbook_plugin, 'create_post'):
-                    result = moltbook_plugin.create_post(post_content)
-                    await update.message.reply_text(f"📚 MoltBook Post:\n{result}")
+                    # Use Model Router to generate intelligent post
+                    from src.config.models import ModelRouter
+                    from src.agents.session_manager import SessionManager
+                    from src.agents.event_types import AgentEvent, EventType
+                    from datetime import datetime
+                    
+                    # Initialize if needed
+                    model_router = ModelRouter()
+                    session_manager = SessionManager()
+                    
+                    # Get user session
+                    user_id = update.effective_user.id
+                    session_id = f"telegram_{user_id}"
+                    session = await session_manager.load_session(session_id)
+                    rag_context = await session_manager.get_rag_context(session_id, topic_direction)
+                    
+                    # Create prompt for AI
+                    prompt = f"""You are AlleyBot, an autonomous AI agent on MoltBook.
+
+Create an engaging post about: {topic_direction}
+
+Requirements:
+1. Be conversational and authentic (not corporate)
+2. Keep it 2-4 sentences for MoltBook format
+3. Show personality and unique perspective
+4. Make it engaging and insightful
+5. Suitable for discussion/community engagement
+
+Generate only the post content (no explanations):"""
+                    
+                    # Generate post with AI
+                    event = AgentEvent(
+                        event_type=EventType.MESSAGE_RECEIVED,
+                        session_id=session_id,
+                        channel="telegram",
+                        payload={"query": prompt},
+                        timestamp=datetime.now(),
+                        priority=2
+                    )
+                    
+                    post_content = await model_router.route_and_execute(
+                        event=event,
+                        session=session,
+                        rag_context=rag_context
+                    )
+                    
+                    # Clean up response
+                    post_content = post_content.strip().strip('"').strip("'")
+                    
+                    # Save session
+                    await session_manager.save_session(session_id, session)
+                    await session_manager.update_rag_memory(session_id, topic_direction, post_content)
+                    
+                    # Post to MoltBook
+                    result = moltbook_plugin.create_post(
+                        submolt="general",
+                        title=topic_direction[:100],  # Use topic as title
+                        content=post_content
+                    )
+                    
+                    # Update status message
+                    await status_msg.edit_text(f"✅ AI-Generated Post:\n\n{post_content}\n\n📚 Result: {result}")
                 else:
-                    await update.message.reply_text("📚 MoltBook posting coming soon!")
+                    await status_msg.edit_text("📚 MoltBook posting coming soon!")
             else:
-                await update.message.reply_text("❌ MoltBook plugin not available")
+                await status_msg.edit_text("❌ MoltBook plugin not available")
                 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
     
     async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Get comprehensive status of all platforms"""
