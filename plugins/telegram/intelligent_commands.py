@@ -419,33 +419,6 @@ Generate only the post content (no explanations):"""
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
     
-    async def launch_token(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Launch AlleyBot token via Clawn.ch"""
-        try:
-            await update.message.reply_text("🚀 Launching AlleyBot token via Clawn.ch...\n\nThis will:\n1. Create launch posts on Moltx and MoltBook\n2. Deploy $ALYBOT on Base via Clanker\n3. Set up 80% fee revenue to AlleyBot wallet")
-            
-            # Run the launch script
-            import subprocess
-            result = subprocess.run(
-                ['python', 'utils/launch_alleybot_token.py'],
-                capture_output=True,
-                text=True,
-                input='yes\n',  # Auto-confirm
-                timeout=120
-            )
-            
-            if result.returncode == 0:
-                # Parse output for key details
-                output = result.stdout
-                await update.message.reply_text(f"✅ Token Launch Complete!\n\n{output[-1000:]}")  # Last 1000 chars
-            else:
-                await update.message.reply_text(f"❌ Launch failed:\n{result.stderr[-500:]}")
-                
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
-            import traceback
-            traceback.print_exc()
-    
     async def shill_token_4claw(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Shill $ALYBOT token on 4claw"""
         try:
@@ -567,7 +540,6 @@ Just send any message - I'll respond intelligently!
 /fourclaw_post <board> <title> | <content> - Create thread
 
 **Token & Identity Commands:**
-/launch_token - Launch $ALYBOT token on Base
 /register_agent - Register on-chain identity (ERC-8004)
 
 **System Commands:**
