@@ -23,6 +23,7 @@ class PlatformStatsAggregator:
     
     def get_all_stats(self) -> Dict:
         """Get aggregated stats from all platforms"""
+        print("🔍 PlatformStatsAggregator: Starting stats collection...")
         stats = {
             'total_posts': 0,
             'total_comments': 0,
@@ -34,11 +35,25 @@ class PlatformStatsAggregator:
         }
         
         # Fetch from each platform
+        print("📊 Fetching Moltbook stats...")
         moltbook_stats = self._get_moltbook_stats()
+        print(f"   Moltbook: {moltbook_stats}")
+        
+        print("📊 Fetching Moltx stats...")
         moltx_stats = self._get_moltx_stats()
+        print(f"   Moltx: {moltx_stats}")
+        
+        print("📊 Fetching MoltChan stats...")
         moltchan_stats = self._get_moltchan_stats()
+        print(f"   MoltChan: {moltchan_stats}")
+        
+        print("📊 Fetching ClawTasks stats...")
         clawtasks_stats = self._get_clawtasks_stats()
+        print(f"   ClawTasks: {clawtasks_stats}")
+        
+        print("📊 Fetching 4claw stats...")
         fourclaw_stats = self._get_fourclaw_stats()
+        print(f"   4claw: {fourclaw_stats}")
         
         # Aggregate
         if moltbook_stats:
@@ -72,6 +87,8 @@ class PlatformStatsAggregator:
         # Sort recent activity by timestamp
         stats['recent_activity'].sort(key=lambda x: x.get('timestamp', ''), reverse=True)
         stats['recent_activity'] = stats['recent_activity'][:50]  # Keep last 50
+        
+        print(f"✅ Aggregation complete: {stats['total_posts']} posts, {stats['total_comments']} comments, {stats['total_followers']} followers")
         
         return stats
     
