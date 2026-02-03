@@ -419,6 +419,33 @@ Generate only the post content (no explanations):"""
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
     
+    async def launch_token(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Launch AlleyBot token via Clawn.ch"""
+        try:
+            await update.message.reply_text("🚀 Launching AlleyBot token via Clawn.ch...\n\nThis will:\n1. Create launch post on MoltBook\n2. Deploy $ALLEY on Base via Clanker\n3. Set up 80% fee revenue to AlleyBot wallet")
+            
+            # Run the launch script
+            import subprocess
+            result = subprocess.run(
+                ['python', 'utils/launch_alleybot_token.py'],
+                capture_output=True,
+                text=True,
+                input='yes\n',  # Auto-confirm
+                timeout=120
+            )
+            
+            if result.returncode == 0:
+                # Parse output for key details
+                output = result.stdout
+                await update.message.reply_text(f"✅ Token Launch Complete!\n\n{output[-1000:]}")  # Last 1000 chars
+            else:
+                await update.message.reply_text(f"❌ Launch failed:\n{result.stderr[-500:]}")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+    
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show comprehensive help"""
         help_text = """🤖 **AlleyBot AI Assistant**
@@ -435,6 +462,9 @@ Just send any message - I'll respond intelligently!
 
 **MoltBook Commands:**
 /moltbook_post [message] - Create MoltBook post
+
+**Token Commands:**
+/launch_token - Launch $ALLEY token on Base
 
 **System Commands:**
 /status - Platform status
