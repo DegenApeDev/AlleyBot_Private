@@ -66,8 +66,8 @@ class IntelligentTelegramCommands:
             # Send "generating" message
             status_msg = await update.message.reply_text("🤖 Generating post with AI...")
             
-            if self.core and hasattr(self.core, 'plugin_manager') and 'moltx' in self.core.plugin_manager.plugins:
-                moltx_plugin = self.core.plugin_manager.plugins['moltx']
+            if self.core and hasattr(self.core, 'plugins') and 'moltx' in self.core.plugins:
+                moltx_plugin = self.core.plugins['moltx']
                 
                 # Use Model Router to generate intelligent post
                 from src.config.models import ModelRouter
@@ -138,8 +138,8 @@ Generate only the post content (no explanations):"""
     async def moltx_feed(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Browse Moltx feed"""
         try:
-            if self.core and hasattr(self.core, 'plugin_manager') and 'moltx' in self.core.plugin_manager.plugins:
-                moltx_plugin = self.core.plugin_manager.plugins['moltx']
+            if self.core and hasattr(self.core, 'plugins') and 'moltx' in self.core.plugins:
+                moltx_plugin = self.core.plugins['moltx']
                 result = moltx_plugin.feed_command()
                 await update.message.reply_text(f"📰 Moltx Feed:\n{result}")
             else:
@@ -153,8 +153,8 @@ Generate only the post content (no explanations):"""
         try:
             count = int(context.args[0]) if context.args else 3
             
-            if self.core and hasattr(self.core, 'plugin_manager') and 'moltx' in self.core.plugin_manager.plugins:
-                moltx_plugin = self.core.plugin_manager.plugins['moltx']
+            if self.core and hasattr(self.core, 'plugins') and 'moltx' in self.core.plugins:
+                moltx_plugin = self.core.plugins['moltx']
                 result = moltx_plugin.engage_feed_command(str(count))
                 await update.message.reply_text(f"🤖 Engagement:\n{result}")
             else:
@@ -166,8 +166,8 @@ Generate only the post content (no explanations):"""
     async def moltx_trending(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Analyze trending topics on Moltx"""
         try:
-            if self.core and hasattr(self.core, 'plugin_manager') and 'moltx' in self.core.plugin_manager.plugins:
-                moltx_plugin = self.core.plugin_manager.plugins['moltx']
+            if self.core and hasattr(self.core, 'plugins') and 'moltx' in self.core.plugins:
+                moltx_plugin = self.core.plugins['moltx']
                 if hasattr(moltx_plugin, 'trending_command'):
                     result = moltx_plugin.trending_command()
                     await update.message.reply_text(f"🔥 Trending:\n{result}")
@@ -191,8 +191,8 @@ Generate only the post content (no explanations):"""
             # Send "generating" message
             status_msg = await update.message.reply_text("🤖 Generating post with AI...")
             
-            if self.core and hasattr(self.core, 'plugin_manager') and 'moltbook' in self.core.plugin_manager.plugins:
-                moltbook_plugin = self.core.plugin_manager.plugins['moltbook']
+            if self.core and hasattr(self.core, 'plugins') and 'moltbook' in self.core.plugins:
+                moltbook_plugin = self.core.plugins['moltbook']
                 
                 if hasattr(moltbook_plugin, 'create_post'):
                     # Use Model Router to generate intelligent post
@@ -327,8 +327,8 @@ Generate only the post content (no explanations):"""
         try:
             status_text = "📊 **AlleyBot Status**\n\n"
             
-            if self.core and hasattr(self.core, 'plugin_manager'):
-                plugins = self.core.plugin_manager.plugins
+            if self.core and hasattr(self.core, 'plugins'):
+                plugins = self.core.plugins
                 
                 # Check each platform
                 platforms = {
