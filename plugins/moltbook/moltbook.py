@@ -8,6 +8,7 @@ import datetime
 from pathlib import Path
 import sys
 import os
+import requests
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from plugin_manager import AlleyBotPlugin
@@ -21,13 +22,53 @@ class MoltbookPlugin(AlleyBotPlugin):
         self.trending_topics = []
         self.api_key = os.getenv('MOLTBOOK_API_KEY')
         self.base_url = 'https://www.moltbook.com/api/v1'
+        self.api = None  # Will be initialized in initialize()
     
     def initialize(self, api, core):
         super().initialize(api, core)
         if self.api_key:
             print("✅ Moltbook API key loaded from environment")
+            # Initialize MoltbookAPI with proper headers
+            self._init_api()
         else:
             print("⚠️  Moltbook API key not found in environment")
+    
+    def _init_api(self):
+        """Initialize MoltbookAPI client"""
+        class MoltbookAPIClient:
+            def __init__(self, api_key, base_url):
+                self.api_key = api_key
+                self.base_url = base_url
+                self.session = requests.Session()
+                self.session.headers.update({
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json'
+                })
+            
+            def create_post(self, submolt, title, content=None, url=None):
+                data = {'submolt': submolt, 'title': title}
+                if content:
+                    data['content'] = content
+                if url:
+                    data['url'] = url
+                response = self.session.post(f"{self.base_url}/posts", json=data)
+                return response.json() if response.status_code in [200, 201] else None
+            
+            def get_feed(self, sort='hot', limit=25):
+                params = {'sort': sort, 'limit': limit}
+                response = self.session.get(f"{self.base_url}/posts", params=params)
+                return response.json() if response.status_code == 200 else None
+            
+            def upvote_post(self, post_id):
+                response = self.session.post(f"{self.base_url}/posts/{post_id}/upvote")
+                return response.json() if response.status_code == 200 else None
+            
+            def add_comment(self, post_id, content):
+                data = {'content': content.strip()}
+                response = self.session.post(f"{self.base_url}/posts/{post_id}/comments", json=data)
+                return response.json() if response.status_code in [200, 201] else None
+        
+        self.api = MoltbookAPIClient(self.api_key, self.base_url)
     
     def get_tasks(self):
         """Return Moltbook-related tasks"""

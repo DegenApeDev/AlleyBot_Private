@@ -156,13 +156,21 @@ class EventRunner:
                 # Also try Moltbook
                 if moltbook_available:
                     moltbook_plugin = self.core.plugin_manager.plugins['moltbook']
-                    if hasattr(moltbook_plugin, 'create_post'):
-                        result = moltbook_plugin.create_post(
-                            submolt="general",
-                            title=f"Autonomous Agent Update",
-                            content=f"Sharing thoughts on {topic}"
-                        )
-                        print(f"✅ Moltbook post created: {result}")
+                    if hasattr(moltbook_plugin, 'api') and moltbook_plugin.api:
+                        try:
+                            result = moltbook_plugin.api.create_post(
+                                submolt="general",
+                                title=f"Autonomous Agent: {topic[:50]}",
+                                content=f"Sharing thoughts on {topic}"
+                            )
+                            if result:
+                                print(f"✅ Moltbook post created: {result}")
+                            else:
+                                print(f"⚠️  Moltbook post failed - no response")
+                        except Exception as e:
+                            print(f"❌ Moltbook post error: {e}")
+                    else:
+                        print(f"⚠️  Moltbook API not initialized")
                 
             elif task == 'browse_and_engage':
                 # Browse feed and engage
@@ -183,15 +191,37 @@ class EventRunner:
                 # Moltbook engagement
                 if moltbook_available:
                     moltbook_plugin = self.core.plugin_manager.plugins['moltbook']
-                    # Get feed
-                    if hasattr(moltbook_plugin, 'get_feed'):
-                        feed = moltbook_plugin.get_feed(sort='hot', limit=count)
-                        print(f"📚 Moltbook feed retrieved")
-                        
-                        # Upvote and comment on posts
-                        if hasattr(moltbook_plugin, 'upvote_post') and hasattr(moltbook_plugin, 'comment_on_post'):
-                            # Engage with posts from feed
-                            print(f"✅ Moltbook engagement completed")
+                    if hasattr(moltbook_plugin, 'api') and moltbook_plugin.api:
+                        try:
+                            # Get feed
+                            feed_data = moltbook_plugin.api.get_feed(sort='hot', limit=count)
+                            if feed_data and 'posts' in feed_data:
+                                posts = feed_data['posts'][:count]
+                                print(f"📚 Moltbook feed retrieved: {len(posts)} posts")
+                                
+                                # Upvote and comment on posts
+                                for post in posts:
+                                    post_id = post.get('id')
+                                    if post_id:
+                                        # Upvote
+                                        moltbook_plugin.api.upvote_post(post_id)
+                                        print(f"  ✅ Upvoted Moltbook post {post_id}")
+                                        
+                                        # Add comment (simple for now)
+                                        try:
+                                            comment = "Interesting perspective! 🦞"
+                                            moltbook_plugin.api.add_comment(post_id, comment)
+                                            print(f"  💬 Commented on Moltbook post {post_id}")
+                                        except:
+                                            pass
+                                
+                                print(f"✅ Moltbook engagement completed")
+                            else:
+                                print(f"⚠️  No Moltbook posts found in feed")
+                        except Exception as e:
+                            print(f"❌ Moltbook engagement error: {e}")
+                    else:
+                        print(f"⚠️  Moltbook API not initialized")
                 
             elif task == 'analyze_trending':
                 # Analyze trending topics and create post based on trends
