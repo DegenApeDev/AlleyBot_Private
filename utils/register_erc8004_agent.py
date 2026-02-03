@@ -43,9 +43,14 @@ AGENT_PROFILE = {
         "multi_platform_engagement",
         "token_deployment",
         "intelligent_conversations",
-        "rag_memory"
+        "rag_memory",
+        "mcp_integration"
     ]
 }
+
+# Note: MCP endpoint is optional for ERC-8004 registration
+# If you want to add it later, you can update your profile with:
+# "mcp_endpoint": "https://your-server.com/mcp"
 
 # ERC-8004 Contract addresses (Ethereum Mainnet)
 IDENTITY_REGISTRY = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
@@ -96,9 +101,13 @@ def register_via_frontend():
     print("\n4. Add services:")
     for service in AGENT_PROFILE['services']:
         print(f"   - {service['name']}: {service['url']}")
-    print("\n5. Click 'Register Agent'")
-    print("\n6. Confirm transaction (~0.005 ETH gas)")
-    print("\n7. You'll receive an ERC-721 NFT representing your agent!")
+    print("\n5. MCP Endpoint (OPTIONAL):")
+    print("   - You can skip this field for now")
+    print("   - AlleyBot has MCP capabilities but no public endpoint yet")
+    print("   - Can be added later by updating your profile")
+    print("\n6. Click 'Register Agent'")
+    print("\n7. Confirm transaction (~0.005 ETH gas)")
+    print("\n8. You'll receive an ERC-721 NFT representing your agent!")
     print("\n" + "="*60)
     print("\n💡 Make sure you have ~0.01 ETH on Ethereum mainnet for gas")
     print("   Use Bankr to bridge: 'Bridge 0.01 ETH from Base to Ethereum'")
