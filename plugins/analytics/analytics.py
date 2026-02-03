@@ -11,6 +11,7 @@ from flask import Flask, render_template, jsonify
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from plugin_manager import AlleyBotPlugin
+from plugins.analytics.platform_aggregator import PlatformStatsAggregator
 
 class AnalyticsPlugin(AlleyBotPlugin):
     """Analytics and dashboard plugin"""
@@ -20,9 +21,11 @@ class AnalyticsPlugin(AlleyBotPlugin):
         self.app = None
         self.dashboard_port = config.get('dashboard_port', 7001)
         self.refresh_interval = config.get('refresh_interval', 120)
+        self.aggregator = None
     
     def initialize(self, api, core):
         super().initialize(api, core)
+        self.aggregator = PlatformStatsAggregator(core)
         self._setup_dashboard()
         print("📊 Analytics system initialized")
     
@@ -53,7 +56,8 @@ class AnalyticsPlugin(AlleyBotPlugin):
             '/api/stats': self.api_stats,
             '/api/metrics': self.api_metrics,
             '/api/activity': self.api_activity,
-            '/api/recent_activity': self.api_recent_activity
+            '/api/recent_activity': self.api_recent_activity,
+            '/api/interactions': self.api_interactions
         }
     
     def _setup_dashboard(self):
@@ -69,49 +73,69 @@ class AnalyticsPlugin(AlleyBotPlugin):
     def dashboard_index(self):
         """Main dashboard page"""
         try:
-            # Load data from memory
-            state = self.core.get_memory('state') or {}
-            interactions = self.core.get_memory('interactions') or []
-            objectives = self.core.get_memory('objectives') or {}
+            # Get real-time stats from all platforms
+            print("📊 Fetching live stats from all platforms...")
+            platform_stats = self.aggregator.get_all_stats()
             
-            # Get profile data
-            try:
-                profile = self.api.get_public_profile(name="AlleyBot")
-                agent = profile.get('agent', {})
-                recent_posts = profile.get('recentPosts', [])
-                print(f"✅ Profile API working: {len(recent_posts)} posts found")
-            except Exception as e:
-                print(f"⚠️  Profile API down (server overload): {e}")
-                print("📊 Using fallback data from memory...")
-                agent = {
-                    'name': 'AlleyBot',
-                    'karma': state.get('karma', 0),
-                    'follower_count': state.get('followers', 0),
-                    'following_count': state.get('following_count', 0)
+            # Extract aggregated data
+            total_posts = platform_stats.get('total_posts', 0)
+            total_comments = platform_stats.get('total_comments', 0)
+            followers = platform_stats.get('total_followers', 0)
+            following = platform_stats.get('total_following', 0)
+            
+            # Get platform-specific data
+            platforms = platform_stats.get('platforms', {})
+            moltbook = platforms.get('moltbook', {})
+            moltx = platforms.get('moltx', {})
+            clawtasks = platforms.get('clawtasks', {})
+            
+            # Calculate derived metrics
+            karma = moltbook.get('karma', 0)
+            earnings_usdc = clawtasks.get('earnings_usdc', 0)
+            
+            # Count active platforms
+            platforms_active = len([p for p in platforms.values() if p.get('status') == 'active'])
+            
+            # Get recent activity from all platforms
+            recent_interactions = platform_stats.get('recent_activity', [])
+            
+            # Format interactions for dashboard
+            formatted_interactions = []
+            for activity in recent_interactions[:20]:
+                interaction = {
+                    'type': activity.get('type', 'post'),
+                    'platform': activity.get('platform', 'Unknown'),
+                    'timestamp': activity.get('timestamp', ''),
+                    'details': {}
                 }
-                recent_posts = []
+                
+                if activity.get('type') == 'post':
+                    interaction['details'] = {
+                        'title': activity.get('title', activity.get('content', ''))[:60],
+                        'post_id': activity.get('url', '').split('/')[-1] if activity.get('url') else None,
+                        'ai_enhanced': False
+                    }
+                
+                formatted_interactions.append(interaction)
             
-            # Calculate multi-platform stats
-            total_posts = state.get('totalPosts', 0)
-            total_comments = state.get('totalComments', 0)
-            total_upvotes = state.get('totalUpvotes', 0)
-            karma = agent.get('karma', 0)
-            followers = agent.get('follower_count', 0)
-            following = agent.get('following_count', 0)
+            # Agent info
+            agent = {
+                'name': 'AlleyBot',
+                'karma': karma,
+                'follower_count': followers,
+                'following_count': following
+            }
             
-            # New v0.13.0 metrics
-            ai_enhanced_posts = state.get('aiEnhancedPosts', 0)
-            platforms_active = state.get('platformsActive', 5)
-            earnings_usdc = state.get('earningsUSDC', 0)
-            conversations_count = state.get('conversationsCount', 0)
-            groups_count = state.get('groupsCount', 0)
-            engagement_rate = state.get('engagementRate', 0)
-            autonomous_tasks = state.get('autonomousTasks', 14)
-            claim_status = state.get('claimStatus', 'claimed')
+            # Static metrics (these would need separate tracking)
+            ai_enhanced_posts = 0  # TODO: Track AI-enhanced posts
+            conversations_count = 0  # TODO: Track conversations
+            groups_count = 0  # TODO: Track groups
+            engagement_rate = round((total_comments / max(total_posts, 1)) * 100, 1) if total_posts > 0 else 0
+            autonomous_tasks = 14  # From config
+            claim_status = 'claimed'
+            objectives = {}
             
-            # Get recent interactions
-            recent_interactions = interactions[-20:] if interactions else []
-            recent_interactions.reverse()
+            print(f"✅ Dashboard loaded: {total_posts} posts, {total_comments} comments, {followers} followers")
             
             # Use the enhanced dashboard template
             return render_template(
@@ -119,12 +143,12 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 agent=agent,
                 total_posts=total_posts,
                 total_comments=total_comments,
-                total_upvotes=total_upvotes,
+                total_upvotes=0,  # TODO: Aggregate upvotes
                 karma=karma,
                 followers=followers,
                 following=following,
-                recent_interactions=recent_interactions,
-                recent_posts=recent_posts,
+                recent_interactions=formatted_interactions,
+                recent_posts=[],
                 objectives=objectives,
                 ai_enhanced_posts=ai_enhanced_posts,
                 platforms_active=platforms_active,
@@ -137,40 +161,34 @@ class AnalyticsPlugin(AlleyBotPlugin):
             )
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return f"Dashboard error: {e}"
     
     def api_stats(self):
         """API endpoint for stats"""
         try:
-            state = self.core.get_memory('state') or {}
+            # Get real-time stats from all platforms
+            platform_stats = self.aggregator.get_all_stats()
             
-            try:
-                profile = self.api.get_public_profile(name="AlleyBot")
-                agent = profile.get('agent', {})
-                print(f"✅ Stats API: Profile retrieved successfully")
-            except Exception as e:
-                print(f"⚠️  Stats API: Profile endpoint down ({e})")
-                print("📊 Using cached profile data...")
-                # Use fallback data
-                agent = {
-                    'karma': state.get('karma', 0),
-                    'follower_count': state.get('followers', 0),
-                    'following_count': state.get('following_count', 0)
-                }
+            platforms = platform_stats.get('platforms', {})
+            moltbook = platforms.get('moltbook', {})
             
             return jsonify({
-                'posts': state.get('totalPosts', 0),
-                'comments': state.get('totalComments', 0),
-                'upvotes': state.get('totalUpvotes', 0),
-                'karma': agent.get('karma', 0),
-                'followers': agent.get('follower_count', 0),
-                'following': agent.get('following_count', 0),
-                'donations': state.get('totalDonationsReceived', 0),
-                'api_status': 'ok' if agent else 'error'
+                'posts': platform_stats.get('total_posts', 0),
+                'comments': platform_stats.get('total_comments', 0),
+                'upvotes': 0,  # TODO: Aggregate upvotes
+                'karma': moltbook.get('karma', 0),
+                'followers': platform_stats.get('total_followers', 0),
+                'following': platform_stats.get('total_following', 0),
+                'donations': 0,  # TODO: Track donations
+                'platforms': platforms,
+                'api_status': 'ok',
+                'timestamp': platform_stats.get('timestamp')
             })
             
         except Exception as e:
-            return jsonify({'error': str(e)})
+            return jsonify({'error': str(e), 'api_status': 'error'})
     
     def api_metrics(self):
         """API endpoint for detailed metrics"""
@@ -240,6 +258,42 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 'activities': activity_data,
                 'stats': stats,
                 'timestamp': datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
+    
+    def api_interactions(self):
+        """API endpoint for recent interactions from all platforms"""
+        try:
+            # Get real-time stats from all platforms
+            platform_stats = self.aggregator.get_all_stats()
+            
+            # Get recent activity
+            recent_activity = platform_stats.get('recent_activity', [])
+            
+            # Format for dashboard
+            interactions = []
+            for activity in recent_activity[:50]:
+                interaction = {
+                    'type': activity.get('type', 'post'),
+                    'platform': activity.get('platform', 'Unknown'),
+                    'timestamp': activity.get('timestamp', ''),
+                    'details': {
+                        'post_id': activity.get('url', '').split('/')[-1] if activity.get('url') else None,
+                        'post_title': activity.get('title', activity.get('content', ''))[:100],
+                        'url': activity.get('url', ''),
+                        'upvotes': activity.get('upvotes', activity.get('likes', 0)),
+                        'comments': activity.get('comments', activity.get('replies', 0))
+                    }
+                }
+                interactions.append(interaction)
+            
+            return jsonify({
+                'success': True,
+                'interactions': interactions,
+                'total': len(interactions),
+                'timestamp': platform_stats.get('timestamp')
             })
             
         except Exception as e:
