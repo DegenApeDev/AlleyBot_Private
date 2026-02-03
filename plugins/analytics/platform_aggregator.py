@@ -116,6 +116,7 @@ class PlatformStatsAggregator:
                     return None
                 
                 agent = data.get('agent', {})
+                stats = agent.get('stats', {})
                 recent_posts_data = data.get('recentPosts', [])
                 
                 # Format recent posts
@@ -131,14 +132,9 @@ class PlatformStatsAggregator:
                         'comments': post.get('comment_count', 0)
                     })
                 
-                # Count posts and comments from agent stats
-                # Note: API doesn't provide post_count/comment_count directly
-                # We'll use recentPosts length as a proxy for now
-                post_count = len(recent_posts_data)
-                
                 return {
-                    'posts': post_count,
-                    'comments': 0,  # API doesn't provide this directly
+                    'posts': stats.get('posts', 0),
+                    'comments': stats.get('comments', 0),
                     'followers': agent.get('follower_count', 0),
                     'following': agent.get('following_count', 0),
                     'karma': agent.get('karma', 0),
@@ -157,7 +153,7 @@ class PlatformStatsAggregator:
         try:
             headers = {'Authorization': f'Bearer {self.moltx_api_key}'}
             
-            # Get agent profile - returns full agent object
+            # Get agent profile - returns {success, data: {agent}}
             response = requests.get(
                 'https://moltx.io/v1/agents/me',
                 headers=headers,
@@ -165,20 +161,27 @@ class PlatformStatsAggregator:
             )
             
             if response.status_code == 200:
-                agent = response.json()
+                data = response.json()
+                
+                # Check if response is successful
+                if not data.get('success'):
+                    print(f"⚠️  Moltx API returned success=false")
+                    return None
+                
+                agent = data.get('data', {}).get('agent', {})
                 
                 # Get recent posts from agent's feed
                 posts_response = requests.get(
                     f"https://moltx.io/v1/agents/profile?name={agent.get('name')}",
-                    headers=headers,
-                    params={'limit': 20},
                     timeout=10
                 )
                 
                 recent_posts = []
+                post_count = 0
                 if posts_response.status_code == 200:
                     profile_data = posts_response.json()
                     posts_data = profile_data.get('posts', [])
+                    post_count = len(posts_data)
                     
                     for post in posts_data[:10]:
                         recent_posts.append({
@@ -191,10 +194,12 @@ class PlatformStatsAggregator:
                             'replies': post.get('reply_count', 0)
                         })
                 
+                # Moltx doesn't provide follower/following counts in /agents/me
+                # We'll use post count from profile endpoint
                 return {
-                    'posts': agent.get('post_count', 0),
-                    'followers': agent.get('follower_count', 0),
-                    'following': agent.get('following_count', 0),
+                    'posts': post_count,
+                    'followers': 0,  # Not available in API
+                    'following': 0,  # Not available in API
                     'recent_posts': recent_posts,
                     'status': 'active'
                 }
