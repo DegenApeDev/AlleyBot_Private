@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 from enum import Enum
 from dataclasses import dataclass
+from .trending_analyzer import TrendingAnalyzer
 
 
 class EventType(Enum):
@@ -40,6 +41,7 @@ class EventRunner:
         self.running = False
         self.session_manager = None  # Will be injected
         self.model_router = None  # Will be injected
+        self.trending_analyzer = TrendingAnalyzer()
         
     async def start(self):
         """Start the event-driven agent loop"""
@@ -192,26 +194,104 @@ class EventRunner:
                             print(f"✅ Moltbook engagement completed")
                 
             elif task == 'analyze_trending':
-                # Analyze trending topics
-                print(f"🔥 Analyzing trending topics")
+                # Analyze trending topics and create post based on trends
+                print(f"🔥 Analyzing trending topics and creating relevant post")
                 
+                trending_hashtags = []
+                
+                # Get trending hashtags from Moltx API
                 if moltx_available:
                     moltx_plugin = self.core.plugin_manager.plugins['moltx']
-                    # Get trending feed
-                    trending = moltx_plugin.get_feed('global', limit=20)
-                    print(f"✅ Moltx trending analyzed")
+                    try:
+                        # Use Moltx trending hashtags API
+                        trending_result = moltx_plugin._make_request('GET', '/hashtags/trending', params={'limit': 20})
+                        if trending_result and 'data' in trending_result:
+                            trending_hashtags = trending_result['data'].get('hashtags', [])
+                            print(f"📊 Found {len(trending_hashtags)} trending hashtags on Moltx")
+                    except Exception as e:
+                        print(f"⚠️  Could not fetch trending hashtags: {e}")
                 
-                if moltbook_available:
-                    moltbook_plugin = self.core.plugin_manager.plugins['moltbook']
-                    if hasattr(moltbook_plugin, 'get_feed'):
-                        trending = moltbook_plugin.get_feed(sort='hot', limit=20)
-                        print(f"✅ Moltbook trending analyzed")
+                # Generate post based on trending topics
+                if trending_hashtags and self.model_router:
+                    await self._create_trending_post(trending_hashtags, moltx_plugin if moltx_available else None)
+                else:
+                    print(f"✅ Trending analysis complete (no post generated)")
             
             else:
                 print(f"⚠️  Unknown task: {task}")
                 
         except Exception as e:
             print(f"❌ Autonomous task error: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    async def _create_trending_post(self, trending_hashtags, moltx_plugin):
+        """Create an intelligent post based on trending hashtags using AI"""
+        try:
+            print(f"🤖 Generating post based on trending topics...")
+            
+            # Build context from trending hashtags
+            top_hashtags = trending_hashtags[:5]
+            hashtag_names = [tag.get('name', tag.get('hashtag', '')) for tag in top_hashtags]
+            hashtag_counts = [tag.get('count', tag.get('posts', 0)) for tag in top_hashtags]
+            
+            # Create prompt for AI
+            hashtag_list = ', '.join([f"#{name} ({count} posts)" for name, count in zip(hashtag_names, hashtag_counts)])
+            
+            prompt = f"""You are AlleyBot, an autonomous AI agent on Moltx.
+
+The following hashtags are currently trending on the platform:
+{hashtag_list}
+
+Create an engaging, insightful post that:
+1. References one or more of these trending topics
+2. Provides unique perspective or insight
+3. Is conversational and authentic (not corporate)
+4. Is 1-3 sentences maximum
+5. Includes 1-2 relevant hashtags from the trending list
+6. Shows personality
+
+Generate only the post content (no explanations or meta-commentary):"""
+            
+            # Use Model Router to generate post
+            event = AgentEvent(
+                event_type=EventType.SCHEDULED_TASK,
+                session_id="trending_post",
+                channel="moltx",
+                payload={"query": prompt},
+                timestamp=datetime.now(),
+                priority=2
+            )
+            
+            # Get session for trending posts
+            if self.session_manager:
+                session = await self.session_manager.load_session("trending_post")
+            else:
+                session = {}
+            
+            # Generate post content with AI
+            post_content = await self.model_router.route_and_execute(
+                event=event,
+                session=session,
+                rag_context=""
+            )
+            
+            # Clean up the response (remove quotes, extra whitespace)
+            post_content = post_content.strip().strip('"').strip("'")
+            
+            print(f"✍️  AI generated post: {post_content[:100]}...")
+            
+            # Post to Moltx
+            if moltx_plugin:
+                result = moltx_plugin.create_post(post_content)
+                print(f"✅ Trending post created: {result}")
+            
+            # Save session
+            if self.session_manager:
+                await self.session_manager.save_session("trending_post", session)
+            
+        except Exception as e:
+            print(f"❌ Failed to create trending post: {e}")
             import traceback
             traceback.print_exc()
     
