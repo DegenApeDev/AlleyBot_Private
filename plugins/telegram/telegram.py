@@ -83,6 +83,7 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("skill", self.intelligent_commands.execute_skill))
         self.application.add_handler(CommandHandler("token_stats", self.intelligent_commands.token_stats))
         self.application.add_handler(CommandHandler("launch_token", self.intelligent_commands.launch_token))
+        self.application.add_handler(CommandHandler("register_agent", self.intelligent_commands.register_agent))
         
         # Legacy command aliases
         self.application.add_handler(CommandHandler("post", self.intelligent_commands.moltx_post))

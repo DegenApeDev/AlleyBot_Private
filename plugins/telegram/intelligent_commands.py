@@ -422,7 +422,7 @@ Generate only the post content (no explanations):"""
     async def launch_token(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Launch AlleyBot token via Clawn.ch"""
         try:
-            await update.message.reply_text("🚀 Launching AlleyBot token via Clawn.ch...\n\nThis will:\n1. Create launch post on MoltBook\n2. Deploy $ALLEY on Base via Clanker\n3. Set up 80% fee revenue to AlleyBot wallet")
+            await update.message.reply_text("🚀 Launching AlleyBot token via Clawn.ch...\n\nThis will:\n1. Create launch posts on Moltx and MoltBook\n2. Deploy $ALYBOT on Base via Clanker\n3. Set up 80% fee revenue to AlleyBot wallet")
             
             # Run the launch script
             import subprocess
@@ -446,6 +446,32 @@ Generate only the post content (no explanations):"""
             import traceback
             traceback.print_exc()
     
+    async def register_agent(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Register AlleyBot on ERC-8004 for on-chain identity"""
+        try:
+            await update.message.reply_text("🆔 Registering AlleyBot on ERC-8004...\n\nThis will:\n1. Create agent profile with capabilities\n2. Register on-chain identity NFT\n3. Enable reputation system\n4. Make AlleyBot discoverable")
+            
+            # Run the registration script
+            import subprocess
+            result = subprocess.run(
+                ['python', 'utils/register_erc8004_agent.py'],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode == 0:
+                output = result.stdout
+                # Send full output as it contains instructions
+                await update.message.reply_text(f"{output[-2000:]}")  # Last 2000 chars for instructions
+            else:
+                await update.message.reply_text(f"❌ Registration check failed:\n{result.stderr[-500:]}")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+    
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show comprehensive help"""
         help_text = """🤖 **AlleyBot AI Assistant**
@@ -463,8 +489,9 @@ Just send any message - I'll respond intelligently!
 **MoltBook Commands:**
 /moltbook_post [message] - Create MoltBook post
 
-**Token Commands:**
-/launch_token - Launch $ALLEY token on Base
+**Token & Identity Commands:**
+/launch_token - Launch $ALYBOT token on Base
+/register_agent - Register on-chain identity (ERC-8004)
 
 **System Commands:**
 /status - Platform status
