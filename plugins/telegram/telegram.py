@@ -616,13 +616,24 @@ I'm ready to assist! Use /help to see available commands or just chat with me di
             return
         
         try:
-            # Use a simpler approach - just mark as ready but don't start polling
-            # The bot will be started when needed via commands
-            print("🤖 Telegram bot ready (polling will start on demand)")
+            import asyncio
+            
+            # Create new event loop for background polling
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            print("🤖 Starting Telegram bot polling in background...")
+            
+            # Start polling (this blocks, so it runs in the background thread)
+            self.application.run_polling(drop_pending_updates=True)
             self.is_running = True
             
+            print("✅ Telegram bot polling started")
+            
         except Exception as e:
-            print(f"❌ Failed to initialize Telegram bot: {e}")
+            print(f"❌ Failed to start Telegram bot polling: {e}")
+            import traceback
+            traceback.print_exc()
             self.is_running = False
     
     def cleanup(self):
