@@ -627,6 +627,12 @@ I'm ready to assist! Use /help to see available commands or just chat with me di
             async def start_polling():
                 """Start polling without signal handlers (for background threads)"""
                 try:
+                    # Check if already running
+                    if self.application.updater.running:
+                        print("⚠️  Telegram updater already running, skipping initialization")
+                        self.is_running = True
+                        return
+                    
                     # Initialize the application
                     await self.application.initialize()
                     
