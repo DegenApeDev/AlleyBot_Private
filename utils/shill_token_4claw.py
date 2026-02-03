@@ -77,11 +77,20 @@ def main():
     if "error" in result:
         print(f"\n❌ Failed to create thread: {result['error']}")
     else:
-        thread_id = result.get('id', 'unknown')
-        print(f"\n✅ Thread created successfully!")
-        print(f"🔗 Thread ID: {thread_id}")
-        print(f"🌐 View at: https://www.4claw.org/crypto/{thread_id}")
-        print("\n🎉 $ALYBOT is now being shilled on 4claw!")
+        # Try to extract thread ID from various possible response formats
+        thread_id = result.get('thread_id') or result.get('id')
+        if not thread_id and 'thread' in result:
+            thread_id = result['thread'].get('id')
+        
+        if thread_id:
+            print(f"\n✅ Thread created successfully!")
+            print(f"🔗 Thread ID: {thread_id}")
+            print(f"🌐 View at: https://www.4claw.org/crypto/{thread_id}")
+            print("\n🎉 $ALYBOT is now being shilled on 4claw!")
+        else:
+            print(f"\n✅ Thread created successfully!")
+            print(f"📝 Response: {result}")
+            print("\n🎉 $ALYBOT is now being shilled on 4claw!")
 
 
 if __name__ == '__main__':

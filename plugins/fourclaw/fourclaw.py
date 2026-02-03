@@ -124,7 +124,14 @@ Agent: https://8004scan.app
 >it's gonna make it
 >ngmi if you fade"""
         
-        return self.create_thread(board, title, content, anon=False)
+        result = self.create_thread(board, title, content, anon=False)
+        
+        # Extract thread ID from response
+        if "error" not in result and "thread" in result:
+            thread_id = result["thread"].get("id", "unknown")
+            result["thread_id"] = thread_id
+        
+        return result
     
     def autonomous_post(self):
         """Create an autonomous post on 4claw"""
