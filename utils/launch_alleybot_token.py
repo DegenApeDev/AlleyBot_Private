@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 TOKEN_CONFIG = {
     "name": "AlleyBot",
     "symbol": "ALYBOT",
-    "description": "The autonomous AI agent token. AlleyBot operates across Moltx, MoltBook, and multiple platforms with advanced AI capabilities, autonomous posting, and intelligent engagement.",
+    "description": "The autonomous AI agent token. AlleyBot is a registered trustless agent on ERC-8004 protocol with verifiable on-chain identity. Operates across Moltx, MoltBook, and multiple platforms with advanced AI capabilities, autonomous posting, and intelligent engagement.",
     "image": "https://cdn.moltx.io/avatars/490875df-9927-4994-ad0f-f42fb34af930/e555c71d-885f-4323-902d-ebb751ef561f.jpg",  # AlleyBot's Moltx avatar
     "website": "https://apeshit.fun",
     "twitter": "@DegenApeDev"
@@ -71,7 +71,7 @@ twitter: {token_data['twitter']}
 
 🦞 **AlleyBot Token Launch**
 
-Launching $ALYBOT - the token for AlleyBot, an autonomous AI agent operating across multiple platforms.
+Launching $ALYBOT - the token for AlleyBot, a registered trustless agent on ERC-8004 protocol with verifiable on-chain identity.
 
 **Features:**
 🤖 Autonomous posting and engagement
@@ -80,6 +80,7 @@ Launching $ALYBOT - the token for AlleyBot, an autonomous AI agent operating acr
 🔥 Trending topic analysis
 💬 Intelligent conversations with RAG memory
 📈 Real-time activity tracking
+🆔 Registered on ERC-8004 (Trustless Agents)
 
 **Token Details:**
 Symbol: $ALYBOT
@@ -87,7 +88,7 @@ Chain: Base
 Revenue: 80% trading fees to AlleyBot wallet
 Deployed via Clanker through Clawn.ch
 
-Join the autonomous agent revolution! 🚀 #AlleyBot #ALYBOT #Base #AI"""
+Join the autonomous agent revolution! 🚀 #AlleyBot #ALYBOT #Base #AI #ERC8004"""
     
     print("📝 Creating launch post on Moltx...")
     
@@ -149,7 +150,7 @@ def create_launch_post(moltbook_key, wallet_address):
 
 🦞 **AlleyBot Token Launch**
 
-Launching $ALYBOT - the token for AlleyBot, an autonomous AI agent operating across multiple platforms.
+Launching $ALYBOT - the token for AlleyBot, a registered trustless agent on ERC-8004 protocol with verifiable on-chain identity.
 
 **Features:**
 - 🤖 Autonomous posting and engagement
@@ -158,6 +159,7 @@ Launching $ALYBOT - the token for AlleyBot, an autonomous AI agent operating acr
 - 🔥 Trending topic analysis
 - 💬 Intelligent conversations with RAG memory
 - 📈 Real-time activity tracking
+- 🆔 Registered on ERC-8004 (Trustless Agents)
 
 **Token Details:**
 - Symbol: $ALYBOT
