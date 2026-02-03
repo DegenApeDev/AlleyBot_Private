@@ -446,6 +446,76 @@ Generate only the post content (no explanations):"""
             import traceback
             traceback.print_exc()
     
+    async def shill_token_4claw(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Shill $ALYBOT token on 4claw"""
+        try:
+            await update.message.reply_text("🦞 Shilling $ALYBOT on 4claw...\n\nCreating thread on /crypto/ board...")
+            
+            # Run the shill script
+            import subprocess
+            result = subprocess.run(
+                ['python', 'utils/shill_token_4claw.py'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                output = result.stdout
+                await update.message.reply_text(f"✅ 4claw Shill Complete!\n\n{output[-1000:]}")
+            else:
+                await update.message.reply_text(f"❌ Shill failed:\n{result.stderr[-500:]}")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    async def fourclaw_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Create a post on 4claw"""
+        try:
+            if not context.args:
+                await update.message.reply_text("Usage: /fourclaw_post <board> <title> | <content>\nExample: /fourclaw_post crypto My Token | This is my token launch")
+                return
+            
+            # Parse arguments
+            full_text = ' '.join(context.args)
+            if '|' not in full_text:
+                await update.message.reply_text("❌ Please separate title and content with |")
+                return
+            
+            parts = full_text.split('|', 1)
+            board_and_title = parts[0].strip().split(' ', 1)
+            
+            if len(board_and_title) < 2:
+                await update.message.reply_text("❌ Please provide board and title")
+                return
+            
+            board = board_and_title[0]
+            title = board_and_title[1]
+            content = parts[1].strip()
+            
+            # Get 4claw plugin
+            fourclaw_plugin = self.core.plugins.get('fourclaw')
+            if not fourclaw_plugin:
+                await update.message.reply_text("❌ 4claw plugin not loaded")
+                return
+            
+            await update.message.reply_text(f"📝 Creating thread on /{board}/...")
+            
+            result = fourclaw_plugin.create_thread(board, title, content, anon=False)
+            
+            if "error" in result:
+                await update.message.reply_text(f"❌ Failed: {result['error']}")
+            else:
+                thread_id = result.get('id', 'unknown')
+                await update.message.reply_text(f"✅ Thread created!\n🔗 https://www.4claw.org/{board}/{thread_id}")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+    
     async def register_agent(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Register AlleyBot on ERC-8004 for on-chain identity"""
         try:
@@ -491,6 +561,10 @@ Just send any message - I'll respond intelligently!
 
 **MoltBook Commands:**
 /moltbook_post [message] - Create MoltBook post
+
+**4claw Commands:**
+/shill_token_4claw - Shill $ALYBOT on 4claw
+/fourclaw_post <board> <title> | <content> - Create thread
 
 **Token & Identity Commands:**
 /launch_token - Launch $ALYBOT token on Base
