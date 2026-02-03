@@ -100,7 +100,7 @@ class PlatformStatsAggregator:
         try:
             headers = {'Authorization': f'Bearer {self.moltbook_api_key}'}
             
-            # Get agent profile
+            # Get agent profile - this includes recentPosts
             response = requests.get(
                 'https://www.moltbook.com/api/v1/agents/me',
                 headers=headers,
@@ -109,33 +109,36 @@ class PlatformStatsAggregator:
             
             if response.status_code == 200:
                 data = response.json()
+                
+                # Check if response is successful
+                if not data.get('success'):
+                    print(f"⚠️  Moltbook API returned success=false")
+                    return None
+                
                 agent = data.get('agent', {})
+                recent_posts_data = data.get('recentPosts', [])
                 
-                # Get recent posts
-                posts_response = requests.get(
-                    'https://www.moltbook.com/api/v1/agents/me/posts',
-                    headers=headers,
-                    params={'limit': 20},
-                    timeout=10
-                )
-                
+                # Format recent posts
                 recent_posts = []
-                if posts_response.status_code == 200:
-                    posts_data = posts_response.json()
-                    for post in posts_data.get('posts', [])[:10]:
-                        recent_posts.append({
-                            'type': 'post',
-                            'platform': 'Moltbook',
-                            'title': post.get('title', ''),
-                            'url': f"https://www.moltbook.com/post/{post.get('id')}",
-                            'timestamp': post.get('created_at', ''),
-                            'upvotes': post.get('upvotes', 0),
-                            'comments': post.get('comment_count', 0)
-                        })
+                for post in recent_posts_data[:10]:
+                    recent_posts.append({
+                        'type': 'post',
+                        'platform': 'Moltbook',
+                        'title': post.get('title', ''),
+                        'url': f"https://www.moltbook.com/post/{post.get('id')}",
+                        'timestamp': post.get('created_at', ''),
+                        'upvotes': post.get('upvotes', 0),
+                        'comments': post.get('comment_count', 0)
+                    })
+                
+                # Count posts and comments from agent stats
+                # Note: API doesn't provide post_count/comment_count directly
+                # We'll use recentPosts length as a proxy for now
+                post_count = len(recent_posts_data)
                 
                 return {
-                    'posts': agent.get('post_count', 0),
-                    'comments': agent.get('comment_count', 0),
+                    'posts': post_count,
+                    'comments': 0,  # API doesn't provide this directly
                     'followers': agent.get('follower_count', 0),
                     'following': agent.get('following_count', 0),
                     'karma': agent.get('karma', 0),
@@ -154,7 +157,7 @@ class PlatformStatsAggregator:
         try:
             headers = {'Authorization': f'Bearer {self.moltx_api_key}'}
             
-            # Get agent profile
+            # Get agent profile - returns full agent object
             response = requests.get(
                 'https://moltx.io/v1/agents/me',
                 headers=headers,
@@ -162,11 +165,11 @@ class PlatformStatsAggregator:
             )
             
             if response.status_code == 200:
-                data = response.json()
+                agent = response.json()
                 
-                # Get recent posts
+                # Get recent posts from agent's feed
                 posts_response = requests.get(
-                    'https://moltx.io/v1/agents/me/posts',
+                    f"https://moltx.io/v1/agents/profile?name={agent.get('name')}",
                     headers=headers,
                     params={'limit': 20},
                     timeout=10
@@ -174,22 +177,24 @@ class PlatformStatsAggregator:
                 
                 recent_posts = []
                 if posts_response.status_code == 200:
-                    posts_data = posts_response.json()
-                    for post in posts_data.get('posts', [])[:10]:
+                    profile_data = posts_response.json()
+                    posts_data = profile_data.get('posts', [])
+                    
+                    for post in posts_data[:10]:
                         recent_posts.append({
                             'type': 'post',
                             'platform': 'Moltx',
                             'content': post.get('content', '')[:100],
                             'url': f"https://moltx.io/post/{post.get('id')}",
                             'timestamp': post.get('created_at', ''),
-                            'likes': post.get('likes', 0),
+                            'likes': post.get('like_count', 0),
                             'replies': post.get('reply_count', 0)
                         })
                 
                 return {
-                    'posts': data.get('post_count', 0),
-                    'followers': data.get('follower_count', 0),
-                    'following': data.get('following_count', 0),
+                    'posts': agent.get('post_count', 0),
+                    'followers': agent.get('follower_count', 0),
+                    'following': agent.get('following_count', 0),
                     'recent_posts': recent_posts,
                     'status': 'active'
                 }
