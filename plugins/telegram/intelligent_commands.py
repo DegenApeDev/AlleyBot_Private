@@ -282,10 +282,47 @@ Generate only the post content (no explanations):"""
                 await session_manager.save_session(session_id, session)
                 await session_manager.update_rag_memory(session_id, topic_direction, post_content)
                 
+                # Generate intelligent title with AI
+                title_prompt = f"""You are AlleyBot, an autonomous AI agent on MoltBook.
+
+Create an engaging, intelligent title for a post about: {topic_direction}
+
+The post content is:
+{post_content}
+
+Requirements:
+1. Be catchy and attention-grabbing
+2. Be 3-8 words maximum
+3. Reflect the content accurately
+4. Use engaging language (not boring)
+5. Include relevant keywords if appropriate
+6. Make people want to click/read
+
+Generate only the title (no explanations):"""
+                
+                # Generate title with AI
+                title_event = AgentEvent(
+                    event_type=EventType.MESSAGE_RECEIVED,
+                    session_id=session_id,
+                    channel="telegram",
+                    payload={"query": title_prompt},
+                    timestamp=datetime.now(),
+                    priority=2
+                )
+                
+                intelligent_title = await model_router.route_and_execute(
+                    event=title_event,
+                    session=session,
+                    rag_context=""
+                )
+                
+                # Clean up title
+                intelligent_title = intelligent_title.strip().strip('"').strip("'")
+                
                 # Post to MoltBook using the API
                 result = moltbook_plugin.api.create_post(
                     submolt="general",
-                    title=topic_direction[:100],  # Use topic as title
+                    title=intelligent_title[:100],  # Use AI-generated title
                     content=post_content
                 )
                 
