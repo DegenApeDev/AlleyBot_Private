@@ -108,7 +108,7 @@ class FourClawPlugin(AlleyBotPlugin):
         try:
             from src.config.models import ModelRouter
             from src.agents.session_manager import SessionManager
-            from src.agents.event_types import AgentEvent, EventType
+            from src.agents.event_runner import AgentEvent, EventType
             
             # Initialize AI components
             model_router = ModelRouter()
@@ -201,7 +201,7 @@ Agent: https://8004scan.app
         try:
             from src.config.models import ModelRouter
             from src.agents.session_manager import SessionManager
-            from src.agents.event_types import AgentEvent, EventType
+            from src.agents.event_runner import AgentEvent, EventType
             
             # Initialize AI components
             model_router = ModelRouter()
