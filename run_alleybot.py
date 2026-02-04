@@ -24,6 +24,35 @@ def main():
         if mode == 'autonomous':
             print("🚀 Starting autonomous mode...")
             core.run_autonomous()
+        elif mode == 'agentic':
+            print("🤖 Starting agentic mode (enhanced autonomous with ReAct)...")
+            try:
+                from src.agentic import AgenticAlleyBot
+                from deepseek_ai import deepseek_ai
+                
+                # Initialize LLM
+                llm = deepseek_ai.get_llm()
+                
+                # Initialize agentic system
+                agentic_bot = AgenticAlleyBot(llm, core)
+                
+                # Start proactive mode
+                print("🚀 Starting proactive agentic behavior...")
+                agentic_bot.start_proactive_mode()
+                
+                # Keep running
+                import time
+                try:
+                    while True:
+                        time.sleep(1)
+                except KeyboardInterrupt:
+                    print("\n🛑 Stopping agentic mode...")
+                    agentic_bot.stop_proactive_mode()
+                    
+            except ImportError as e:
+                print(f"❌ Agentic system not available: {e}")
+                print("💡 Install dependencies: pip install -r requirements.txt")
+                return 1
         elif mode == 'interactive':
             print("🎮 Starting interactive mode...")
             core.run_interactive()
@@ -54,6 +83,7 @@ def print_help():
 📋 Modes:
   python run_alleybot.py interactive  - Interactive CLI mode
   python run_alleybot.py autonomous   - Fully autonomous mode
+  python run_alleybot.py agentic      - Enhanced agentic mode (ReAct + proactive)
   python run_alleybot.py dashboard     - Start web dashboard
 
 💬 Plugin Commands:
