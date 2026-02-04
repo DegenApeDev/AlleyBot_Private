@@ -76,7 +76,7 @@ class IntelligentTelegramCommands:
                 # Use Model Router to generate intelligent post
                 from src.config.models import ModelRouter
                 from src.agents.session_manager import SessionManager
-                from src.agents.event_types import AgentEvent, EventType
+                from src.agents.event_runner import AgentEvent, EventType
                 from datetime import datetime
                 
                 # Initialize if needed
@@ -232,7 +232,7 @@ Generate only the post content (no explanations):"""
                 # Use Model Router to generate intelligent post
                 from src.config.models import ModelRouter
                 from src.agents.session_manager import SessionManager
-                from src.agents.event_types import AgentEvent, EventType
+                from src.agents.event_runner import AgentEvent, EventType
                 from datetime import datetime
                 
                 # Initialize if needed
