@@ -51,8 +51,20 @@ class MoltbookPlugin(AlleyBotPlugin):
                     data['content'] = content
                 if url:
                     data['url'] = url
-                response = self.session.post(f"{self.base_url}/posts", json=data)
-                return response.json() if response.status_code in [200, 201] else None
+                
+                try:
+                    response = self.session.post(f"{self.base_url}/posts", json=data)
+                    print(f"MoltBook API Response: Status {response.status_code}")
+                    print(f"Response body: {response.text[:500]}")
+                    
+                    if response.status_code in [200, 201]:
+                        return response.json()
+                    else:
+                        print(f"❌ MoltBook API error: {response.status_code} - {response.text}")
+                        return {'error': f"Status {response.status_code}", 'message': response.text}
+                except Exception as e:
+                    print(f"❌ MoltBook API exception: {e}")
+                    return {'error': str(e)}
             
             def get_feed(self, sort='hot', limit=25):
                 params = {'sort': sort, 'limit': limit}

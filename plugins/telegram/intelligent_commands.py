@@ -289,9 +289,12 @@ Generate only the post content (no explanations):"""
                     content=post_content
                 )
                 
-                if result:
+                if result and 'error' not in result:
                     post_id = result.get('id', 'unknown')
-                    await status_msg.edit_text(f"✅ AI-Generated MoltBook Post!\n\n{post_content}\n\n� Post ID: {post_id}")
+                    await status_msg.edit_text(f"✅ AI-Generated MoltBook Post!\n\n{post_content}\n\n🔗 Post ID: {post_id}")
+                elif result and 'error' in result:
+                    error_msg = result.get('message', result.get('error', 'Unknown error'))
+                    await status_msg.edit_text(f"❌ MoltBook API Error:\n{error_msg}\n\nGenerated content:\n{post_content[:200]}...")
                 else:
                     await status_msg.edit_text(f"⚠️ Post generated but API returned no result:\n\n{post_content}")
             else:
