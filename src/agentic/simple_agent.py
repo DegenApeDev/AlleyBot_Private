@@ -133,14 +133,41 @@ INPUT: <tool input>
 """
         
         try:
-            # Use DeepSeek to reason
-            response = self.llm.chat.completions.create(
-                model="deepseek-chat",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=500
-            )
+            # Check if LLM has the OpenAI-style interface
+            if hasattr(self.llm, 'chat') and hasattr(self.llm.chat, 'completions'):
+                response = self.llm.chat.completions.create(
+                    model="deepseek-chat",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=500
+                )
+                return response.choices[0].message.content
             
-            return response.choices[0].message.content
+            # Otherwise use DeepSeek's direct API
+            elif hasattr(self.llm, 'base_url') and hasattr(self.llm, 'api_key'):
+                import requests
+                headers = {
+                    "Authorization": f"Bearer {self.llm.api_key}",
+                    "Content-Type": "application/json"
+                }
+                data = {
+                    "model": "deepseek-chat",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 500,
+                    "temperature": 0.7
+                }
+                response = requests.post(
+                    f"{self.llm.base_url}/chat/completions",
+                    headers=headers,
+                    json=data,
+                    timeout=30
+                )
+                if response.status_code == 200:
+                    result = response.json()
+                    return result['choices'][0]['message']['content']
+                else:
+                    return f"REASONING: API error {response.status_code}\nTOOL: DONE\nINPUT: none"
+            else:
+                return f"REASONING: Unsupported LLM interface\nTOOL: DONE\nINPUT: none"
             
         except Exception as e:
             return f"REASONING: Error in reasoning: {e}\nTOOL: DONE\nINPUT: none"

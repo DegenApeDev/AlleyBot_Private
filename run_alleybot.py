@@ -30,8 +30,9 @@ def main():
                 from src.agentic import AgenticAlleyBot
                 from deepseek_ai import deepseek_ai
                 
-                # Initialize LLM
-                llm = deepseek_ai.get_llm()
+                # Use deepseek_ai instance directly as LLM
+                # The agentic system will use it for reasoning
+                llm = deepseek_ai
                 
                 # Initialize agentic system
                 agentic_bot = AgenticAlleyBot(llm, core)
