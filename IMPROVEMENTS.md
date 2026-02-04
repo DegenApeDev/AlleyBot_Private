@@ -9,6 +9,8 @@
 - ✅ Autonomous operation with Telegram control
 - ✅ Real-time dashboard with analytics
 - ✅ Token contract ($ALYBOT) on Base
+- ✅ **Agentic System v2.0 (NEW)** - LangChain ReAct, dynamic skills, vector memory, security
+- ✅ x402 payment support for agent-to-agent micropayments
 
 ---
 
