@@ -3,22 +3,32 @@ Integrated Agentic System for AlleyBot
 Combines ReAct agent, event scheduler, skill generation, enhanced memory, and security
 """
 import os
+import sys
 import json
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from pathlib import Path
 
-# Import agentic components
-from src.agentic.react_agent import EnhancedReActAgent, AgentState
+# Try to import LangChain components, fallback to simple agent if incompatible
+try:
+    from src.agentic.react_agent import EnhancedReActAgent, AgentState
+    from langchain.tools import Tool
+    from langchain_community.llms import BaseLLM
+    LANGCHAIN_AVAILABLE = True
+except (ImportError, Exception) as e:
+    print(f"⚠️  LangChain not available (Python {sys.version_info.major}.{sys.version_info.minor}): {e}")
+    print("📦 Using simple agent implementation instead")
+    from src.agentic.simple_agent import SimpleReActAgent, SimpleTool, AgentState
+    LANGCHAIN_AVAILABLE = False
+    Tool = SimpleTool  # Alias for compatibility
+    BaseLLM = None
+
+# Import other agentic components
 from src.agentic.event_scheduler import ProactiveAgentScheduler, OnChainOpportunityDetector
 from src.agentic.skill_generator import DynamicSkillGenerator
 from src.agentic.enhanced_memory import EnhancedMemorySystem
 from src.agentic.security_filter import SecurityFilter
 from src.agentic.approval_dashboard import ApprovalDashboard
-
-# LangChain imports
-from langchain.tools import Tool
-from langchain_community.llms import BaseLLM
 
 
 class AgenticAlleyBot:
@@ -85,18 +95,26 @@ class AgenticAlleyBot:
         self.tools = self._build_tools()
         print(f"✅ Built {len(self.tools)} tools")
         
-        # Initialize ReAct agent
-        self.agent = EnhancedReActAgent(
-            llm=llm,
-            tools=self.tools,
-            max_iterations=self.config.get('max_iterations', 15),
-            approval_callback=self.approval_dashboard.request_approval
-        )
-        print("✅ ReAct agent initialized")
+        # Initialize ReAct agent (LangChain or simple)
+        if LANGCHAIN_AVAILABLE:
+            self.agent = EnhancedReActAgent(
+                llm=llm,
+                tools=self.tools,
+                max_iterations=self.config.get('max_iterations', 15),
+                approval_callback=self.approval_dashboard.request_approval
+            )
+            print("✅ ReAct agent initialized (LangChain)")
+        else:
+            self.agent = SimpleReActAgent(
+                llm=llm,
+                tools=self.tools,
+                max_iterations=self.config.get('max_iterations', 15)
+            )
+            print("✅ Simple ReAct agent initialized (Python 3.14 compatible)")
         
-        # Update on-chain context
+        # Update on-chain context (only for LangChain agent)
         wallet_address = os.getenv('BASE_WALLET_PUBLIC_ADDRESS')
-        if wallet_address:
+        if wallet_address and LANGCHAIN_AVAILABLE and hasattr(self.agent, 'update_on_chain_context'):
             self.agent.update_on_chain_context(wallet_address)
             print(f"✅ On-chain context updated for {wallet_address[:10]}...")
         
