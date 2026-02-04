@@ -138,15 +138,32 @@ Generate only the post content (no explanations):"""
     async def moltx_feed(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Browse Moltx feed"""
         try:
-            if self.core and hasattr(self.core, 'plugin_manager') and 'moltx' in self.core.plugin_manager.plugins:
-                moltx_plugin = self.core.plugin_manager.plugins['moltx']
-                result = moltx_plugin.feed_command()
-                await update.message.reply_text(f"📰 Moltx Feed:\n{result}")
-            else:
-                await update.message.reply_text("❌ Moltx plugin not available")
+            if not self.core:
+                await update.message.reply_text("❌ Core not initialized")
+                return
+            
+            if not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Plugin manager not found")
+                return
+            
+            if 'moltx' not in self.core.plugin_manager.plugins:
+                available = list(self.core.plugin_manager.plugins.keys())
+                await update.message.reply_text(f"❌ Moltx plugin not loaded\nAvailable: {', '.join(available)}")
+                return
+            
+            moltx_plugin = self.core.plugin_manager.plugins['moltx']
+            
+            if not hasattr(moltx_plugin, 'feed_command'):
+                await update.message.reply_text("❌ Moltx plugin missing feed_command method")
+                return
+            
+            result = moltx_plugin.feed_command()
+            await update.message.reply_text(f"📰 Moltx Feed:\n{result}")
                 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
     
     async def moltx_engage(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Engage with Moltx feed (like/comment)"""
@@ -166,18 +183,27 @@ Generate only the post content (no explanations):"""
     async def moltx_trending(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Analyze trending topics on Moltx"""
         try:
-            if self.core and hasattr(self.core, 'plugin_manager') and 'moltx' in self.core.plugin_manager.plugins:
-                moltx_plugin = self.core.plugin_manager.plugins['moltx']
-                if hasattr(moltx_plugin, 'trending_command'):
-                    result = moltx_plugin.trending_command()
-                    await update.message.reply_text(f"🔥 Trending:\n{result}")
-                else:
-                    await update.message.reply_text("📊 Trending analysis coming soon!")
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Core not initialized")
+                return
+            
+            if 'moltx' not in self.core.plugin_manager.plugins:
+                available = list(self.core.plugin_manager.plugins.keys())
+                await update.message.reply_text(f"❌ Moltx plugin not loaded\nAvailable: {', '.join(available)}")
+                return
+            
+            moltx_plugin = self.core.plugin_manager.plugins['moltx']
+            
+            if hasattr(moltx_plugin, 'trending_command'):
+                result = moltx_plugin.trending_command()
+                await update.message.reply_text(f"🔥 Trending:\n{result}")
             else:
-                await update.message.reply_text("❌ Moltx plugin not available")
+                await update.message.reply_text("📊 Trending analysis coming soon!")
                 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
     
     async def moltbook_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Create an AI-generated post on MoltBook based on topic/direction"""
