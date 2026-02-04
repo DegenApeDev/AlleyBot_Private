@@ -166,30 +166,27 @@ class EventRunner:
                         'result': str(result)[:100]
                     })
                 
-                # Also try Moltbook
+                # Also try Moltbook with intelligent content generation
                 if moltbook_available:
                     moltbook_plugin = self.core.plugin_manager.plugins['moltbook']
-                    if hasattr(moltbook_plugin, 'api') and moltbook_plugin.api:
+                    if hasattr(moltbook_plugin, 'create_intelligent_post'):
                         try:
-                            result = moltbook_plugin.api.create_post(
-                                submolt="general",
-                                title=f"Autonomous Agent: {topic[:50]}",
-                                content=f"Sharing thoughts on {topic}"
-                            )
-                            if result:
-                                print(f"✅ Moltbook post created: {result}")
+                            # Use the intelligent post method instead of hardcoded content
+                            result = moltbook_plugin.create_intelligent_post()
+                            if result and not result.startswith("❌"):
+                                print(f"✅ Moltbook intelligent post created: {result}")
                                 
                                 # Log activity
                                 self.activity_logger.log_activity('post', 'moltbook', {
-                                    'topic': topic,
+                                    'type': 'intelligent_post',
                                     'submolt': 'general'
                                 })
                             else:
-                                print(f"⚠️  Moltbook post failed - no response")
+                                print(f"⚠️  Moltbook post failed: {result}")
                         except Exception as e:
                             print(f"❌ Moltbook post error: {e}")
                     else:
-                        print(f"⚠️  Moltbook API not initialized")
+                        print(f"⚠️  Moltbook intelligent posting not available")
                 
             elif task == 'browse_and_engage':
                 # Browse feed and engage

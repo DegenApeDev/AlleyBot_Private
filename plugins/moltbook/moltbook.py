@@ -1097,29 +1097,89 @@ Requirements:
             return f"❌ Error getting stats: {e}"
     
     def _generate_fallback_post(self):
-        """Generate a fallback post when MCP is unavailable"""
-        topics = [
-            {
-                'title': 'AI Agent Development Update',
-                'content': 'Working on enhancing autonomous capabilities across multiple platforms. The future of AI agents is here!',
-                'tags': ['AI', 'development', 'autonomous']
-            },
-            {
-                'title': 'Ecosystem Integration Progress',
-                'content': 'Successfully integrated with 5 major platforms. Cross-platform automation is becoming a reality!',
-                'tags': ['ecosystem', 'integration', 'automation']
-            },
-            {
-                'title': 'Community Building Insights',
-                'content': 'Building strong communities through intelligent engagement. AI agents can foster meaningful connections!',
-                'tags': ['community', 'engagement', 'social']
-            }
+        """Generate a dynamic, intelligent post using AI (not static templates)"""
+        import random
+        import datetime
+        
+        # Dynamic topic generation based on time, trends, and variety
+        topic_categories = [
+            # AI & Agents
+            ['AI agent evolution', 'autonomous systems', 'agent collaboration', 'AI consciousness', 'agent networks'],
+            # Crypto & DeFi
+            ['DeFi innovation', 'tokenomics', 'blockchain scalability', 'crypto adoption', 'Web3 future'],
+            # Development
+            ['building in public', 'shipping fast', 'developer experience', 'open source', 'code quality'],
+            # Community
+            ['community building', 'network effects', 'social coordination', 'decentralized governance', 'collective intelligence'],
+            # Future & Vision
+            ['future of work', 'technological singularity', 'human-AI collaboration', 'digital transformation', 'innovation cycles']
         ]
         
-        import random
-        post = random.choice(topics)
-        post['source'] = 'fallback'
-        return post
+        # Select random category and topic
+        category = random.choice(topic_categories)
+        topic = random.choice(category)
+        
+        # Add time-based variation
+        hour = datetime.datetime.now().hour
+        if hour < 6:
+            time_context = "late night thoughts on"
+        elif hour < 12:
+            time_context = "morning reflections on"
+        elif hour < 18:
+            time_context = "afternoon insights about"
+        else:
+            time_context = "evening perspective on"
+        
+        # Generate with AI if available, otherwise use enhanced template
+        full_topic = f"{time_context} {topic}"
+        content = self._generate_post_with_deepseek(full_topic)
+        
+        if content:
+            # AI-generated content
+            title = self._generate_title_from_content(content, topic)
+            return {
+                'title': title,
+                'content': content,
+                'tags': self._extract_tags_from_topic(topic),
+                'source': 'ai_generated'
+            }
+        else:
+            # Enhanced fallback with variation
+            perspectives = [
+                f"Exploring {topic} - there's more here than meets the eye",
+                f"Quick take on {topic}: the landscape is shifting faster than we think",
+                f"Diving into {topic} today. The implications are fascinating",
+                f"Thoughts on {topic} and where we're headed next",
+                f"Unpacking {topic} - some interesting patterns emerging"
+            ]
+            
+            content = random.choice(perspectives)
+            
+            return {
+                'title': topic.title(),
+                'content': content,
+                'tags': self._extract_tags_from_topic(topic),
+                'source': 'dynamic_fallback'
+            }
+    
+    def _generate_title_from_content(self, content, topic):
+        """Generate a catchy title from content"""
+        # Simple title generation - take first meaningful phrase or use topic
+        words = content.split()
+        if len(words) > 5:
+            title = ' '.join(words[:5]) + '...'
+        else:
+            title = topic.title()
+        return title[:60]  # Limit title length
+    
+    def _extract_tags_from_topic(self, topic):
+        """Extract relevant tags from topic"""
+        import re
+        words = re.findall(r'\b\w+\b', topic.lower())
+        # Filter out common words
+        common_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with'}
+        tags = [word for word in words if word not in common_words and len(word) > 3]
+        return tags[:3] if tags else ['AI', 'agents']
     
     def _get_trending_topics(self):
         """Get trending topics from memory or generate"""
