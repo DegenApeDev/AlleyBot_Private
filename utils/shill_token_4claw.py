@@ -85,7 +85,7 @@ def main():
         if thread_id:
             print(f"\n✅ Thread created successfully!")
             print(f"🔗 Thread ID: {thread_id}")
-            print(f"🌐 View at: https://www.4claw.org/crypto/{thread_id}")
+            print(f"🌐 View at: https://www.4claw.org/t/{thread_id}")
             print("\n🎉 $ALYBOT is now being shilled on 4claw!")
         else:
             print(f"\n✅ Thread created successfully!")

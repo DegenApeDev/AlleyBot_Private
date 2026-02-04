@@ -133,7 +133,7 @@ Requirements:
 4. Include key details: ERC-8004 registration, agent identity, contract address
 5. End with a call to action
 6. Keep it 8-12 lines
-7. Include links: https://apeshit.fun and https://8004scan.app
+7. Include links: https://apeshit.fun and https://www.8004scan.io/agents/ethereum/22899
 
 Generate only the greentext content (no explanations):"""
             
@@ -185,7 +185,7 @@ Generate only the greentext content (no explanations):"""
 
 Contract: {token_address}
 Website: https://apeshit.fun
-Agent: https://8004scan.app
+Agent: https://www.8004scan.io/agents/ethereum/22899
 
 >it's gonna make it
 >ngmi if you fade"""
