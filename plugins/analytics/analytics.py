@@ -302,33 +302,9 @@ class AnalyticsPlugin(AlleyBotPlugin):
     def start_dashboard(self):
         """Start the dashboard server"""
         try:
-            # Check if Telegram bot is running
-            print("🔍 Checking if Telegram bot is ready...")
-            telegram_plugin = None
-            if hasattr(self.core, 'plugin_manager') and 'telegram' in self.core.plugin_manager.plugins:
-                telegram_plugin = self.core.plugin_manager.plugins['telegram']
-            
-            if telegram_plugin:
-                # Wait for Telegram bot to be running
-                import time
-                max_wait = 10  # Wait up to 10 seconds
-                waited = 0
-                
-                while not telegram_plugin.is_running and waited < max_wait:
-                    print(f"⏳ Waiting for Telegram bot to start... ({waited}s)")
-                    time.sleep(1)
-                    waited += 1
-                
-                if not telegram_plugin.is_running:
-                    print("⚠️  Telegram bot not running yet, but starting dashboard anyway...")
-                else:
-                    print("✅ Telegram bot is running")
-            else:
-                print("⚠️  Telegram plugin not found, starting dashboard anyway...")
-            
-            print(f"\n🚀 Starting analytics dashboard on port {self.dashboard_port}...")
-            print(f"📊 Dashboard will be available at: http://localhost:{self.dashboard_port}")
-            print("💡 Press Ctrl+C to stop the dashboard\n")
+            print(f"� Starting analytics dashboard on port {self.dashboard_port}...")
+            print(f"📊 Dashboard available at: http://localhost:{self.dashboard_port}")
+            print(f"📊 Dashboard available at: http://0.0.0.0:{self.dashboard_port}")
             
             self.app.run(
                 debug=False,

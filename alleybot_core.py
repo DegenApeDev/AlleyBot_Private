@@ -213,6 +213,9 @@ class AlleyBotCore:
             
             print("🚀 Starting Production Event-Driven Mode...")
             
+            # Auto-start dashboard in background
+            self._start_dashboard_background()
+            
             # Run the production async event loop
             import asyncio
             asyncio.run(run_production_mode(self))
@@ -223,6 +226,37 @@ class AlleyBotCore:
             self.run_advanced_autonomous()
         except KeyboardInterrupt:
             print("\n🛑 Stopping production mode...")
+    
+    def _start_dashboard_background(self):
+        """Start dashboard in background thread"""
+        try:
+            import threading
+            import time
+            
+            def start_dashboard_delayed():
+                # Wait for Telegram bot to be ready
+                time.sleep(3)
+                
+                # Check if analytics plugin exists
+                if 'analytics' in self.plugin_manager.plugins:
+                    analytics = self.plugin_manager.plugins['analytics']
+                    print("📊 Auto-starting dashboard in background...")
+                    
+                    # Start dashboard in separate thread
+                    dashboard_thread = threading.Thread(
+                        target=analytics.start_dashboard,
+                        daemon=True
+                    )
+                    dashboard_thread.start()
+                else:
+                    print("⚠️  Analytics plugin not found, skipping dashboard")
+            
+            # Start dashboard in background
+            thread = threading.Thread(target=start_dashboard_delayed, daemon=True)
+            thread.start()
+            
+        except Exception as e:
+            print(f"⚠️  Failed to auto-start dashboard: {e}")
     
     def run_standard_autonomous(self):
         """Run standard autonomous mode with scheduled tasks (fallback)"""
