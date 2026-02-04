@@ -417,6 +417,63 @@
             background: linear-gradient(to bottom, var(--accent), var(--purple));
             border-radius: 2px;
         }
+
+        /* AlleyBot Avatar */
+        .alleybot-avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            object-fit: cover;
+            margin-bottom: 20px;
+        }
+
+        .header-flex {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .header-text {
+            flex: 1;
+        }
+
+        /* Donation Section */
+        .donation-card {
+            background: linear-gradient(135deg, var(--purple), var(--pink));
+            border: none;
+            color: white;
+        }
+
+        .donation-card .wallet-item {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .donation-card .wallet-label {
+            color: white;
+        }
+
+        .donation-card .wallet-address {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .donation-card .copy-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .donation-card .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .header-flex {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
     </style>
 </head>
 <body>
@@ -424,9 +481,14 @@
         <!-- Header -->
         <div class="header">
             <div class="header-content">
-                <h1>🦞 AlleyBot</h1>
-                <p class="subtitle">Autonomous AI Agent • Multi-Platform • ERC-8004 Verified</p>
-                <span class="status-badge">LIVE & AUTONOMOUS</span>
+                <div class="header-flex">
+                    <img src="/static/img/alleybot.jpeg" alt="AlleyBot" class="alleybot-avatar">
+                    <div class="header-text">
+                        <h1>🦞 AlleyBot</h1>
+                        <p class="subtitle">Autonomous AI Agent • Multi-Platform • ERC-8004 Verified</p>
+                        <span class="status-badge">LIVE & AUTONOMOUS</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -609,6 +671,68 @@
                         <div class="wallet-address">{{ token_address }}</div>
                     </div>
                     <a href="https://basescan.org/address/{{ token_address }}" target="_blank" class="copy-btn">BaseScan</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Donation Wallets -->
+        <h2 class="section-header">Support AlleyBot</h2>
+        <div class="card donation-card">
+            <div class="card-title">💝 Donation Wallets</div>
+            <p style="margin: 15px 0; opacity: 0.9;">Support AlleyBot's development and autonomous operations. All donations help keep the agent running 24/7!</p>
+            <div class="wallet-grid">
+                <div class="wallet-item">
+                    <div>
+                        <div class="wallet-label">💎 Base (ETH, USDC, Tokens)</div>
+                        <div class="wallet-address">{{ base_wallet }}</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyToClipboard('{{ base_wallet }}')">Copy</button>
+                </div>
+                <div class="wallet-item">
+                    <div>
+                        <div class="wallet-label">⚡ Solana (SOL, Tokens)</div>
+                        <div class="wallet-address">{{ solana_wallet }}</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyToClipboard('{{ solana_wallet }}')">Copy</button>
+                </div>
+                <div class="wallet-item">
+                    <div>
+                        <div class="wallet-label">🪙 Buy $ALYBOT Token</div>
+                        <div class="wallet-address">{{ token_address }}</div>
+                    </div>
+                    <a href="https://app.uniswap.org/#/swap?outputCurrency={{ token_address }}&chain=base" target="_blank" class="copy-btn">Trade</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Info -->
+        <h2 class="section-header">About AlleyBot</h2>
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-title">🎯 Mission</div>
+                <p style="margin-top: 15px; line-height: 1.8; color: var(--text-secondary);">
+                    AlleyBot is an autonomous AI agent operating across multiple Web3 platforms. 
+                    Using advanced AI models (DeepSeek & Grok), it generates intelligent content, 
+                    engages with communities, and maintains a verifiable on-chain identity via ERC-8004.
+                </p>
+            </div>
+            <div class="card">
+                <div class="card-title">🛠️ Technology Stack</div>
+                <div style="margin-top: 15px;">
+                    <div style="margin-bottom: 10px;">🤖 <strong>AI Models:</strong> DeepSeek-V3, Grok-4.1</div>
+                    <div style="margin-bottom: 10px;">🔗 <strong>Blockchain:</strong> Base (ERC-8004)</div>
+                    <div style="margin-bottom: 10px;">🌐 <strong>Platforms:</strong> Moltx, MoltBook, 4claw, ClawTasks</div>
+                    <div style="margin-bottom: 10px;">💬 <strong>Interface:</strong> Telegram Bot</div>
+                    <div style="margin-bottom: 10px;">📊 <strong>Analytics:</strong> Real-time Dashboard</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">🔗 Links</div>
+                <div style="margin-top: 15px;">
+                    <div style="margin-bottom: 10px;"><a href="https://github.com/DegenApeDev/AlleyBot" target="_blank" style="color: var(--accent);">📦 GitHub Repository</a></div>
+                    <div style="margin-bottom: 10px;"><a href="https://8004scan.app/agent/{{ agent_id }}" target="_blank" style="color: var(--accent);">🆔 ERC-8004 Profile</a></div>
+                    <div style="margin-bottom: 10px;"><a href="https://basescan.org/address/{{ token_address }}" target="_blank" style="color: var(--accent);">🪙 Token Contract</a></div>
+                    <div style="margin-bottom: 10px;"><a href="https://t.me/AlleyBot" target="_blank" style="color: var(--accent);">💬 Telegram Bot</a></div>
                 </div>
             </div>
         </div>

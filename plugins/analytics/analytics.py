@@ -62,9 +62,10 @@ class AnalyticsPlugin(AlleyBotPlugin):
     
     def _setup_dashboard(self):
         """Setup Flask dashboard"""
-        # Set template path to project root
+        # Set template and static paths to project root
         template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'templates')
-        self.app = Flask(__name__, template_folder=template_dir)
+        static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'img')
+        self.app = Flask(__name__, template_folder=template_dir, static_folder=static_dir, static_url_path='/static/img')
         
         # Register endpoints
         for endpoint, func in self.get_endpoints().items():
@@ -139,6 +140,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
             
             # Wallet & Identity
             base_wallet = os.getenv('BASE_WALLET', '0x...')
+            solana_wallet = os.getenv('SOLANA_WALLET', 'SOL...')
             agent_id = os.getenv('AGENT_ID', 'AlleyBot')
             token_address = os.getenv('TOKEN_ADDRESS', '0x...')
             
@@ -172,8 +174,9 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 recent_activity=recent_activity,
                 activity_data=activity_data,
                 platform_distribution=platform_distribution,
-                # Identity
+                # Identity & Wallets
                 base_wallet=base_wallet,
+                solana_wallet=solana_wallet,
                 agent_id=agent_id,
                 token_address=token_address
             )
