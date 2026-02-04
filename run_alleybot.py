@@ -42,6 +42,13 @@ def main():
                 # Initialize agentic system
                 agentic_bot = AgenticAlleyBot(llm, core)
                 
+                # Link agentic system to Telegram conversational AI
+                if 'telegram' in core.plugin_manager.plugins:
+                    telegram_plugin = core.plugin_manager.plugins['telegram']
+                    if hasattr(telegram_plugin, 'conversational_ai'):
+                        telegram_plugin.conversational_ai.set_agentic_system(agentic_bot)
+                        print("✅ Telegram conversational AI linked to agentic system")
+                
                 # Start dashboard in background
                 print("📊 Auto-starting dashboard in background...")
                 try:

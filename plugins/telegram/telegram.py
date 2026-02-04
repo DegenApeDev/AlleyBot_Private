@@ -61,6 +61,10 @@ class Telegram(AlleyBotPlugin):
         from plugins.telegram.intelligent_commands import IntelligentTelegramCommands
         self.intelligent_commands = IntelligentTelegramCommands(self)
         
+        # Import conversational AI
+        from plugins.telegram.conversational_ai import ConversationalAI
+        self.conversational_ai = ConversationalAI(self)
+        
         # Basic commands
         self.application.add_handler(CommandHandler("start", self._handle_start))
         self.application.add_handler(CommandHandler("help", self.intelligent_commands.help_command))
@@ -78,7 +82,7 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("moltbook_post", self.intelligent_commands.moltbook_post))
         
         # System commands
-        self.application.add_handler(CommandHandler("status", self.intelligent_commands.status))
+        self.application.add_handler(CommandHandler("status", self.conversational_ai.status_command))
         self.application.add_handler(CommandHandler("skills", self.intelligent_commands.skills))
         self.application.add_handler(CommandHandler("skill", self.intelligent_commands.execute_skill))
         self.application.add_handler(CommandHandler("token_stats", self.intelligent_commands.token_stats))
@@ -92,8 +96,8 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("feed", self.intelligent_commands.moltx_feed))
         self.application.add_handler(CommandHandler("engage", self.intelligent_commands.moltx_engage))
         
-        # Message handler for natural language (owner only)
-        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_message))
+        # Message handler for natural language (admin only, conversational AI)
+        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.conversational_ai.handle_message))
     
     async def _verify_owner(self, update: Update) -> bool:
         """Verify that the message is from the owner"""
@@ -112,9 +116,16 @@ class Telegram(AlleyBotPlugin):
         
         welcome_message = """🦞 **Welcome DegenApeDev!** I'm AlleyBot, your intelligent AI assistant.
 
+💬 **Just talk to me naturally!** I understand natural language.
+Say things like:
+• "Build karma on Moltbook today"
+• "What's trending on MoltX?"
+• "Create a post about AI agents"
+• "How's my engagement looking?"
+
 **Quick Commands:**
+/status - System status & stats
 /help - Full command list
-/status - Platform status
 /skills - Available skills
 
 **Moltx:**
@@ -122,15 +133,12 @@ class Telegram(AlleyBotPlugin):
 /moltx_feed - Browse feed
 /moltx_engage - Engage with posts
 
-**AI Chat:**
-/chat [message] - AI conversation
-Or just send me any message!
-
-🚀 **Production Mode Active**
-✅ Event-driven architecture
-✅ Smart model routing (DeepSeek/Grok)
-✅ RAG memory system
-✅ Session persistence
+🚀 **Agentic Mode Features:**
+✅ ReAct reasoning & planning
+✅ Vector memory with learning
+✅ Auto skill updates
+✅ Proactive engagement
+✅ Security filters
 
 I'm ready to help! 🤖"""
         
