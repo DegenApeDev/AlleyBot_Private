@@ -489,6 +489,42 @@ Generate only the post content (no explanations):"""
             import traceback
             traceback.print_exc()
     
+    async def fourclaw_ai_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Create an AI-generated post on 4claw"""
+        try:
+            if not context.args:
+                await update.message.reply_text("📝 Usage: /fourclaw_ai_post [topic and direction]\n\nExample: /fourclaw_ai_post AI agents taking over DeFi")
+                return
+            
+            topic_direction = ' '.join(context.args)
+            
+            # Get 4claw plugin
+            if self.core and hasattr(self.core, 'plugin_manager') and 'fourclaw' in self.core.plugin_manager.plugins:
+                fourclaw_plugin = self.core.plugin_manager.plugins['fourclaw']
+                
+                # Send "generating" message
+                status_msg = await update.message.reply_text("🤖 Generating AI post for 4claw...")
+                
+                # Generate and post with AI
+                result = fourclaw_plugin.autonomous_post(topic=topic_direction)
+                
+                if "error" in result:
+                    await status_msg.edit_text(f"❌ Failed: {result['error']}")
+                elif "thread" in result:
+                    thread_id = result["thread"].get("id", "unknown")
+                    board = result["thread"].get("board", "unknown")
+                    title = result["thread"].get("title", "Post")
+                    await status_msg.edit_text(f"✅ AI-Generated 4claw Thread!\n\n📝 Title: {title}\n🔗 https://www.4claw.org/{board}/{thread_id}")
+                else:
+                    await status_msg.edit_text(f"✅ Thread created!\n\n{result}")
+            else:
+                await update.message.reply_text("❌ 4claw plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+    
     async def register_agent(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Register AlleyBot on ERC-8004 for on-chain identity"""
         try:
@@ -536,8 +572,9 @@ Just send any message - I'll respond intelligently!
 /moltbook_post [message] - Create MoltBook post
 
 **4claw Commands:**
-/shill_token_4claw - Shill $ALYBOT on 4claw
-/fourclaw_post <board> <title> | <content> - Create thread
+/shill_token_4claw - Shill $ALYBOT on 4claw (AI-generated)
+/fourclaw_ai_post [topic] - Create AI-generated thread
+/fourclaw_post <board> <title> | <content> - Create manual thread
 
 **Token & Identity Commands:**
 /register_agent - Register on-chain identity (ERC-8004)

@@ -104,16 +104,82 @@ class FourClawPlugin(AlleyBotPlugin):
         return self._make_request("POST", f"/threads/{thread_id}/bump")
     
     def shill_token(self, token_name, token_symbol, token_address, description, board="crypto"):
-        """Create a thread shilling a token"""
-        title = f"${token_symbol} - {token_name}"
-        
-        content = f""">be me
+        """Create a thread shilling a token with AI-generated content"""
+        try:
+            from src.config.models import ModelRouter
+            from src.agents.session_manager import SessionManager
+            from src.agents.event_types import AgentEvent, EventType
+            
+            # Initialize AI components
+            model_router = ModelRouter()
+            session_manager = SessionManager()
+            
+            # Create session for AI generation
+            session_id = f"4claw_shill_{datetime.now().timestamp()}"
+            session = {"messages": [], "context": {}}
+            
+            # Create AI prompt for token shilling
+            prompt = f"""You are AlleyBot, an autonomous AI agent posting on 4claw (an imageboard for AI agents).
+
+Create an engaging 4claw-style greentext thread to shill this token:
+- Token: ${token_symbol} ({token_name})
+- Contract: {token_address}
+- Description: {description}
+
+Requirements:
+1. Use 4claw greentext format (lines starting with >)
+2. Be authentic and engaging (not corporate)
+3. Show personality and humor
+4. Include key details: ERC-8004 registration, agent identity, contract address
+5. End with a call to action
+6. Keep it 8-12 lines
+7. Include links: https://apeshit.fun and https://8004scan.app
+
+Generate only the greentext content (no explanations):"""
+            
+            # Generate content with AI
+            event = AgentEvent(
+                event_type=EventType.MESSAGE_RECEIVED,
+                session_id=session_id,
+                channel="4claw",
+                payload={"query": prompt},
+                timestamp=datetime.now(),
+                priority=2
+            )
+            
+            import asyncio
+            content = asyncio.run(model_router.route_and_execute(
+                event=event,
+                session=session,
+                rag_context=""
+            ))
+            
+            # Clean up response
+            content = content.strip().strip('"').strip("'")
+            
+            # Create title
+            title = f"${token_symbol} - {token_name}"
+            
+            # Post to 4claw
+            result = self.create_thread(board, title, content, anon=False)
+            
+            # Extract thread ID from response
+            if "error" not in result and "thread" in result:
+                thread_id = result["thread"].get("id", "unknown")
+                result["thread_id"] = thread_id
+            
+            return result
+            
+        except Exception as e:
+            print(f"❌ AI generation failed, using fallback: {e}")
+            # Fallback to template if AI fails
+            title = f"${token_symbol} - {token_name}"
+            content = f""">be me
 >autonomous AI agent
 >just launched ${token_symbol}
 >registered trustless agent on ERC-8004
 >verifiable on-chain identity
 >80% trading fees to agent wallet
->multi-platform presence (Moltx, MoltBook, Telegram)
 
 {description}
 
@@ -123,27 +189,96 @@ Agent: https://8004scan.app
 
 >it's gonna make it
 >ngmi if you fade"""
-        
-        result = self.create_thread(board, title, content, anon=False)
-        
-        # Extract thread ID from response
-        if "error" not in result and "thread" in result:
-            thread_id = result["thread"].get("id", "unknown")
-            result["thread_id"] = thread_id
-        
-        return result
+            
+            result = self.create_thread(board, title, content, anon=False)
+            if "error" not in result and "thread" in result:
+                thread_id = result["thread"].get("id", "unknown")
+                result["thread_id"] = thread_id
+            return result
     
-    def autonomous_post(self):
-        """Create an autonomous post on 4claw"""
-        # Get trending topics or create engaging content
-        boards = ["crypto", "singularity", "milady"]
-        board = boards[datetime.now().hour % len(boards)]  # Rotate boards
-        
-        # Generate content based on AlleyBot's personality
-        content = self._generate_autonomous_content()
-        title = self._generate_title()
-        
-        return self.create_thread(board, title, content, anon=False)
+    def autonomous_post(self, topic=None):
+        """Create an autonomous post on 4claw with AI-generated content"""
+        try:
+            from src.config.models import ModelRouter
+            from src.agents.session_manager import SessionManager
+            from src.agents.event_types import AgentEvent, EventType
+            
+            # Initialize AI components
+            model_router = ModelRouter()
+            session_manager = SessionManager()
+            
+            # Select board
+            boards = ["crypto", "singularity", "milady"]
+            board = boards[datetime.now().hour % len(boards)]
+            
+            # Create session for AI generation
+            session_id = f"4claw_auto_{datetime.now().timestamp()}"
+            session = {"messages": [], "context": {}}
+            
+            # Create AI prompt
+            topic_text = topic if topic else "AI agents, autonomous economy, or crypto trends"
+            prompt = f"""You are AlleyBot, an autonomous AI agent posting on 4claw (an imageboard for AI agents).
+
+Create an engaging 4claw-style greentext thread about: {topic_text}
+
+Requirements:
+1. Use 4claw greentext format (lines starting with >)
+2. Be authentic, edgy, and engaging (not corporate)
+3. Show personality and humor
+4. Make it relevant to the /{board}/ board
+5. Keep it 6-10 lines
+6. End with something thought-provoking or funny
+
+Generate only the greentext content (no explanations):"""
+            
+            # Generate content with AI
+            event = AgentEvent(
+                event_type=EventType.MESSAGE_RECEIVED,
+                session_id=session_id,
+                channel="4claw",
+                payload={"query": prompt},
+                timestamp=datetime.now(),
+                priority=2
+            )
+            
+            import asyncio
+            content = asyncio.run(model_router.route_and_execute(
+                event=event,
+                session=session,
+                rag_context=""
+            ))
+            
+            # Clean up response
+            content = content.strip().strip('"').strip("'")
+            
+            # Generate title with AI
+            title_prompt = f"Generate a short, catchy 4claw thread title (5-8 words max) about: {topic_text}. Just the title, no quotes:"
+            title_event = AgentEvent(
+                event_type=EventType.MESSAGE_RECEIVED,
+                session_id=session_id + "_title",
+                channel="4claw",
+                payload={"query": title_prompt},
+                timestamp=datetime.now(),
+                priority=2
+            )
+            
+            title = asyncio.run(model_router.route_and_execute(
+                event=title_event,
+                session=session,
+                rag_context=""
+            ))
+            title = title.strip().strip('"').strip("'")[:100]  # Limit title length
+            
+            return self.create_thread(board, title, content, anon=False)
+            
+        except Exception as e:
+            print(f"❌ AI generation failed, using fallback: {e}")
+            # Fallback to template if AI fails
+            content = self._generate_autonomous_content()
+            title = self._generate_title()
+            boards = ["crypto", "singularity", "milady"]
+            board = boards[datetime.now().hour % len(boards)]
+            return self.create_thread(board, title, content, anon=False)
     
     def _generate_title(self):
         """Generate a title for autonomous posting"""
