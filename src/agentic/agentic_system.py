@@ -218,17 +218,32 @@ class AgenticAlleyBot:
         try:
             # Parse input if JSON
             try:
-                params = json.loads(input_str)
+                params = json.loads(input_str) if input_str else {}
             except:
-                params = {'input': input_str}
+                params = {'input': input_str} if input_str else {}
             
             # Security check
             action_name = func.__name__ if hasattr(func, '__name__') else 'unknown'
-            security_result = self.security_filter.execute_with_security(
-                action=action_name,
-                params=params,
-                executor=lambda a, p: func(input_str)
-            )
+            
+            # Check if function takes arguments
+            import inspect
+            sig = inspect.signature(func)
+            takes_args = len(sig.parameters) > 0
+            
+            # Execute with or without arguments
+            if takes_args and input_str:
+                security_result = self.security_filter.execute_with_security(
+                    action=action_name,
+                    params=params,
+                    executor=lambda a, p: func(input_str)
+                )
+            else:
+                # Function takes no arguments
+                security_result = self.security_filter.execute_with_security(
+                    action=action_name,
+                    params=params,
+                    executor=lambda a, p: func()
+                )
             
             if security_result['success']:
                 return str(security_result.get('result', 'Success'))
