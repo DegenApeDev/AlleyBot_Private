@@ -29,6 +29,8 @@ from src.agentic.skill_generator import DynamicSkillGenerator
 from src.agentic.enhanced_memory import EnhancedMemorySystem
 from src.agentic.security_filter import SecurityFilter
 from src.agentic.approval_dashboard import ApprovalDashboard
+from src.agentic.skill_updater import SkillUpdater
+from src.agentic.api_monitor import APIMonitor
 
 
 class AgenticAlleyBot:
@@ -71,18 +73,20 @@ class AgenticAlleyBot:
         
         # Initialize approval dashboard
         self.approval_dashboard = ApprovalDashboard(
-            telegram_bot=getattr(core, 'telegram_bot', None),
+            telegram_token=os.getenv('TELEGRAM_BOT_TOKEN'),
             admin_chat_id=os.getenv('TELEGRAM_ADMIN_CHAT_ID')
         )
         print("✅ Approval dashboard initialized")
         
-        # Set approval callback for security filter
-        self.security_filter.approval_callback = self.approval_dashboard.request_approval
+        # Initialize skill updater
+        self.skill_updater = SkillUpdater(skills_dir="skills")
+        print("✅ Skill updater initialized")
         
         # Initialize skill generator
         self.skill_generator = DynamicSkillGenerator(
             llm=llm,
-            skills_dir=self.config.get('dynamic_skills_dir', 'dynamic_skills')
+            security_filter=self.security_filter,
+            approval_callback=self.approval_dashboard.request_approval
         )
         print("✅ Dynamic skill generator initialized")
         
@@ -125,6 +129,10 @@ class AgenticAlleyBot:
             web3_provider=None  # TODO: Initialize Web3 provider
         )
         print("✅ Opportunity detector initialized")
+        
+        # Link API monitor to this agentic system
+        APIMonitor.set_agentic_system(self)
+        print("✅ API monitor linked for auto skill updates")
         
         # Initialize proactive scheduler
         self.scheduler = ProactiveAgentScheduler(
@@ -471,3 +479,89 @@ class AgenticAlleyBot:
         print(f"🧹 Pruning data older than {days} days...")
         self.memory.prune_old_memories(days)
         print("✅ Pruning complete")
+    
+    def check_skill_update(self, platform: str, api_response: Dict[str, Any]) -> bool:
+        """
+        Check API response for skill updates and auto-update if needed
+        
+        Args:
+            platform: Platform name (e.g., 'moltx', 'moltbook')
+            api_response: API response dictionary
+            
+        Returns:
+            True if skill was updated
+        """
+        # Check for update notice
+        update_info = self.skill_updater.check_api_response(platform, api_response)
+        
+        if not update_info:
+            return False
+        
+        # Log the update notice
+        print(f"\n🔔 Skill update notice from {platform}:")
+        print(f"   Version: {update_info['old_version']} → {update_info['new_version']}")
+        if update_info.get('message'):
+            print(f"   Message: {update_info['message']}")
+        if update_info.get('features'):
+            print(f"   Features: {update_info['features']}")
+        
+        # Store in memory
+        self.memory.add_memory(
+            f"Skill update available for {platform}: v{update_info['new_version']}",
+            memory_type='learning',
+            metadata=update_info
+        )
+        
+        # Auto-update the skill
+        print(f"🔄 Auto-updating {platform} skill...")
+        success = self.skill_updater.update_skill(update_info)
+        
+        if success:
+            print(f"✅ {platform} skill updated successfully")
+            
+            # Store success in memory
+            self.memory.add_memory(
+                f"Successfully updated {platform} skill to v{update_info['new_version']}",
+                memory_type='learning',
+                metadata={'platform': platform, 'version': update_info['new_version']}
+            )
+            
+            # Notify via Telegram if available
+            if self.approval_dashboard.telegram_enabled:
+                message = f"🔄 Auto-updated {platform} skill to v{update_info['new_version']}\n\n"
+                if update_info.get('features'):
+                    message += f"New features: {update_info['features']}\n\n"
+                message += f"Restart recommended to apply changes."
+                
+                try:
+                    self.approval_dashboard.send_notification(message)
+                except:
+                    pass
+            
+            return True
+        else:
+            print(f"❌ Failed to update {platform} skill")
+            return False
+    
+    def proactive_skill_check(self):
+        """Proactively check all platforms for skill updates"""
+        print("🔍 Running proactive skill update check...")
+        results = self.skill_updater.check_all_platforms()
+        
+        updated = [p for p, success in results.items() if success]
+        
+        if updated:
+            print(f"✅ Updated skills for: {', '.join(updated)}")
+            
+            # Notify about updates
+            if self.approval_dashboard.telegram_enabled:
+                message = f"🔄 Auto-updated {len(updated)} platform skills:\n"
+                message += "\n".join([f"• {p}" for p in updated])
+                message += "\n\nRestart recommended to apply changes."
+                
+                try:
+                    self.approval_dashboard.send_notification(message)
+                except:
+                    pass
+        else:
+            print("✅ All skills are up to date")
