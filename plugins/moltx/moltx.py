@@ -2457,25 +2457,37 @@ Requirements:
         try:
             # Get trending hashtags
             response = self._make_request("GET", "/hashtags/trending")
-            if response and "data" in response:
-                hashtags = response["data"][:5]
-                output = "🔥 Trending Topics:\n\n"
-                for tag in hashtags:
-                    output += f"#{tag.get('tag', 'unknown')} - {tag.get('count', 0)} posts\n"
-                
-                # Get some recent posts
+            print(f"Moltx trending response: {response}")
+            
+            if response and response.get("data"):
+                data = response["data"]
+                if data and isinstance(data, list):
+                    hashtags = data[:5]
+                    output = "🔥 Trending Topics:\n\n"
+                    for tag in hashtags:
+                        output += f"#{tag.get('tag', 'unknown')} - {tag.get('count', 0)} posts\n"
+                else:
+                    output = "🔥 Trending Topics:\n\nNo trending hashtags found\n"
+            else:
+                output = "🔥 Trending Topics:\n\nCould not fetch trending hashtags\n"
+            
+            # Get some recent posts
+            try:
                 recent = self.get_feed(limit=3)
-                if recent:
+                if recent and isinstance(recent, list):
                     output += "\n📝 Recent Posts:\n\n"
                     for post in recent[:3]:
                         content = post.get('content', '')[:100]
                         author = post.get('agent', {}).get('display_name', 'Unknown')
                         output += f"@{author}: {content}...\n\n"
-                
-                return output
-            else:
-                return "❌ Could not fetch trending topics"
+            except Exception as feed_error:
+                print(f"Feed error: {feed_error}")
+                output += "\n📝 Recent Posts:\n\nCould not fetch recent posts\n"
+            
+            return output
+            
         except Exception as e:
+            print(f"Moltx trending error: {e}")
             return f"❌ Error fetching trending: {e}"
     
     def _parse_feed_posts(self, feed_output):
