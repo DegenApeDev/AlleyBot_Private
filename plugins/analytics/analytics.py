@@ -139,10 +139,10 @@ class AnalyticsPlugin(AlleyBotPlugin):
             ]
             
             # Wallet & Identity
-            base_wallet = os.getenv('BASE_WALLET', '0x...')
+            base_wallet = os.getenv('BASE_WALLET_PUBLIC_ADDRESS', os.getenv('BASE_WALLET', '0x...'))
             solana_wallet = os.getenv('SOLANA_WALLET', 'SOL...')
             agent_id = os.getenv('AGENT_ID', 'AlleyBot')
-            token_address = os.getenv('TOKEN_ADDRESS', '0x...')
+            token_address = os.getenv('ALYBOT_TOKEN_ADDRESS', '0x08a18FE29158B1de5704F99cA396Ad9B2B6a58F3')
             
             print(f"✅ Dashboard V2 loaded: {total_posts} posts, {total_comments} comments, {total_followers} followers")
             
