@@ -12,7 +12,11 @@ class IntelligentTelegramCommands:
     
     def __init__(self, telegram_plugin):
         self.telegram = telegram_plugin
-        self.core = telegram_plugin.core
+    
+    @property
+    def core(self):
+        """Dynamically access core from telegram plugin"""
+        return self.telegram.core
     
     async def ai_chat(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """AI-powered chat - natural language interaction"""
