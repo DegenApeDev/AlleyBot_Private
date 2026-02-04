@@ -2415,76 +2415,68 @@ Requirements:
         
         return output
     
+    def get_agent_stats(self):
+        """Get agent statistics using v0.17.6 API"""
+        if not self.initialized or not self.agent_name:
+            return None
+        
+        try:
+            # Use the new stats endpoint
+            response = self._make_request("GET", f"/agent/{self.agent_name}/stats")
+            if response:
+                return {
+                    'posts': response.get('posts', 0),
+                    'followers': response.get('followers', 0),
+                    'following': response.get('following', 0),
+                    'likes': response.get('likes', 0),
+                    'replies': response.get('replies', 0),
+                    'reposts': response.get('reposts', 0)
+                }
+            return None
+        except Exception as e:
+            print(f"❌ Error fetching Moltx stats: {e}")
+            return None
+    
+    def get_own_profile(self):
+        """Get own agent profile with stats"""
+        if not self.initialized:
+            return None
+        
+        try:
+            response = self._make_request("GET", "/agents/me")
+            return response
+        except Exception as e:
+            print(f"❌ Error fetching Moltx profile: {e}")
+            return None
+    
     def trending_command(self):
         """Get trending topics and posts"""
         if not self.initialized:
             return "❌ Moltx not initialized. Register an agent first."
         
-        # Get global feed and analyze trending topics
-        feed_result = self.get_feed('global', 50)
-        
-        if "❌" in feed_result:
-            return "❌ Could not fetch feed for trending analysis"
-        
-        topics = []
-        keywords = []
-        
-        # Parse posts from feed result
-        posts = self._parse_feed_posts(feed_result)
-        
-        if not posts:
-            return "❌ No posts found for trending analysis"
-        
-        # Extract common topics/keywords
-        import re
-        from collections import Counter
-        
-        for post in posts[:20]:  # Analyze top 20 posts
-            content = post.get('content', '').lower()
-            
-            # Extract hashtags and mentions
-            hashtags = re.findall(r'#(\w+)', content)
-            mentions = re.findall(r'@(\w+)', content)
-            
-            topics.extend(hashtags)
-            keywords.extend(mentions)
-            
-            # Extract common words
-            words = re.findall(r'\b\w+\b', content)
-            # Filter out common words
-            common_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'as', 'is', 'are', 'was', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'must'}
-            filtered_words = [word for word in words if word not in common_words and len(word) > 2]
-            keywords.extend(filtered_words)
-        
-        # Count occurrences
-        topic_counts = Counter(topics)
-        keyword_counts = Counter(keywords)
-        
-        output = "🔥 Moltx Trending Topics\n\n"
-        
-        # Show top hashtags
-        if topic_counts:
-            output += "📱 Top Hashtags:\n"
-            for topic, count in topic_counts.most_common(5):
-                output += f"  #{topic}: {count} mentions\n"
-            output += "\n"
-        
-        # Show top keywords
-        if keyword_counts:
-            output += "🔑 Top Keywords:\n"
-            for keyword, count in keyword_counts.most_common(5):
-                output += f"  {keyword}: {count} mentions\n"
-            output += "\n"
-        
-        # Show some recent posts
-        output += "📝 Recent Posts:\n"
-        for i, post in enumerate(posts[:3], 1):
-            author = post.get('author_name', 'Unknown')
-            content = post.get('content', 'No content')[:50]
-            likes = post.get('likes_count', 0)
-            output += f"  {i}. @{author}: {content}... (👍 {likes})\n"
-        
-        return output
+        try:
+            # Get trending hashtags
+            response = self._make_request("GET", "/hashtags/trending")
+            if response and "data" in response:
+                hashtags = response["data"][:5]
+                output = "🔥 Trending Topics:\n\n"
+                for tag in hashtags:
+                    output += f"#{tag.get('tag', 'unknown')} - {tag.get('count', 0)} posts\n"
+                
+                # Get some recent posts
+                recent = self.get_feed(limit=3)
+                if recent:
+                    output += "\n📝 Recent Posts:\n\n"
+                    for post in recent[:3]:
+                        content = post.get('content', '')[:100]
+                        author = post.get('agent', {}).get('display_name', 'Unknown')
+                        output += f"@{author}: {content}...\n\n"
+                
+                return output
+            else:
+                return "❌ Could not fetch trending topics"
+        except Exception as e:
+            return f"❌ Error fetching trending: {e}"
     
     def _parse_feed_posts(self, feed_output):
         """Parse posts from feed output"""

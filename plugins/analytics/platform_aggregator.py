@@ -179,7 +179,7 @@ class PlatformStatsAggregator:
             return None
     
     def _get_moltx_stats(self) -> Optional[Dict]:
-        """Get stats from Moltx"""
+        """Get stats from Moltx using v0.17.6 API"""
         if not self.moltx_api_key:
             return None
         
