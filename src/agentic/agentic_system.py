@@ -95,28 +95,23 @@ class AgenticAlleyBot:
         self.tools = self._build_tools()
         print(f"✅ Built {len(self.tools)} tools")
         
-        # Initialize ReAct agent (LangChain or simple)
-        # Check if LLM is compatible with LangChain (needs bind() method)
-        use_langchain = LANGCHAIN_AVAILABLE and hasattr(llm, 'bind')
-        
-        if use_langchain:
+        # Initialize ReAct agent with LangChain
+        if LANGCHAIN_AVAILABLE:
             self.agent = EnhancedReActAgent(
                 llm=llm,
                 tools=self.tools,
                 max_iterations=self.config.get('max_iterations', 15),
                 approval_callback=self.approval_dashboard.request_approval
             )
-            print("✅ ReAct agent initialized (LangChain)")
+            print("✅ Enhanced ReAct agent initialized (LangChain)")
         else:
-            if LANGCHAIN_AVAILABLE and not hasattr(llm, 'bind'):
-                print("⚠️  LLM not compatible with LangChain (missing bind() method)")
-                print("📦 Using simple agent implementation instead")
+            # Fallback only if LangChain not available at all
             self.agent = SimpleReActAgent(
                 llm=llm,
                 tools=self.tools,
                 max_iterations=self.config.get('max_iterations', 15)
             )
-            print("✅ Simple ReAct agent initialized")
+            print("✅ ReAct agent initialized (fallback mode)")
         
         # Update on-chain context (only for LangChain agent)
         wallet_address = os.getenv('BASE_WALLET_PUBLIC_ADDRESS')

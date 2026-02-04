@@ -28,11 +28,16 @@ def main():
             print("🤖 Starting agentic mode (enhanced autonomous with ReAct)...")
             try:
                 from src.agentic import AgenticAlleyBot
-                from deepseek_ai import deepseek_ai
+                from src.agentic.deepseek_llm import DeepSeekLLM
+                import os
                 
-                # Use deepseek_ai instance directly as LLM
-                # The agentic system will use it for reasoning
-                llm = deepseek_ai
+                # Initialize LangChain-compatible DeepSeek LLM
+                api_key = os.getenv('DEEPSEEK_API_KEY')
+                if not api_key:
+                    print("❌ DEEPSEEK_API_KEY not found in environment")
+                    return 1
+                
+                llm = DeepSeekLLM(api_key=api_key)
                 
                 # Initialize agentic system
                 agentic_bot = AgenticAlleyBot(llm, core)
