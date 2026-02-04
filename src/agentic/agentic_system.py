@@ -86,8 +86,7 @@ class AgenticAlleyBot:
         # Initialize skill generator
         self.skill_generator = DynamicSkillGenerator(
             llm=llm,
-            security_filter=self.security_filter,
-            approval_callback=self.approval_dashboard.request_approval
+            skills_dir='dynamic_skills'
         )
         print("✅ Dynamic skill generator initialized")
         
