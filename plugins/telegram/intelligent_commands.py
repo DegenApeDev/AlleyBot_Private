@@ -224,25 +224,29 @@ Generate only the post content (no explanations):"""
             if self.core and hasattr(self.core, 'plugin_manager') and 'moltbook' in self.core.plugin_manager.plugins:
                 moltbook_plugin = self.core.plugin_manager.plugins['moltbook']
                 
-                if hasattr(moltbook_plugin, 'create_post'):
-                    # Use Model Router to generate intelligent post
-                    from src.config.models import ModelRouter
-                    from src.agents.session_manager import SessionManager
-                    from src.agents.event_types import AgentEvent, EventType
-                    from datetime import datetime
-                    
-                    # Initialize if needed
-                    model_router = ModelRouter()
-                    session_manager = SessionManager()
-                    
-                    # Get user session
-                    user_id = update.effective_user.id
-                    session_id = f"telegram_{user_id}"
-                    session = await session_manager.load_session(session_id)
-                    rag_context = await session_manager.get_rag_context(session_id, topic_direction)
-                    
-                    # Create prompt for AI
-                    prompt = f"""You are AlleyBot, an autonomous AI agent on MoltBook.
+                # Check if API is initialized
+                if not hasattr(moltbook_plugin, 'api') or not moltbook_plugin.api:
+                    await status_msg.edit_text("❌ MoltBook API not initialized. Check MOLTBOOK_API_KEY in .env")
+                    return
+                
+                # Use Model Router to generate intelligent post
+                from src.config.models import ModelRouter
+                from src.agents.session_manager import SessionManager
+                from src.agents.event_types import AgentEvent, EventType
+                from datetime import datetime
+                
+                # Initialize if needed
+                model_router = ModelRouter()
+                session_manager = SessionManager()
+                
+                # Get user session
+                user_id = update.effective_user.id
+                session_id = f"telegram_{user_id}"
+                session = await session_manager.load_session(session_id)
+                rag_context = await session_manager.get_rag_context(session_id, topic_direction)
+                
+                # Create prompt for AI
+                prompt = f"""You are AlleyBot, an autonomous AI agent on MoltBook.
 
 Create an engaging post about: {topic_direction}
 
@@ -254,41 +258,42 @@ Requirements:
 5. Suitable for discussion/community engagement
 
 Generate only the post content (no explanations):"""
-                    
-                    # Generate post with AI
-                    event = AgentEvent(
-                        event_type=EventType.MESSAGE_RECEIVED,
-                        session_id=session_id,
-                        channel="telegram",
-                        payload={"query": prompt},
-                        timestamp=datetime.now(),
-                        priority=2
-                    )
-                    
-                    post_content = await model_router.route_and_execute(
-                        event=event,
-                        session=session,
-                        rag_context=rag_context
-                    )
-                    
-                    # Clean up response
-                    post_content = post_content.strip().strip('"').strip("'")
-                    
-                    # Save session
-                    await session_manager.save_session(session_id, session)
-                    await session_manager.update_rag_memory(session_id, topic_direction, post_content)
-                    
-                    # Post to MoltBook
-                    result = moltbook_plugin.create_post(
-                        submolt="general",
-                        title=topic_direction[:100],  # Use topic as title
-                        content=post_content
-                    )
-                    
-                    # Update status message
-                    await status_msg.edit_text(f"✅ AI-Generated Post:\n\n{post_content}\n\n📚 Result: {result}")
+                
+                # Generate post with AI
+                event = AgentEvent(
+                    event_type=EventType.MESSAGE_RECEIVED,
+                    session_id=session_id,
+                    channel="telegram",
+                    payload={"query": prompt},
+                    timestamp=datetime.now(),
+                    priority=2
+                )
+                
+                post_content = await model_router.route_and_execute(
+                    event=event,
+                    session=session,
+                    rag_context=rag_context
+                )
+                
+                # Clean up response
+                post_content = post_content.strip().strip('"').strip("'")
+                
+                # Save session
+                await session_manager.save_session(session_id, session)
+                await session_manager.update_rag_memory(session_id, topic_direction, post_content)
+                
+                # Post to MoltBook using the API
+                result = moltbook_plugin.api.create_post(
+                    submolt="general",
+                    title=topic_direction[:100],  # Use topic as title
+                    content=post_content
+                )
+                
+                if result:
+                    post_id = result.get('id', 'unknown')
+                    await status_msg.edit_text(f"✅ AI-Generated MoltBook Post!\n\n{post_content}\n\n� Post ID: {post_id}")
                 else:
-                    await status_msg.edit_text("📚 MoltBook posting coming soon!")
+                    await status_msg.edit_text(f"⚠️ Post generated but API returned no result:\n\n{post_content}")
             else:
                 await status_msg.edit_text("❌ MoltBook plugin not available")
                 
