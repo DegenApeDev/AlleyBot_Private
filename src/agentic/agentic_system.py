@@ -72,8 +72,9 @@ class AgenticAlleyBot:
         print("✅ Security filter initialized")
         
         # Initialize approval dashboard
+        # Note: telegram_bot will be None initially, can be set later if needed
         self.approval_dashboard = ApprovalDashboard(
-            telegram_token=os.getenv('TELEGRAM_BOT_TOKEN'),
+            telegram_bot=None,
             admin_chat_id=os.getenv('TELEGRAM_ADMIN_CHAT_ID')
         )
         print("✅ Approval dashboard initialized")
