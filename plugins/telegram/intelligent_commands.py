@@ -162,7 +162,13 @@ Generate only the post content (no explanations):"""
                 return
             
             result = moltx_plugin.feed_command()
-            await update.message.reply_text(f"📰 Moltx Feed:\n{result}")
+            
+            # Telegram has a 4096 character limit, truncate if needed
+            message = f"📰 Moltx Feed:\n{result}"
+            if len(message) > 4000:
+                message = message[:3900] + "\n\n... (truncated, too long for Telegram)"
+            
+            await update.message.reply_text(message)
                 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
