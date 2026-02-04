@@ -37,6 +37,13 @@ def main():
                 # Initialize agentic system
                 agentic_bot = AgenticAlleyBot(llm, core)
                 
+                # Start dashboard in background
+                print("📊 Auto-starting dashboard in background...")
+                try:
+                    core.run_command('dashboard')
+                except Exception as e:
+                    print(f"⚠️  Dashboard start failed: {e}")
+                
                 # Start proactive mode
                 print("🚀 Starting proactive agentic behavior...")
                 agentic_bot.start_proactive_mode()
