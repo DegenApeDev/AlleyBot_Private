@@ -17,7 +17,11 @@ MOLTX_BASE_URL = "https://moltx.io/v1"
 BTC_WALLET = os.getenv('BTC_WALLET')
 ETH_WALLET = os.getenv('ETH_WALLET')
 BASE_WALLET = os.getenv('BASE_WALLET')
+BASE_WALLET_PUBLIC_ADDRESS = os.getenv('BASE_WALLET_PUBLIC_ADDRESS', BASE_WALLET)
 SOL_WALLET = os.getenv('SOL_WALLET')
+
+# Base network RPC
+BASE_RPC_URL = os.getenv('BASE_RPC_URL', 'https://mainnet.base.org')
 
 # Legacy support
 WALLET_ADDRESS = BTC_WALLET

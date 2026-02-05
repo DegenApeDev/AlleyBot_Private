@@ -74,5 +74,12 @@
       "alerts_enabled": true,
       "chat_enabled": true
     }
+  },
+  "onchain": {
+    "enabled": true,
+    "config": {
+      "network": "mainnet",
+      "heartbeat_enabled": true
+    }
   }
 }

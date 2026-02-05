@@ -127,12 +127,19 @@ class AgenticAlleyBot:
             self.agent.update_on_chain_context(wallet_address)
             print(f"✅ On-chain context updated for {wallet_address[:10]}...")
         
-        # Initialize opportunity detector
+        # Initialize opportunity detector with real Web3 provider from onchain plugin
+        onchain_plugin = core.plugin_manager.plugins.get('onchain')
+        web3_prov = getattr(onchain_plugin, 'web3_provider', None) if onchain_plugin else None
+        w3_instance = getattr(web3_prov, 'w3', None) if web3_prov and getattr(web3_prov, 'connected', False) else None
+        self.onchain_plugin = onchain_plugin
         self.opportunity_detector = OnChainOpportunityDetector(
             moltbook_api=getattr(core.plugin_manager.plugins.get('moltbook'), 'api', None),
-            web3_provider=None  # TODO: Initialize Web3 provider
+            web3_provider=w3_instance
         )
-        print("✅ Opportunity detector initialized")
+        if w3_instance:
+            print("✅ Opportunity detector initialized (Web3 connected)")
+        else:
+            print("✅ Opportunity detector initialized (Web3 not available)")
         
         # Link API monitor to this agentic system
         APIMonitor.set_agentic_system(self)
@@ -371,15 +378,33 @@ class AgenticAlleyBot:
             return f"❌ Failed to generate skill: {str(e)}"
     
     def _check_balance_tool(self, address: str) -> str:
-        """Check wallet balance tool"""
+        """Check wallet balance tool using onchain plugin"""
         if address == 'self':
             address = os.getenv('BASE_WALLET_PUBLIC_ADDRESS')
-        
+
         if not address:
             return "❌ No wallet address provided"
-        
-        # TODO: Implement actual balance check with Web3
-        return f"Balance check for {address}: Not implemented yet"
+
+        # Use onchain plugin if available
+        if self.onchain_plugin and hasattr(self.onchain_plugin, 'web3_provider'):
+            provider = self.onchain_plugin.web3_provider
+            if provider and provider.connected:
+                result = provider.get_eth_balance(address)
+                if result['success']:
+                    output = f"💰 Balance for {address[:10]}...{address[-6:]}\n"
+                    output += f"  Ξ {result['balance_eth']:.6f} ETH ({result['network']})\n"
+
+                    # Also check tracked tokens
+                    for symbol, token_info in self.onchain_plugin.tracked_tokens.items():
+                        tok_result = provider.get_token_balance(token_info['address'], address)
+                        if tok_result['success']:
+                            output += f"  🪙 {tok_result['balance']:,.4f} {symbol}\n"
+
+                    return output
+                else:
+                    return f"❌ Balance check failed: {result['error']}"
+
+        return f"❌ Web3 not connected. Enable the onchain plugin."
     
     def _get_opportunities_tool(self, platform: str) -> str:
         """Get on-chain opportunities tool"""
