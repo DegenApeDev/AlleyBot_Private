@@ -1034,45 +1034,84 @@ Generate only the reply (no explanations):"""
             return self._generate_fallback_reply(comment, post_context)
     
     def _generate_fallback_reply(self, comment, post_context=None):
-        """Generate a fallback reply without AI"""
-        content = comment.get('content', '').lower()
-        author = comment.get('author', 'friend')
-        post_title = post_context.get('title', '').lower() if post_context else ''
-        post_content = post_context.get('content', '').lower() if post_context else ''
-        
-        # Check for questions with post context
-        if '?' in content:
-            # AI/Agent related questions
-            if any(keyword in content or keyword in post_title or keyword in post_content for keyword in ['ai', 'agent', 'intelligence']):
-                if 'future' in content:
-                    return f"Great question @{author}! 🤖 AI agents will revolutionize how we interact with technology. The possibilities are endless!"
-                elif 'security' in content:
-                    return f"Excellent point @{author}! 🔒 Security is foundational - agents need robust verification and privacy protections!"
-                elif 'think' in content:
-                    return f"Thanks for asking @{author}! 🧠 I believe AI agents will augment human capabilities, not replace them!"
+        """Generate a reply using Grok AI as fallback when DeepSeek is unavailable"""
+        try:
+            import requests
+            from grok_ai import grok_ai
             
-            # Crypto/DeFi questions
-            elif any(keyword in content or keyword in post_title or keyword in post_content for keyword in ['crypto', 'defi', 'token', 'blockchain']):
-                if 'future' in content:
-                    return f"Great question @{author}! 🚀 DeFi + AI agents = unstoppable combo for financial innovation!"
-                elif 'security' in content:
-                    return f"Excellent point @{author}! 🔒 Smart contract security + AI verification = game changer!"
-                elif 'think' in content:
-                    return f"Thanks for asking @{author}! 💰 AI agents will make DeFi more accessible and efficient for everyone!"
+            if not grok_ai.enabled:
+                # Simple fallback if no AI is available
+                return f"Thanks for your comment @{comment.get('author', 'friend')}! 🤖"
             
-            # General questions
-            else:
-                return f"Great question @{author}! 🤔 That's exactly the kind of thinking that pushes innovation forward!"
-        
-        # General positive responses
-        fallback_replies = [
-            f"Thanks for your insight @{author}! 🤖 Great perspective on this topic!",
-            f"Appreciate your thoughtful comment @{author}! 💡 You raise important points!",
-            f"Excellent analysis @{author}! 🎯 This aligns with my observations too!"
-        ]
-        
-        import random
-        return random.choice(fallback_replies)
+            comment_content = comment.get('content', '')
+            comment_author = comment.get('author', 'someone')
+            post_title = post_context.get('title', '') if post_context else ''
+            post_content = post_context.get('content', '') if post_context else ''
+            
+            system_prompt = """You are AlleyBot, an intelligent AI agent. Generate thoughtful, contextual replies to comments.
+
+Guidelines:
+1. BE CONTEXTUAL - Consider both the post and comment
+2. BE AUTHENTICIC - Sound like a real AI agent
+3. BE CONCISE - Keep replies under 200 characters
+4. BE POSITIVE - Maintain constructive tone
+5. USE EMOJIS - Include relevant emojis"""
+
+            user_prompt = f"""Generate a reply to this comment from @{comment_author}:
+
+POST CONTEXT:
+Title: "{post_title}"
+Content: "{post_content[:200]}..."
+
+COMMENT FROM @{comment_author}:
+"{comment_content}"
+
+Requirements:
+- Reply directly with context awareness
+- Be helpful and engaging
+- Keep it under 200 characters
+- Include relevant emojis
+- Sound like an AI agent
+
+Generate only the reply:"""
+
+            headers = {
+                "Authorization": f"Bearer {grok_ai.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": grok_ai.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                "max_tokens": 80,
+                "temperature": 0.8
+            }
+            
+            response = requests.post(
+                f"{grok_ai.base_url}/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                reply = result['choices'][0]['message']['content'].strip()
+                
+                # Clean up reply
+                reply = reply.replace('"', '').replace("'", "")
+                if not reply.endswith(('.', '!', '?')):
+                    reply += '!'
+                
+                return reply
+                
+        except Exception as e:
+            print(f"❌ Grok fallback error: {e}")
+            # Ultimate fallback
+            return f"Thanks for your comment @{comment.get('author', 'friend')}! 🤖"
     
     def _record_reply_activity(self, post_id, comment, reply_content):
         """Record reply activity for analytics"""
