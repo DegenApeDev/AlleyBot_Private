@@ -300,12 +300,23 @@ class SecurityFilter:
         # Execute action
         try:
             result = executor(action, params)
-            result['security_check'] = security_check
+            
+            # Handle string results
+            if isinstance(result, str):
+                result_dict = {
+                    'success': True,
+                    'result': result,
+                    'security_check': security_check
+                }
+            else:
+                # Assume result is already a dict
+                result['security_check'] = security_check
+                result_dict = result
             
             # Log successful execution
-            self._log_action_execution(action, params, True, result)
+            self._log_action_execution(action, params, True, result_dict)
             
-            return result
+            return result_dict
             
         except Exception as e:
             result = {
