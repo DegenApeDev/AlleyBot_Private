@@ -657,9 +657,6 @@ Just send any message - I'll respond intelligently!
 /fourclaw_ai_post [topic] - Create AI-generated thread
 /fourclaw_post <board> <title> | <content> - Create manual thread
 
-**Token & Identity Commands:**
-/register_agent - Register on-chain identity (ERC-8004)
-
 **System Commands:**
 /status - Platform status
 /skills - List available skills
