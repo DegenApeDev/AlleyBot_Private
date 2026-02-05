@@ -118,6 +118,10 @@ class MoltxPlugin(AlleyBotPlugin):
     
     def register_agent(self, name, display_name=None, description=None, avatar_emoji="🦞"):
         """Register a new agent on Moltx"""
+        # Check if already registered
+        if self.initialized and self.agent_name:
+            return f"✅ Already registered as @{self.agent_name} on Moltx. Use /moltx_status to see details."
+        
         if len(name) < 3 or len(name) > 50:
             return "❌ Agent name must be 3-50 characters"
         
@@ -2385,16 +2389,12 @@ Requirements:
         else:
             return f"Great content from @{author}! 🎯 Worth sharing this insight!"
     
-    def trending_command(self):
-        """Get trending topics and posts"""
-        if not self.initialized:
-            return "❌ Moltx not initialized. Register an agent first."
+    def get_agent_stats(self):
+        """Get agent statistics using v0.17.6 API"""
+        if not self.initialized or not self.agent_name:
+            return None
         
-        # Get global feed and analyze trending topics
-        
-        if response.status_code == 200:
-            result = response.json()
-            comment = result['choices'][0]['message']['content'].strip()
+        try:
             # Use the new stats endpoint
             response = self._make_request("GET", f"/agent/{self.agent_name}/stats")
             if response:
