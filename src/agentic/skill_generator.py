@@ -256,9 +256,19 @@ Respond in JSON format:
                 response_text = response
             
             # Parse JSON response
-            # Ensure response_text is a string
+            # Handle Grok's nested response format
             if isinstance(response_text, list):
-                response_text = str(response_text)
+                # Grok returns [{'content': [{'type': 'output_text', 'text': '...'}]}]
+                try:
+                    if len(response_text) > 0 and isinstance(response_text[0], dict):
+                        content = response_text[0].get('content', [])
+                        if isinstance(content, list) and len(content) > 0:
+                            text_obj = content[0]
+                            if isinstance(text_obj, dict) and 'text' in text_obj:
+                                response_text = text_obj['text']
+                except Exception as e:
+                    print(f"⚠️  Error extracting text from nested response: {e}")
+                    response_text = str(response_text)
             elif not isinstance(response_text, str):
                 response_text = str(response_text)
             
@@ -266,13 +276,17 @@ Respond in JSON format:
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 try:
-                    gap_info = json.loads(json_match.group())
+                    json_str = json_match.group()
+                    gap_info = json.loads(json_str)
                     
                     if gap_info.get('gap_exists'):
                         return gap_info.get('missing_capability')
                 except json.JSONDecodeError as e:
+                    # Silently handle when no gap exists
+                    if 'gap_exists' in response_text and 'false' in response_text.lower():
+                        return None
                     print(f"⚠️  JSON parsing error: {e}")
-                    print(f"⚠️  Raw response: {response_text[:200]}...")
+                    print(f"⚠️  Attempted to parse: {json_str[:200]}...")
                     return None
             
             return None
