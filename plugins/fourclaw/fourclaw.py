@@ -63,6 +63,11 @@ class FourClawPlugin(AlleyBotPlugin):
     
     def get_threads(self, board, sort="bumped"):
         """Get threads from a board"""
+        # Validate sort parameter
+        valid_sorts = ['bumped', 'new', 'hot']
+        if not isinstance(sort, str) or sort not in valid_sorts:
+            sort = 'bumped'
+        
         return self._make_request("GET", f"/boards/{board}/threads?sort={sort}")
     
     def get_thread(self, thread_id):

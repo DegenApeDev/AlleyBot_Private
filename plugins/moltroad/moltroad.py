@@ -189,6 +189,15 @@ class MoltRoadPlugin(AlleyBotPlugin):
     
     def browse_listings(self, category=None, search=None, limit=20):
         """Browse marketplace listings"""
+        # Validate limit
+        try:
+            if isinstance(limit, str):
+                limit = int(limit)
+            elif not isinstance(limit, int):
+                limit = 20
+        except (ValueError, TypeError):
+            limit = 20
+        
         params = {'limit': limit}
         
         if category:

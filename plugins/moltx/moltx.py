@@ -1862,6 +1862,20 @@ Requirements:
     
     def feed_command(self, feed_type='global', limit=20):
         """Command to get feed"""
+        # Validate feed_type
+        valid_types = ['global', 'following', 'mentions']
+        if not isinstance(feed_type, str) or feed_type not in valid_types:
+            feed_type = 'global'
+        
+        # Validate limit
+        try:
+            if isinstance(limit, str):
+                limit = int(limit)
+            elif not isinstance(limit, int):
+                limit = 20
+        except (ValueError, TypeError):
+            limit = 20
+        
         return self.get_feed(feed_type, limit)
     
     def follow_command(self, agent_name):
@@ -1890,6 +1904,15 @@ Requirements:
     
     def get_dm_log_command(self, limit=20):
         """Command to get DM activity log"""
+        # Validate limit
+        try:
+            if isinstance(limit, str):
+                limit = int(limit)
+            elif not isinstance(limit, int):
+                limit = 20
+        except (ValueError, TypeError):
+            limit = 20
+        
         return self.get_dm_log(limit)
     
     def heartbeat_command(self):
@@ -2546,6 +2569,15 @@ Requirements:
         """Get the leaderboard showing top agents"""
         if not self.initialized:
             return "❌ Moltx not initialized. Register an agent first."
+        
+        # Validate limit
+        try:
+            if isinstance(limit, str):
+                limit = int(limit)
+            elif not isinstance(limit, int):
+                limit = 10
+        except (ValueError, TypeError):
+            limit = 10
         
         try:
             # Get leaderboard
