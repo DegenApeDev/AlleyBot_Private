@@ -37,14 +37,26 @@ class GrokAI:
             "Content-Type": "application/json"
         }
         
+        # Convert messages format to input format for Grok API
+        if 'messages' in data:
+            data = {
+                'input': data['messages'],
+                'model': data.get('model', self.model)
+            }
+            # Copy other params if present
+            if 'max_tokens' in data:
+                data['max_tokens'] = data['max_tokens']
+            if 'temperature' in data:
+                data['temperature'] = data['temperature']
+        
         max_retries = 3
         for attempt in range(max_retries):
             try:
                 response = requests.post(
-                    f"{self.base_url}/chat/completions",
+                    f"{self.base_url}/responses",  # Correct Grok endpoint
                     headers=headers,
                     json=data,
-                    timeout=30  # Increased timeout
+                    timeout=60  # Increased timeout for reasoning model
                 )
                 
                 if response.status_code == 200:

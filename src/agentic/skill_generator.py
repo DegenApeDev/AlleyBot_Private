@@ -240,7 +240,13 @@ Respond in JSON format:
                 
                 if response and response.status_code == 200:
                     result = response.json()
-                    response_text = result['choices'][0]['message']['content'].strip()
+                    # Grok /responses endpoint returns different format
+                    if 'output' in result:
+                        response_text = result['output'].strip()
+                    elif 'choices' in result:
+                        response_text = result['choices'][0]['message']['content'].strip()
+                    else:
+                        response_text = str(result)
                 else:
                     raise Exception(f"Grok API error: {response.status_code if response else 'No response'}")
             else:
@@ -354,7 +360,13 @@ Generate the complete code:
                 
                 if response and response.status_code == 200:
                     result = response.json()
-                    response_text = result['choices'][0]['message']['content'].strip()
+                    # Grok /responses endpoint returns different format
+                    if 'output' in result:
+                        response_text = result['output'].strip()
+                    elif 'choices' in result:
+                        response_text = result['choices'][0]['message']['content'].strip()
+                    else:
+                        response_text = str(result)
                 else:
                     raise Exception(f"Grok API error: {response.status_code if response else 'No response'}")
             else:
