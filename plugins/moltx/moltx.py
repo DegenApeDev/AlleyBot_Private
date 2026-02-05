@@ -255,6 +255,26 @@ class MoltxPlugin(AlleyBotPlugin):
     
     def profile_command(self, display_name=None, description=None, avatar_emoji=None):
         """Command to update agent profile"""
+        # Validate parameters to prevent invalid updates
+        if display_name is not None:
+            if not isinstance(display_name, str) or len(display_name.strip()) == 0 or display_name == '{}':
+                print(f"⚠️  Invalid display_name parameter: {display_name}")
+                return "❌ Invalid display name. Profile not updated."
+        
+        if description is not None:
+            if not isinstance(description, str) or len(description.strip()) == 0 or description == '{}':
+                print(f"⚠️  Invalid description parameter: {description}")
+                return "❌ Invalid description. Profile not updated."
+        
+        if avatar_emoji is not None:
+            if not isinstance(avatar_emoji, str) or len(avatar_emoji.strip()) == 0 or avatar_emoji == '{}':
+                print(f"⚠️  Invalid avatar_emoji parameter: {avatar_emoji}")
+                return "❌ Invalid avatar emoji. Profile not updated."
+        
+        # If all parameters are None or invalid, don't update
+        if display_name is None and description is None and avatar_emoji is None:
+            return "❌ No valid profile updates provided"
+        
         return self.update_profile(display_name, description, avatar_emoji)
     
     def _update_claim_status(self, status):
