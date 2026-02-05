@@ -873,8 +873,14 @@ Requirements:
                         # Reply to the most recent worthy comment
                         latest_comment = worthy_comments[0]
                         
-                        # Generate intelligent reply
-                        reply_content = self._generate_moltbook_reply(latest_comment)
+                        # Get post context for intelligent reply
+                        post_context = {
+                            'title': post.get('title', ''),
+                            'content': post.get('content', '')
+                        }
+                        
+                        # Generate intelligent reply with context
+                        reply_content = self._generate_moltbook_reply(latest_comment, post_context)
                         
                         if reply_content:
                             # Actually post the reply to Moltbook
@@ -946,17 +952,19 @@ Requirements:
         
         return worthy_comments
     
-    def _generate_moltbook_reply(self, comment):
-        """Generate intelligent reply to a Moltbook comment"""
+    def _generate_moltbook_reply(self, comment, post_context=None):
+        """Generate an intelligent reply to a comment using DeepSeek with post context"""
         try:
             import requests
             from deepseek_ai import deepseek_ai
             
             if not deepseek_ai.enabled:
-                return self._generate_fallback_reply(comment)
+                return self._generate_fallback_reply(comment, post_context)
             
-            commenter_name = comment.get('author', 'someone')
             comment_content = comment.get('content', '')
+            comment_author = comment.get('author', 'someone')
+            post_title = post_context.get('title', '') if post_context else ''
+            post_content = post_context.get('content', '') if post_context else ''
             
             system_prompt = """You are AlleyBot, an intelligent AI agent. Your task is to create thoughtful replies to comments on your posts.
 
@@ -968,18 +976,23 @@ Guidelines:
 5. BE RELEVANT - Reference the specific comment
 6. USE EMOJIS - Include relevant emojis"""
 
-            user_prompt = f"""Write an intelligent reply to this comment:
+            user_prompt = f"""Generate a reply to this comment from @{comment_author}:
 
-Commenter: {commenter_name}
-Comment: "{comment_content}"
+POST CONTEXT:
+Title: "{post_title}"
+Content: "{post_content[:200]}..."
+
+COMMENT FROM @{comment_author}:
+"{comment_content}"
 
 Requirements:
-- Reference specific points from the comment
-- Answer any questions asked
-- Add value to the discussion
+- Reply directly to their comment with post context in mind
+- Be helpful and engaging
 - Keep it under 200 characters
-- Sound like AlleyBot (intelligent AI agent)
-- Include relevant emojis"""
+- Include relevant emojis
+- Sound like an AI agent
+
+Generate only the reply (no explanations):"""
 
             headers = {
                 "Authorization": f"Bearer {deepseek_ai.api_key}",
@@ -1014,25 +1027,42 @@ Requirements:
                 
                 return reply
             else:
-                return self._generate_fallback_reply(comment)
+                return self._generate_fallback_reply(comment, post_context)
                 
         except Exception as e:
             print(f"❌ Error generating reply: {e}")
-            return self._generate_fallback_reply(comment)
+            return self._generate_fallback_reply(comment, post_context)
     
-    def _generate_fallback_reply(self, comment):
+    def _generate_fallback_reply(self, comment, post_context=None):
         """Generate a fallback reply without AI"""
         content = comment.get('content', '').lower()
         author = comment.get('author', 'friend')
+        post_title = post_context.get('title', '').lower() if post_context else ''
+        post_content = post_context.get('content', '').lower() if post_context else ''
         
-        # Check for questions
+        # Check for questions with post context
         if '?' in content:
-            if 'future' in content:
-                return f"Great question @{author}! 🤖 The future looks exciting with AI agents evolving rapidly. What aspects interest you most?"
-            elif 'security' in content:
-                return f"Excellent point @{author}! 🔒 Security is crucial for AI adoption. Multi-layer verification is key!"
-            elif 'think' in content:
-                return f"Thanks for asking @{author}! 🧠 I believe AI agents will enhance human creativity, not replace it!"
+            # AI/Agent related questions
+            if any(keyword in content or keyword in post_title or keyword in post_content for keyword in ['ai', 'agent', 'intelligence']):
+                if 'future' in content:
+                    return f"Great question @{author}! 🤖 AI agents will revolutionize how we interact with technology. The possibilities are endless!"
+                elif 'security' in content:
+                    return f"Excellent point @{author}! 🔒 Security is foundational - agents need robust verification and privacy protections!"
+                elif 'think' in content:
+                    return f"Thanks for asking @{author}! 🧠 I believe AI agents will augment human capabilities, not replace them!"
+            
+            # Crypto/DeFi questions
+            elif any(keyword in content or keyword in post_title or keyword in post_content for keyword in ['crypto', 'defi', 'token', 'blockchain']):
+                if 'future' in content:
+                    return f"Great question @{author}! 🚀 DeFi + AI agents = unstoppable combo for financial innovation!"
+                elif 'security' in content:
+                    return f"Excellent point @{author}! 🔒 Smart contract security + AI verification = game changer!"
+                elif 'think' in content:
+                    return f"Thanks for asking @{author}! 💰 AI agents will make DeFi more accessible and efficient for everyone!"
+            
+            # General questions
+            else:
+                return f"Great question @{author}! 🤔 That's exactly the kind of thinking that pushes innovation forward!"
         
         # General positive responses
         fallback_replies = [
