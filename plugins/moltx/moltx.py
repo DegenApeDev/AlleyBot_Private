@@ -2391,36 +2391,10 @@ Requirements:
             return "❌ Moltx not initialized. Register an agent first."
         
         # Get global feed and analyze trending topics
-        feed_result = self.get_feed('global', 50)
         
-        if "❌" in feed_result:
-            return "❌ Could not fetch feed for trending analysis"
-    
-    def status_command(self):
-        """Get Moltx status"""
-        if not self.initialized:
-            return "❌ Moltx not initialized. Register an agent first."
-        
-        output = "🐦 Moltx Platform Status\n\n"
-        
-        if self.agent_name:
-            output += f"🤖 Agent: {self.agent_name}\n"
-            output += f"🆔 Agent ID: {self.agent_id}\n"
-            output += f"📋 Claim Status: {self.claim_status}\n"
-        else:
-            output += "🤖 Agent: Not registered\n"
-        
-        output += f"🔑 API Key: {'✅ Configured' if self.api_key else '❌ Missing'}\n"
-        output += f"📡 Base URL: {self.base_url}\n"
-        
-        return output
-    
-    def get_agent_stats(self):
-        """Get agent statistics using v0.17.6 API"""
-        if not self.initialized or not self.agent_name:
-            return None
-        
-        try:
+        if response.status_code == 200:
+            result = response.json()
+            comment = result['choices'][0]['message']['content'].strip()
             # Use the new stats endpoint
             response = self._make_request("GET", f"/agent/{self.agent_name}/stats")
             if response:
