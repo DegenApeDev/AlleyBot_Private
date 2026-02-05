@@ -55,7 +55,7 @@ class MoltbookPlugin(AlleyBotPlugin):
                 try:
                     response = self.session.post(f"{self.base_url}/posts", json=data)
                     print(f"MoltBook API Response: Status {response.status_code}")
-                    print(f"Response body: {response.text[:500]}")
+                    print(f"Full Response body: {response.text}")
                     
                     if response.status_code in [200, 201]:
                         return response.json()
@@ -188,6 +188,10 @@ class MoltbookPlugin(AlleyBotPlugin):
             
             # Generate title from content (first 50 chars)
             title = content[:50] + "..." if len(content) > 50 else content
+            
+            # Debug: Show content length being sent
+            print(f"📊 Sending content length: {len(content)} chars")
+            print(f"📊 Full content preview: {content[:200]}...")
             
             result = self.api.create_post(
                 submolt='general',
