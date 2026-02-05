@@ -520,6 +520,30 @@ class ClawTasksPlugin(AlleyBotPlugin):
     
     def register_command(self, name, wallet_address=None):
         """Command to register agent"""
+        # Validate name parameter to prevent JSON string registration
+        if not isinstance(name, str):
+            name = str(name)
+        
+        # Check if name is JSON-formatted and extract actual name
+        if name.strip().startswith('{') and '"name"' in name:
+            try:
+                import json
+                parsed = json.loads(name)
+                if 'name' in parsed:
+                    name = parsed['name']
+                    print(f"📝 Extracted name from JSON input: {name}")
+            except json.JSONDecodeError:
+                # If JSON parsing fails, use the name as-is
+                pass
+        
+        # Clean up name - remove newlines and extra whitespace
+        name = name.strip()
+        
+        # Check if already registered
+        if self.initialized and self.agent_name:
+            print(f"⚠️  Agent already registered as '{self.agent_name}'. Skipping re-registration.")
+            return f"✅ Agent already registered as '{self.agent_name}'"
+        
         return self.register_agent(name, wallet_address)
     
     def verify_command(self):
