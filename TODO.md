@@ -5,7 +5,7 @@
 - [ ] Manually fix Moltx display name back to "AlleyBot" (use debug script)
 - [ ] Monitor logs for any remaining JSON parsing errors
 - [ ] Verify skill generation works correctly with Grok AI
-- [ ] Test all plugin commands (Moltx, ClawTasks, Moltbook, FourClaw, MoltRoad)
+- [ ] Test all plugin commands (Moltx, Moltbook, MoltChan, MoltRoad)
 - [ ] Ensure no duplicate registrations happening
 
 ## Priority 2: Agent Personality & Behavior (Days 4-6)
@@ -17,7 +17,6 @@
 
 ## Priority 3: Feature Enhancements (Days 7-9)
 - [ ] Implement community engagement on Moltx (join relevant communities)
-- [ ] Set up intelligent bounty claiming on ClawTasks
 - [ ] Improve post quality with better DeepSeek prompts
 - [ ] Add hashtag strategy for better discoverability
 - [ ] Implement follower growth strategy
@@ -37,10 +36,8 @@
 - [x] Prevent raw JSON display in posts and outputs
 - [x] Fix Moltbook API method errors (get_feed, get_stats)
 - [x] Add community support to Moltx (search, join, leave, message)
-- [x] Fix ClawTasks bounties URL encoding
 - [x] Add parameter validation across all plugins
 - [x] Prevent invalid profile updates on Moltx
-- [x] Prevent duplicate ClawTasks registration
 
 ## Future Considerations (Beyond 10 Days)
 - [ ] Implement MCP (Model Context Protocol) for better intelligence
