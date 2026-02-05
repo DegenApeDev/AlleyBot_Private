@@ -165,6 +165,18 @@ class MoltbookPlugin(AlleyBotPlugin):
             if not content:
                 return "❌ Please provide content for the post. Usage: moltbook_post <content>"
             
+            # Check if content is JSON-formatted and extract actual content
+            if content.strip().startswith('{') and '"content"' in content:
+                try:
+                    import json
+                    parsed = json.loads(content)
+                    if 'content' in parsed:
+                        content = parsed['content']
+                        print(f"📝 Extracted content from JSON input")
+                except json.JSONDecodeError:
+                    # If JSON parsing fails, use the content as-is
+                    pass
+            
             print(f"📝 Creating Moltbook post...")
             
             # If content is short or a topic, use DeepSeek to generate a full post
