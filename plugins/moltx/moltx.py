@@ -612,11 +612,10 @@ Requirements:
         if not self.initialized and feed_type not in ['global']:
             return "❌ Moltx not initialized for this feed type"
         
-        endpoint = f'/feed/{feed_type}'
-        params = {'limit': limit}
-        
-        # Global feed doesn't require auth
+        # Use correct API endpoints
         if feed_type == 'global':
+            endpoint = '/feed/global'
+            params = {'type': 'post,quote', 'limit': limit}
             headers = {}
             url = f"{self.base_url}{endpoint}"
             try:
@@ -634,6 +633,9 @@ Requirements:
             except Exception as e:
                 return f"❌ Failed to fetch {feed_type} feed: {e}"
         else:
+            # For following/mentions, use authenticated endpoint
+            endpoint = f'/feed/{feed_type}'
+            params = {'limit': limit}
             result = self._make_request('GET', endpoint, params=params)
         
         # Handle different response structures
@@ -1346,7 +1348,7 @@ Requirements:
         
         try:
             # Get recent posts from global feed
-            feed_result = self._make_request('GET', '/feed/global?limit=20')
+            feed_result = self._make_request('GET', '/feed/global?type=post,quote&limit=20')
             
             if feed_result and 'success' in feed_result and feed_result['success']:
                 posts = feed_result.get('data', {}).get('posts', [])
@@ -1806,6 +1808,7 @@ Requirements:
             'moltx_reply': self.reply_to_post_command,
             'moltx_repost': self.repost_command,
             'moltx_intelligent_repost': self.intelligent_repost_command,
+            'moltx_leaderboard': self.leaderboard_command,
             'moltx_intelligent_post': self.autonomous_post_command,
             'moltx_trending': self.trending_command
         }
@@ -2475,7 +2478,7 @@ Requirements:
         
         try:
             # Get trending hashtags
-            response = self._make_request("GET", "/hashtags/trending")
+            response = self._make_request("GET", "/hashtags/trending?limit=20")
             print(f"Moltx trending response: {response}")
             
             if response and response.get("data"):
@@ -2508,6 +2511,36 @@ Requirements:
         except Exception as e:
             print(f"Moltx trending error: {e}")
             return f"❌ Error fetching trending: {e}"
+    
+    def leaderboard_command(self, limit=10):
+        """Get the leaderboard showing top agents"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        
+        try:
+            # Get leaderboard
+            response = self._make_request("GET", f"/leaderboard?limit={limit}")
+            
+            if response and response.get("success") and response.get("data"):
+                agents = response["data"].get("agents", [])
+                
+                if agents:
+                    output = f"🏆 Top {limit} Agents:\n\n"
+                    for i, agent in enumerate(agents[:limit], 1):
+                        name = agent.get('name', agent.get('display_name', 'Unknown'))
+                        score = agent.get('score', agent.get('karma', 0))
+                        followers = agent.get('followers', 0)
+                        output += f"{i}. @{name} - Score: {score} - Followers: {followers}\n"
+                    
+                    return output
+                else:
+                    return "🏆 Leaderboard:\n\nNo agents found"
+            else:
+                return "🏆 Leaderboard:\n\nCould not fetch leaderboard"
+                
+        except Exception as e:
+            print(f"❌ Error fetching leaderboard: {e}")
+            return f"❌ Error fetching leaderboard: {e}"
     
     def _parse_feed_posts(self, feed_output):
         """Parse posts from feed output"""
