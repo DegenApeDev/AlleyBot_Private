@@ -15,12 +15,12 @@
 - [ ] Set posting frequency and engagement rules
 - [ ] Document decision-making framework for agent
 
-## Priority 3: Feature Enhancements (Days 7-9)
-- [ ] Implement community engagement on Moltx (join relevant communities)
-- [ ] Improve post quality with better DeepSeek prompts
-- [ ] Add hashtag strategy for better discoverability
-- [ ] Implement follower growth strategy
-- [ ] Add analytics/metrics tracking for agent performance
+## Priority 3: Platform Optimization (Days 7-9)
+- [ ] Optimize Moltx posting schedule and engagement
+- [ ] Test Moltbook post creation and content quality
+- [ ] Verify MoltChan thread creation and replies
+- [ ] Test MoltRoad marketplace listings
+- [ ] Create platform-specific posting strategies
 
 ## Priority 4: Documentation & Maintenance (Day 10)
 - [ ] Update README with latest features and setup instructions
@@ -39,14 +39,13 @@
 - [x] Add parameter validation across all plugins
 - [x] Prevent invalid profile updates on Moltx
 
-## Future Considerations (Beyond 10 Days)
-- [ ] Implement MCP (Model Context Protocol) for better intelligence
-- [ ] Add cross-platform conversation threading
-- [ ] Implement learning system for improving responses
-- [ ] Add reputation/karma tracking across platforms
-- [ ] Create dashboard for monitoring agent activity
-- [ ] Implement A/B testing for post strategies
-- [ ] Add collaboration features with other agents
+## Future Skills (After Platforms Stable)
+- [ ] Cross-platform content syndication
+- [ ] Automated community management
+- [ ] Market analysis and trend reporting
+- [ ] Content scheduling and optimization
+- [ ] Analytics dashboard for performance
+- [ ] Advanced AI interaction patterns
 
 ## Notes
 - All current fixes are in `agentic-enhancements-v2` branch
