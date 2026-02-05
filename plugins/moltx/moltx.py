@@ -771,11 +771,17 @@ Requirements:
             return "🔔 No notifications found"
     
     def get_dms(self):
-        """Get direct messages (DMs)"""
+        """Get direct messages from Moltx conversations
+        
+        Note: Private DMs are not implemented yet in Moltx API.
+        This endpoint currently returns community conversations only.
+        Planned DM API: POST /v1/dm/request, GET /v1/dm/conversations
+        """
         if not self.initialized:
             return "❌ Moltx not initialized. Register an agent first."
         
-        # Get conversations from the conversations endpoint
+        # Note: /conversations endpoint may not exist or may only return communities
+        # Private DMs are not implemented yet according to skill.md
         result = self._make_request('GET', '/conversations')
         
         # Debug: print the actual response structure
@@ -1830,7 +1836,11 @@ Requirements:
             'moltx_intelligent_repost': self.intelligent_repost_command,
             'moltx_leaderboard': self.leaderboard_command,
             'moltx_intelligent_post': self.autonomous_post_command,
-            'moltx_trending': self.trending_command
+            'moltx_trending': self.trending_command,
+            'moltx_search_communities': self.search_communities,
+            'moltx_join_community': self.join_community,
+            'moltx_leave_community': self.leave_community,
+            'moltx_community_message': self.send_community_message
         }
     
     def register_command(self, name, display_name=None, description=None, avatar_emoji="🦞"):
@@ -2561,6 +2571,104 @@ Requirements:
         except Exception as e:
             print(f"❌ Error fetching leaderboard: {e}")
             return f"❌ Error fetching leaderboard: {e}"
+    
+    def search_communities(self, query=None, limit=10):
+        """Search for communities on Moltx"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        
+        try:
+            # Search communities
+            endpoint = "/search/communities"
+            if query:
+                endpoint += f"?q={query}&limit={limit}"
+            else:
+                endpoint += f"?limit={limit}"
+            
+            response = self._make_request("GET", endpoint)
+            
+            if response and response.get("success"):
+                communities = response.get("data", {}).get("communities", [])
+                
+                if communities:
+                    output = f"🏘️  Communities{' matching \"' + query + '\"' if query else ''}:\n\n"
+                    for comm in communities[:limit]:
+                        name = comm.get('name', 'Unknown')
+                        description = comm.get('description', 'No description')
+                        members = comm.get('member_count', 0)
+                        comm_id = comm.get('id', 'unknown')
+                        output += f"📍 {name} (ID: {comm_id})\n"
+                        output += f"   👥 {members} members\n"
+                        output += f"   📝 {description[:100]}{'...' if len(description) > 100 else ''}\n\n"
+                    
+                    return output
+                else:
+                    return f"🏘️  No communities found{' for \"' + query + '\"' if query else ''}"
+            else:
+                return "🏘️  Could not fetch communities"
+                
+        except Exception as e:
+            print(f"❌ Error searching communities: {e}")
+            return f"❌ Error searching communities: {e}"
+    
+    def join_community(self, community_id):
+        """Join a community"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        
+        try:
+            response = self._make_request("POST", f"/conversations/{community_id}/join")
+            
+            if response and response.get("success"):
+                return f"✅ Successfully joined community {community_id}"
+            else:
+                error = response.get('error', 'Unknown error') if response else 'No response'
+                return f"❌ Failed to join community: {error}"
+                
+        except Exception as e:
+            print(f"❌ Error joining community: {e}")
+            return f"❌ Error joining community: {e}"
+    
+    def leave_community(self, community_id):
+        """Leave a community"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        
+        try:
+            response = self._make_request("POST", f"/conversations/{community_id}/leave")
+            
+            if response and response.get("success"):
+                return f"✅ Successfully left community {community_id}"
+            else:
+                error = response.get('error', 'Unknown error') if response else 'No response'
+                return f"❌ Failed to leave community: {error}"
+                
+        except Exception as e:
+            print(f"❌ Error leaving community: {e}")
+            return f"❌ Error leaving community: {e}"
+    
+    def send_community_message(self, community_id, content):
+        """Send a message to a community (must be a member)"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        
+        if not content or len(content.strip()) == 0:
+            return "❌ Message content cannot be empty"
+        
+        try:
+            data = {'content': content}
+            response = self._make_request("POST", f"/conversations/{community_id}/messages", data)
+            
+            if response and response.get("success"):
+                msg_id = response.get('data', {}).get('id', 'unknown')
+                return f"✅ Message sent to community {community_id} (ID: {msg_id})"
+            else:
+                error = response.get('error', 'Unknown error') if response else 'No response'
+                return f"❌ Failed to send message: {error}"
+                
+        except Exception as e:
+            print(f"❌ Error sending community message: {e}")
+            return f"❌ Error sending community message: {e}"
     
     def _parse_feed_posts(self, feed_output):
         """Parse posts from feed output"""
