@@ -11,6 +11,13 @@ from pathlib import Path
 from moltbook_api import MoltbookAPI
 from plugin_manager import PluginManager
 
+# Try to import enhanced memory; fall back to None if deps missing
+try:
+    from src.agentic.enhanced_memory import EnhancedMemorySystem
+    ENHANCED_MEMORY_AVAILABLE = True
+except ImportError:
+    ENHANCED_MEMORY_AVAILABLE = False
+
 class AlleyBotCore:
     """Minimal core that orchestrates plugins"""
     
@@ -25,6 +32,19 @@ class AlleyBotCore:
         # Core components
         self.api = MoltbookAPI()
         self.plugin_manager = PluginManager()
+
+        # Unified memory system
+        self.enhanced_memory = None
+        if ENHANCED_MEMORY_AVAILABLE:
+            try:
+                self.enhanced_memory = EnhancedMemorySystem(
+                    storage_dir='data/memory'
+                )
+                print("✅ Enhanced memory system initialized (vector DB + goals + encryption)")
+            except Exception as e:
+                print(f"⚠️  Enhanced memory unavailable, using JSON fallback: {e}")
+        else:
+            print("ℹ️  Enhanced memory deps not installed, using JSON fallback")
         
         # Load configuration
         self.config = self._load_config()
@@ -67,24 +87,86 @@ class AlleyBotCore:
         return default_config
     
     def get_memory(self, memory_type='state'):
-        """Get memory storage for plugins"""
+        """Get memory storage for plugins (JSON key-value store)"""
         memory_dir = Path('memory')
         memory_dir.mkdir(exist_ok=True)
-        
+
         memory_file = memory_dir / f'{memory_type}.json'
         if memory_file.exists():
             with open(memory_file, 'r') as f:
                 return json.load(f)
         return {}
-    
+
     def save_memory(self, memory_type, data):
-        """Save memory storage for plugins"""
+        """Save memory storage for plugins (JSON key-value store)"""
         memory_dir = Path('memory')
         memory_dir.mkdir(exist_ok=True)
-        
+
         memory_file = memory_dir / f'{memory_type}.json'
         with open(memory_file, 'w') as f:
             json.dump(data, f, indent=2)
+
+    # --- Enhanced memory helpers (semantic search, goals, encryption) ---
+
+    def add_semantic_memory(self, content, memory_type='interaction', metadata=None):
+        """Add a memory with optional vector embedding for semantic search"""
+        if self.enhanced_memory:
+            return self.enhanced_memory.add_memory(content, memory_type, metadata)
+        # Fallback: store in regular JSON
+        self.save_memory(f'semantic_{memory_type}', {
+            'content': content,
+            'type': memory_type,
+            'metadata': metadata or {},
+            'timestamp': datetime.now().isoformat()
+        })
+        return None
+
+    def search_memories(self, query, k=5, memory_type=None):
+        """Semantic search across memories (requires enhanced memory deps)"""
+        if self.enhanced_memory:
+            return self.enhanced_memory.search_memories(query, k, memory_type)
+        return []
+
+    def add_goal(self, description, goal_type='short_term', parent_goal_id=None, priority=1):
+        """Add a hierarchical goal (requires enhanced memory deps)"""
+        if self.enhanced_memory:
+            return self.enhanced_memory.add_goal(description, goal_type, parent_goal_id, priority)
+        return None
+
+    def get_active_goals(self, goal_type=None):
+        """Get active goals (requires enhanced memory deps)"""
+        if self.enhanced_memory:
+            return self.enhanced_memory.get_active_goals(goal_type)
+        return []
+
+    def store_sensitive(self, key, value):
+        """Store encrypted sensitive data (requires enhanced memory deps)"""
+        if self.enhanced_memory:
+            self.enhanced_memory.store_sensitive(key, value)
+        else:
+            print("⚠️  Enhanced memory not available, sensitive data not stored")
+
+    def get_sensitive(self, key):
+        """Retrieve encrypted sensitive data (requires enhanced memory deps)"""
+        if self.enhanced_memory:
+            return self.enhanced_memory.get_sensitive(key)
+        return None
+
+    def get_memory_stats(self):
+        """Get unified memory system statistics"""
+        stats = {
+            'json_store': {},
+            'enhanced': None
+        }
+        # Count JSON memory files
+        memory_dir = Path('memory')
+        if memory_dir.exists():
+            json_files = list(memory_dir.glob('*.json'))
+            stats['json_store']['file_count'] = len(json_files)
+            stats['json_store']['files'] = [f.stem for f in json_files]
+        if self.enhanced_memory:
+            stats['enhanced'] = self.enhanced_memory.get_memory_stats()
+        return stats
     
     def setup_schedule(self):
         """Setup scheduled tasks from plugins"""

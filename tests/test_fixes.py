@@ -396,11 +396,12 @@ class TestFileCleanup(unittest.TestCase):
         self.assertFalse(sys_file.exists(), "Stale 'sys' file should be deleted from project root")
 
     def test_main_py_renamed(self):
-        """main.py should be renamed to legacy_main.py"""
+        """main.py should not exist at root; legacy_main.py archived"""
         old_main = PROJECT_ROOT / 'main.py'
-        new_main = PROJECT_ROOT / 'legacy_main.py'
-        self.assertFalse(old_main.exists(), "main.py should be renamed")
-        self.assertTrue(new_main.exists(), "legacy_main.py should exist")
+        self.assertFalse(old_main.exists(), "main.py should be renamed/archived")
+        # legacy_main.py moved to archive_old_files/ during Phase 2.4 cleanup
+        archived = PROJECT_ROOT / 'archive_old_files' / 'legacy_main.py'
+        self.assertTrue(archived.exists(), "legacy_main.py should exist in archive_old_files/")
 
     def test_no_stdlib_shadowing(self):
         """Project root should not contain files that shadow stdlib modules"""

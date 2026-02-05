@@ -61,11 +61,15 @@ class AgenticAlleyBot:
         
         print("🤖 Initializing Agentic AlleyBot System...")
         
-        # Initialize memory system
-        self.memory = EnhancedMemorySystem(
-            storage_dir=self.config.get('memory_dir', 'data/memory')
-        )
-        print("✅ Enhanced memory system initialized")
+        # Reuse core's enhanced memory if available, otherwise create our own
+        if hasattr(core, 'enhanced_memory') and core.enhanced_memory:
+            self.memory = core.enhanced_memory
+            print("✅ Reusing core's enhanced memory system")
+        else:
+            self.memory = EnhancedMemorySystem(
+                storage_dir=self.config.get('memory_dir', 'data/memory')
+            )
+            print("✅ Enhanced memory system initialized (standalone)")
         
         # Initialize security filter
         self.security_filter = SecurityFilter()
