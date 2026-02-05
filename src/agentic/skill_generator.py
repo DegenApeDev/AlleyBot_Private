@@ -242,7 +242,8 @@ Respond in JSON format:
                     result = response.json()
                     # Grok /responses endpoint returns different format
                     if 'output' in result:
-                        response_text = result['output'].strip()
+                        output = result['output']
+                        response_text = output.strip() if isinstance(output, str) else str(output)
                     elif 'choices' in result:
                         response_text = result['choices'][0]['message']['content'].strip()
                     else:
@@ -368,7 +369,8 @@ Generate the complete code:
                     result = response.json()
                     # Grok /responses endpoint returns different format
                     if 'output' in result:
-                        response_text = result['output'].strip()
+                        output = result['output']
+                        response_text = output.strip() if isinstance(output, str) else str(output)
                     elif 'choices' in result:
                         response_text = result['choices'][0]['message']['content'].strip()
                     else:
