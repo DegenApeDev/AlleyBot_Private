@@ -133,7 +133,8 @@ class EnhancedReActAgent:
             max_iterations=max_iterations,
             verbose=True,
             handle_parsing_errors=True,
-            return_intermediate_steps=True
+            return_intermediate_steps=True,
+            max_execution_time=300  # 5 minute timeout
         )
         
         self.state = AgentState()
@@ -288,7 +289,19 @@ Thought: {agent_scratchpad}"""
             
             # Update state
             self.state.iteration += 1
-            self.state.observations.append(result.get('output', ''))
+            
+            # Clean up output to prevent raw JSON display
+            output = result.get('output', '')
+            if output and output.startswith('{') and output.endswith('}'):
+                # If output looks like raw JSON, try to format it
+                try:
+                    import json
+                    parsed = json.loads(output)
+                    output = f"Action completed: {parsed.get('title', 'Unknown action')}"
+                except:
+                    output = "Action completed successfully"
+            
+            self.state.observations.append(output)
             
             # Track actions
             if 'intermediate_steps' in result:
@@ -303,7 +316,7 @@ Thought: {agent_scratchpad}"""
             
             return {
                 'success': True,
-                'output': result.get('output'),
+                'output': output,
                 'intermediate_steps': result.get('intermediate_steps', []),
                 'state': asdict(self.state)
             }
