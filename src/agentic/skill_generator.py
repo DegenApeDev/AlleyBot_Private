@@ -224,11 +224,33 @@ Respond in JSON format:
 """
         
         try:
-            response = self.llm.invoke(prompt)
+            # Use Grok for skill generation (better reasoning)
+            from grok_ai import grok_ai
+            
+            if grok_ai.enabled:
+                response = grok_ai._make_api_request({
+                    "model": grok_ai.model,
+                    "messages": [
+                        {"role": "system", "content": "You are an expert Python programmer and AI agent developer. Respond with valid JSON only."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "max_tokens": 500,
+                    "temperature": 0.3
+                })
+                
+                if response and response.status_code == 200:
+                    result = response.json()
+                    response_text = result['choices'][0]['message']['content'].strip()
+                else:
+                    raise Exception(f"Grok API error: {response.status_code if response else 'No response'}")
+            else:
+                # Fallback to DeepSeek
+                response = self.llm.invoke(prompt)
+                response_text = response
             
             # Parse JSON response
             # Try to extract JSON from response
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 gap_info = json.loads(json_match.group())
                 
@@ -316,17 +338,39 @@ Generate the complete code:
 """
         
         try:
-            response = self.llm.invoke(prompt)
+            # Use Grok for skill code generation (better reasoning)
+            from grok_ai import grok_ai
+            
+            if grok_ai.enabled:
+                response = grok_ai._make_api_request({
+                    "model": grok_ai.model,
+                    "messages": [
+                        {"role": "system", "content": "You are an expert Python programmer. Generate complete, working code with proper syntax."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "max_tokens": 2000,
+                    "temperature": 0.2
+                })
+                
+                if response and response.status_code == 200:
+                    result = response.json()
+                    response_text = result['choices'][0]['message']['content'].strip()
+                else:
+                    raise Exception(f"Grok API error: {response.status_code if response else 'No response'}")
+            else:
+                # Fallback to DeepSeek
+                response = self.llm.invoke(prompt)
+                response_text = response
             
             # Extract code from response
-            code_match = re.search(r'```python\n(.*?)\n```', response, re.DOTALL)
+            code_match = re.search(r'```python\n(.*?)\n```', response_text, re.DOTALL)
             if code_match:
                 code = code_match.group(1)
                 return code
             
             # If no code block, try to use entire response
-            if 'def ' in response:
-                return response
+            if 'def ' in response_text:
+                return response_text
             
             return None
             
