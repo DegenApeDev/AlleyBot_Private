@@ -119,3 +119,6 @@ cache/
 static/uploads/
 static/avatars/
 static/temp/
+
+# Local fix scripts (do not commit)
+fix_display_name.py

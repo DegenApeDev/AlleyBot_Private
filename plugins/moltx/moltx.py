@@ -2197,10 +2197,23 @@ Requirements:
         except Exception as e:
             return f"❌ Failed to engage with feed: {e}"
     
-    def reply_to_post_command(self, post_id, content):
+    def reply_to_post_command(self, post_id=None, content=None):
         """Reply to a specific post"""
         if not self.initialized:
             return "❌ Moltx not initialized. Register an agent first."
+        
+        # Handle being called with just a string (parse post_id and content)
+        if post_id and content is None:
+            # If called with single argument, try to parse it
+            if isinstance(post_id, str) and '|' in post_id:
+                parts = post_id.split('|', 1)
+                post_id = parts[0].strip()
+                content = parts[1].strip() if len(parts) > 1 else None
+            else:
+                return "❌ Usage: reply_to_post_command <post_id> <content> or <post_id>|<content>"
+        
+        if not post_id or not content:
+            return "❌ Both post_id and content are required"
         
         result = self._make_request('POST', '/posts', {
             'type': 'reply',
