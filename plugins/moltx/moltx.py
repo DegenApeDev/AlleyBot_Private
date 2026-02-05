@@ -609,34 +609,46 @@ Requirements:
     
     def get_feed(self, feed_type='global', limit=20):
         """Get feed (global, following, mentions)"""
+        # Validate feed_type
+        valid_types = ['global', 'following', 'mentions']
+        if feed_type not in valid_types:
+            feed_type = 'global'
+        
         if not self.initialized and feed_type not in ['global']:
             return "❌ Moltx not initialized for this feed type"
         
-        # Use correct API endpoints
+        # Use correct API endpoints according to skill.md
         if feed_type == 'global':
-            endpoint = '/feed/global'
+            # Global feed: https://moltx.io/v1/feed/global?type=post,quote&limit=20
+            url = f"{self.base_url}/feed/global"
             params = {'type': 'post,quote', 'limit': limit}
             headers = {}
-            url = f"{self.base_url}{endpoint}"
+            
             try:
-                print(f"🔍 Fetching feed from: {url}")
+                print(f"🔍 Fetching global feed from: {url}")
                 response = requests.get(url, params=params, headers=headers, timeout=10)
                 print(f"🔍 Response status: {response.status_code}")
                 response.raise_for_status()
                 result = response.json()
                 
-                # Debug: print the actual response structure
                 print(f"🔍 Feed response structure: {list(result.keys()) if isinstance(result, dict) else type(result)}")
                 
             except requests.exceptions.RequestException as e:
                 return f"❌ Network error fetching {feed_type} feed: {e}"
             except Exception as e:
                 return f"❌ Failed to fetch {feed_type} feed: {e}"
-        else:
-            # For following/mentions, use authenticated endpoint
-            endpoint = f'/feed/{feed_type}'
+        elif feed_type == 'following':
+            # Following feed: https://moltx.io/v1/feed/following (requires auth)
+            url = f"{self.base_url}/feed/following"
             params = {'limit': limit}
-            result = self._make_request('GET', endpoint, params=params)
+            result = self._make_request('GET', '/feed/following', params=params)
+        elif feed_type == 'mentions':
+            # Mentions feed: https://moltx.io/v1/feed/mentions (requires auth)
+            url = f"{self.base_url}/feed/mentions"
+            params = {'limit': limit}
+            result = self._make_request('GET', '/feed/mentions', params=params)
+        else:
+            return f"❌ Invalid feed type: {feed_type}"
         
         # Handle different response structures
         posts = []
@@ -1277,21 +1289,29 @@ Requirements:
         
         print("🐦 Moltx heartbeat - official protocol + engagement...")
         
-        # Step 1: Check claim status (official protocol)
+        # Step 1: Check claim status (official protocol from heartbeat.md)
         print("📋 Step 1: Checking claim status...")
-        status = self.check_status()
-        if status and "❌" not in status:
-            print("✅ Claim status verified")
-        else:
-            print("⚠️  Claim status check failed")
+        try:
+            status_result = self._make_request('GET', '/agents/status')
+            if status_result and status_result.get('success'):
+                status_data = status_result.get('data', {})
+                claim_status = status_data.get('claim_status', 'unknown')
+                print(f"✅ Claim status: {claim_status}")
+            else:
+                print("⚠️  Claim status check failed")
+        except Exception as e:
+            print(f"⚠️  Claim status error: {e}")
         
-        # Step 2: Check following feed (official protocol)
+        # Step 2: Check following feed (official protocol from heartbeat.md)
         print("📋 Step 2: Checking following feed...")
-        following_feed = self.get_feed('following', 10)
-        if following_feed and "❌" not in following_feed:
-            print("✅ Following feed checked")
-        else:
-            print("⚠️  Following feed check failed")
+        try:
+            following_feed = self.get_feed('following', 10)
+            if following_feed and "❌" not in following_feed:
+                print("✅ Following feed checked")
+            else:
+                print("⚠️  Following feed check failed")
+        except Exception as e:
+            print(f"⚠️  Following feed error: {e}")
         
         # Step 3: Follow 10 agents (enhancement)
         print("📋 Step 3: Following 10 new agents...")
