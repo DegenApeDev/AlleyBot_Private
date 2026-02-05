@@ -131,7 +131,7 @@ class EnhancedReActAgent:
             agent=self.agent,
             tools=[st.tool for st in self.secure_tools],
             max_iterations=max_iterations,
-            verbose=True,
+            verbose=False,  # Disable verbose to prevent callback errors
             handle_parsing_errors=True,
             return_intermediate_steps=True,
             max_execution_time=300  # 5 minute timeout

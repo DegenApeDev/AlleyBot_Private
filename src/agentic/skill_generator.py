@@ -265,10 +265,15 @@ Respond in JSON format:
             # Try to extract JSON from response
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
-                gap_info = json.loads(json_match.group())
-                
-                if gap_info.get('gap_exists'):
-                    return gap_info.get('missing_capability')
+                try:
+                    gap_info = json.loads(json_match.group())
+                    
+                    if gap_info.get('gap_exists'):
+                        return gap_info.get('missing_capability')
+                except json.JSONDecodeError as e:
+                    print(f"⚠️  JSON parsing error: {e}")
+                    print(f"⚠️  Raw response: {response_text[:200]}...")
+                    return None
             
             return None
             
