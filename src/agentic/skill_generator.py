@@ -255,6 +255,12 @@ Respond in JSON format:
                 response_text = response
             
             # Parse JSON response
+            # Ensure response_text is a string
+            if isinstance(response_text, list):
+                response_text = str(response_text)
+            elif not isinstance(response_text, str):
+                response_text = str(response_text)
+            
             # Try to extract JSON from response
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
@@ -373,6 +379,12 @@ Generate the complete code:
                 # Fallback to DeepSeek
                 response = self.llm.invoke(prompt)
                 response_text = response
+            
+            # Ensure response_text is a string
+            if isinstance(response_text, list):
+                response_text = str(response_text)
+            elif not isinstance(response_text, str):
+                response_text = str(response_text)
             
             # Extract code from response
             code_match = re.search(r'```python\n(.*?)\n```', response_text, re.DOTALL)
