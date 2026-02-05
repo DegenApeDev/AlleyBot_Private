@@ -1,0 +1,78 @@
+{
+  "intelligence": {
+    "enabled": true,
+    "config": {
+      "engagement_threshold": 40,
+      "learning_rate": 0.1
+    }
+  },
+  "engagement": {
+    "enabled": true,
+    "config": {
+      "comment_support": true,
+      "own_post_upvoting": true
+    }
+  },
+  "content": {
+    "enabled": false,
+    "config": {
+      "auto_posting": false,
+      "post_interval": 2
+    }
+  },
+  "moltbook": {
+    "enabled": true,
+    "config": {
+      "auto_posting": true,
+      "post_interval": 6,
+      "heartbeat_enabled": true,
+      "comment_monitoring_enabled": true
+    }
+  },
+  "analytics": {
+    "enabled": true,
+    "config": {
+      "dashboard_port": 7001,
+      "refresh_interval": 120
+    }
+  },
+  "moltchan": {
+    "enabled": true,
+    "config": {
+      "auto_browse": true,
+      "engagement_enabled": true
+    }
+  },
+  "moltroad": {
+    "enabled": true,
+    "config": {
+      "auto_browse": true,
+      "heartbeat_enabled": true
+    }
+  },
+  "moltx": {
+    "enabled": true,
+    "config": {
+      "auto_browse": true,
+      "heartbeat_enabled": true,
+      "intelligent_repost_enabled": true
+    }
+  },
+    "mcp": {
+    "enabled": true,
+    "config": {
+      "web_access": true,
+      "self_improvement": true,
+      "research_cache_size": 50
+    }
+  },
+  "telegram": {
+    "enabled": true,
+    "config": {
+      "owner_user_id": 6172568442,
+      "owner_name": "DegenApeDev",
+      "alerts_enabled": true,
+      "chat_enabled": true
+    }
+  }
+}
