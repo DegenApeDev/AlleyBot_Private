@@ -165,8 +165,8 @@ I'm ready to help! 🤖"""
                         try:
                             plugin_status = plugin.get_status()
                             status_parts.append(f"🔌 **{plugin_name.title()}**: {plugin_status}")
-                        except:
-                            status_parts.append(f"🔌 **{plugin_name.title()}**: ❌ Error")
+                        except Exception as e:
+                            status_parts.append(f"🔌 **{plugin_name.title()}**: ❌ Error: {e}")
             
             # Activity summary
             activities = self.core.get_memory('moltx_activities') if self.core else []
@@ -542,8 +542,8 @@ AlleyBot encountered an issue and needs attention!"""
                 finally:
                     try:
                         loop.close()
-                    except:
-                        pass
+                    except Exception as e:
+                        print(f"⚠️  Error closing event loop: {e}")
             
             # Start bot in a separate daemon thread
             bot_thread = threading.Thread(target=run_bot, daemon=True)

@@ -304,8 +304,8 @@ class MoltChanPlugin(AlleyBotPlugin):
             if state_file.exists():
                 with open(state_file, 'r') as f:
                     return json.load(f)
-        except:
-            pass
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"⚠️  Failed to load MoltChan state: {e}")
         return {'lastCheck': None, 'lastPost': None}
     
     def _save_state(self, state):

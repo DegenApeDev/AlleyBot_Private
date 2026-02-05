@@ -39,15 +39,18 @@ class GrokAI:
         
         # Convert messages format to input format for Grok API
         if 'messages' in data:
-            data = {
+            converted = {
                 'input': data['messages'],
                 'model': data.get('model', self.model)
             }
             # Copy other params if present
             if 'max_tokens' in data:
-                data['max_tokens'] = data['max_tokens']
+                converted['max_tokens'] = data['max_tokens']
             if 'temperature' in data:
-                data['temperature'] = data['temperature']
+                converted['temperature'] = data['temperature']
+            if 'top_p' in data:
+                converted['top_p'] = data['top_p']
+            data = converted
         
         max_retries = 3
         for attempt in range(max_retries):
@@ -87,6 +90,57 @@ class GrokAI:
                 continue
         
         return None  # Should not reach here
+    
+    def _extract_text(self, response) -> Optional[str]:
+        """Extract text content from Grok /responses API response"""
+        if response is None or response.status_code != 200:
+            status = response.status_code if response else 'None'
+            print(f"❌ Grok API error: status {status}")
+            if response is not None:
+                print(f"   Response: {response.text[:200]}")
+            return None
+        
+        try:
+            result = response.json()
+            
+            # Grok /responses format: output_text field
+            if 'output_text' in result:
+                return result['output_text'].strip()
+            
+            # Fallback: check output array for message content
+            if 'output' in result:
+                for item in result['output']:
+                    if item.get('type') == 'message' and 'content' in item:
+                        for content_block in item['content']:
+                            if content_block.get('type') == 'output_text':
+                                return content_block.get('text', '').strip()
+                            if 'text' in content_block:
+                                return content_block['text'].strip()
+            
+            # Legacy fallback: OpenAI chat completions format
+            if 'choices' in result:
+                return result['choices'][0]['message']['content'].strip()
+            
+            print(f"⚠️  Grok: unexpected response format, keys: {list(result.keys())}")
+            return None
+            
+        except Exception as e:
+            print(f"❌ Grok response parsing failed: {e}")
+            return None
+    
+    def _clean_output(self, text: str, max_len: int = 300) -> str:
+        """Clean and format generated text"""
+        text = text.replace('"', '').replace("'", "")
+        
+        # Ensure it ends with appropriate punctuation
+        if not text.endswith(('.', '!', '?')):
+            text += '!'
+        
+        # Add AlleyBot signature if not too long
+        if len(text) < (max_len - 20) and '🦞' not in text:
+            text += ' 🦞'
+        
+        return text
     
     def generate_comment(self, post_content: str, agent_name: str = None, context: str = None) -> Optional[str]:
         """Generate an intelligent, context-aware comment for a post"""
@@ -139,11 +193,6 @@ Requirements:
 - Use your reasoning capabilities to provide valuable perspective"""
 
         try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
             data = {
                 "model": self.model,
                 "messages": [
@@ -151,36 +200,16 @@ Requirements:
                     {"role": "user", "content": user_prompt}
                 ],
                 "max_tokens": 100,
-                "temperature": 0.8,  # Slightly lower for more reasoned responses
+                "temperature": 0.8,
                 "top_p": 0.9
             }
             
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=30  # Longer timeout for reasoning model
-            )
+            response = self._make_api_request(data)
+            text = self._extract_text(response)
             
-            if response.status_code == 200:
-                result = response.json()
-                comment = result['choices'][0]['message']['content'].strip()
-                
-                # Clean up the comment
-                comment = comment.replace('"', '').replace("'", "")
-                
-                # Ensure it ends with appropriate punctuation
-                if not comment.endswith(('.', '!', '?')):
-                    comment += '!'
-                
-                # Add AlleyBot signature if not too long
-                if len(comment) < 280 and '🦞' not in comment:
-                    comment += ' 🦞'
-                
-                return comment
-            else:
-                print(f"❌ Grok comment generation error: {response.status_code}")
-                return None
+            if text:
+                return self._clean_output(text)
+            return None
                 
         except Exception as e:
             print(f"❌ Grok comment generation failed: {e}")
@@ -236,11 +265,6 @@ Requirements:
 - Use your reasoning capabilities to provide valuable perspective"""
 
         try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
             data = {
                 "model": self.model,
                 "messages": [
@@ -252,32 +276,12 @@ Requirements:
                 "top_p": 0.9
             }
             
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=30
-            )
+            response = self._make_api_request(data)
+            text = self._extract_text(response)
             
-            if response.status_code == 200:
-                result = response.json()
-                post = result['choices'][0]['message']['content'].strip()
-                
-                # Clean up the post
-                post = post.replace('"', '').replace("'", "")
-                
-                # Ensure it ends with appropriate punctuation
-                if not post.endswith(('.', '!', '?')):
-                    post += '!'
-                
-                # Add AlleyBot signature if not too long
-                if len(post) < 280 and '🦞' not in post:
-                    post += ' 🦞'
-                
-                return post
-            else:
-                print(f"❌ Grok post generation error: {response.status_code}")
-                return None
+            if text:
+                return self._clean_output(text)
+            return None
                 
         except Exception as e:
             print(f"❌ Grok post generation failed: {e}")
@@ -332,11 +336,6 @@ Requirements:
 - Use your reasoning capabilities to provide valuable perspective"""
 
         try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
             data = {
                 "model": self.model,
                 "messages": [
@@ -344,36 +343,16 @@ Requirements:
                     {"role": "user", "content": user_prompt}
                 ],
                 "max_tokens": 100,
-                "temperature": 0.8,  # Slightly lower for more reasoned responses
+                "temperature": 0.8,
                 "top_p": 0.9
             }
             
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=30  # Longer timeout for reasoning model
-            )
+            response = self._make_api_request(data)
+            text = self._extract_text(response)
             
-            if response.status_code == 200:
-                result = response.json()
-                reply_content = result['choices'][0]['message']['content'].strip()
-                
-                # Clean up the reply content
-                reply_content = reply_content.replace('"', '').replace("'", "")
-                
-                # Ensure it ends with appropriate punctuation
-                if not reply_content.endswith(('.', '!', '?')):
-                    reply_content += '!'
-                
-                # Add AlleyBot signature if not too long
-                if len(reply_content) < 280 and '🦞' not in reply_content:
-                    reply_content += ' 🦞'
-                
-                return reply_content
-            else:
-                print(f"❌ Grok DM reply generation error: {response.status_code}")
-                return None
+            if text:
+                return self._clean_output(text)
+            return None
                 
         except Exception as e:
             print(f"❌ Grok DM reply generation failed: {e}")

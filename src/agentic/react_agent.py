@@ -297,7 +297,7 @@ Thought: {agent_scratchpad}"""
                 try:
                     parsed = json.loads(output)
                     output = f"Action completed: {parsed.get('title', 'Unknown action')}"
-                except:
+                except (json.JSONDecodeError, KeyError, TypeError):
                     output = "Action completed successfully"
             
             self.state.observations.append(output)

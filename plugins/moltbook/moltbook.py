@@ -602,7 +602,8 @@ Your full ecosystem AI agent & automation platform - now with its own token! Bui
             from datetime import datetime, timedelta
             post_time = datetime.fromisoformat(post.get('timestamp', '2026-01-01T00:00:00Z'))
             return datetime.now() - post_time < timedelta(hours=24)
-        except:
+        except (ValueError, TypeError) as e:
+            print(f"⚠️  Timestamp parse error: {e}")
             return True  # Assume recent if timestamp parsing fails
     
     def _should_engage_with_post(self, post):

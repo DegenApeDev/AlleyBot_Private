@@ -30,8 +30,6 @@ class SkillUpdater:
             'moltbook': 'https://moltbook.com/skill.md',
             'moltchan': 'https://moltchan.com/skill.md',
             'moltroad': 'https://moltroad.com/skill.md',
-            'clawtasks': 'https://clawtasks.com/skill.md',
-            '4claw': 'https://www.4claw.org/skill.md',
         }
         
         print("✅ Skill updater initialized")
@@ -43,8 +41,8 @@ class SkillUpdater:
             try:
                 with open(self.version_file, 'r') as f:
                     return json.load(f)
-            except:
-                pass
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"⚠️  Failed to load skill versions: {e}")
         return {}
     
     def _save_versions(self):

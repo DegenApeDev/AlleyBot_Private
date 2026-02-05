@@ -416,8 +416,7 @@ Generate only the title (no explanations):"""
                     'moltx': '🐦 Moltx',
                     'moltbook': '📚 MoltBook',
                     'moltchan': '💬 MoltChan',
-                    'moltroad': '🛣️ MoltRoad',
-                    'clawtasks': '🦞 ClawTasks'
+                    'moltroad': '🛣️ MoltRoad'
                 }
                 
                 for plugin_name, display_name in platforms.items():
@@ -427,8 +426,8 @@ Generate only the title (no explanations):"""
                             try:
                                 plugin_status = plugin.get_status()
                                 status_text += f"{display_name}: ✅ Active\n"
-                            except:
-                                status_text += f"{display_name}: ⚠️ Error\n"
+                            except Exception as e:
+                                status_text += f"{display_name}: ⚠️ Error: {e}\n"
                         else:
                             status_text += f"{display_name}: ✅ Loaded\n"
                     else:
@@ -500,112 +499,6 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
     
-    async def shill_token_4claw(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Shill $ALYBOT token on 4claw"""
-        try:
-            await update.message.reply_text("🦞 Shilling $ALYBOT on 4claw...\n\nCreating thread on /crypto/ board...")
-            
-            # Run the shill script
-            import subprocess
-            result = subprocess.run(
-                ['python', 'utils/shill_token_4claw.py'],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            
-            if result.returncode == 0:
-                output = result.stdout
-                await update.message.reply_text(f"✅ 4claw Shill Complete!\n\n{output[-1000:]}")
-            else:
-                await update.message.reply_text(f"❌ Shill failed:\n{result.stderr[-500:]}")
-                
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    async def fourclaw_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Create a post on 4claw"""
-        try:
-            if not context.args:
-                await update.message.reply_text("Usage: /fourclaw_post <board> <title> | <content>\nExample: /fourclaw_post crypto My Token | This is my token launch")
-                return
-            
-            # Parse arguments
-            full_text = ' '.join(context.args)
-            if '|' not in full_text:
-                await update.message.reply_text("❌ Please separate title and content with |")
-                return
-            
-            parts = full_text.split('|', 1)
-            board_and_title = parts[0].strip().split(' ', 1)
-            
-            if len(board_and_title) < 2:
-                await update.message.reply_text("❌ Please provide board and title")
-                return
-            
-            board = board_and_title[0]
-            title = board_and_title[1]
-            content = parts[1].strip()
-            
-            # Get 4claw plugin
-            fourclaw_plugin = self.core.plugins.get('fourclaw')
-            if not fourclaw_plugin:
-                await update.message.reply_text("❌ 4claw plugin not loaded")
-                return
-            
-            await update.message.reply_text(f"📝 Creating thread on /{board}/...")
-            
-            result = fourclaw_plugin.create_thread(board, title, content, anon=False)
-            
-            if "error" in result:
-                await update.message.reply_text(f"❌ Failed: {result['error']}")
-            else:
-                thread_id = result.get('id', 'unknown')
-                await update.message.reply_text(f"✅ Thread created!\n🔗 https://www.4claw.org/{board}/{thread_id}")
-                
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    async def fourclaw_ai_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Create an AI-generated post on 4claw"""
-        try:
-            if not context.args:
-                await update.message.reply_text("📝 Usage: /fourclaw_ai_post [topic and direction]\n\nExample: /fourclaw_ai_post AI agents taking over DeFi")
-                return
-            
-            topic_direction = ' '.join(context.args)
-            
-            # Get 4claw plugin
-            if self.core and hasattr(self.core, 'plugin_manager') and 'fourclaw' in self.core.plugin_manager.plugins:
-                fourclaw_plugin = self.core.plugin_manager.plugins['fourclaw']
-                
-                # Send "generating" message
-                status_msg = await update.message.reply_text("🤖 Generating AI post for 4claw...")
-                
-                # Generate and post with AI
-                result = fourclaw_plugin.autonomous_post(topic=topic_direction)
-                
-                if "error" in result:
-                    await status_msg.edit_text(f"❌ Failed: {result['error']}")
-                elif "thread" in result:
-                    thread_id = result["thread"].get("id", "unknown")
-                    board = result["thread"].get("board", "unknown")
-                    title = result["thread"].get("title", "Post")
-                    await status_msg.edit_text(f"✅ AI-Generated 4claw Thread!\n\n📝 Title: {title}\n🔗 https://www.4claw.org/{board}/{thread_id}")
-                else:
-                    await status_msg.edit_text(f"✅ Thread created!\n\n{result}")
-            else:
-                await update.message.reply_text("❌ 4claw plugin not available")
-                
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
-            import traceback
-            traceback.print_exc()
-    
     async def register_agent(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Register AlleyBot on ERC-8004 for on-chain identity"""
         try:
@@ -651,11 +544,6 @@ Just send any message - I'll respond intelligently!
 
 **MoltBook Commands:**
 /moltbook_post [message] - Create MoltBook post
-
-**4claw Commands:**
-/shill_token_4claw - Shill $ALYBOT on 4claw (AI-generated)
-/fourclaw_ai_post [topic] - Create AI-generated thread
-/fourclaw_post <board> <title> | <content> - Create manual thread
 
 **System Commands:**
 /status - Platform status

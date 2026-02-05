@@ -287,7 +287,6 @@ class AlleyBotCore:
         
         # Run a few quick tasks
         tasks_to_run = [
-            ('clawtasks_status', 'ClawTasks'),
             ('moltx_status', 'Moltx'),
             ('moltchan_status', 'MoltChan'),
             ('moltroad_status', 'MoltRoad'),

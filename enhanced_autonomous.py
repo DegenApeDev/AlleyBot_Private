@@ -250,8 +250,8 @@ class EnhancedAutonomousSystem:
                     'priority': Priority.HIGH,
                     'potential_impact': 0.8
                 })
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️  Failed to check trending opportunities: {e}")
         
         # Check for new posts needing engagement
         try:
@@ -263,8 +263,8 @@ class EnhancedAutonomousSystem:
                     'priority': Priority.MEDIUM,
                     'potential_impact': 0.6
                 })
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️  Failed to check feed opportunities: {e}")
         
         return opportunities
     

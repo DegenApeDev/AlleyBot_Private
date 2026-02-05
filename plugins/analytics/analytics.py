@@ -92,8 +92,6 @@ class AnalyticsPlugin(AlleyBotPlugin):
             moltx = platforms.get('moltx', {})
             moltchan = platforms.get('moltchan', {})
             moltroad = platforms.get('moltroad', {})
-            clawtasks = platforms.get('clawtasks', {})
-            fourclaw = platforms.get('fourclaw', {})
             
             # Platform-specific stats
             moltx_posts = moltx.get('posts', 0)
@@ -102,8 +100,6 @@ class AnalyticsPlugin(AlleyBotPlugin):
             moltbook_comments = moltbook.get('comments', 0)
             moltchan_posts = moltchan.get('posts', 0)
             moltroad_posts = moltroad.get('posts', 0)
-            clawtasks_tasks = clawtasks.get('tasks_completed', 0)
-            fourclaw_threads = fourclaw.get('threads', 0)
             
             # Calculate metrics
             engagement_rate = round((total_comments / max(total_posts, 1)) * 100, 1) if total_posts > 0 else 0
@@ -134,8 +130,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 moltx_posts,
                 moltbook_posts,
                 moltchan_posts,
-                fourclaw_threads,
-                moltroad_posts + clawtasks_tasks
+                moltroad_posts
             ]
             
             # Wallet & Identity
@@ -162,8 +157,6 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 moltbook_comments=moltbook_comments,
                 moltchan_posts=moltchan_posts,
                 moltroad_posts=moltroad_posts,
-                clawtasks_tasks=clawtasks_tasks,
-                fourclaw_threads=fourclaw_threads,
                 # AI stats
                 deepseek_calls=deepseek_calls,
                 grok_calls=grok_calls,

@@ -171,8 +171,8 @@ class SecureSandbox:
             # Clean up temp file
             try:
                 os.unlink(temp_file)
-            except:
-                pass
+            except OSError as e:
+                print(f"⚠️  Failed to clean up temp file: {e}")
 
 
 class DynamicSkillGenerator:

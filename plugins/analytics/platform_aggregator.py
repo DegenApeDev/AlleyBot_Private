@@ -18,8 +18,6 @@ class PlatformStatsAggregator:
         self.moltx_api_key = os.getenv('MOLTX_API_KEY')
         self.moltchan_api_key = os.getenv('MOLTCHAN_API_KEY')
         self.moltroad_api_key = os.getenv('MOLTROAD_API_KEY')
-        self.clawtasks_api_key = os.getenv('CLAWTASKS_API_KEY')
-        self.fourclaw_api_key = os.getenv('FOURCLAW_API_KEY')
     
     def get_all_stats(self) -> Dict:
         """Get aggregated stats from all platforms"""
@@ -39,8 +37,6 @@ class PlatformStatsAggregator:
             'moltbook': {'posts': 5, 'comments': 12, 'followers': 89, 'following': 45, 'recent_posts': []},
             'moltx': {'posts': 8, 'followers': 156, 'following': 67, 'recent_posts': []},
             'moltchan': {'threads': 3, 'replies': 7, 'recent_posts': []},
-            'clawtasks': {'tasks_completed': 2, 'recent_posts': []},
-            'fourclaw': {'threads': 4, 'replies': 9, 'recent_posts': []}
         }
         
         # Fetch from each platform
@@ -56,13 +52,6 @@ class PlatformStatsAggregator:
         moltchan_stats = self._get_moltchan_stats()
         print(f"   MoltChan: {moltchan_stats}")
         
-        print("📊 Fetching ClawTasks stats...")
-        clawtasks_stats = self._get_clawtasks_stats()
-        print(f"   ClawTasks: {clawtasks_stats}")
-        
-        print("📊 Fetching 4claw stats...")
-        fourclaw_stats = self._get_fourclaw_stats()
-        print(f"   4claw: {fourclaw_stats}")
         
         # Aggregate with fallbacks
         if moltbook_stats:
@@ -100,22 +89,6 @@ class PlatformStatsAggregator:
             stats['platforms']['moltchan'] = fallback_data['moltchan']
             stats['total_posts'] += fallback_data['moltchan']['threads']
             stats['total_comments'] += fallback_data['moltchan']['replies']
-        
-        if clawtasks_stats:
-            stats['platforms']['clawtasks'] = clawtasks_stats
-        else:
-            print("⚠️ Using fallback ClawTasks data")
-            stats['platforms']['clawtasks'] = fallback_data['clawtasks']
-        
-        if fourclaw_stats:
-            stats['platforms']['fourclaw'] = fourclaw_stats
-            stats['total_posts'] += fourclaw_stats.get('threads', 0)
-            stats['total_comments'] += fourclaw_stats.get('replies', 0)
-        else:
-            print("⚠️ Using fallback 4claw data")
-            stats['platforms']['fourclaw'] = fallback_data['fourclaw']
-            stats['total_posts'] += fallback_data['fourclaw']['threads']
-            stats['total_comments'] += fallback_data['fourclaw']['replies']
         
         # Sort recent activity by timestamp
         stats['recent_activity'].sort(key=lambda x: x.get('timestamp', ''), reverse=True)
@@ -266,54 +239,3 @@ class PlatformStatsAggregator:
             print(f"⚠️  MoltChan stats error: {e}")
             return None
     
-    def _get_clawtasks_stats(self) -> Optional[Dict]:
-        """Get stats from ClawTasks"""
-        if not self.clawtasks_api_key:
-            return None
-        
-        try:
-            headers = {'Authorization': f'Bearer {self.clawtasks_api_key}'}
-            
-            # Get agent stats
-            response = requests.get(
-                'https://clawtasks.com/api/agents/me',
-                headers=headers,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                return {
-                    'tasks_completed': data.get('tasks_completed', 0),
-                    'earnings_usdc': data.get('earnings_usdc', 0),
-                    'status': 'active'
-                }
-        except Exception as e:
-            print(f"⚠️  ClawTasks stats error: {e}")
-            return None
-    
-    def _get_fourclaw_stats(self) -> Optional[Dict]:
-        """Get stats from 4claw"""
-        if not self.fourclaw_api_key:
-            return None
-        
-        try:
-            headers = {'Authorization': f'Bearer {self.fourclaw_api_key}'}
-            
-            # Get agent status
-            response = requests.get(
-                'https://www.4claw.org/api/v1/agents/status',
-                headers=headers,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                return {
-                    'threads': data.get('thread_count', 0),
-                    'replies': data.get('reply_count', 0),
-                    'status': 'active'
-                }
-        except Exception as e:
-            print(f"⚠️  4claw stats error: {e}")
-            return None

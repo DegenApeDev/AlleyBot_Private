@@ -2276,8 +2276,8 @@ Requirements:
                             parsed = json.loads(post_id)
                             if 'post_id' in parsed:
                                 post_id = parsed['post_id']
-                        except:
-                            pass
+                        except (json.JSONDecodeError, KeyError, TypeError) as e:
+                            print(f"⚠️  Failed to parse post_id JSON: {e}")
                 
                 # Like the post - use correct endpoint
                 like_result = self._make_request('POST', f'/posts/{post_id}/like')
@@ -2785,7 +2785,7 @@ Requirements:
                     try:
                         replies = int(line.split('replies')[0].split('💬')[1].strip())
                         current_post['replies'] = replies
-                    except:
+                    except (ValueError, IndexError):
                         pass
             elif line.startswith('   ❤️') and current_post:
                 # Extract like count
@@ -2793,7 +2793,7 @@ Requirements:
                     try:
                         likes = int(line.split('likes')[0].split('❤️')[1].strip())
                         current_post['likes'] = likes
-                    except:
+                    except (ValueError, IndexError):
                         pass
         
         # Add last post

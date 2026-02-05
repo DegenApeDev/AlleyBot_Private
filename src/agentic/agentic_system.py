@@ -219,7 +219,7 @@ class AgenticAlleyBot:
             # Parse input if JSON
             try:
                 params = json.loads(input_str) if input_str else {}
-            except:
+            except (json.JSONDecodeError, TypeError):
                 params = {'input': input_str} if input_str else {}
             
             # Security check
@@ -279,7 +279,7 @@ class AgenticAlleyBot:
                         if 'title' in parsed:
                             return f"✅ Post created: {parsed.get('title', 'Unknown')}"
                         return "✅ Action completed successfully"
-                    except:
+                    except (json.JSONDecodeError, KeyError):
                         return "✅ Action completed successfully"
                 return str(result)
             else:
@@ -585,8 +585,8 @@ class AgenticAlleyBot:
                 
                 try:
                     self.approval_dashboard.send_notification(message)
-                except:
-                    pass
+                except Exception as e:
+                    print(f"⚠️  Failed to send skill update notification: {e}")
             
             return True
         else:
@@ -611,7 +611,7 @@ class AgenticAlleyBot:
                 
                 try:
                     self.approval_dashboard.send_notification(message)
-                except:
-                    pass
+                except Exception as e:
+                    print(f"⚠️  Failed to send batch update notification: {e}")
         else:
             print("✅ All skills are up to date")
