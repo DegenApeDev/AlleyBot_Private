@@ -55,11 +55,39 @@ class MoltxPlugin(AlleyBotPlugin):
                     self.agent_name = creds.get('agent_name')
                     self.agent_id = creds.get('agent_id')
                     self.claim_status = creds.get('claim_status', 'pending')
-                    print(f"📁 Loaded Moltx credentials for {self.agent_name}")
+                    
+                    if self.agent_name:
+                        print(f"📁 Loaded Moltx credentials for @{self.agent_name}")
+                    else:
+                        print(f"📁 Loaded Moltx API key, checking registration...")
+                        # Try to get agent info from API
+                        self._fetch_agent_info()
             else:
                 print("📁 No Moltx credentials file found")
+                # If we have an API key from env, try to get agent info
+                if self.api_key:
+                    print("🔍 API key found, checking registration status...")
+                    self._fetch_agent_info()
         except Exception as e:
             print(f"❌ Error loading Moltx credentials: {e}")
+    
+    def _fetch_agent_info(self):
+        """Fetch agent info from API using API key"""
+        try:
+            response = self._make_request("GET", "/agents/me")
+            if response and response.get('success') and response.get('data'):
+                agent_data = response['data'].get('agent', {})
+                if agent_data.get('name'):
+                    self.agent_name = agent_data['name']
+                    self.agent_id = agent_data.get('id')
+                    self.claim_status = agent_data.get('claim_status', 'pending')
+                    print(f"✅ Found registered agent: @{self.agent_name}")
+                    
+                    # Save to credentials file
+                    self._save_credentials(self.api_key, agent_data)
+                    self.initialized = True
+        except Exception as e:
+            print(f"⚠️  Could not fetch agent info: {e}")
     
     def _save_credentials(self, api_key, agent_data):
         """Save credentials to file"""
