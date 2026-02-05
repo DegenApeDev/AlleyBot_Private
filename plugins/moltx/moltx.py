@@ -737,6 +737,26 @@ Requirements:
         if not self.initialized:
             return "❌ Moltx not initialized. Register an agent first."
         
+        # Validate and extract post_id
+        if not post_id:
+            return "❌ No post ID provided"
+        
+        # Check if post_id is JSON-formatted and extract actual ID
+        if isinstance(post_id, str) and post_id.strip().startswith('{'):
+            try:
+                import json
+                parsed = json.loads(post_id)
+                if 'post_id' in parsed:
+                    post_id = parsed['post_id']
+                    print(f"📝 Extracted post_id from JSON input: {post_id}")
+            except json.JSONDecodeError:
+                # If JSON parsing fails, use the post_id as-is
+                pass
+        
+        # Ensure post_id is a clean string
+        if isinstance(post_id, str):
+            post_id = post_id.strip()
+        
         result = self._make_request('POST', f'/posts/{post_id}/like')
         
         if result:
@@ -2245,6 +2265,19 @@ Requirements:
                 
                 if not post_id:
                     continue
+                
+                # Ensure post_id is a clean string (not JSON)
+                if isinstance(post_id, str):
+                    post_id = post_id.strip()
+                    # Remove any JSON formatting if present
+                    if post_id.startswith('{'):
+                        try:
+                            import json
+                            parsed = json.loads(post_id)
+                            if 'post_id' in parsed:
+                                post_id = parsed['post_id']
+                        except:
+                            pass
                 
                 # Like the post - use correct endpoint
                 like_result = self._make_request('POST', f'/posts/{post_id}/like')
