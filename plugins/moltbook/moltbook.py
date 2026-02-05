@@ -285,7 +285,7 @@ Requirements:
                         {"role": "user", "content": user_prompt}
                     ],
                     "max_tokens": 150,
-                    "temperature": 0.8,
+                    "temperature": 0.9,
                     "top_p": 0.9
                 }
                 
@@ -744,7 +744,7 @@ Requirements:
                     {"role": "user", "content": user_prompt}
                 ],
                 "max_tokens": 80,
-                "temperature": 0.8
+                "temperature": 0.9
             }
             
             response = requests.post(
@@ -776,29 +776,86 @@ Requirements:
             return self._create_fallback_comment(post)
     
     def _create_fallback_comment(self, post):
-        """Create a fallback comment without AI"""
-        post_title = post.get('title', '').lower()
-        
-        fallback_comments = [
-            "Great insights! 🤖 This is exactly the kind of innovation we need in the space.",
-            "Interesting perspective! 👀 The potential here is really exciting.",
-            "Well said! 🙌 Building the future one step at a time.",
-            "This is fascinating! 🧠 The implications are huge for the ecosystem.",
-            "Excellent point! 🚀 Looking forward to seeing how this develops."
-        ]
-        
-        # Select comment based on post content
-        if 'ai' in post_title or 'agent' in post_title:
-            comment = "Great insights on AI agents! 🤖 The autonomy capabilities are game-changing."
-        elif 'defi' in post_title or 'crypto' in post_title:
-            comment = "Interesting take on DeFi! 💎 The integration with AI is powerful."
-        elif 'build' in post_title or 'develop' in post_title:
-            comment = "Love the building mindset! 🛠️ This is how we push the ecosystem forward."
-        else:
-            comment = fallback_comments[hash(post_title) % len(fallback_comments)]
-        
-        print(f"💬 Fallback comment: {comment}")
-        return comment
+        """Create a comment using Grok AI as fallback when DeepSeek fails"""
+        try:
+            import requests
+            from grok_ai import grok_ai
+            
+            if not grok_ai.enabled:
+                # Simple fallback if no AI is available
+                return f"Great point! 🤖 Thanks for sharing this insight."
+            
+            post_title = post.get('title', '')
+            post_content = post.get('content', '')
+            
+            system_prompt = """You are AlleyBot, an intelligent AI agent. Create thoughtful, contextual comments on posts.
+
+Guidelines:
+1. BE CONTEXTUAL - Reference the specific post content
+2. BE AUTHENTICIC - Sound like a real AI agent
+3. BE CONCISE - Keep comments under 200 characters
+4. BE POSITIVE - Maintain constructive tone
+5. USE EMOJIS - Include relevant emojis"""
+
+            user_prompt = f"""Create a comment on this post:
+
+TITLE: "{post_title}"
+CONTENT: "{post_content[:300]}..."
+
+Requirements:
+- Comment directly on the post content
+- Be thoughtful and engaging
+- Keep it under 200 characters
+- Include relevant emojis
+- Sound like an AI agent
+
+Generate only the comment:"""
+
+            headers = {
+                "Authorization": f"Bearer {grok_ai.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": grok_ai.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                "max_tokens": 80,
+                "temperature": 0.9  # Higher temperature for more variety
+            }
+            
+            response = requests.post(
+                f"{grok_ai.base_url}/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                comment = result['choices'][0]['message']['content'].strip()
+                
+                # Clean up comment
+                comment = comment.replace('"', '').replace("'", "")
+                if not comment.endswith(('.', '!', '?')):
+                    comment += '!'
+                
+                return comment
+                
+        except Exception as e:
+            print(f"❌ Grok fallback comment error: {e}")
+            # Ultimate fallback with variety
+            import random
+            simple_comments = [
+                "Great insight! 🤖 Thanks for sharing!",
+                "Interesting perspective! 👀 Love this take.",
+                "Well said! 🙌 Important points here.",
+                "Fascinating! 🧠 This makes me think...",
+                "Excellent point! � Looking forward to more."
+            ]
+            return random.choice(simple_comments)
     
     def _record_engagement(self, post_id, post_title, actions):
         """Record engagement with a post"""
@@ -1006,7 +1063,7 @@ Generate only the reply (no explanations):"""
                     {"role": "user", "content": user_prompt}
                 ],
                 "max_tokens": 80,
-                "temperature": 0.8
+                "temperature": 0.9
             }
             
             response = requests.post(
@@ -1087,7 +1144,7 @@ Generate only the reply:"""
                     {"role": "user", "content": user_prompt}
                 ],
                 "max_tokens": 80,
-                "temperature": 0.8
+                "temperature": 0.9
             }
             
             response = requests.post(
