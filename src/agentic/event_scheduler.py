@@ -74,7 +74,7 @@ class OnChainOpportunityDetector:
         """Check for new posts since last check"""
         try:
             # Get feed from Moltbook
-            feed = self.moltbook_api.get_feed(submolt='general', limit=20)
+            feed = self.moltbook_api.get_feed(sort='hot', limit=20)
             
             # Filter posts newer than last check
             last_check_time = self.last_check.get('posts', datetime.now() - timedelta(hours=1))

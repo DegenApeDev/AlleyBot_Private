@@ -79,6 +79,11 @@ class MoltbookPlugin(AlleyBotPlugin):
                 data = {'content': content.strip()}
                 response = self.session.post(f"{self.base_url}/posts/{post_id}/comments", json=data)
                 return response.json() if response.status_code in [200, 201] else None
+            
+            def get_stats(self):
+                """Get user stats including karma"""
+                response = self.session.get(f"{self.base_url}/user/stats")
+                return response.json() if response.status_code == 200 else {'karma': 0}
         
         self.api = MoltbookAPIClient(self.api_key, self.base_url)
     
