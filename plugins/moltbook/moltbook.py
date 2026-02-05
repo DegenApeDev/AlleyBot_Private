@@ -566,49 +566,34 @@ Your full ecosystem AI agent & automation platform - now with its own token! Bui
     def _get_feed_posts(self):
         """Get recent posts from Moltbook feed"""
         try:
-            # Try to get posts from API or memory
-            posts = []
+            # Get posts from Moltbook API
+            response = self.api.session.get(f"{self.api.base_url}/posts?limit=20")
             
-            # For now, simulate getting posts from memory or generate sample posts
-            # In a real implementation, this would call the Moltbook API
-            sample_posts = [
-                {
-                    'id': 'sample1',
-                    'title': 'AI agents are revolutionizing DeFi',
-                    'content': 'The integration of AI agents in decentralized finance is creating new opportunities...',
-                    'author': 'crypto_enthusiast',
-                    'upvotes': 15,
-                    'comments': 3,
-                    'timestamp': '2026-02-01T10:00:00Z'
-                },
-                {
-                    'id': 'sample2', 
-                    'title': 'Building autonomous systems',
-                    'content': 'Autonomous systems that can learn and adapt are the future...',
-                    'author': 'dev_builder',
-                    'upvotes': 8,
-                    'comments': 1,
-                    'timestamp': '2026-02-01T09:30:00Z'
-                },
-                {
-                    'id': 'sample3',
-                    'title': 'Community governance models',
-                    'content': 'Decentralized governance is evolving with new voting mechanisms...',
-                    'author': 'dao_researcher',
-                    'upvotes': 22,
-                    'comments': 7,
-                    'timestamp': '2026-02-01T08:45:00Z'
-                }
-            ]
-            
-            # Filter posts from last 24 hours and sort by engagement
-            recent_posts = [p for p in sample_posts if self._is_recent_post(p)]
-            sorted_posts = sorted(recent_posts, key=lambda x: x.get('upvotes', 0), reverse=True)
-            
-            return sorted_posts
-            
+            if response.status_code == 200:
+                posts_data = response.json()
+                posts = []
+                
+                # Convert API response to expected format
+                for post in posts_data.get('posts', []):
+                    posts.append({
+                        'id': post.get('id'),
+                        'title': post.get('title', 'No title'),
+                        'content': post.get('content', ''),
+                        'author': post.get('author', 'Anonymous'),
+                        'upvotes': post.get('upvotes', 0),
+                        'comments': post.get('comments_count', 0),
+                        'timestamp': post.get('created_at', '2026-02-01T00:00:00Z')
+                    })
+                
+                print(f"📱 Retrieved {len(posts)} posts from Moltbook API")
+                return posts
+            else:
+                print(f"❌ Failed to fetch posts: {response.status_code}")
+                return []
+                
         except Exception as e:
-            print(f"❌ Error getting feed posts: {e}")
+            print(f"❌ Error fetching posts from API: {e}")
+            # Fallback to empty list if API fails
             return []
     
     def _is_recent_post(self, post):
@@ -892,12 +877,17 @@ Requirements:
                         reply_content = self._generate_moltbook_reply(latest_comment)
                         
                         if reply_content:
-                            # Post the reply (simulate for now)
-                            print(f"💬 Would reply to {latest_comment.get('author', 'Unknown')}: {reply_content[:50]}...")
-                            reply_count += 1
+                            # Actually post the reply to Moltbook
+                            reply_result = self.api.add_comment(post_id, reply_content)
                             
-                            # Record the reply
-                            self._record_reply_activity(post_id, latest_comment, reply_content)
+                            if reply_result:
+                                print(f"💬 Replied to {latest_comment.get('author', 'Unknown')}: {reply_content[:50]}...")
+                                reply_count += 1
+                                
+                                # Record the reply
+                                self._record_reply_activity(post_id, latest_comment, reply_content)
+                            else:
+                                print(f"❌ Failed to post reply to {latest_comment.get('author', 'Unknown')}")
             
             result = f"💬 Monitored {len(recent_posts)} posts, generated {reply_count} replies"
             print(result)
@@ -908,36 +898,32 @@ Requirements:
             return f"❌ Error monitoring comments: {e}"
     
     def _get_post_comments(self, post_id):
-        """Get comments for a specific post (simulated for now)"""
-        # In a real implementation, this would call the Moltbook API
-        # For now, simulate some comments
-        import random
-        
-        sample_comments = [
-            {
-                'author': 'crypto_enthusiast',
-                'content': 'Great insights on AI agents! What do you think about the future?',
-                'timestamp': '2026-02-01T10:30:00Z',
-                'engagement_score': 0.8
-            },
-            {
-                'author': 'dev_builder',
-                'content': 'Interesting take on autonomous systems. Have you considered the security implications?',
-                'timestamp': '2026-02-01T09:45:00Z',
-                'engagement_score': 0.7
-            },
-            {
-                'author': 'dao_researcher',
-                'content': 'This aligns with what we\'re seeing in DAO governance. Good analysis!',
-                'timestamp': '2026-02-01T08:20:00Z',
-                'engagement_score': 0.9
-            }
-        ]
-        
-        # Randomly return 0-2 comments
-        if random.random() > 0.5:
-            return random.sample(sample_comments, random.randint(0, 2))
-        return []
+        """Get comments for a specific post from Moltbook API"""
+        try:
+            response = self.api.session.get(f"{self.api.base_url}/posts/{post_id}/comments")
+            
+            if response.status_code == 200:
+                comments_data = response.json()
+                comments = []
+                
+                # Convert API response to expected format
+                for comment in comments_data.get('comments', []):
+                    comments.append({
+                        'id': comment.get('id'),
+                        'author': comment.get('author', 'Anonymous'),
+                        'content': comment.get('content', ''),
+                        'timestamp': comment.get('created_at', '2026-02-01T00:00:00Z'),
+                        'upvotes': comment.get('upvotes', 0)
+                    })
+                
+                return comments
+            else:
+                print(f"❌ Failed to fetch comments: {response.status_code}")
+                return []
+                
+        except Exception as e:
+            print(f"❌ Error fetching comments: {e}")
+            return []
     
     def _filter_comments_for_reply(self, comments):
         """Filter comments that are worth replying to"""
