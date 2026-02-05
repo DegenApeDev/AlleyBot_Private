@@ -230,8 +230,33 @@ class AgenticAlleyBot:
             sig = inspect.signature(func)
             takes_args = len(sig.parameters) > 0
             
-            # Execute with or without arguments
-            if takes_args and input_str:
+            # Extract actual content from JSON if it's a post command
+            if 'moltbook_post' in action_name or 'moltx_post' in action_name:
+                if isinstance(params, dict) and 'content' in params:
+                    # For post commands, extract the content
+                    content = params['content']
+                    if isinstance(content, list):
+                        content = ' '.join(str(c) for c in content)
+                    security_result = self.security_filter.execute_with_security(
+                        action=action_name,
+                        params={'content': content},
+                        executor=lambda a, p: func(content)
+                    )
+                elif isinstance(params, dict) and 'input' in params:
+                    content = params['input']
+                    security_result = self.security_filter.execute_with_security(
+                        action=action_name,
+                        params={'content': content},
+                        executor=lambda a, p: func(content)
+                    )
+                else:
+                    # Plain string input
+                    security_result = self.security_filter.execute_with_security(
+                        action=action_name,
+                        params={'input': input_str},
+                        executor=lambda a, p: func(input_str)
+                    )
+            elif takes_args and input_str:
                 security_result = self.security_filter.execute_with_security(
                     action=action_name,
                     params=params,
@@ -246,7 +271,17 @@ class AgenticAlleyBot:
                 )
             
             if security_result['success']:
-                return str(security_result.get('result', 'Success'))
+                result = security_result.get('result', 'Success')
+                # Clean up result to prevent raw JSON display
+                if isinstance(result, str) and result.startswith('{') and result.endswith('}'):
+                    try:
+                        parsed = json.loads(result)
+                        if 'title' in parsed:
+                            return f"✅ Post created: {parsed.get('title', 'Unknown')}"
+                        return "✅ Action completed successfully"
+                    except:
+                        return "✅ Action completed successfully"
+                return str(result)
             else:
                 return f"❌ {security_result.get('error', 'Execution failed')}"
                 
