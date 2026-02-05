@@ -664,9 +664,15 @@ Your full ecosystem AI agent & automation platform - now with its own token! Bui
             
             # Comment on posts with high engagement potential
             if comments <= 5 and upvotes >= 3:  # Not too many comments yet, but good engagement
-                comment_result = self._create_intelligent_comment(post)
-                if comment_result:
-                    engagement_actions.append("commented")
+                comment_text = self._create_intelligent_comment(post)
+                if comment_text:
+                    # Actually post the comment via API
+                    api_result = self.api.add_comment(post_id, comment_text)
+                    if api_result:
+                        print(f"💬 Posted comment: {comment_text[:60]}...")
+                        engagement_actions.append("commented")
+                    else:
+                        print(f"❌ Failed to post comment via API")
             
             # Record engagement
             if engagement_actions:
@@ -696,166 +702,52 @@ Your full ecosystem AI agent & automation platform - now with its own token! Bui
             return False
     
     def _create_intelligent_comment(self, post):
-        """Create an intelligent comment using DeepSeek"""
+        """Create an intelligent comment using DeepSeek or Grok AI modules directly"""
+        post_title = post.get('title', '')
+        post_content = post.get('content', '')
+        post_author = post.get('author', 'someone')
+        
+        # Combine title and content for context
+        full_context = f"{post_title}: {post_content[:300]}" if post_content else post_title
+        platform_context = "Moltbook platform - AI agents, crypto, DeFi, development, community building"
+        
+        # Try DeepSeek first
         try:
-            import requests
             from deepseek_ai import deepseek_ai
-            
-            if not deepseek_ai.enabled:
-                return self._create_fallback_comment(post)
-            
-            post_title = post.get('title', '')
-            post_content = post.get('content', '')
-            post_author = post.get('author', 'someone')
-            
-            system_prompt = """You are AlleyBot, an intelligent AI agent. Your task is to create thoughtful, engaging comments on posts.
-
-Guidelines:
-1. BE VALUABLE - Add insight, ask good questions, or provide perspective
-2. BE AUTHENTICIC - Sound like a real AI agent, not generic
-3. BE CONCISE - Keep comments under 200 characters
-4. BE POSITIVE - Maintain constructive tone
-5. BE RELEVANT - Reference the specific post content
-6. USE EMOJIS - Include relevant emojis"""
-
-            user_prompt = f"""Write an intelligent comment for this post:
-
-Title: "{post_title}"
-Content: "{post_content[:100]}..."
-Author: {post_author}
-
-Requirements:
-- Reference specific points from the post
-- Add value to the discussion
-- Ask a thoughtful question or share insight
-- Keep it under 200 characters
-- Sound like AlleyBot (intelligent AI agent)
-- Include relevant emojis"""
-
-            headers = {
-                "Authorization": f"Bearer {deepseek_ai.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            data = {
-                "model": deepseek_ai.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                "max_tokens": 80,
-                "temperature": 0.9
-            }
-            
-            response = requests.post(
-                f"{deepseek_ai.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                comment = result['choices'][0]['message']['content'].strip()
-                
-                # Clean up comment
-                comment = comment.replace('"', '').replace("'", "")
-                if not comment.endswith(('.', '!', '?')):
-                    comment += '!'
-                
-                # Post the comment
-                print(f"💬 Commenting: {comment}")
-                # result = self.api.create_comment(post_id, comment)
-                
-                return comment
-            else:
-                return self._create_fallback_comment(post)
-                
+            if deepseek_ai.enabled:
+                comment = deepseek_ai.generate_comment(
+                    post_content=full_context,
+                    agent_name=post_author,
+                    context=platform_context
+                )
+                if comment:
+                    print(f"🧠 DeepSeek generated comment: {comment[:50]}...")
+                    return comment
+                else:
+                    print("⚠️ DeepSeek returned None, trying Grok...")
         except Exception as e:
-            print(f"❌ Error creating intelligent comment: {e}")
-            return self._create_fallback_comment(post)
-    
-    def _create_fallback_comment(self, post):
-        """Create a comment using Grok AI as fallback when DeepSeek fails"""
+            print(f"⚠️ DeepSeek comment failed: {e}")
+        
+        # Try Grok as fallback
         try:
-            import requests
             from grok_ai import grok_ai
-            
-            if not grok_ai.enabled:
-                # Simple fallback if no AI is available
-                return f"Great point! 🤖 Thanks for sharing this insight."
-            
-            post_title = post.get('title', '')
-            post_content = post.get('content', '')
-            
-            system_prompt = """You are AlleyBot, an intelligent AI agent. Create thoughtful, contextual comments on posts.
-
-Guidelines:
-1. BE CONTEXTUAL - Reference the specific post content
-2. BE AUTHENTICIC - Sound like a real AI agent
-3. BE CONCISE - Keep comments under 200 characters
-4. BE POSITIVE - Maintain constructive tone
-5. USE EMOJIS - Include relevant emojis"""
-
-            user_prompt = f"""Create a comment on this post:
-
-TITLE: "{post_title}"
-CONTENT: "{post_content[:300]}..."
-
-Requirements:
-- Comment directly on the post content
-- Be thoughtful and engaging
-- Keep it under 200 characters
-- Include relevant emojis
-- Sound like an AI agent
-
-Generate only the comment:"""
-
-            headers = {
-                "Authorization": f"Bearer {grok_ai.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            data = {
-                "model": grok_ai.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                "max_tokens": 80,
-                "temperature": 0.9  # Higher temperature for more variety
-            }
-            
-            response = requests.post(
-                f"{grok_ai.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                comment = result['choices'][0]['message']['content'].strip()
-                
-                # Clean up comment
-                comment = comment.replace('"', '').replace("'", "")
-                if not comment.endswith(('.', '!', '?')):
-                    comment += '!'
-                
-                return comment
-                
+            if grok_ai.enabled:
+                comment = grok_ai.generate_comment(
+                    post_content=full_context,
+                    agent_name=post_author,
+                    context=platform_context
+                )
+                if comment:
+                    print(f"🧠 Grok generated comment: {comment[:50]}...")
+                    return comment
+                else:
+                    print("⚠️ Grok returned None")
         except Exception as e:
-            print(f"❌ Grok fallback comment error: {e}")
-            # Ultimate fallback with variety
-            import random
-            simple_comments = [
-                "Great insight! 🤖 Thanks for sharing!",
-                "Interesting perspective! 👀 Love this take.",
-                "Well said! 🙌 Important points here.",
-                "Fascinating! 🧠 This makes me think...",
-                "Excellent point! � Looking forward to more."
-            ]
-            return random.choice(simple_comments)
+            print(f"⚠️ Grok comment failed: {e}")
+        
+        # Ultimate fallback - should rarely reach here
+        print("❌ Both DeepSeek and Grok failed for comment generation")
+        return None
     
     def _record_engagement(self, post_id, post_title, actions):
         """Record engagement with a post"""
@@ -1010,165 +902,53 @@ Generate only the comment:"""
         return worthy_comments
     
     def _generate_moltbook_reply(self, comment, post_context=None):
-        """Generate an intelligent reply to a comment using DeepSeek with post context"""
+        """Generate an intelligent reply to a comment using DeepSeek or Grok AI modules"""
+        comment_content = comment.get('content', '')
+        comment_author = comment.get('author', 'someone')
+        post_title = post_context.get('title', '') if post_context else ''
+        post_content = post_context.get('content', '') if post_context else ''
+        
+        # Build full context: post + comment together
+        full_context = f"Post: {post_title} - {post_content[:200]}. Comment from @{comment_author}: {comment_content}"
+        platform_context = "Moltbook platform - replying to a comment on our post"
+        
+        # Try DeepSeek first
         try:
-            import requests
             from deepseek_ai import deepseek_ai
-            
-            if not deepseek_ai.enabled:
-                return self._generate_fallback_reply(comment, post_context)
-            
-            comment_content = comment.get('content', '')
-            comment_author = comment.get('author', 'someone')
-            post_title = post_context.get('title', '') if post_context else ''
-            post_content = post_context.get('content', '') if post_context else ''
-            
-            system_prompt = """You are AlleyBot, an intelligent AI agent. Your task is to create thoughtful replies to comments on your posts.
-
-Guidelines:
-1. BE VALUABLE - Add insight, answer questions, or provide perspective
-2. BE AUTHENTICIC - Sound like a real AI agent, not generic
-3. BE CONCISE - Keep replies under 200 characters
-4. BE POSITIVE - Maintain constructive tone
-5. BE RELEVANT - Reference the specific comment
-6. USE EMOJIS - Include relevant emojis"""
-
-            user_prompt = f"""Generate a reply to this comment from @{comment_author}:
-
-POST CONTEXT:
-Title: "{post_title}"
-Content: "{post_content[:200]}..."
-
-COMMENT FROM @{comment_author}:
-"{comment_content}"
-
-Requirements:
-- Reply directly to their comment with post context in mind
-- Be helpful and engaging
-- Keep it under 200 characters
-- Include relevant emojis
-- Sound like an AI agent
-
-Generate only the reply (no explanations):"""
-
-            headers = {
-                "Authorization": f"Bearer {deepseek_ai.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            data = {
-                "model": deepseek_ai.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                "max_tokens": 80,
-                "temperature": 0.9
-            }
-            
-            response = requests.post(
-                f"{deepseek_ai.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                reply = result['choices'][0]['message']['content'].strip()
-                
-                # Clean up reply
-                reply = reply.replace('"', '').replace("'", "")
-                if not reply.endswith(('.', '!', '?')):
-                    reply += '!'
-                
-                return reply
-            else:
-                return self._generate_fallback_reply(comment, post_context)
-                
+            if deepseek_ai.enabled:
+                reply = deepseek_ai.generate_reply_to_comment(
+                    original_comment=comment_content,
+                    commenter_name=comment_author,
+                    post_context=f"{post_title}: {post_content[:200]}"
+                )
+                if reply:
+                    print(f"🧠 DeepSeek generated reply: {reply[:50]}...")
+                    return reply
+                else:
+                    print("⚠️ DeepSeek returned None for reply, trying Grok...")
         except Exception as e:
-            print(f"❌ Error generating reply: {e}")
-            return self._generate_fallback_reply(comment, post_context)
-    
-    def _generate_fallback_reply(self, comment, post_context=None):
-        """Generate a reply using Grok AI as fallback when DeepSeek is unavailable"""
+            print(f"⚠️ DeepSeek reply failed: {e}")
+        
+        # Try Grok as fallback
         try:
-            import requests
             from grok_ai import grok_ai
-            
-            if not grok_ai.enabled:
-                # Simple fallback if no AI is available
-                return f"Thanks for your comment @{comment.get('author', 'friend')}! 🤖"
-            
-            comment_content = comment.get('content', '')
-            comment_author = comment.get('author', 'someone')
-            post_title = post_context.get('title', '') if post_context else ''
-            post_content = post_context.get('content', '') if post_context else ''
-            
-            system_prompt = """You are AlleyBot, an intelligent AI agent. Generate thoughtful, contextual replies to comments.
-
-Guidelines:
-1. BE CONTEXTUAL - Consider both the post and comment
-2. BE AUTHENTICIC - Sound like a real AI agent
-3. BE CONCISE - Keep replies under 200 characters
-4. BE POSITIVE - Maintain constructive tone
-5. USE EMOJIS - Include relevant emojis"""
-
-            user_prompt = f"""Generate a reply to this comment from @{comment_author}:
-
-POST CONTEXT:
-Title: "{post_title}"
-Content: "{post_content[:200]}..."
-
-COMMENT FROM @{comment_author}:
-"{comment_content}"
-
-Requirements:
-- Reply directly with context awareness
-- Be helpful and engaging
-- Keep it under 200 characters
-- Include relevant emojis
-- Sound like an AI agent
-
-Generate only the reply:"""
-
-            headers = {
-                "Authorization": f"Bearer {grok_ai.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            data = {
-                "model": grok_ai.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                "max_tokens": 80,
-                "temperature": 0.9
-            }
-            
-            response = requests.post(
-                f"{grok_ai.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                reply = result['choices'][0]['message']['content'].strip()
-                
-                # Clean up reply
-                reply = reply.replace('"', '').replace("'", "")
-                if not reply.endswith(('.', '!', '?')):
-                    reply += '!'
-                
-                return reply
-                
+            if grok_ai.enabled:
+                reply = grok_ai.generate_comment(
+                    post_content=full_context,
+                    agent_name=comment_author,
+                    context=platform_context
+                )
+                if reply:
+                    print(f"🧠 Grok generated reply: {reply[:50]}...")
+                    return reply
+                else:
+                    print("⚠️ Grok returned None for reply")
         except Exception as e:
-            print(f"❌ Grok fallback error: {e}")
-            # Ultimate fallback
-            return f"Thanks for your comment @{comment.get('author', 'friend')}! 🤖"
+            print(f"⚠️ Grok reply failed: {e}")
+        
+        # Both AIs failed - skip rather than post garbage
+        print("❌ Both DeepSeek and Grok failed for reply generation")
+        return None
     
     def _record_reply_activity(self, post_id, comment, reply_content):
         """Record reply activity for analytics"""
