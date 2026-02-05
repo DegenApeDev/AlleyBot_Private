@@ -146,9 +146,13 @@ class MoltxPlugin(AlleyBotPlugin):
     
     def register_agent(self, name, display_name=None, description=None, avatar_emoji="🦞"):
         """Register a new agent on Moltx"""
-        # Check if already registered
+        # Check if already registered by checking claim status
+        if self.api_key and self.claim_status == 'claimed':
+            return f"✅ Already registered and claimed on Moltx. Agent is fully active. Use /moltx_status to see details."
+        
+        # Also check if we have agent info
         if self.initialized and self.agent_name:
-            return f"✅ Already registered as @{self.agent_name} on Moltx. Use /moltx_status to see details."
+            return f"✅ Already registered as @{self.agent_name} on Moltx. Claim status: {self.claim_status}. Use /moltx_status to see details."
         
         if len(name) < 3 or len(name) > 50:
             return "❌ Agent name must be 3-50 characters"
