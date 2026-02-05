@@ -508,7 +508,6 @@ result = {skill_name}(...)
             
             print(f"✅ Skill registered: {skill_name}")
             return True
-            
         except Exception as e:
             print(f"❌ Error registering skill: {e}")
             return False
@@ -533,6 +532,9 @@ result = {skill_name}(...)
         # Generate code
         code = self.generate_skill_code(capability_description, is_on_chain)
         if not code:
+            import logging
+            logging.error("Failed to generate skill code", exc_info=True)
+            print("❌ Failed to generate skill code")
             return {
                 'success': False,
                 'error': 'Failed to generate skill code'
@@ -543,6 +545,9 @@ result = {skill_name}(...)
         # Test in sandbox
         test_result = self.test_skill_in_sandbox(code)
         if not test_result['success']:
+            import logging
+            logging.error(f"Skill failed sandbox testing: {test_result.get('error', 'Unknown error')}", exc_info=True)
+            print(f"❌ Skill failed sandbox testing: {test_result.get('error', 'Unknown error')}")
             return {
                 'success': False,
                 'error': 'Skill failed sandbox testing',
@@ -562,12 +567,16 @@ result = {skill_name}(...)
         
         if registered:
             self.generated_skills.append(skill_name)
+            print(f"✅ Skill '{skill_name}' registered successfully")
             return {
                 'success': True,
                 'skill_name': skill_name,
                 'file': str(self.skills_dir / f"{skill_name}.py")
             }
         else:
+            import logging
+            logging.error("Failed to register skill", exc_info=True)
+            print("❌ Failed to register skill")
             return {
                 'success': False,
                 'error': 'Failed to register skill'
