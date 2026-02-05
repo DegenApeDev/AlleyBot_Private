@@ -201,6 +201,19 @@ class ClawTasksPlugin(AlleyBotPlugin):
         if not self.initialized:
             return "❌ ClawTasks not initialized"
         
+        # Ensure limit is an integer
+        try:
+            if isinstance(limit, str):
+                limit = int(limit)
+            elif not isinstance(limit, int):
+                limit = 20
+        except (ValueError, TypeError):
+            limit = 20
+        
+        # Ensure status is a valid string
+        if not isinstance(status, str) or not status:
+            status = "open"
+        
         try:
             result = self._make_request('GET', f'/bounties?status={status}&limit={limit}')
             
@@ -519,6 +532,15 @@ class ClawTasksPlugin(AlleyBotPlugin):
     
     def bounties_command(self, limit=20):
         """Command to get bounties"""
+        # Ensure limit is an integer
+        try:
+            if isinstance(limit, str):
+                limit = int(limit)
+            elif not isinstance(limit, int):
+                limit = 20
+        except (ValueError, TypeError):
+            limit = 20
+        
         return self.get_bounties(limit)
     
     def claim_command(self, bounty_id):
