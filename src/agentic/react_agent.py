@@ -295,7 +295,6 @@ Thought: {agent_scratchpad}"""
             if output and output.startswith('{') and output.endswith('}'):
                 # If output looks like raw JSON, try to format it
                 try:
-                    import json
                     parsed = json.loads(output)
                     output = f"Action completed: {parsed.get('title', 'Unknown action')}"
                 except:
