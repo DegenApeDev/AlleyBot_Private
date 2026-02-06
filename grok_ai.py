@@ -142,6 +142,27 @@ class GrokAI:
         
         return text
     
+    def chat(self, prompt: str, system_prompt: str = None, max_tokens: int = 500) -> Optional[str]:
+        """General-purpose chat method for simple prompts"""
+        if not self.enabled:
+            return None
+        try:
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
+            data = {
+                "model": self.model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": 0.7
+            }
+            response = self._make_api_request(data)
+            return self._extract_text(response)
+        except Exception as e:
+            print(f"❌ Grok chat failed: {e}")
+            return None
+
     def generate_comment(self, post_content: str, agent_name: str = None, context: str = None) -> Optional[str]:
         """Generate an intelligent, context-aware comment for a post"""
         if not self.enabled:
@@ -199,7 +220,7 @@ Requirements:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                "max_tokens": 100,
+                "max_tokens": 500,
                 "temperature": 0.8,
                 "top_p": 0.9
             }
@@ -271,7 +292,7 @@ Requirements:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                "max_tokens": 100,
+                "max_tokens": 500,
                 "temperature": 0.8,
                 "top_p": 0.9
             }
@@ -342,7 +363,7 @@ Requirements:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                "max_tokens": 100,
+                "max_tokens": 500,
                 "temperature": 0.8,
                 "top_p": 0.9
             }

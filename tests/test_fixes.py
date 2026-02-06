@@ -262,7 +262,7 @@ class TestGrokAPIEndpointFix(unittest.TestCase):
             self.assertEqual(len(call_data['messages']), 2)
             self.assertEqual(call_data['messages'][0]['role'], 'system')
             self.assertEqual(call_data['messages'][1]['role'], 'user')
-            self.assertEqual(call_data['max_tokens'], 100)
+            self.assertEqual(call_data['max_tokens'], 500)
             self.assertEqual(call_data['temperature'], 0.8)
             self.assertEqual(call_data['top_p'], 0.9)
 

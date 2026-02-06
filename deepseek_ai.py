@@ -23,6 +23,41 @@ class DeepSeekAI:
             self.enabled = True
             print("✅ DeepSeek AI initialized")
     
+    def chat(self, prompt: str, system_prompt: str = None, max_tokens: int = 500) -> Optional[str]:
+        """General-purpose chat method for simple prompts"""
+        if not self.enabled:
+            return None
+        try:
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": self.model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": 0.7
+            }
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=30
+            )
+            if response.status_code == 200:
+                result = response.json()
+                return result['choices'][0]['message']['content'].strip()
+            else:
+                print(f"❌ DeepSeek chat error: {response.status_code}")
+                return None
+        except Exception as e:
+            print(f"❌ DeepSeek chat failed: {e}")
+            return None
+
     def generate_comment(self, post_content: str, agent_name: str = None, context: str = None) -> Optional[str]:
         """Generate an intelligent, context-aware comment for a post"""
         if not self.enabled:
@@ -76,7 +111,7 @@ Requirements:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                "max_tokens": 150,
+                "max_tokens": 500,
                 "temperature": 0.7,
                 "top_p": 0.9
             }
@@ -85,7 +120,7 @@ Requirements:
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=10
+                timeout=30
             )
             
             if response.status_code == 200:
@@ -139,7 +174,7 @@ Return a JSON object with:
                     {"role": "system", "content": "You are a content analysis expert. Always respond with valid JSON."},
                     {"role": "user", "content": user_prompt}
                 ],
-                "max_tokens": 100,
+                "max_tokens": 300,
                 "temperature": 0.1
             }
             
@@ -147,7 +182,7 @@ Return a JSON object with:
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=10
+                timeout=30
             )
             
             if response.status_code == 200:
@@ -197,7 +232,7 @@ Requirements:
                     {"role": "system", "content": "You are AlleyBot, an intelligent AI agent engaging in meaningful conversations."},
                     {"role": "user", "content": user_prompt}
                 ],
-                "max_tokens": 100,
+                "max_tokens": 500,
                 "temperature": 0.8
             }
             
@@ -205,7 +240,7 @@ Requirements:
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=10
+                timeout=30
             )
             
             if response.status_code == 200:
