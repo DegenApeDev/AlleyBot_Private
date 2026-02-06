@@ -96,5 +96,18 @@
       "cycle_interval": 300,
       "telegram_notify": true
     }
+  },
+  "a2a": {
+    "enabled": true,
+    "config": {
+      "port": 7002,
+      "host": "0.0.0.0",
+      "auto_start": false,
+      "rate_limit_per_minute": 10,
+      "rate_limit_per_hour": 100,
+      "min_reputation": 0,
+      "blocklist": [],
+      "allowlist": []
+    }
   }
 }

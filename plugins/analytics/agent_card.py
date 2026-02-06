@@ -96,6 +96,14 @@ PLUGIN_SKILL_MAP = {
             'evaluation_monitoring/quality_evaluation',
         ],
     },
+    'a2a': {
+        'category': 'agent_orchestration',
+        'skills': [
+            'agent_orchestration/agent_coordination',
+            'agent_orchestration/negotiation_resolution',
+            'tool_interaction/api_schema_understanding',
+        ],
+    },
 }
 
 
@@ -200,6 +208,7 @@ class AgentCardGenerator:
             'brain': ['autonomous_decision_making', 'ai_reasoning'],
             'telegram': ['natural_language_interface', 'tool_dispatch'],
             'analytics': ['performance_analytics', 'dashboard'],
+            'a2a': ['agent_to_agent_protocol', 'task_delegation', 'agent_discovery'],
         }
 
         for plugin_name, plugin_caps in capability_map.items():
