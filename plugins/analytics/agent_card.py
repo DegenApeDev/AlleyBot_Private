@@ -277,27 +277,27 @@ class AgentCardGenerator:
         import os
         import requests
 
-        # ── Pinata (preferred) ──────────────────────────────────────
+        # ── Pinata v3 API (preferred) ─────────────────────────────────
         pinata_jwt = os.getenv('PINATA_JWT')
         if pinata_jwt:
-            print("📌 Uploading agent card to IPFS via Pinata...")
+            print("📌 Uploading agent card to IPFS via Pinata v3...")
             resp = requests.post(
-                'https://api.pinata.cloud/pinning/pinJSONToIPFS',
+                'https://uploads.pinata.cloud/v3/files',
                 headers={
                     'Authorization': f'Bearer {pinata_jwt}',
-                    'Content-Type': 'application/json',
                 },
-                json={
-                    'pinataContent': json.loads(card_json),
-                    'pinataMetadata': {
-                        'name': f'AlleyBot-agent-card-{AGENT_ID}',
-                    },
+                files={
+                    'file': ('agent-card.json', card_json.encode(), 'application/json'),
+                },
+                data={
+                    'network': 'public',
+                    'name': f'AlleyBot-agent-card-{AGENT_ID}',
                 },
                 timeout=30,
             )
             resp.raise_for_status()
-            ipfs_hash = resp.json()['IpfsHash']
-            ipfs_uri = f"ipfs://{ipfs_hash}"
+            cid = resp.json()['data']['cid']
+            ipfs_uri = f"ipfs://{cid}"
             print(f"✅ Pinned to IPFS: {ipfs_uri}")
             return ipfs_uri
 
