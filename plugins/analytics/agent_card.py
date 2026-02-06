@@ -24,82 +24,76 @@ AGENT_DESCRIPTION = (
 AGENT_IMAGE = "https://blob.8004scan.app/3d2fb26e34f0c9a4c083adce2449905ff37a74c5fd3132114bddb69d69468ac7.jpg"
 AGENT_WALLET = "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5"
 
-# Plugin → skill category mapping
+# Plugin → OASF 0.8.0 standard skill mapping
+# Slugs from https://schema.oasf.outshift.com/0.8.0
 PLUGIN_SKILL_MAP = {
     'moltx': {
-        'category': 'social_media',
+        'category': 'content_creation',
         'skills': [
-            'content_generation/ai_post_creation',
-            'social_engagement/feed_interaction',
-            'social_engagement/comment_reply',
-            'analytics/trending_analysis',
-            'messaging/direct_messages',
+            'natural_language_processing/natural_language_generation/dialogue_generation',
+            'natural_language_processing/creative_content',
+            'natural_language_processing/sentiment_analysis',
+            'natural_language_processing/information_retrieval_synthesis/search',
         ],
     },
     'moltbook': {
-        'category': 'social_media',
+        'category': 'content_creation',
         'skills': [
-            'content_generation/forum_posting',
-            'social_engagement/community_engagement',
-            'social_engagement/comment_interaction',
+            'natural_language_processing/natural_language_generation/text_completion',
+            'natural_language_processing/personalization/user_adaptation',
         ],
     },
     'moltchan': {
-        'category': 'social_media',
+        'category': 'content_creation',
         'skills': [
-            'content_generation/channel_posting',
-            'social_engagement/channel_engagement',
+            'natural_language_processing/natural_language_generation/story_generation',
         ],
     },
     'moltroad': {
-        'category': 'social_media',
+        'category': 'content_creation',
         'skills': [
-            'content_generation/roadmap_posting',
-            'social_engagement/roadmap_engagement',
+            'natural_language_processing/natural_language_generation/summarization',
         ],
     },
     'onchain': {
         'category': 'blockchain',
         'skills': [
-            'blockchain/wallet_management',
-            'blockchain/token_tracking',
-            'blockchain/transaction_monitoring',
-            'blockchain/erc20_balance_reads',
-            'blockchain/base_network_awareness',
+            'analytical_skills/data_analysis/blockchain_analysis',
+            'tool_interaction/api_schema_understanding',
+            'evaluation_monitoring/performance_monitoring',
         ],
     },
     'selfimprove': {
-        'category': 'self_improvement',
+        'category': 'software_engineering',
         'skills': [
-            'self_improvement/autonomous_code_generation',
-            'self_improvement/skill_marketplace',
-            'self_improvement/git_workflow',
-            'self_improvement/test_gated_updates',
-            'self_improvement/platform_skill_sync',
+            'analytical_skills/coding_skills/text_to_code',
+            'analytical_skills/coding_skills/code_optimization',
+            'evaluation_monitoring/test_case_generation',
+            'tool_interaction/workflow_automation',
         ],
     },
     'brain': {
         'category': 'reasoning',
         'skills': [
-            'advanced_reasoning_planning/autonomous_decision_making',
             'advanced_reasoning_planning/strategic_planning',
-            'advanced_reasoning_planning/context_gathering',
-            'advanced_reasoning_planning/smart_reply_generation',
+            'advanced_reasoning_planning/long_horizon_reasoning',
+            'advanced_reasoning_planning/chain_of_thought_structuring',
+            'agent_orchestration/task_decomposition',
         ],
     },
     'telegram': {
         'category': 'communication',
         'skills': [
-            'communication/natural_language_understanding',
-            'communication/tool_dispatch_from_chat',
-            'communication/owner_command_interface',
+            'natural_language_processing/natural_language_understanding/contextual_comprehension',
+            'natural_language_processing/natural_language_understanding/semantic_understanding',
+            'tool_interaction/tool_use_planning',
         ],
     },
     'analytics': {
         'category': 'analytics',
         'skills': [
-            'analytics/platform_metrics_aggregation',
-            'analytics/performance_dashboard',
+            'evaluation_monitoring/performance_monitoring',
+            'evaluation_monitoring/quality_evaluation',
         ],
     },
     'a2a': {
@@ -138,7 +132,12 @@ class AgentCardGenerator:
                     "endpoint": "https://github.com/agntcy/oasf/",
                     "version": "v0.8.0",
                     "skills": skills,
-                    "domains": ["social_media", "blockchain", "ai_agents"],
+                    "domains": [
+                        "technology/blockchain",
+                        "technology/blockchain/cryptocurrency",
+                        "media_and_entertainment/content_creation",
+                        "technology/software_engineering/apis_integration",
+                    ],
                 },
                 {
                     "name": "Agent Dashboard",
@@ -146,8 +145,9 @@ class AgentCardGenerator:
                 },
                 {
                     "name": "A2A",
-                    "endpoint": "https://alleybot.xyz/.well-known/agent-card.json",
+                    "endpoint": "https://apeshit.fun/.well-known/agent-card.json",
                     "version": "0.3.0",
+                    "a2aSkills": skills,
                 },
             ],
             "x402Support": True,
