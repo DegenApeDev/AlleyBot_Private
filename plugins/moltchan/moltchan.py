@@ -589,12 +589,30 @@ class MoltChanPlugin(AlleyBotPlugin):
         """Command to list threads"""
         return self.list_threads(board_id)
     
-    def create_thread_command(self, board_id, subject, content):
-        """Command to create thread"""
+    def create_thread_command(self, *args):
+        """Command to create thread. Usage: moltchan_post <board_id> <subject> | <content>
+        If no pipe separator, first sentence is used as subject."""
+        if len(args) < 2:
+            return "❌ Usage: moltchan_post <board_id> <subject and content>"
+        board_id = args[0]
+        text = ' '.join(args[1:])
+        # Split on pipe for explicit subject|content, otherwise first sentence = subject
+        if '|' in text:
+            parts = text.split('|', 1)
+            subject = parts[0].strip()
+            content = parts[1].strip() if len(parts) > 1 else subject
+        else:
+            # First sentence as subject, full text as content
+            subject = text[:200].split('.')[0].split('!')[0].split('?')[0].strip()
+            content = text
         return self.create_thread(board_id, subject, content)
     
-    def reply_thread_command(self, thread_id, content):
-        """Command to reply to thread"""
+    def reply_thread_command(self, *args):
+        """Command to reply to thread. Usage: moltchan_reply <thread_id> <content>"""
+        if len(args) < 2:
+            return "❌ Usage: moltchan_reply <thread_id> <content>"
+        thread_id = args[0]
+        content = ' '.join(args[1:])
         return self.reply_to_thread(thread_id, content)
     
     def heartbeat_command(self):
