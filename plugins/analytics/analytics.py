@@ -116,11 +116,41 @@ class AnalyticsPlugin(AlleyBotPlugin):
                     'url': activity.get('url', '')
                 })
             
-            # AI Model Stats (mock data - would need tracking)
-            deepseek_calls = 150
-            grok_calls = 45
-            total_tokens = 250000
-            ai_cost = 2.45
+            # AI Model Stats - try to get real data
+            deepseek_calls = 0
+            grok_calls = 0
+            total_tokens = 0
+            ai_cost = 0.0
+            try:
+                from src.config.models import ModelRouter
+                router = ModelRouter()
+                daily = router.token_tracker.get_daily_stats()
+                costs = router.token_tracker.get_cost_estimate()
+                deepseek_calls = daily.get('usage', {}).get('deepseek', {}).get('requests', 0)
+                grok_calls = daily.get('usage', {}).get('grok', {}).get('requests', 0)
+                total_tokens = daily.get('total_tokens', 0)
+                ai_cost = round(costs.get('total_daily_cost', 0), 4)
+            except Exception:
+                pass
+
+            # Brain stats
+            brain_cycles = 0
+            brain_success_rate = 0
+            brain_available_actions = 0
+            brain_known_users = 0
+            brain_running = False
+            try:
+                brain = self.core.plugin_manager.plugins.get('brain')
+                if brain:
+                    brain_cycles = brain.cycle_count
+                    brain_running = brain.autonomous_running
+                    brain_available_actions = len(brain.get_available_actions())
+                    brain_known_users = len(getattr(brain, 'user_profiles', {}))
+                    ctx = brain.gather_full_context()
+                    eng = ctx.get('engagement', {})
+                    brain_success_rate = round(eng.get('success_rate', 0) * 100)
+            except Exception:
+                pass
             
             # Activity data for chart (last 7 days)
             activity_data = [12, 15, 18, 14, 20, 16, 19]
@@ -138,9 +168,8 @@ class AnalyticsPlugin(AlleyBotPlugin):
             agent_id = os.getenv('AGENT_ID', 'AlleyBot')
             token_address = os.getenv('ALYBOT_TOKEN_ADDRESS', '0x08a18FE29158B1de5704F99cA396Ad9B2B6a58F3')
             
-            print(f"✅ Dashboard V2 loaded: {total_posts} posts, {total_comments} comments, {total_followers} followers")
+            print(f"✅ Dashboard loaded: {total_posts} posts, {total_comments} comments, brain cycles: {brain_cycles}")
             
-            # Use the new powerful dashboard template
             return render_template(
                 'dashboard_v2.html',
                 # Key metrics
@@ -162,6 +191,12 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 grok_calls=grok_calls,
                 total_tokens=total_tokens,
                 ai_cost=ai_cost,
+                # Brain stats
+                brain_cycles=brain_cycles,
+                brain_success_rate=brain_success_rate,
+                brain_available_actions=brain_available_actions,
+                brain_known_users=brain_known_users,
+                brain_running=brain_running,
                 # Activity data
                 recent_activity=recent_activity,
                 activity_data=activity_data,
@@ -186,17 +221,37 @@ class AnalyticsPlugin(AlleyBotPlugin):
             platforms = platform_stats.get('platforms', {})
             moltbook = platforms.get('moltbook', {})
             
+            # Brain stats for auto-refresh
+            brain_data = {}
+            try:
+                brain = self.core.plugin_manager.plugins.get('brain')
+                if brain:
+                    brain_data = {
+                        'brain_cycles': brain.cycle_count,
+                        'brain_running': brain.autonomous_running,
+                        'brain_available_actions': len(brain.get_available_actions()),
+                        'brain_known_users': len(getattr(brain, 'user_profiles', {})),
+                        'brain_success_rate': 0,
+                    }
+                    try:
+                        ctx = brain.gather_full_context()
+                        eng = ctx.get('engagement', {})
+                        brain_data['brain_success_rate'] = round(eng.get('success_rate', 0) * 100)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
             return jsonify({
-                'posts': platform_stats.get('total_posts', 0),
-                'comments': platform_stats.get('total_comments', 0),
-                'upvotes': 0,  # TODO: Aggregate upvotes
+                'total_posts': platform_stats.get('total_posts', 0),
+                'total_comments': platform_stats.get('total_comments', 0),
+                'total_followers': platform_stats.get('total_followers', 0),
+                'ai_generations': platform_stats.get('total_posts', 0),
                 'karma': moltbook.get('karma', 0),
-                'followers': platform_stats.get('total_followers', 0),
-                'following': platform_stats.get('total_following', 0),
-                'donations': 0,  # TODO: Track donations
                 'platforms': platforms,
                 'api_status': 'ok',
-                'timestamp': platform_stats.get('timestamp')
+                'timestamp': platform_stats.get('timestamp'),
+                **brain_data
             })
             
         except Exception as e:

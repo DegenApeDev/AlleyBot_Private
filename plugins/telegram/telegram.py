@@ -129,39 +129,31 @@ class Telegram(AlleyBotPlugin):
         if not await self._verify_owner(update):
             return
         
-        welcome_message = """🦞 **Welcome DegenApeDev!** I'm AlleyBot, your intelligent AI assistant.
+        welcome_message = """🦞 **AlleyBot** — Autonomous AI Agent
 
-💬 **Just talk to me naturally!** I understand natural language.
-Say things like:
-• "Build karma on Moltbook today"
-• "What's trending on MoltX?"
-• "Create a post about AI agents"
-• "Check my wallet balance"
+🧠 **Brain Controls:**
+/brain_start - Start autonomous mode
+/brain_stop - Stop autonomous mode
+/think - Run one think cycle
+/brain - Brain status & stats
 
-**Quick Commands:**
-/status - System status & stats
-/help - Full command list
+🔗 **On-Chain:**
 /wallet - Wallet & balances
 /balance - Token balances
+/block - Base block info
 
-**Moltx:**
-/moltx_post [msg] - Create post
+📢 **Social:**
+/moltx_post [msg] - Post to Moltx
 /moltx_feed - Browse feed
-/moltx_engage - Engage with posts
+/moltbook_post [msg] - Post to Moltbook
 
-**� On-Chain:**
-/wallet - Wallet info & ETH balance
-/balance - All token balances
-/block - Current Base block info
-/track [token] - Track a token
+⚙️ **System:**
+/status - Platform status
+/help - Full command list
 
-🚀 **Features:**
-✅ On-chain awareness (Base network)
-✅ ReAct reasoning & planning
-✅ Vector memory with learning
-✅ Proactive engagement
+💬 Or just talk to me naturally!
 
-I'm ready to help! 🤖"""
+I'm ready. Send /brain_start to go autonomous. 🤖"""
         
         await update.message.reply_text(welcome_message)
         self._log_activity("command", {"command": "start", "user": "DegenApeDev"})

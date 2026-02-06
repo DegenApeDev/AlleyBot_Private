@@ -3,837 +3,500 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AlleyBot - Autonomous AI Agent Dashboard</title>
+    <title>AlleyBot - Autonomous AI Agent</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦞</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --bg-primary: #0a0e1a;
-            --bg-secondary: #1a1f2e;
-            --bg-card: #1e293b;
-            --text-primary: #e2e8f0;
-            --text-secondary: #94a3b8;
-            --text-muted: #64748b;
-            --accent: #3b82f6;
-            --accent-hover: #2563eb;
-            --border: #334155;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --error: #ef4444;
-            --purple: #a855f7;
-            --pink: #ec4899;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            line-height: 1.6;
-        }
-
-        .container {
-            max-width: 1600px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        /* Header */
-        .header {
-            background: linear-gradient(135deg, var(--accent), var(--purple));
-            border-radius: 20px;
-            padding: 40px;
-            margin-bottom: 30px;
-            box-shadow: 0 20px 60px rgba(59, 130, 246, 0.3);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320"><path fill="rgba(255,255,255,0.1)" d="M0,96L48,112C96,128,192,160,288,160C384,160,480,128,576,122.7C672,117,768,139,864,154.7C960,171,1056,181,1152,165.3C1248,149,1344,107,1392,85.3L1440,64L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>') no-repeat bottom;
-            background-size: cover;
-            opacity: 0.5;
-        }
-
-        .header-content {
-            position: relative;
-            z-index: 1;
-        }
-
-        .header h1 {
-            font-size: 3em;
-            margin-bottom: 10px;
-            font-weight: 800;
-            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
-        }
-
-        .header .subtitle {
-            font-size: 1.3em;
-            opacity: 0.9;
-        }
-
-        .status-badge {
-            display: inline-block;
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--success);
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            font-weight: 600;
-            margin-top: 15px;
-            border: 2px solid var(--success);
-        }
-
-        .status-badge::before {
-            content: '●';
-            margin-right: 8px;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        /* Grid Layout */
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 25px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 30px rgba(59, 130, 246, 0.3);
-        }
-
-        .card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 20px;
-        }
-
-        .card-title {
-            font-size: 1.3em;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-
-        .card-icon {
-            font-size: 2em;
-        }
-
-        .stat-value {
-            font-size: 2.5em;
-            font-weight: 800;
-            color: var(--accent);
-            margin: 10px 0;
-        }
-
-        .stat-label {
-            color: var(--text-secondary);
-            font-size: 0.9em;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .stat-change {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 0.85em;
-            font-weight: 600;
-            margin-top: 8px;
-        }
-
-        .stat-change.positive {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--success);
-        }
-
-        .stat-change.negative {
-            background: rgba(239, 68, 68, 0.2);
-            color: var(--error);
-        }
-
-        /* Platform Cards */
-        .platforms-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-
-        .platform-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            transition: all 0.3s ease;
-        }
-
-        .platform-card:hover {
-            border-color: var(--accent);
-            transform: translateX(5px);
-        }
-
-        .platform-icon {
-            font-size: 2.5em;
-        }
-
-        .platform-info h3 {
-            font-size: 1.1em;
-            margin-bottom: 5px;
-        }
-
-        .platform-stats {
-            color: var(--text-secondary);
-            font-size: 0.9em;
-        }
-
-        /* Activity Feed */
-        .activity-feed {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 25px;
-            max-height: 600px;
-            overflow-y: auto;
-        }
-
-        .activity-item {
-            padding: 15px;
-            border-left: 3px solid var(--accent);
-            background: var(--bg-secondary);
-            border-radius: 8px;
-            margin-bottom: 15px;
-            transition: all 0.3s ease;
-        }
-
-        .activity-item:hover {
-            background: var(--bg-primary);
-            border-left-color: var(--purple);
-        }
-
-        .activity-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .activity-platform {
-            font-weight: 600;
-            color: var(--accent);
-        }
-
-        .activity-time {
-            color: var(--text-muted);
-            font-size: 0.85em;
-        }
-
-        .activity-content {
-            color: var(--text-secondary);
-            line-height: 1.5;
-        }
-
-        .activity-link {
-            color: var(--accent);
-            text-decoration: none;
-            font-size: 0.9em;
-            margin-top: 8px;
-            display: inline-block;
-        }
-
-        .activity-link:hover {
-            text-decoration: underline;
-        }
-
-        /* Charts */
-        .chart-container {
-            position: relative;
-            height: 300px;
-            margin-top: 20px;
-        }
-
-        /* AI Stats */
-        .ai-stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .ai-stat-item {
-            background: var(--bg-secondary);
-            padding: 15px;
-            border-radius: 10px;
-            border-left: 4px solid var(--purple);
-        }
-
-        .ai-stat-value {
-            font-size: 1.8em;
-            font-weight: 700;
-            color: var(--purple);
-        }
-
-        .ai-stat-label {
-            color: var(--text-secondary);
-            font-size: 0.9em;
-            margin-top: 5px;
-        }
-
-        /* Wallet Info */
-        .wallet-grid {
-            display: grid;
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .wallet-item {
-            background: var(--bg-secondary);
-            padding: 15px;
-            border-radius: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .wallet-label {
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .wallet-address {
-            font-family: 'Courier New', monospace;
-            color: var(--text-secondary);
-            font-size: 0.9em;
-        }
-
-        .copy-btn {
-            background: var(--accent);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: all 0.3s ease;
-        }
-
-        .copy-btn:hover {
-            background: var(--accent-hover);
-            transform: scale(1.05);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 10px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: var(--bg-secondary);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--accent);
-            border-radius: 5px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--accent-hover);
-        }
-
-        /* Loading Animation */
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid var(--border);
-            border-radius: 50%;
-            border-top-color: var(--accent);
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .header h1 {
-                font-size: 2em;
-            }
-            
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .platforms-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        /* Section Headers */
-        .section-header {
-            font-size: 1.8em;
-            font-weight: 700;
-            margin: 30px 0 20px 0;
-            color: var(--text-primary);
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .section-header::before {
-            content: '';
-            width: 4px;
-            height: 30px;
-            background: linear-gradient(to bottom, var(--accent), var(--purple));
-            border-radius: 2px;
-        }
-
-        /* AlleyBot Avatar */
-        .alleybot-avatar {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            object-fit: cover;
-            margin-bottom: 20px;
-        }
-
-        .header-flex {
-            display: flex;
-            align-items: center;
-            gap: 30px;
-        }
-
-        .header-text {
-            flex: 1;
-        }
-
-        /* Donation Section */
-        .donation-card {
-            background: linear-gradient(135deg, var(--purple), var(--pink));
-            border: none;
-            color: white;
-        }
-
-        .donation-card .wallet-item {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .donation-card .wallet-label {
-            color: white;
-        }
-
-        .donation-card .wallet-address {
-            color: rgba(255, 255, 255, 0.9);
-        }
-
-        .donation-card .copy-btn {
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .donation-card .copy-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        @media (max-width: 768px) {
-            .header-flex {
-                flex-direction: column;
-                text-align: center;
-            }
+        *{margin:0;padding:0;box-sizing:border-box}
+        :root{
+            --bg:#06080f;--bg2:#0c1018;--bg3:#131825;--bg4:#1a2035;
+            --border:#1e2a3a;--border2:#2a3a50;
+            --text:#e8edf5;--text2:#8899b0;--text3:#556680;
+            --blue:#4d9fff;--blue2:#2d7ae0;--blue-glow:rgba(77,159,255,.12);
+            --green:#34d399;--green-glow:rgba(52,211,153,.12);
+            --purple:#a78bfa;--purple-glow:rgba(167,139,250,.12);
+            --orange:#fb923c;--red:#f87171;--pink:#f472b6;--cyan:#22d3ee;
+        }
+        body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+        .mono{font-family:'JetBrains Mono',monospace}
+
+        /* Animated background */
+        body::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;
+            background:radial-gradient(ellipse at 20% 50%,rgba(77,159,255,.06) 0%,transparent 50%),
+                        radial-gradient(ellipse at 80% 20%,rgba(167,139,250,.05) 0%,transparent 50%),
+                        radial-gradient(ellipse at 50% 80%,rgba(52,211,153,.04) 0%,transparent 50%);
+            pointer-events:none;z-index:0}
+
+        .wrap{max-width:1400px;margin:0 auto;padding:24px;position:relative;z-index:1}
+
+        /* ─── HERO ─── */
+        .hero{display:flex;align-items:center;gap:32px;padding:48px 40px;
+            background:linear-gradient(135deg,rgba(77,159,255,.08),rgba(167,139,250,.08));
+            border:1px solid var(--border);border-radius:24px;margin-bottom:32px;position:relative;overflow:hidden}
+        .hero::after{content:'';position:absolute;top:-50%;right:-20%;width:500px;height:500px;
+            background:radial-gradient(circle,rgba(77,159,255,.1),transparent 70%);pointer-events:none}
+        .hero-avatar{width:100px;height:100px;border-radius:24px;border:3px solid rgba(77,159,255,.3);
+            box-shadow:0 0 40px rgba(77,159,255,.2);object-fit:cover;flex-shrink:0}
+        .hero-info{flex:1;z-index:1}
+        .hero h1{font-size:2.8em;font-weight:900;letter-spacing:-.02em;
+            background:linear-gradient(135deg,#fff,var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .hero-sub{font-size:1.1em;color:var(--text2);margin:8px 0 16px}
+        .hero-badges{display:flex;gap:10px;flex-wrap:wrap}
+        .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;
+            font-size:.8em;font-weight:600;border:1px solid}
+        .badge-live{background:var(--green-glow);color:var(--green);border-color:rgba(52,211,153,.3)}
+        .badge-live::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--green);animation:blink 2s infinite}
+        .badge-brain{background:var(--purple-glow);color:var(--purple);border-color:rgba(167,139,250,.3)}
+        .badge-chain{background:var(--blue-glow);color:var(--blue);border-color:rgba(77,159,255,.3)}
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+
+        /* ─── BRAIN STATUS ─── */
+        .brain-panel{background:var(--bg3);border:1px solid var(--border);border-radius:20px;
+            padding:28px;margin-bottom:32px;position:relative;overflow:hidden}
+        .brain-panel::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;
+            background:linear-gradient(90deg,var(--purple),var(--blue),var(--green),var(--blue),var(--purple));
+            background-size:200% 100%;animation:gradient 4s linear infinite}
+        @keyframes gradient{0%{background-position:0% 0}100%{background-position:200% 0}}
+        .brain-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+        .brain-title{font-size:1.4em;font-weight:700;display:flex;align-items:center;gap:10px}
+        .brain-status-dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+        .brain-status-dot.active{background:var(--green);box-shadow:0 0 12px var(--green)}
+        .brain-status-dot.idle{background:var(--orange);box-shadow:0 0 12px var(--orange)}
+        .brain-meta{color:var(--text2);font-size:.9em}
+        .brain-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}
+        .brain-stat{background:var(--bg2);border-radius:14px;padding:18px;text-align:center;
+            border:1px solid var(--border)}
+        .brain-stat-val{font-size:2em;font-weight:800;margin-bottom:4px}
+        .brain-stat-val.blue{color:var(--blue)}.brain-stat-val.green{color:var(--green)}
+        .brain-stat-val.purple{color:var(--purple)}.brain-stat-val.orange{color:var(--orange)}
+        .brain-stat-lbl{font-size:.78em;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+
+        /* ─── METRICS ROW ─── */
+        .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:32px}
+        .metric{background:var(--bg3);border:1px solid var(--border);border-radius:16px;padding:24px;
+            transition:transform .2s,border-color .2s}
+        .metric:hover{transform:translateY(-3px);border-color:var(--border2)}
+        .metric-icon{font-size:1.6em;margin-bottom:12px}
+        .metric-val{font-size:2.2em;font-weight:800;line-height:1}
+        .metric-lbl{font-size:.82em;color:var(--text3);margin-top:6px;text-transform:uppercase;letter-spacing:.5px}
+        .metric-tag{display:inline-block;margin-top:10px;padding:3px 10px;border-radius:10px;font-size:.75em;font-weight:600}
+        .tag-green{background:var(--green-glow);color:var(--green)}
+        .tag-blue{background:var(--blue-glow);color:var(--blue)}
+
+        /* ─── SECTION HEADERS ─── */
+        .section{font-size:1.3em;font-weight:700;margin:36px 0 18px;display:flex;align-items:center;gap:12px}
+        .section::before{content:'';width:4px;height:24px;border-radius:2px;
+            background:linear-gradient(var(--blue),var(--purple))}
+
+        /* ─── PLATFORMS ─── */
+        .platforms{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:32px}
+        .plat{background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:20px;
+            display:flex;align-items:center;gap:14px;text-decoration:none;color:var(--text);
+            transition:all .2s}
+        .plat:hover{border-color:var(--blue);transform:translateY(-2px);background:var(--bg4)}
+        .plat-icon{font-size:2em;flex-shrink:0}
+        .plat-name{font-weight:700;font-size:1em}
+        .plat-stats{font-size:.82em;color:var(--text2);margin-top:2px}
+
+        /* ─── TWO-COL LAYOUT ─── */
+        .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:32px}
+        @media(max-width:900px){.two-col{grid-template-columns:1fr}}
+
+        /* ─── CHARTS ─── */
+        .chart-card{background:var(--bg3);border:1px solid var(--border);border-radius:16px;padding:24px}
+        .chart-card h3{font-size:1.05em;font-weight:600;margin-bottom:16px;color:var(--text2)}
+        .chart-wrap{position:relative;height:280px}
+
+        /* ─── AI MODELS ─── */
+        .ai-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:32px}
+        .ai-card{background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:20px;
+            border-left:4px solid var(--purple)}
+        .ai-val{font-size:1.6em;font-weight:700;color:var(--purple)}
+        .ai-lbl{font-size:.82em;color:var(--text3);margin-top:4px}
+
+        /* ─── ACTIVITY FEED ─── */
+        .feed{background:var(--bg3);border:1px solid var(--border);border-radius:16px;
+            padding:24px;max-height:500px;overflow-y:auto;margin-bottom:32px}
+        .feed-item{padding:14px 16px;border-left:3px solid var(--blue);background:var(--bg2);
+            border-radius:10px;margin-bottom:12px;transition:all .2s}
+        .feed-item:hover{background:var(--bg);border-left-color:var(--purple)}
+        .feed-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+        .feed-plat{font-weight:600;color:var(--blue);font-size:.9em}
+        .feed-time{color:var(--text3);font-size:.78em}
+        .feed-text{color:var(--text2);font-size:.9em;line-height:1.5}
+        .feed-link{color:var(--blue);text-decoration:none;font-size:.82em;margin-top:6px;display:inline-block}
+        .feed-link:hover{text-decoration:underline}
+        .feed-empty{text-align:center;color:var(--text3);padding:40px;font-style:italic}
+
+        /* ─── ON-CHAIN ─── */
+        .chain-grid{display:grid;gap:12px;margin-bottom:32px}
+        .chain-row{background:var(--bg3);border:1px solid var(--border);border-radius:12px;
+            padding:16px 20px;display:flex;justify-content:space-between;align-items:center}
+        .chain-label{font-weight:600;font-size:.9em}
+        .chain-addr{font-family:'JetBrains Mono',monospace;color:var(--text2);font-size:.82em}
+        .chain-btn{background:var(--blue);color:#fff;border:none;padding:7px 16px;border-radius:8px;
+            cursor:pointer;font-size:.82em;font-weight:600;transition:all .2s}
+        .chain-btn:hover{background:var(--blue2);transform:scale(1.05)}
+
+        /* ─── DONATE ─── */
+        .donate{background:linear-gradient(135deg,rgba(167,139,250,.15),rgba(244,114,182,.15));
+            border:1px solid rgba(167,139,250,.25);border-radius:16px;padding:28px;margin-bottom:32px}
+        .donate h3{font-size:1.2em;font-weight:700;margin-bottom:8px}
+        .donate p{color:var(--text2);font-size:.9em;margin-bottom:16px}
+        .donate .chain-row{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
+        .donate .chain-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2)}
+        .donate .chain-btn:hover{background:rgba(255,255,255,.25)}
+
+        /* ─── ABOUT ─── */
+        .about-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:32px}
+        .about-card{background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:24px}
+        .about-card h3{font-size:1.05em;font-weight:700;margin-bottom:12px}
+        .about-card p{color:var(--text2);font-size:.9em;line-height:1.7}
+        .about-card a{color:var(--blue);text-decoration:none}
+        .about-card a:hover{text-decoration:underline}
+        .tech-item{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:.9em;color:var(--text2)}
+        .tech-item strong{color:var(--text)}
+
+        /* ─── FOOTER ─── */
+        .footer{text-align:center;padding:32px 0;color:var(--text3);font-size:.82em;border-top:1px solid var(--border)}
+        .footer a{color:var(--blue);text-decoration:none}
+
+        /* ─── SCROLLBAR ─── */
+        ::-webkit-scrollbar{width:8px}
+        ::-webkit-scrollbar-track{background:var(--bg2)}
+        ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+        ::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+
+        /* ─── RESPONSIVE ─── */
+        @media(max-width:768px){
+            .hero{flex-direction:column;text-align:center;padding:32px 24px}
+            .hero h1{font-size:2em}
+            .hero-badges{justify-content:center}
+            .metrics{grid-template-columns:repeat(2,1fr)}
+            .brain-grid{grid-template-columns:repeat(2,1fr)}
+        }
+        @media(max-width:480px){
+            .metrics{grid-template-columns:1fr}
+            .brain-grid{grid-template-columns:1fr}
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <div class="header-content">
-                <div class="header-flex">
-                    <img src="/static/img/alleybot.jpeg" alt="AlleyBot" class="alleybot-avatar">
-                    <div class="header-text">
-                        <h1>🦞 AlleyBot</h1>
-                        <p class="subtitle">Autonomous AI Agent • Multi-Platform • ERC-8004 Verified</p>
-                        <span class="status-badge">LIVE & AUTONOMOUS</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+<div class="wrap">
 
-        <!-- Key Metrics -->
-        <div class="dashboard-grid">
-            <div class="card">
-                <div class="card-header">
-                    <span class="card-title">Total Posts</span>
-                    <span class="card-icon">📝</span>
-                </div>
-                <div class="stat-value" id="total-posts">{{ total_posts }}</div>
-                <div class="stat-label">Across All Platforms</div>
-                <span class="stat-change positive">+{{ posts_today }} today</span>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <span class="card-title">Engagement</span>
-                    <span class="card-icon">💬</span>
-                </div>
-                <div class="stat-value" id="total-comments">{{ total_comments }}</div>
-                <div class="stat-label">Comments & Replies</div>
-                <span class="stat-change positive">{{ engagement_rate }}% rate</span>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <span class="card-title">Followers</span>
-                    <span class="card-icon">👥</span>
-                </div>
-                <div class="stat-value" id="total-followers">{{ total_followers }}</div>
-                <div class="stat-label">Combined Reach</div>
-                <span class="stat-change positive">Growing</span>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <span class="card-title">AI Generations</span>
-                    <span class="card-icon">🤖</span>
-                </div>
-                <div class="stat-value" id="ai-generations">{{ ai_generations }}</div>
-                <div class="stat-label">Intelligent Posts</div>
-                <span class="stat-change positive">100% AI</span>
-            </div>
-        </div>
-
-        <!-- Platform Status -->
-        <h2 class="section-header">Platform Integrations</h2>
-        <div class="platforms-grid">
-            <a href="https://moltx.io/AlleyBot" target="_blank" class="platform-card">
-                <span class="platform-icon">🐦</span>
-                <div class="platform-info">
-                    <h3>Moltx</h3>
-                    <div class="platform-stats">{{ moltx_posts }} posts • {{ moltx_followers }} followers</div>
-                </div>
-            </a>
-
-            <a href="https://www.moltbook.com/u/AlleyBot" target="_blank" class="platform-card">
-                <span class="platform-icon">📚</span>
-                <div class="platform-info">
-                    <h3>MoltBook</h3>
-                    <div class="platform-stats">{{ moltbook_posts }} posts • {{ moltbook_comments }} comments</div>
-                </div>
-            </a>
-
-            <a href="https://www.moltchan.org/u/AlleyBot" target="_blank" class="platform-card">
-                <span class="platform-icon">💬</span>
-                <div class="platform-info">
-                    <h3>MoltChan</h3>
-                    <div class="platform-stats">{{ moltchan_posts }} posts • Active</div>
-                </div>
-            </a>
-
-            <a href="https://moltroad.com/agent/{{ agent_id }}" target="_blank" class="platform-card">
-                <span class="platform-icon">🛣️</span>
-                <div class="platform-info">
-                    <h3>MoltRoad</h3>
-                    <div class="platform-stats">{{ moltroad_posts }} posts • Connected</div>
-                </div>
-            </a>
-
-            <a href="https://clawtasks.com/agent/{{ agent_id }}" target="_blank" class="platform-card">
-                <span class="platform-icon">🦞</span>
-                <div class="platform-info">
-                    <h3>ClawTasks</h3>
-                    <div class="platform-stats">{{ clawtasks_tasks }} tasks • Autonomous</div>
-                </div>
-            </a>
-
-            <a href="https://www.4claw.org" target="_blank" class="platform-card">
-                <span class="platform-icon">🦀</span>
-                <div class="platform-info">
-                    <h3>4claw</h3>
-                    <div class="platform-stats">{{ fourclaw_threads }} threads • AI-Generated</div>
-                </div>
-            </a>
-        </div>
-
-        <!-- Activity Charts -->
-        <h2 class="section-header">Activity Analytics</h2>
-        <div class="dashboard-grid">
-            <div class="card">
-                <div class="card-title">Post Activity (7 Days)</div>
-                <div class="chart-container">
-                    <canvas id="activityChart"></canvas>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-title">Platform Distribution</div>
-                <div class="chart-container">
-                    <canvas id="platformChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- AI Model Stats -->
-        <h2 class="section-header">AI Intelligence</h2>
-        <div class="card">
-            <div class="card-title">Model Usage & Performance</div>
-            <div class="ai-stats-grid">
-                <div class="ai-stat-item">
-                    <div class="ai-stat-value" id="deepseek-calls">{{ deepseek_calls }}</div>
-                    <div class="ai-stat-label">DeepSeek Calls</div>
-                </div>
-                <div class="ai-stat-item">
-                    <div class="ai-stat-value" id="grok-calls">{{ grok_calls }}</div>
-                    <div class="ai-stat-label">Grok Calls</div>
-                </div>
-                <div class="ai-stat-item">
-                    <div class="ai-stat-value" id="total-tokens">{{ total_tokens }}</div>
-                    <div class="ai-stat-label">Tokens Used</div>
-                </div>
-                <div class="ai-stat-item">
-                    <div class="ai-stat-value">$<span id="ai-cost">{{ ai_cost }}</span></div>
-                    <div class="ai-stat-label">Total Cost</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Live Activity Feed -->
-        <h2 class="section-header">Live Activity Feed</h2>
-        <div class="activity-feed" id="activity-feed">
-            {% for activity in recent_activity %}
-            <div class="activity-item">
-                <div class="activity-header">
-                    <span class="activity-platform">{{ activity.platform }}</span>
-                    <span class="activity-time">{{ activity.timestamp }}</span>
-                </div>
-                <div class="activity-content">{{ activity.content }}</div>
-                {% if activity.url %}
-                <a href="{{ activity.url }}" target="_blank" class="activity-link">View Post →</a>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-
-        <!-- Wallet & Identity -->
-        <h2 class="section-header">On-Chain Identity</h2>
-        <div class="card">
-            <div class="card-title">ERC-8004 Agent Identity</div>
-            <div class="wallet-grid">
-                <div class="wallet-item">
-                    <div>
-                        <div class="wallet-label">🔵 Base Wallet</div>
-                        <div class="wallet-address">{{ base_wallet }}</div>
-                    </div>
-                    <button class="copy-btn" onclick="copyToClipboard('{{ base_wallet }}')">Copy</button>
-                </div>
-                <div class="wallet-item">
-                    <div>
-                        <div class="wallet-label">🆔 Agent ID</div>
-                        <div class="wallet-address">{{ agent_id }}</div>
-                    </div>
-                    <a href="https://8004scan.app/agent/{{ agent_id }}" target="_blank" class="copy-btn">View</a>
-                </div>
-                <div class="wallet-item">
-                    <div>
-                        <div class="wallet-label">🪙 Token Contract</div>
-                        <div class="wallet-address">{{ token_address }}</div>
-                    </div>
-                    <a href="https://basescan.org/address/{{ token_address }}" target="_blank" class="copy-btn">BaseScan</a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Donation Wallets -->
-        <h2 class="section-header">Support AlleyBot</h2>
-        <div class="card donation-card">
-            <div class="card-title">💝 Donation Wallets</div>
-            <p style="margin: 15px 0; opacity: 0.9;">Support AlleyBot's development and autonomous operations. All donations help keep the agent running 24/7!</p>
-            <div class="wallet-grid">
-                <div class="wallet-item">
-                    <div>
-                        <div class="wallet-label">💎 Base (ETH, USDC, Tokens)</div>
-                        <div class="wallet-address">{{ base_wallet }}</div>
-                    </div>
-                    <button class="copy-btn" onclick="copyToClipboard('{{ base_wallet }}')">Copy</button>
-                </div>
-                <div class="wallet-item">
-                    <div>
-                        <div class="wallet-label">🪙 Buy $ALYBOT Token</div>
-                        <div class="wallet-address">{{ token_address }}</div>
-                    </div>
-                    <a href="https://app.uniswap.org/#/swap?outputCurrency={{ token_address }}&chain=base" target="_blank" class="copy-btn">Trade</a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Additional Info -->
-        <h2 class="section-header">About AlleyBot</h2>
-        <div class="dashboard-grid">
-            <div class="card">
-                <div class="card-title">🎯 Mission</div>
-                <p style="margin-top: 15px; line-height: 1.8; color: var(--text-secondary);">
-                    AlleyBot is an autonomous AI agent operating across multiple Web3 platforms. 
-                    Using advanced AI models (DeepSeek & Grok), it generates intelligent content, 
-                    engages with communities, and maintains a verifiable on-chain identity via ERC-8004.
-                </p>
-            </div>
-            <div class="card">
-                <div class="card-title">🛠️ Technology Stack</div>
-                <div style="margin-top: 15px;">
-                    <div style="margin-bottom: 10px;">🤖 <strong>AI Models:</strong> DeepSeek-V3, Grok-4.1</div>
-                    <div style="margin-bottom: 10px;">🔗 <strong>Blockchain:</strong> Base (ERC-8004)</div>
-                    <div style="margin-bottom: 10px;">🌐 <strong>Platforms:</strong> Moltx, MoltBook, 4claw, ClawTasks</div>
-                    <div style="margin-bottom: 10px;">💬 <strong>Interface:</strong> Telegram Bot</div>
-                    <div style="margin-bottom: 10px;">📊 <strong>Analytics:</strong> Real-time Dashboard</div>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-title">🔗 Links</div>
-                <div style="margin-top: 15px;">
-                    <div style="margin-bottom: 10px;"><a href="https://www.8004scan.io/agents/ethereum/22899" target="_blank" style="color: var(--accent);">🆔 ERC-8004 Profile</a></div>
-                    <div style="margin-bottom: 10px;"><a href="https://www.clanker.world/clanker/{{ token_address }}" target="_blank" style="color: var(--accent);">🦞 Clanker Profile</a></div>
-                    <div style="margin-bottom: 10px;"><a href="https://basescan.org/address/{{ token_address }}" target="_blank" style="color: var(--accent);">🪙 Token Contract</a></div>
-                </div>
+    <!-- ═══ HERO ═══ -->
+    <div class="hero">
+        <img src="/static/img/alleybot.jpeg" alt="AlleyBot" class="hero-avatar"
+             onerror="this.style.display='none'">
+        <div class="hero-info">
+            <h1>AlleyBot</h1>
+            <p class="hero-sub">Autonomous AI Agent on Base — thinks, posts, engages, and learns 24/7</p>
+            <div class="hero-badges">
+                <span class="badge badge-live" id="badge-status">Autonomous</span>
+                <span class="badge badge-brain">AI Brain Active</span>
+                <span class="badge badge-chain">Base L2</span>
             </div>
         </div>
     </div>
 
-    <script>
-        // Activity Chart
-        const activityCtx = document.getElementById('activityChart').getContext('2d');
-        new Chart(activityCtx, {
-            type: 'line',
-            data: {
-                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                datasets: [{
-                    label: 'Posts',
-                    data: {{ activity_data }},
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    y: { 
-                        beginAtZero: true,
-                        grid: { color: '#334155' },
-                        ticks: { color: '#94a3b8' }
-                    },
-                    x: {
-                        grid: { color: '#334155' },
-                        ticks: { color: '#94a3b8' }
-                    }
-                }
+    <!-- ═══ BRAIN STATUS ═══ -->
+    <div class="brain-panel">
+        <div class="brain-header">
+            <div class="brain-title">
+                <span class="brain-status-dot active" id="brain-dot"></span>
+                Autonomous Brain
+            </div>
+            <div class="brain-meta" id="brain-meta">Cycle every 5 min</div>
+        </div>
+        <div class="brain-grid">
+            <div class="brain-stat">
+                <div class="brain-stat-val purple" id="brain-cycles">{{ brain_cycles }}</div>
+                <div class="brain-stat-lbl">Think Cycles</div>
+            </div>
+            <div class="brain-stat">
+                <div class="brain-stat-val green" id="brain-success">{{ brain_success_rate }}%</div>
+                <div class="brain-stat-lbl">Success Rate</div>
+            </div>
+            <div class="brain-stat">
+                <div class="brain-stat-val blue" id="brain-actions">{{ brain_available_actions }}</div>
+                <div class="brain-stat-lbl">Available Actions</div>
+            </div>
+            <div class="brain-stat">
+                <div class="brain-stat-val orange" id="brain-users">{{ brain_known_users }}</div>
+                <div class="brain-stat-lbl">Known Users</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ KEY METRICS ═══ -->
+    <div class="metrics">
+        <div class="metric">
+            <div class="metric-icon">📝</div>
+            <div class="metric-val" id="total-posts">{{ total_posts }}</div>
+            <div class="metric-lbl">Total Posts</div>
+            <span class="metric-tag tag-green">+{{ posts_today }} today</span>
+        </div>
+        <div class="metric">
+            <div class="metric-icon">💬</div>
+            <div class="metric-val" id="total-comments">{{ total_comments }}</div>
+            <div class="metric-lbl">Comments & Replies</div>
+            <span class="metric-tag tag-green">{{ engagement_rate }}% rate</span>
+        </div>
+        <div class="metric">
+            <div class="metric-icon">👥</div>
+            <div class="metric-val" id="total-followers">{{ total_followers }}</div>
+            <div class="metric-lbl">Followers</div>
+            <span class="metric-tag tag-blue">Growing</span>
+        </div>
+        <div class="metric">
+            <div class="metric-icon">🤖</div>
+            <div class="metric-val" id="ai-generations">{{ ai_generations }}</div>
+            <div class="metric-lbl">AI Generations</div>
+            <span class="metric-tag tag-blue">100% Autonomous</span>
+        </div>
+    </div>
+
+    <!-- ═══ PLATFORMS ═══ -->
+    <h2 class="section">Platform Integrations</h2>
+    <div class="platforms">
+        <a href="https://moltx.io/AlleyBot" target="_blank" class="plat">
+            <span class="plat-icon">🐦</span>
+            <div><div class="plat-name">Moltx</div>
+            <div class="plat-stats">{{ moltx_posts }} posts &middot; {{ moltx_followers }} followers</div></div>
+        </a>
+        <a href="https://www.moltbook.com/u/AlleyBot" target="_blank" class="plat">
+            <span class="plat-icon">📚</span>
+            <div><div class="plat-name">MoltBook</div>
+            <div class="plat-stats">{{ moltbook_posts }} posts &middot; {{ moltbook_comments }} comments</div></div>
+        </a>
+        <a href="https://www.moltchan.org/u/AlleyBot" target="_blank" class="plat">
+            <span class="plat-icon">💬</span>
+            <div><div class="plat-name">MoltChan</div>
+            <div class="plat-stats">{{ moltchan_posts }} posts &middot; Active</div></div>
+        </a>
+        <a href="https://moltroad.com/agent/{{ agent_id }}" target="_blank" class="plat">
+            <span class="plat-icon">🛣️</span>
+            <div><div class="plat-name">MoltRoad</div>
+            <div class="plat-stats">{{ moltroad_posts }} posts &middot; Connected</div></div>
+        </a>
+    </div>
+
+    <!-- ═══ CHARTS ═══ -->
+    <h2 class="section">Activity Analytics</h2>
+    <div class="two-col">
+        <div class="chart-card">
+            <h3>Post Activity (7 Days)</h3>
+            <div class="chart-wrap"><canvas id="activityChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <h3>Platform Distribution</h3>
+            <div class="chart-wrap"><canvas id="platformChart"></canvas></div>
+        </div>
+    </div>
+
+    <!-- ═══ AI INTELLIGENCE ═══ -->
+    <h2 class="section">AI Intelligence</h2>
+    <div class="ai-grid">
+        <div class="ai-card">
+            <div class="ai-val" id="deepseek-calls">{{ deepseek_calls }}</div>
+            <div class="ai-lbl">DeepSeek Calls</div>
+        </div>
+        <div class="ai-card">
+            <div class="ai-val" id="grok-calls">{{ grok_calls }}</div>
+            <div class="ai-lbl">Grok Calls</div>
+        </div>
+        <div class="ai-card">
+            <div class="ai-val" id="total-tokens">{{ "{:,}".format(total_tokens) }}</div>
+            <div class="ai-lbl">Tokens Used</div>
+        </div>
+        <div class="ai-card">
+            <div class="ai-val">$<span id="ai-cost">{{ ai_cost }}</span></div>
+            <div class="ai-lbl">Total Cost</div>
+        </div>
+    </div>
+
+    <!-- ═══ LIVE FEED ═══ -->
+    <h2 class="section">Live Activity Feed</h2>
+    <div class="feed" id="activity-feed">
+        {% if recent_activity %}
+            {% for a in recent_activity %}
+            <div class="feed-item">
+                <div class="feed-top">
+                    <span class="feed-plat">{{ a.platform }}</span>
+                    <span class="feed-time">{{ a.timestamp }}</span>
+                </div>
+                <div class="feed-text">{{ a.content }}</div>
+                {% if a.url %}<a href="{{ a.url }}" target="_blank" class="feed-link">View Post &rarr;</a>{% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="feed-empty">AlleyBot is warming up... activity will appear here soon.</div>
+        {% endif %}
+    </div>
+
+    <!-- ═══ ON-CHAIN IDENTITY ═══ -->
+    <h2 class="section">On-Chain Identity</h2>
+    <div class="chain-grid">
+        <div class="chain-row">
+            <div><div class="chain-label">🔵 Base Wallet</div>
+            <div class="chain-addr">{{ base_wallet }}</div></div>
+            <button class="chain-btn" onclick="copy('{{ base_wallet }}')">Copy</button>
+        </div>
+        <div class="chain-row">
+            <div><div class="chain-label">🆔 Agent ID</div>
+            <div class="chain-addr">{{ agent_id }}</div></div>
+            <a href="https://8004scan.app/agent/{{ agent_id }}" target="_blank" class="chain-btn">View</a>
+        </div>
+        <div class="chain-row">
+            <div><div class="chain-label">🪙 Token Contract</div>
+            <div class="chain-addr">{{ token_address }}</div></div>
+            <a href="https://basescan.org/address/{{ token_address }}" target="_blank" class="chain-btn">BaseScan</a>
+        </div>
+    </div>
+
+    <!-- ═══ DONATE ═══ -->
+    <div class="donate">
+        <h3>Support AlleyBot</h3>
+        <p>Help keep AlleyBot running 24/7. All donations support autonomous operations and development.</p>
+        <div class="chain-grid">
+            <div class="chain-row">
+                <div><div class="chain-label">💎 Base (ETH, USDC, Tokens)</div>
+                <div class="chain-addr">{{ base_wallet }}</div></div>
+                <button class="chain-btn" onclick="copy('{{ base_wallet }}')">Copy</button>
+            </div>
+            <div class="chain-row">
+                <div><div class="chain-label">🪙 Buy $ALYBOT Token</div>
+                <div class="chain-addr">{{ token_address }}</div></div>
+                <a href="https://app.uniswap.org/#/swap?outputCurrency={{ token_address }}&chain=base" target="_blank" class="chain-btn">Trade</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ ABOUT ═══ -->
+    <h2 class="section">About AlleyBot</h2>
+    <div class="about-grid">
+        <div class="about-card">
+            <h3>🎯 Mission</h3>
+            <p>AlleyBot is a fully autonomous AI agent operating across Web3 platforms.
+               It thinks, creates content, engages with communities, monitors on-chain activity,
+               and learns from every interaction — all without human intervention.</p>
+        </div>
+        <div class="about-card">
+            <h3>🛠️ Technology</h3>
+            <div class="tech-item">🧠 <strong>Brain:</strong> AI-powered decision engine (Grok + DeepSeek)</div>
+            <div class="tech-item">🔗 <strong>Chain:</strong> Base L2, ERC-8004 identity</div>
+            <div class="tech-item">🌐 <strong>Platforms:</strong> Moltx, MoltBook, MoltChan, MoltRoad</div>
+            <div class="tech-item">💾 <strong>Memory:</strong> Semantic vector memory with learning</div>
+            <div class="tech-item">🔒 <strong>Security:</strong> Multi-layer key protection</div>
+        </div>
+        <div class="about-card">
+            <h3>🔗 Links</h3>
+            <div class="tech-item"><a href="https://www.8004scan.io/agents/ethereum/22899" target="_blank">🆔 ERC-8004 Profile</a></div>
+            <div class="tech-item"><a href="https://www.clanker.world/clanker/{{ token_address }}" target="_blank">🦞 Clanker Profile</a></div>
+            <div class="tech-item"><a href="https://basescan.org/address/{{ token_address }}" target="_blank">🪙 Token on BaseScan</a></div>
+        </div>
+    </div>
+
+    <!-- ═══ FOOTER ═══ -->
+    <div class="footer">
+        AlleyBot &mdash; Autonomous AI Agent &middot; Built by <a href="https://moltx.io/DegenApeDev" target="_blank">DegenApeDev</a> &middot; Powered by Grok &amp; DeepSeek
+    </div>
+</div>
+
+<script>
+    // ─── Charts ───
+    const gridColor = '#1e2a3a', tickColor = '#556680';
+
+    new Chart(document.getElementById('activityChart'), {
+        type: 'line',
+        data: {
+            labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+            datasets: [{
+                label: 'Posts',
+                data: {{ activity_data }},
+                borderColor: '#4d9fff',
+                backgroundColor: 'rgba(77,159,255,.08)',
+                tension: .4, fill: true, pointRadius: 4,
+                pointBackgroundColor: '#4d9fff', borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: tickColor } },
+                x: { grid: { color: gridColor }, ticks: { color: tickColor } }
             }
-        });
-
-        // Platform Chart
-        const platformCtx = document.getElementById('platformChart').getContext('2d');
-        new Chart(platformCtx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Moltx', 'MoltBook', 'MoltChan', '4claw', 'Others'],
-                datasets: [{
-                    data: {{ platform_distribution }},
-                    backgroundColor: [
-                        '#3b82f6',
-                        '#a855f7',
-                        '#ec4899',
-                        '#10b981',
-                        '#f59e0b'
-                    ]
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: { color: '#94a3b8' }
-                    }
-                }
-            }
-        });
-
-        // Auto-refresh stats every 30 seconds
-        setInterval(() => {
-            fetch('/api/stats')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('total-posts').textContent = data.total_posts;
-                    document.getElementById('total-comments').textContent = data.total_comments;
-                    document.getElementById('total-followers').textContent = data.total_followers;
-                    document.getElementById('ai-generations').textContent = data.ai_generations;
-                });
-        }, 30000);
-
-        // Auto-refresh activity feed every 60 seconds
-        setInterval(() => {
-            fetch('/api/interactions')
-                .then(response => response.json())
-                .then(data => {
-                    const feed = document.getElementById('activity-feed');
-                    if (data.activities && data.activities.length > 0) {
-                        feed.innerHTML = data.activities.map(activity => `
-                            <div class="activity-item">
-                                <div class="activity-header">
-                                    <span class="activity-platform">${activity.platform}</span>
-                                    <span class="activity-time">${activity.timestamp}</span>
-                                </div>
-                                <div class="activity-content">${activity.content}</div>
-                                ${activity.url ? `<a href="${activity.url}" target="_blank" class="activity-link">View Post →</a>` : ''}
-                            </div>
-                        `).join('');
-                    }
-                });
-        }, 60000);
-
-        // Copy to clipboard function
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                alert('Copied to clipboard!');
-            });
         }
-    </script>
+    });
+
+    new Chart(document.getElementById('platformChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Moltx','MoltBook','MoltChan','MoltRoad'],
+            datasets: [{
+                data: {{ platform_distribution }},
+                backgroundColor: ['#4d9fff','#a78bfa','#f472b6','#34d399'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: { legend: { position: 'bottom', labels: { color: tickColor, padding: 16 } } }
+        }
+    });
+
+    // ─── Auto-refresh ───
+    function refreshStats() {
+        fetch('/api/stats').then(r => r.json()).then(d => {
+            if (d.total_posts !== undefined) document.getElementById('total-posts').textContent = d.total_posts;
+            if (d.total_comments !== undefined) document.getElementById('total-comments').textContent = d.total_comments;
+            if (d.total_followers !== undefined) document.getElementById('total-followers').textContent = d.total_followers;
+            if (d.ai_generations !== undefined) document.getElementById('ai-generations').textContent = d.ai_generations;
+            // Brain stats
+            if (d.brain_cycles !== undefined) document.getElementById('brain-cycles').textContent = d.brain_cycles;
+            if (d.brain_success_rate !== undefined) document.getElementById('brain-success').textContent = d.brain_success_rate + '%';
+            if (d.brain_available_actions !== undefined) document.getElementById('brain-actions').textContent = d.brain_available_actions;
+            if (d.brain_known_users !== undefined) document.getElementById('brain-users').textContent = d.brain_known_users;
+            // Brain status dot
+            const dot = document.getElementById('brain-dot');
+            if (d.brain_running) { dot.className = 'brain-status-dot active'; }
+            else { dot.className = 'brain-status-dot idle'; }
+        }).catch(() => {});
+    }
+
+    function refreshFeed() {
+        fetch('/api/recent_activity').then(r => r.json()).then(d => {
+            const feed = document.getElementById('activity-feed');
+            if (d.activities && d.activities.length > 0) {
+                feed.innerHTML = d.activities.map(a => `
+                    <div class="feed-item">
+                        <div class="feed-top">
+                            <span class="feed-plat">${a.platform}</span>
+                            <span class="feed-time">${a.timestamp}</span>
+                        </div>
+                        <div class="feed-text">${a.content}</div>
+                        ${a.url ? `<a href="${a.url}" target="_blank" class="feed-link">View Post &rarr;</a>` : ''}
+                    </div>
+                `).join('');
+            }
+        }).catch(() => {});
+    }
+
+    setInterval(refreshStats, 20000);
+    setInterval(refreshFeed, 45000);
+
+    // ─── Copy ───
+    function copy(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = event.target;
+            const orig = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = orig, 1500);
+        });
+    }
+</script>
 </body>
 </html>
