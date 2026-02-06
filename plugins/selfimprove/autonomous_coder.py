@@ -114,10 +114,30 @@ Generate the complete Python code. Return ONLY the raw Python code, no markdown 
 
     def _clean_generated_code(self, raw: str) -> str:
         """Strip markdown fences and clean up AI output"""
-        # Remove ```python ... ``` wrappers
-        code = re.sub(r'^```(?:python)?\s*\n', '', raw.strip())
-        code = re.sub(r'\n```\s*$', '', code)
-        return code.strip()
+        text = raw.strip()
+
+        # If the response contains a fenced code block, extract just the code
+        fence_match = re.search(r'```(?:python|py)?\s*\n(.*?)```', text, re.DOTALL)
+        if fence_match:
+            text = fence_match.group(1)
+        else:
+            # Fallback: strip leading/trailing fences
+            text = re.sub(r'^```(?:python|py)?\s*\n', '', text)
+            text = re.sub(r'\n```\s*$', '', text)
+
+        # Strip any leading prose before the first import/def/class/#
+        lines = text.split('\n')
+        code_start = 0
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped and (stripped.startswith(('import ', 'from ', 'def ', 'class ',
+                                                  '#', '"""', "'''", '@'))
+                            or stripped[0].isalpha() and '=' in stripped):
+                code_start = i
+                break
+        text = '\n'.join(lines[code_start:])
+
+        return text.strip()
 
     # ------------------------------------------------------------------
     # Plan: analyze what needs to change
@@ -268,21 +288,55 @@ Return ONLY valid JSON, no markdown or explanation."""
                 'size': len(code),
             })
 
-        # Step 2: Validate all generated code
-        all_issues = []
-        for gf in results['generated_files']:
-            safety = self.validate_code_safety(gf['code'])
-            if not safety['safe']:
-                all_issues.extend(safety['issues'])
+        # Step 2: Validate all generated code (with syntax-fix retry)
+        max_syntax_retries = 2
+        for syntax_attempt in range(max_syntax_retries + 1):
+            all_issues = []
+            syntax_issues = []
+            security_issues = []
 
-        results['validation'] = {
-            'safe': len(all_issues) == 0,
-            'issues': all_issues,
-        }
+            for gf in results['generated_files']:
+                safety = self.validate_code_safety(gf['code'])
+                if not safety['safe']:
+                    for issue in safety['issues']:
+                        all_issues.append(issue)
+                        if 'Syntax error' in issue:
+                            syntax_issues.append((gf, issue))
+                        else:
+                            security_issues.append(issue)
 
-        if not results['validation']['safe']:
-            results['error'] = f"Safety validation failed: {'; '.join(all_issues)}"
-            return results
+            # Security violations are never retryable
+            if security_issues:
+                results['validation'] = {'safe': False, 'issues': all_issues}
+                results['error'] = f"Safety validation failed: {'; '.join(security_issues)}"
+                return results
+
+            # No issues at all — pass
+            if not syntax_issues:
+                break
+
+            # Syntax errors only — ask AI to fix (unless we've exhausted retries)
+            if syntax_attempt >= max_syntax_retries:
+                results['validation'] = {'safe': False, 'issues': all_issues}
+                results['error'] = f"Safety validation failed after {max_syntax_retries} syntax fix attempts: {'; '.join(all_issues)}"
+                return results
+
+            print(f"🔧 Syntax error detected — asking AI to fix (attempt {syntax_attempt + 1}/{max_syntax_retries})...")
+            for gf, issue in syntax_issues:
+                fix_prompt = (
+                    f"This Python code has a syntax error:\n{issue}\n\n"
+                    f"```python\n{gf['code'][:6000]}\n```\n\n"
+                    f"Fix the syntax error and return ONLY the complete corrected Python file. "
+                    f"No markdown fences, no explanations."
+                )
+                fixed = self._generate_code_with_ai(fix_prompt, max_tokens=6000)
+                if fixed:
+                    gf['code'] = fixed
+                    print(f"  🔧 Got syntax fix for {gf['path']} ({len(fixed)} bytes)")
+                else:
+                    print(f"  ⚠️  AI returned no syntax fix for {gf['path']}")
+
+        results['validation'] = {'safe': True, 'issues': []}
 
         # Step 3: Apply changes (on auto/* branch)
         apply_result = self._apply_changes(results['generated_files'], plan.get('summary', 'auto-update'))
