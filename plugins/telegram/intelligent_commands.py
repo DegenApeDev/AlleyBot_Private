@@ -594,8 +594,8 @@ Generate only the title (no explanations):"""
                 await update.message.reply_text("❌ On-chain plugin not loaded")
                 return
 
-            result = onchain.wallet_command()
-            await update.message.reply_text(self._filter_text(result))
+            result = await self._run_sync(onchain.wallet_command)
+            await update.message.reply_text(self._filter_text(str(result)))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -610,8 +610,8 @@ Generate only the title (no explanations):"""
                 await update.message.reply_text("❌ On-chain plugin not loaded")
                 return
 
-            result = onchain.token_balances_command()
-            await update.message.reply_text(self._filter_text(result))
+            result = await self._run_sync(onchain.token_balances_command)
+            await update.message.reply_text(self._filter_text(str(result)))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -626,8 +626,8 @@ Generate only the title (no explanations):"""
                 await update.message.reply_text("❌ On-chain plugin not loaded")
                 return
 
-            result = onchain.block_info_command()
-            await update.message.reply_text(self._filter_text(result))
+            result = await self._run_sync(onchain.block_info_command)
+            await update.message.reply_text(self._filter_text(str(result)))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -642,8 +642,11 @@ Generate only the title (no explanations):"""
                 await update.message.reply_text("❌ On-chain plugin not loaded")
                 return
 
-            result = onchain.track_token_command(*context.args) if context.args else onchain.track_token_command()
-            await update.message.reply_text(self._filter_text(result))
+            if context.args:
+                result = await self._run_sync(onchain.track_token_command, *context.args)
+            else:
+                result = await self._run_sync(onchain.track_token_command)
+            await update.message.reply_text(self._filter_text(str(result)))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -658,8 +661,11 @@ Generate only the title (no explanations):"""
                 await update.message.reply_text("❌ On-chain plugin not loaded")
                 return
 
-            result = onchain.tx_lookup_command(*context.args) if context.args else onchain.tx_lookup_command()
-            await update.message.reply_text(self._filter_text(result))
+            if context.args:
+                result = await self._run_sync(onchain.tx_lookup_command, *context.args)
+            else:
+                result = await self._run_sync(onchain.tx_lookup_command)
+            await update.message.reply_text(self._filter_text(str(result)))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -675,8 +681,11 @@ Generate only the title (no explanations):"""
                 return
 
             status_msg = await update.message.reply_text("🔍 Scanning recent blocks...")
-            result = onchain.recent_activity_command(*context.args) if context.args else onchain.recent_activity_command()
-            result = self._filter_text(result)
+            if context.args:
+                result = await self._run_sync(onchain.recent_activity_command, *context.args)
+            else:
+                result = await self._run_sync(onchain.recent_activity_command)
+            result = self._filter_text(str(result))
 
             if len(result) > 4000:
                 result = result[:3900] + "\n\n... (truncated)"
@@ -695,8 +704,8 @@ Generate only the title (no explanations):"""
                 await update.message.reply_text("❌ On-chain plugin not loaded")
                 return
 
-            result = onchain.onchain_status_command()
-            await update.message.reply_text(self._filter_text(result))
+            result = await self._run_sync(onchain.onchain_status_command)
+            await update.message.reply_text(self._filter_text(str(result)))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -711,6 +720,13 @@ Generate only the title (no explanations):"""
             return self.core.plugin_manager.plugins.get('brain')
         return None
 
+    async def _run_sync(self, func, *args):
+        """Run a blocking synchronous function in a thread executor
+        so it doesn't block the Telegram async event loop."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, func, *args)
+
     async def brain_think(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Run one brain think cycle"""
         if not await self._verify_admin(update):
@@ -722,8 +738,8 @@ Generate only the title (no explanations):"""
                 return
 
             status_msg = await update.message.reply_text("🧠 Thinking...")
-            result = brain.think_command()
-            await status_msg.edit_text(self._filter_text(result))
+            result = await self._run_sync(brain.think_command)
+            await status_msg.edit_text(self._filter_text(str(result)))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -738,8 +754,8 @@ Generate only the title (no explanations):"""
                 await update.message.reply_text("❌ Brain plugin not loaded")
                 return
 
-            result = brain.start_autonomous()
-            await update.message.reply_text(self._filter_text(result))
+            result = await self._run_sync(brain.start_autonomous)
+            await update.message.reply_text(self._filter_text(str(result)))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -754,8 +770,8 @@ Generate only the title (no explanations):"""
                 await update.message.reply_text("❌ Brain plugin not loaded")
                 return
 
-            result = brain.stop_autonomous()
-            await update.message.reply_text(self._filter_text(result))
+            result = await self._run_sync(brain.stop_autonomous)
+            await update.message.reply_text(self._filter_text(str(result)))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -770,8 +786,8 @@ Generate only the title (no explanations):"""
                 await update.message.reply_text("❌ Brain plugin not loaded")
                 return
 
-            result = brain.status_command()
-            await update.message.reply_text(self._filter_text(result))
+            result = await self._run_sync(brain.status_command)
+            await update.message.reply_text(self._filter_text(str(result)))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
