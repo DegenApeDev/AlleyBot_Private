@@ -68,6 +68,13 @@ AUTONOMOUS_ACTIONS = {
         'impact': 'high',
         'requires': 'selfimprove',
     },
+    'update_skills': {
+        'description': 'Check all platforms for skill file updates and auto-download new versions',
+        'platform': 'system',
+        'cooldown_minutes': 720,
+        'impact': 'medium',
+        'requires': 'selfimprove',
+    },
 }
 
 
@@ -390,6 +397,11 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             selfimprove = plugins.get('selfimprove')
             if selfimprove and hasattr(selfimprove, 'improve_command'):
                 return selfimprove.improve_command()
+
+        elif action_id == 'update_skills':
+            selfimprove = plugins.get('selfimprove')
+            if selfimprove and hasattr(selfimprove, 'update_skills_command'):
+                return selfimprove.update_skills_command()
 
         return f"❌ Action {action_id} not dispatchable"
 

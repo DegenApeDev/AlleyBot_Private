@@ -10,8 +10,6 @@ from src.agentic.skill_generator import DynamicSkillGenerator
 from src.agentic.enhanced_memory import EnhancedMemorySystem
 from src.agentic.security_filter import SecurityFilter
 from src.agentic.approval_dashboard import ApprovalDashboard
-from src.agentic.skill_updater import SkillUpdater
-from src.agentic.api_monitor import monitor_api_response
 
 __all__ = [
     'AgenticAlleyBot',
@@ -22,8 +20,6 @@ __all__ = [
     'EnhancedMemorySystem',
     'SecurityFilter',
     'ApprovalDashboard',
-    'SkillUpdater',
-    'monitor_api_response'
 ]
 
 __version__ = '2.0.0'

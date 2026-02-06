@@ -288,7 +288,7 @@ class TestStaleReferencesRemoved(unittest.TestCase):
 
     def test_skill_updater_no_clawtasks(self):
         """skill_updater.py should not reference clawtasks or 4claw"""
-        updater_path = PROJECT_ROOT / 'src' / 'agentic' / 'skill_updater.py'
+        updater_path = PROJECT_ROOT / 'plugins' / 'selfimprove' / 'skill_updater.py'
         content = updater_path.read_text()
         self.assertNotIn('clawtasks', content)
         self.assertNotIn('4claw', content)
@@ -342,7 +342,7 @@ class TestSilentExceptBlocksFixed(unittest.TestCase):
         self.assertEqual(bare, [], f"Bare except: found at lines {bare} in agentic_system.py")
 
     def test_skill_updater_no_bare_except(self):
-        path = PROJECT_ROOT / 'src' / 'agentic' / 'skill_updater.py'
+        path = PROJECT_ROOT / 'plugins' / 'selfimprove' / 'skill_updater.py'
         bare = self._check_no_bare_except(path)
         self.assertEqual(bare, [], f"Bare except: found at lines {bare} in skill_updater.py")
 

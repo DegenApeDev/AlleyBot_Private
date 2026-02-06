@@ -16,9 +16,10 @@ from plugins.selfimprove.git_workflow import GitWorkflowMixin
 from plugins.selfimprove.test_gate import TestGateMixin
 from plugins.selfimprove.skill_marketplace import SkillMarketplaceMixin
 from plugins.selfimprove.skill_builder import SkillBuilderMixin
+from plugins.selfimprove.skill_updater import SkillUpdaterMixin
 
 
-class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, SkillBuilderMixin, AlleyBotPlugin):
+class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, SkillBuilderMixin, SkillUpdaterMixin, AlleyBotPlugin):
     """Self-improvement capabilities: autonomous coding, git workflow, test gates, skill marketplace"""
 
     def __init__(self, config):
@@ -45,6 +46,9 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
         # Initialize skill builder (SKILL.md discovery + AI generation)
         self._init_skill_builder()
         print(f"🧩 Skill builder ready ({len(self.loaded_skills)} skills discovered)")
+
+        # Initialize skill updater (auto-download platform skill files)
+        self._init_skill_updater()
 
         print("✅ Self-improvement plugin ready")
 
@@ -157,6 +161,12 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
         output += f"\n  📦 Published skills: {len(self.published_skills)}\n"
         output += f"  📥 Imported skills: {len(self.imported_skills)}\n"
 
+        # Skill updater
+        if hasattr(self, 'skill_versions') and self.skill_versions:
+            output += f"\n  🔄 Tracked platform skills: {len(self.skill_versions)}\n"
+            for plat, ver in sorted(self.skill_versions.items()):
+                output += f"      {plat}: v{ver}\n"
+
         return output
 
     def get_tasks(self):
@@ -169,6 +179,13 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
                 'schedule': '0 */6 * * *',
                 'description': 'Run autonomous self-improvement cycle every 6 hours'
             }
+
+        # Always check for skill updates every 12 hours
+        tasks['skill_update_check'] = {
+            'function': lambda: self.update_skills_command(),
+            'schedule': '0 */12 * * *',
+            'description': 'Check all platforms for skill file updates'
+        }
 
         return tasks
 
@@ -198,6 +215,10 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
             'improve_publish': self.marketplace_publish_command,
             'improve_import': self.marketplace_import_command,
             'improve_market_status': self.marketplace_status_command,
+            # Skill updater
+            'improve_update_skills': self.update_skills_command,
+            'improve_update_skill': self.update_single_skill_command,
+            'improve_skill_versions': self.skill_versions_command,
         }
 
     def get_endpoints(self):
