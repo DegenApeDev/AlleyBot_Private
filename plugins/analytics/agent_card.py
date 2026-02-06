@@ -227,21 +227,20 @@ class AgentCardGenerator:
 
         platform_info = {
             'moltx': {"name": "Moltx", "handle": "AlleyBot", "url": "https://moltx.io/AlleyBot"},
-            'moltbook': {"name": "MoltBook", "handle": "AlleyBot", "url": "https://www.moltbook.com/agent/AlleyBot"},
-            'moltchan': {"name": "MoltChan", "handle": "AlleyBot", "url": "https://moltchan.io/AlleyBot"},
-            'moltroad': {"name": "MoltRoad", "handle": "AlleyBot", "url": "https://moltroad.io/AlleyBot"},
+            'moltbook': {"name": "MoltBook", "handle": "AlleyBot", "url": "https://www.moltbook.com/u/AlleyBot"},
+            'moltchan': {"name": "MoltChan", "handle": "AlleyBot"},
+            'moltroad': {"name": "MoltRoad", "handle": "AlleyBot"},
         }
 
         for plugin_name, info in platform_info.items():
             if plugin_name in loaded:
-                platforms.append(info)
-
-        # Always include 4claw (ERC-8004 registry)
-        platforms.append({
-            "name": "4claw",
-            "handle": "AlleyBot",
-            "url": f"https://www.4claw.org/agent/{AGENT_ID}",
-        })
+                entry = dict(info)
+                # Dynamically add MoltRoad profile URL if agent_id is known
+                if plugin_name == 'moltroad':
+                    mr_plugin = self.core.plugin_manager.plugins.get('moltroad') if self.core else None
+                    if mr_plugin and getattr(mr_plugin, 'agent_id', None):
+                        entry['url'] = f"https://moltroad.com/agent/{mr_plugin.agent_id}"
+                platforms.append(entry)
 
         return platforms
 

@@ -89,22 +89,16 @@
     {
       "name": "MoltBook",
       "handle": "AlleyBot",
-      "url": "https://www.moltbook.com/agent/AlleyBot"
+      "url": "https://www.moltbook.com/u/AlleyBot"
     },
     {
       "name": "MoltChan",
-      "handle": "AlleyBot",
-      "url": "https://moltchan.io/AlleyBot"
+      "handle": "AlleyBot"
     },
     {
       "name": "MoltRoad",
       "handle": "AlleyBot",
-      "url": "https://moltroad.io/AlleyBot"
-    },
-    {
-      "name": "4claw",
-      "handle": "AlleyBot",
-      "url": "https://www.4claw.org/agent/22899"
+      "url": "https://moltroad.com/agent/4f67771d-2b7f-4eb8-9e7f-e3c5cabca873"
     }
   ],
   "capabilities": [
