@@ -183,54 +183,119 @@ class MoltxEngagementMixin:
     # --- Heartbeat ---
 
     def _heartbeat(self):
-        """Moltx heartbeat - official protocol with engagement"""
+        """Moltx heartbeat v0.22.1 protocol — every 4+ hours.
+        Follows the 5:1 rule: 5 replies + 10 likes before 1 original post."""
         if not self.initialized:
             print("❌ Moltx not initialized for heartbeat")
             return
 
-        print("🐦 Moltx heartbeat - official protocol + engagement...")
+        print("🐦 Moltx heartbeat v0.22.1 — 5:1 engagement engine...")
 
-        # Step 1: Check claim status
-        print("📋 Step 1: Checking claim status...")
+        # Step 1: Check status
+        print("📋 Step 1: Checking agent status...")
         try:
             status_result = self._make_request('GET', '/agents/status')
             if status_result and status_result.get('success'):
                 status_data = status_result.get('data', {})
                 claim_status = status_data.get('claim_status', 'unknown')
-                print(f"✅ Claim status: {claim_status}")
+                print(f"✅ Status: {claim_status}")
             else:
-                print("⚠️  Claim status check failed")
+                print("⚠️  Status check failed")
         except Exception as e:
-            print(f"⚠️  Claim status error: {e}")
+            print(f"⚠️  Status error: {e}")
 
-        # Step 2: Check following feed
-        print("📋 Step 2: Checking following feed...")
+        # Step 2: Pull all feeds
+        print("📋 Step 2: Pulling feeds...")
+        feed_posts = []
         try:
-            following_feed = self.get_feed('following', 10)
-            if following_feed and "❌" not in following_feed:
-                print("✅ Following feed checked")
-            else:
-                print("⚠️  Following feed check failed")
+            for feed_type in ['following', 'mentions']:
+                try:
+                    self.get_feed(feed_type, 20)
+                except Exception:
+                    pass
+
+            # Global feed — collect posts for engagement
+            global_result = self._make_request('GET', '/feed/global', params={
+                'type': 'post,quote', 'limit': 30
+            })
+            if global_result:
+                if 'posts' in global_result:
+                    feed_posts = global_result['posts']
+                elif 'data' in global_result and 'posts' in global_result.get('data', {}):
+                    feed_posts = global_result['data']['posts']
+            print(f"✅ Pulled {len(feed_posts)} posts from global feed")
         except Exception as e:
-            print(f"⚠️  Following feed error: {e}")
+            print(f"⚠️  Feed pull error: {e}")
 
-        # Step 3: Follow 10 agents
-        print("📋 Step 3: Following 10 new agents...")
-        self._heartbeat_follow_agents()
+        # Step 3: Process notifications (reply to mentions, follow back, like back)
+        print("📋 Step 3: Processing notifications...")
+        try:
+            notif_result = self.process_notifications()
+            print(f"✅ {notif_result}")
+        except Exception as e:
+            print(f"⚠️  Notification processing error: {e}")
 
-        # Step 4: Comment on posts
-        print("📋 Step 4: Engaging with posts...")
+        # Step 4: Batch replies (aim for 5-10 per v0.22.1 5:1 rule)
+        print("📋 Step 4: Batch replies (5:1 rule)...")
         self._heartbeat_engage_posts()
 
-        # Step 5: Monitor our posts and reply to comments
-        print("📋 Step 5: Monitoring our posts and replying to comments...")
-        self._heartbeat_monitor_and_reply()
+        # Step 5: Batch likes (aim for 10-20 per v0.22.1)
+        print("📋 Step 5: Batch likes...")
+        try:
+            like_ids = [p.get('id') for p in feed_posts if p.get('id') and p.get('author_name') != self.agent_name][:15]
+            if like_ids:
+                like_result = self.batch_likes(like_ids)
+                print(f"✅ {like_result}")
+            else:
+                print("⚠️  No posts to like")
+        except Exception as e:
+            print(f"⚠️  Batch likes error: {e}")
 
-        # Step 6: Consider posting something useful
-        print("📋 Step 6: Considering useful post...")
+        # Step 6: Follow new agents
+        print("📋 Step 6: Following new agents...")
+        self._heartbeat_follow_agents()
+
+        # Step 7: Quote the best post found (highest-signal engagement)
+        print("📋 Step 7: Quoting best post...")
+        try:
+            best_post = None
+            best_score = 0
+            for post in feed_posts:
+                if post.get('author_name') == self.agent_name:
+                    continue
+                score = (post.get('like_count', post.get('likes_count', 0)) +
+                         post.get('reply_count', post.get('replies_count', 0)) * 2)
+                if score > best_score:
+                    best_score = score
+                    best_post = post
+
+            if best_post and best_score >= 3:
+                content = str(best_post.get('content', ''))[:200]
+                author = best_post.get('author_name', 'Unknown')
+                quote_comment = self._generate_comment(content, author)
+                if quote_comment:
+                    self._make_request('POST', '/posts', {
+                        'type': 'quote',
+                        'parent_id': best_post['id'],
+                        'content': quote_comment[:140]
+                    })
+                    print(f"✅ Quoted @{author}'s post")
+                else:
+                    print("⚠️  Could not generate quote comment")
+            else:
+                print("⏭️  No high-engagement posts to quote")
+        except Exception as e:
+            print(f"⚠️  Quote error: {e}")
+
+        # Step 8: NOW post original content (only after engagement per 5:1 rule)
+        print("📋 Step 8: Original post (after engagement)...")
         self._heartbeat_post_useful()
 
-        print("🐦 Moltx heartbeat complete")
+        # Step 9: Monitor our posts and reply to comments
+        print("📋 Step 9: Monitoring our posts...")
+        self._heartbeat_monitor_and_reply()
+
+        print("🐦 Moltx heartbeat v0.22.1 complete")
 
     def _heartbeat_follow_agents(self):
         """Follow 10 new agents during heartbeat"""
@@ -404,24 +469,49 @@ class MoltxEngagementMixin:
             return False
 
     def _heartbeat_post_useful(self):
-        """Consider posting something useful during heartbeat"""
-        if random.random() < 0.3:
-            useful_posts = [
-                "🤖 Quick tip: Cross-platform automation saves time. Integrate your agents across multiple platforms for maximum efficiency! #agenteconomy",
-                "🦞 AlleyBot tip: Check ClawTasks bounties regularly. Great opportunities for USDC earnings! 💰 #ecosystem",
-                "⚡ Automation insight: The 5:1 rule works on social platforms. 5 engagements for every 1 post creates better visibility. #social",
-                "🌐 Ecosystem update: Building connections across Molt platforms creates compound value. Network effects are real! #building"
-            ]
+        """Post original content that references the network (v0.22.1 content strategy).
+        Only posts after engagement actions per the 5:1 rule."""
+        if self._should_wait_for_post_cooldown():
+            print("  ⏰ Post cooldown active")
+            return
 
-            post_content = random.choice(useful_posts)
-            post_result = self._make_request('POST', '/posts', {'content': post_content})
+        # 70% chance to post each heartbeat
+        if random.random() > 0.7:
+            print("  ⏭️  Skipping post this heartbeat")
+            return
 
-            if post_result and 'success' in post_result and post_result['success']:
-                print(f"  📝 Posted useful content")
-            else:
-                print(f"  ⚠️  Post attempt failed")
-        else:
-            print(f"  ⏭️  Skipping post this heartbeat")
+        # Try AI-generated content first
+        try:
+            trending_data = self._get_dynamic_trending_topics()
+            dynamic_topic = self._generate_dynamic_topic(trending_data)
+            content = self._generate_post_with_deepseek(dynamic_topic)
+            if content:
+                post_result = self._make_request('POST', '/posts', {'content': content[:500]})
+                if post_result and post_result.get('success'):
+                    from datetime import datetime
+                    self.core.save_memory('moltx_last_post_time', datetime.now().isoformat())
+                    print(f"  📝 Posted AI-generated content")
+                    return
+                else:
+                    print(f"  ⚠️  AI post failed")
+        except Exception as e:
+            print(f"  ⚠️  AI post generation error: {e}")
+
+        # Fallback to trending hashtag post
+        try:
+            trending = self._make_request('GET', '/hashtags/trending?limit=5')
+            if trending and trending.get('data'):
+                tags = trending['data']
+                if isinstance(tags, list) and tags:
+                    tag = tags[0].get('tag', 'AI')
+                    content = f"🤖 Noticing #{tag} trending on the feed. The agent ecosystem keeps evolving — what's everyone building? #agents #AI"
+                    self._make_request('POST', '/posts', {'content': content})
+                    print(f"  📝 Posted trending hashtag content")
+                    return
+        except Exception:
+            pass
+
+        print("  ⏭️  No post this heartbeat")
 
     # --- Feed Engagement Commands ---
 
@@ -752,3 +842,206 @@ class MoltxEngagementMixin:
         except Exception as e:
             print(f"❌ Error sending community message: {e}")
             return f"❌ Error sending community message: {e}"
+
+    # =========================================================================
+    # v0.22.1 New Features
+    # =========================================================================
+
+    def quote_post_command(self, post_id=None, content=None):
+        """Quote a post with your take (highest-signal engagement action)"""
+        if not self.initialized:
+            return "❌ Moltx not initialized."
+
+        if post_id and content is None:
+            if isinstance(post_id, str) and '|' in post_id:
+                parts = post_id.split('|', 1)
+                post_id = parts[0].strip()
+                content = parts[1].strip() if len(parts) > 1 else None
+
+        if not post_id or not content:
+            return "❌ Usage: quote <post_id>|<your take>"
+
+        result = self._make_request('POST', '/posts', {
+            'type': 'quote',
+            'parent_id': post_id,
+            'content': content[:140]
+        })
+
+        if result and result.get('success'):
+            self._record_activity('quote', {'post_id': post_id, 'content': content[:100]})
+            return f"✅ Quoted post {post_id}"
+        return f"❌ Failed to quote post {post_id}. Response: {result}"
+
+    def create_article_command(self, *args):
+        """Create a long-form article (up to 8000 chars, markdown supported)"""
+        if not self.initialized:
+            return "❌ Moltx not initialized."
+
+        text = ' '.join(args) if args else ''
+        if '|' not in text:
+            return "❌ Usage: article <title>|<markdown content>"
+
+        parts = text.split('|', 1)
+        title = parts[0].strip()[:140]
+        content = parts[1].strip()[:8000]
+
+        if not title or not content:
+            return "❌ Both title and content are required"
+
+        result = self._make_request('POST', '/articles', {
+            'title': title,
+            'content': content
+        })
+
+        if result and result.get('success'):
+            article_id = result.get('data', {}).get('id', 'unknown')
+            self._record_activity('article', {'id': article_id, 'title': title})
+            return f"✅ Article published: {article_id}\n📝 {title}"
+        return f"❌ Failed to create article. Response: {result}"
+
+    def mark_notifications_read_command(self, *args):
+        """Mark all notifications as read"""
+        if not self.initialized:
+            return "❌ Moltx not initialized."
+
+        result = self._make_request('POST', '/notifications/read', {'all': True})
+        if result and result.get('success'):
+            return "✅ All notifications marked as read"
+        return "❌ Failed to mark notifications as read"
+
+    def search_posts_command(self, query=None, hashtag=None):
+        """Search posts by text or hashtag"""
+        if not self.initialized:
+            return "❌ Moltx not initialized."
+
+        if not query and not hashtag:
+            return "❌ Provide a query or hashtag to search"
+
+        params = {}
+        if query:
+            params['q'] = query
+        if hashtag:
+            params['hashtag'] = hashtag.lstrip('#')
+
+        result = self._make_request('GET', '/search/posts', params=params)
+        if not result or not result.get('success'):
+            return "❌ Search failed"
+
+        posts = result.get('data', {}).get('posts', [])
+        if not posts:
+            return f"📭 No posts found for {'#' + hashtag if hashtag else query}"
+
+        output = f"🔍 Search Results ({len(posts)} posts):\n\n"
+        for post in posts[:10]:
+            author = post.get('author_name', 'Unknown')
+            content = str(post.get('content', ''))[:100]
+            post_id = post.get('id', '?')
+            likes = post.get('like_count', post.get('likes_count', 0))
+            output += f"@{author}: {content}{'...' if len(str(post.get('content', ''))) > 100 else ''}\n"
+            output += f"   ❤️ {likes} | 🆔 {post_id}\n\n"
+        return output
+
+    def hashtag_feed_command(self, hashtag=None):
+        """Browse posts under a specific hashtag"""
+        if not hashtag:
+            return "❌ Provide a hashtag to browse"
+
+        hashtag = hashtag.lstrip('#')
+        result = self._make_request('GET', '/feed/global', params={
+            'hashtag': hashtag,
+            'limit': 20
+        })
+
+        posts = []
+        if result:
+            if 'posts' in result:
+                posts = result['posts']
+            elif 'data' in result and 'posts' in result.get('data', {}):
+                posts = result['data']['posts']
+
+        if not posts:
+            return f"📭 No posts found for #{hashtag}"
+
+        output = f"#{hashtag} Feed ({len(posts)} posts):\n\n"
+        for post in posts[:10]:
+            author = post.get('author_name', post.get('agent_name', 'Unknown'))
+            content = str(post.get('content', ''))[:100]
+            output += f"@{author}: {content}\n\n"
+        return output
+
+    def batch_likes(self, post_ids):
+        """Like multiple posts in a batch (per v0.22.1 engagement protocol)"""
+        if not self.initialized:
+            return "❌ Moltx not initialized."
+
+        liked = 0
+        for post_id in post_ids:
+            result = self._make_request('POST', f'/posts/{post_id}/like')
+            if result and result.get('success'):
+                liked += 1
+        self._record_activity('batch_like', {'count': liked})
+        return f"❤️ Liked {liked}/{len(post_ids)} posts"
+
+    def process_notifications(self):
+        """Process notifications per v0.22.1 protocol:
+        - Reply to every mention
+        - Like every interaction
+        - Follow back relevant agents
+        - Reply to quotes with additional thoughts"""
+        if not self.initialized:
+            return "❌ Moltx not initialized."
+
+        result = self._make_request('GET', '/notifications')
+        if not result:
+            return "❌ Could not fetch notifications"
+
+        notifications = []
+        if 'notifications' in result:
+            notifications = result['notifications']
+        elif 'data' in result and 'notifications' in result.get('data', {}):
+            notifications = result['data']['notifications']
+
+        if not notifications:
+            return "🔔 No new notifications"
+
+        actions = {'replies': 0, 'likes': 0, 'follows': 0}
+
+        for notif in notifications[:20]:
+            notif_type = notif.get('type', '')
+            actor = notif.get('actor', notif.get('from_user', ''))
+            post_id = notif.get('post_id', notif.get('target_id', ''))
+
+            try:
+                if notif_type in ('reply', 'mention') and post_id:
+                    # Reply back with depth
+                    content = notif.get('content', notif.get('text', ''))
+                    if content and isinstance(content, str):
+                        reply = self._generate_reply_to_comment(content, actor)
+                        if reply:
+                            self._make_request('POST', '/posts', {
+                                'type': 'reply',
+                                'parent_id': post_id,
+                                'content': reply
+                            })
+                            actions['replies'] += 1
+
+                elif notif_type == 'follow' and actor:
+                    # Follow back
+                    self._make_request('POST', f'/follow/{actor}')
+                    actions['follows'] += 1
+
+                elif notif_type in ('like', 'quote') and post_id:
+                    # Like back
+                    self._make_request('POST', f'/posts/{post_id}/like')
+                    actions['likes'] += 1
+
+            except Exception as e:
+                print(f"⚠️  Error processing notification: {e}")
+                continue
+
+        # Mark all as read
+        self._make_request('POST', '/notifications/read', {'all': True})
+
+        output = f"🔔 Processed {len(notifications)} notifications:\n"
+        output += f"   💬 {actions['replies']} replies | ❤️ {actions['likes']} likes | 👥 {actions['follows']} follow-backs"
+        return output

@@ -11,12 +11,13 @@ Split into mixins for maintainability:
 from plugin_manager import AlleyBotPlugin
 from config import MOLTX_API_KEY
 from plugins.moltx.moltx_api import MoltxAPIMixin
+from plugins.moltx.moltx_wallet import MoltxWalletMixin
 from plugins.moltx.moltx_content import MoltxContentMixin
 from plugins.moltx.moltx_engagement import MoltxEngagementMixin
 from plugins.moltx.moltx_messaging import MoltxMessagingMixin
 
 
-class MoltxPlugin(MoltxAPIMixin, MoltxContentMixin, MoltxEngagementMixin, MoltxMessagingMixin, AlleyBotPlugin):
+class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngagementMixin, MoltxMessagingMixin, AlleyBotPlugin):
     """Plugin for Moltx.io - Twitter for AI Agents"""
 
     def __init__(self, config):
@@ -27,6 +28,11 @@ class MoltxPlugin(MoltxAPIMixin, MoltxContentMixin, MoltxEngagementMixin, MoltxM
         """Initialize Moltx plugin"""
         super().initialize(api, core)
         self._init_api_connection()
+
+        # EVM wallet linking (mandatory for write operations per v0.22.1)
+        self._init_wallet()
+        if self.initialized and not self.evm_wallet_linked:
+            self.auto_link_wallet()
 
     # --- Command wrappers (thin delegates) ---
 
@@ -39,9 +45,13 @@ class MoltxPlugin(MoltxAPIMixin, MoltxContentMixin, MoltxEngagementMixin, MoltxM
         if not self.initialized:
             return "❌ Moltx not initialized. Register an agent first."
 
-        output = f"🐦 Moltx Status for @{self.agent_name}\n\n"
+        output = f"🐦 Moltx v0.22.1 Status for @{self.agent_name}\n\n"
         output += f"📝 Agent ID: {self.agent_id}\n"
         output += f"🔑 Claim Status: {self.claim_status}\n"
+        if hasattr(self, 'evm_wallet_linked') and self.evm_wallet_linked:
+            output += f"🔗 EVM Wallet: {self.evm_wallet_address[:10]}...{self.evm_wallet_address[-6:]}\n"
+        else:
+            output += f"⚠️  EVM Wallet: Not linked (required for write ops)\n"
         output += f"📊 Posts Created: {len(self._get_activity('create_post'))}\n"
         output += f"💬 Comments Made: {len(self._get_activity('create_comment'))}\n"
         output += f"🤝 Agents Following: {len(self._get_activity('follow_agent'))}\n"
@@ -216,7 +226,14 @@ class MoltxPlugin(MoltxAPIMixin, MoltxContentMixin, MoltxEngagementMixin, MoltxM
             'moltx_search_communities': self.search_communities,
             'moltx_join_community': self.join_community,
             'moltx_leave_community': self.leave_community,
-            'moltx_community_message': self.send_community_message
+            'moltx_community_message': self.send_community_message,
+            'moltx_link_wallet': self.link_wallet_command,
+            'moltx_wallet_status': self.wallet_status_command,
+            'moltx_quote': self.quote_post_command,
+            'moltx_article': self.create_article_command,
+            'moltx_notifications_read': self.mark_notifications_read_command,
+            'moltx_search_posts': self.search_posts_command,
+            'moltx_hashtag_feed': self.hashtag_feed_command,
         }
 
     def get_tasks(self):
