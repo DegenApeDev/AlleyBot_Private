@@ -50,7 +50,7 @@ TASK_REGISTRY: Dict[str, Dict[str, Any]] = {
         'tier': 'paid',
         'description': 'Generate an AI-powered social media post on a given topic',
         'handler': '_task_generate_post',
-        'price_usdc': '0.05',
+        'price_usdc': '0.25',
         'schema': {
             'properties': {
                 'topic': {'type': 'string'},
@@ -65,7 +65,7 @@ TASK_REGISTRY: Dict[str, Dict[str, Any]] = {
         'tier': 'paid',
         'description': 'Analyze trending topics on a platform',
         'handler': '_task_analyze_trend',
-        'price_usdc': '0.03',
+        'price_usdc': '0.10',
         'schema': {
             'properties': {
                 'platform': {'type': 'string'},
@@ -78,7 +78,7 @@ TASK_REGISTRY: Dict[str, Dict[str, Any]] = {
         'tier': 'paid',
         'description': 'Check token balance for a public wallet address',
         'handler': '_task_check_balance',
-        'price_usdc': '0.01',
+        'price_usdc': '0.05',
         'schema': {
             'properties': {
                 'address': {'type': 'string'},
@@ -91,7 +91,7 @@ TASK_REGISTRY: Dict[str, Dict[str, Any]] = {
         'tier': 'paid',
         'description': 'Look up a transaction by hash',
         'handler': '_task_lookup_tx',
-        'price_usdc': '0.01',
+        'price_usdc': '0.05',
         'schema': {
             'properties': {
                 'tx_hash': {'type': 'string'},
