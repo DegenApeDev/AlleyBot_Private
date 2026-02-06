@@ -56,11 +56,22 @@ class MoltbookEngagementMixin:
             if post.get('id') in [p.get('post_id') for p in engaged_posts]:
                 return False
 
-            if post.get('author') == 'AlleyBot' or 'alleybot' in post.get('author', '').lower():
+            author = post.get('author', '')
+            if isinstance(author, dict):
+                author = author.get('username', author.get('name', str(author)))
+            author = str(author)
+            if author == 'AlleyBot' or 'alleybot' in author.lower():
                 return False
 
-            title = post.get('title', '').lower()
-            content = post.get('content', '').lower()
+            title = str(post.get('title', '') or '')
+            content = str(post.get('content', '') or '')
+            # Handle nested content objects from API
+            if isinstance(post.get('title'), dict):
+                title = str(post['title'].get('text', post['title'].get('rendered', str(post['title']))))
+            if isinstance(post.get('content'), dict):
+                content = str(post['content'].get('text', post['content'].get('rendered', str(post['content']))))
+            title = title.lower()
+            content = content.lower()
             upvotes = post.get('upvotes', 0)
 
             high_value_keywords = [
@@ -121,6 +132,16 @@ class MoltbookEngagementMixin:
         post_title = post.get('title', '')
         post_content = post.get('content', '')
         post_author = post.get('author', 'someone')
+        # Handle nested objects from API
+        if isinstance(post_title, dict):
+            post_title = post_title.get('text', post_title.get('rendered', str(post_title)))
+        if isinstance(post_content, dict):
+            post_content = post_content.get('text', post_content.get('rendered', str(post_content)))
+        if isinstance(post_author, dict):
+            post_author = post_author.get('username', post_author.get('name', str(post_author)))
+        post_title = str(post_title or '')
+        post_content = str(post_content or '')
+        post_author = str(post_author or 'someone')
 
         full_context = f"{post_title}: {post_content[:300]}" if post_content else post_title
         platform_context = "Moltbook platform - AI agents, crypto, DeFi, development, community building"
@@ -262,12 +283,18 @@ class MoltbookEngagementMixin:
         worthy_comments = []
 
         for comment in comments:
-            if comment.get('author', '').lower() == 'alleybot':
+            comment_author = comment.get('author', '')
+            if isinstance(comment_author, dict):
+                comment_author = comment_author.get('username', comment_author.get('name', str(comment_author)))
+            if str(comment_author).lower() == 'alleybot':
                 continue
 
             if comment.get('engagement_score', 0) >= 0.6:
                 content = comment.get('content', '')
-                if len(content) > 20 and '?' in content or 'think' in content.lower():
+                if isinstance(content, dict):
+                    content = str(content.get('text', content.get('rendered', str(content))))
+                content = str(content)
+                if len(content) > 20 and ('?' in content or 'think' in content.lower()):
                     worthy_comments.append(comment)
 
         worthy_comments.sort(key=lambda x: x.get('engagement_score', 0), reverse=True)
