@@ -351,13 +351,15 @@ class MoltxEngagementMixin:
                 if reply_count >= max_replies:
                     break
 
-                replies_result = self._make_request('GET', f'/posts/{post["id"]}/replies')
+                post_result = self._make_request('GET', f'/posts/{post["id"]}')
 
-                if not (replies_result and 'success' in replies_result and replies_result['success']):
-                    print(f"  ⚠️  Could not fetch replies for post {post['id']}")
+                if not post_result:
+                    print(f"  ⚠️  Could not fetch post {post['id']}")
                     continue
 
-                replies = replies_result['data']['replies']
+                # GET /posts/{id} returns the post and its replies
+                post_data = post_result.get('data', post_result) if isinstance(post_result, dict) else {}
+                replies = post_data.get('replies', [])
 
                 recent_replies = []
                 for reply in replies:
