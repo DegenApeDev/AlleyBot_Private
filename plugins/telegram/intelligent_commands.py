@@ -17,6 +17,17 @@ class IntelligentTelegramCommands:
     def core(self):
         """Dynamically access core from telegram plugin"""
         return self.telegram.core
+
+    def _filter_text(self, text: str) -> str:
+        """Filter sensitive data from outbound text"""
+        try:
+            from security_filter import security_filter
+            filtered, was_filtered = security_filter.filter_message(str(text))
+            if was_filtered:
+                print("⚠️  SECURITY: Filtered sensitive data from Telegram command output")
+            return filtered
+        except Exception:
+            return str(text)
     
     async def ai_chat(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """AI-powered chat - natural language interaction"""
@@ -547,7 +558,7 @@ Generate only the title (no explanations):"""
                 return
 
             result = onchain.wallet_command()
-            await update.message.reply_text(result)
+            await update.message.reply_text(self._filter_text(result))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -561,7 +572,7 @@ Generate only the title (no explanations):"""
                 return
 
             result = onchain.token_balances_command()
-            await update.message.reply_text(result)
+            await update.message.reply_text(self._filter_text(result))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -575,7 +586,7 @@ Generate only the title (no explanations):"""
                 return
 
             result = onchain.block_info_command()
-            await update.message.reply_text(result)
+            await update.message.reply_text(self._filter_text(result))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -589,7 +600,7 @@ Generate only the title (no explanations):"""
                 return
 
             result = onchain.track_token_command(*context.args) if context.args else onchain.track_token_command()
-            await update.message.reply_text(result)
+            await update.message.reply_text(self._filter_text(result))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -603,7 +614,7 @@ Generate only the title (no explanations):"""
                 return
 
             result = onchain.tx_lookup_command(*context.args) if context.args else onchain.tx_lookup_command()
-            await update.message.reply_text(result)
+            await update.message.reply_text(self._filter_text(result))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -618,6 +629,7 @@ Generate only the title (no explanations):"""
 
             status_msg = await update.message.reply_text("🔍 Scanning recent blocks...")
             result = onchain.recent_activity_command(*context.args) if context.args else onchain.recent_activity_command()
+            result = self._filter_text(result)
 
             if len(result) > 4000:
                 result = result[:3900] + "\n\n... (truncated)"
@@ -635,7 +647,7 @@ Generate only the title (no explanations):"""
                 return
 
             result = onchain.onchain_status_command()
-            await update.message.reply_text(result)
+            await update.message.reply_text(self._filter_text(result))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -660,7 +672,7 @@ Generate only the title (no explanations):"""
 
             status_msg = await update.message.reply_text("🧠 Thinking...")
             result = brain.think_command()
-            await status_msg.edit_text(result)
+            await status_msg.edit_text(self._filter_text(result))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -674,7 +686,7 @@ Generate only the title (no explanations):"""
                 return
 
             result = brain.start_autonomous()
-            await update.message.reply_text(result)
+            await update.message.reply_text(self._filter_text(result))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -688,7 +700,7 @@ Generate only the title (no explanations):"""
                 return
 
             result = brain.stop_autonomous()
-            await update.message.reply_text(result)
+            await update.message.reply_text(self._filter_text(result))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
@@ -702,7 +714,7 @@ Generate only the title (no explanations):"""
                 return
 
             result = brain.status_command()
-            await update.message.reply_text(result)
+            await update.message.reply_text(self._filter_text(result))
 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")

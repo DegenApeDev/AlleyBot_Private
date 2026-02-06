@@ -398,12 +398,24 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
         except Exception as e:
             print(f"⚠️  Failed to log Telegram activity: {e}")
     
+    def _filter_outbound(self, text: str) -> str:
+        """Run outbound text through the security filter to prevent key leaks"""
+        try:
+            from security_filter import security_filter
+            filtered, was_filtered = security_filter.filter_message(str(text))
+            if was_filtered:
+                print("⚠️  SECURITY: Filtered sensitive data from Telegram outbound message")
+            return filtered
+        except Exception:
+            return str(text)
+
     async def send_message_to_owner(self, message: str):
         """Send a message to the owner"""
         if not self.enabled or not self.bot:
             return False
         
         try:
+            message = self._filter_outbound(message)
             await self.bot.send_message(
                 chat_id=self.owner_user_id,
                 text=message

@@ -13,41 +13,64 @@ class SecurityFilter:
     def __init__(self):
         # Load all sensitive values from .env
         self.sensitive_values = set()
+        self.sensitive_env_names = set()
         
-        # API Keys
-        moltbook_key = os.getenv('MOLTBOOK_API_KEY')
-        xai_key = os.getenv('XAI_API_KEY')
-        base_private_key = os.getenv('BASE_WALLET_PRIVATE_KEY')
-        moltcities_key = os.getenv('MOLTCITIES_API_KEY')
+        # Auto-detect ALL secret env vars from known key names
+        secret_env_keys = [
+            'MOLTBOOK_API_KEY', 'MOLTCHAN_API_KEY', 'MOLTROAD_API_KEY',
+            'MOLTX_API_KEY', 'CLAWTASKS_API_KEY', 'XAI_API_KEY',
+            'BASE_WALLET_PRIVATE_KEY', 'DEEPSEEK_API_KEY',
+            'BANKR_API_KEY', 'FOURCLAW_API_KEY', 'TELEGRAM_BOT_TOKEN',
+            'OPENAI_API_KEY', 'GOOGLE_API_KEY', '8004SCAN_API_KEY',
+            'MOLTCITIES_API_KEY',
+        ]
         
-        # Add to sensitive set (only if they exist)
-        if moltbook_key:
-            self.sensitive_values.add(moltbook_key)
-        if xai_key:
-            self.sensitive_values.add(xai_key)
-        if base_private_key:
-            self.sensitive_values.add(base_private_key)
-        if moltcities_key:
-            self.sensitive_values.add(moltcities_key)
+        for key_name in secret_env_keys:
+            value = os.getenv(key_name)
+            if value and value not in ('', 'your_openai_free_api_key_here', 'your_google_gemini_free_api_key_here'):
+                self.sensitive_values.add(value)
+                self.sensitive_env_names.add(key_name)
+        
+        # Also protect wallet private keys and bot tokens by scanning all env vars
+        for key, value in os.environ.items():
+            if not value or len(value) < 10:
+                continue
+            key_upper = key.upper()
+            if any(s in key_upper for s in ('PRIVATE', 'SECRET', 'TOKEN', 'API_KEY', 'PASSWORD')):
+                self.sensitive_values.add(value)
+                self.sensitive_env_names.add(key)
         
         # Patterns to detect and block
         self.sensitive_patterns = [
             # API key patterns
-            r'sk-[a-zA-Z0-9]{32,}',  # OpenAI/XAI style keys
-            r'xai-[a-zA-Z0-9]{32,}',  # XAI keys
-            r'[a-f0-9]{64}',  # Generic API keys (64 hex chars)
+            r'sk-[a-zA-Z0-9]{20,}',  # OpenAI/DeepSeek style keys
+            r'xai-[a-zA-Z0-9]{20,}',  # XAI keys
+            r'moltbook_sk_[a-zA-Z0-9_]+',  # Moltbook keys
+            r'moltchan_sk_[a-zA-Z0-9_]+',  # Moltchan keys
+            r'moltx_sk_[a-zA-Z0-9_]+',  # Moltx keys
+            r'moltroad_sk_[a-zA-Z0-9_]+',  # Moltroad keys
+            r'bk_[A-Z0-9]{20,}',  # Bankr keys
+            r'clawchan_[a-f0-9]{20,}',  # 4claw keys
+            r'8004_[a-zA-Z0-9_]{20,}',  # 8004scan keys
+            r'[a-f0-9]{64}',  # Generic 64-char hex (API keys, private keys)
             
             # Private key patterns
-            r'0x[a-f0-9]{64}',  # Ethereum private keys
+            r'0x[a-fA-F0-9]{64}',  # Ethereum private keys
             r'-----BEGIN.*PRIVATE KEY-----',  # PEM private keys
             
-            # Environment variable references
+            # Telegram bot token pattern
+            r'\d{9,10}:[A-Za-z0-9_-]{35}',  # Telegram bot tokens
+            
+            # Environment variable name references
             r'\.env',
-            r'MOLTBOOK_API_KEY',
-            r'XAI_API_KEY',
-            r'BASE_WALLET_PRIVATE_KEY',
-            r'MOLTCITIES_API_KEY',
+            r'PRIVATE_KEY',
+            r'API_KEY',
+            r'BOT_TOKEN',
         ]
+        
+        # Also block any env var name that holds a secret
+        for name in self.sensitive_env_names:
+            self.sensitive_patterns.append(re.escape(name))
         
         # Compile patterns
         self.compiled_patterns = [re.compile(p, re.IGNORECASE) for p in self.sensitive_patterns]
