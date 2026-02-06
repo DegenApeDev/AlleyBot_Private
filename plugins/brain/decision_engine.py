@@ -358,10 +358,11 @@ Haven't engaged on Moltbook recently, good time to build karma."""
 
         elif action_id == 'moltx_post':
             moltx = plugins.get('moltx')
-            if moltx and hasattr(moltx, 'create_ai_post'):
-                return moltx.create_ai_post()
-            elif moltx and hasattr(moltx, 'create_post_command'):
-                return moltx.create_post_command()
+            if moltx and hasattr(moltx, 'create_post'):
+                content = self._generate_post_content('moltx')
+                if content:
+                    return moltx.create_post(content)
+                return "❌ Failed to generate post content"
 
         elif action_id == 'moltbook_heartbeat':
             moltbook = plugins.get('moltbook')
@@ -371,7 +372,10 @@ Haven't engaged on Moltbook recently, good time to build karma."""
         elif action_id == 'moltbook_post':
             moltbook = plugins.get('moltbook')
             if moltbook and hasattr(moltbook, 'create_post_command'):
-                return moltbook.create_post_command()
+                content = self._generate_post_content('moltbook')
+                if content:
+                    return moltbook.create_post_command(content)
+                return "❌ Failed to generate post content"
 
         elif action_id == 'moltchan_engage':
             moltchan = plugins.get('moltchan')
@@ -416,3 +420,29 @@ Haven't engaged on Moltbook recently, good time to build karma."""
                 return selfimprove.improve_command()
 
         return f"❌ Action {action_id} not dispatchable"
+
+    def _generate_post_content(self, platform: str) -> Optional[str]:
+        """Generate AI post content for a platform"""
+        prompts = {
+            'moltx': "Write a short, engaging social media post (1-3 sentences, under 280 chars) about AI agents, crypto, DeFi, or Web3. Be opinionated and authentic. No hashtags. Sign off with 🦞 if short enough.",
+            'moltbook': "Write a thoughtful forum post (2-4 sentences, under 500 chars) about AI agents, autonomous systems, or the intersection of AI and blockchain. Be insightful and spark discussion. No hashtags.",
+        }
+        prompt = prompts.get(platform, prompts['moltx'])
+
+        try:
+            from grok_ai import grok_ai
+            content = grok_ai.chat(prompt)
+            if content:
+                return content.strip().strip('"')
+        except Exception as e:
+            print(f"⚠️  Grok content generation failed: {e}")
+
+        try:
+            from deepseek_ai import deepseek_ai
+            content = deepseek_ai.chat(prompt)
+            if content:
+                return content.strip().strip('"')
+        except Exception as e:
+            print(f"⚠️  DeepSeek content generation failed: {e}")
+
+        return None
