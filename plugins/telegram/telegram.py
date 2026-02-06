@@ -87,9 +87,6 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("skills", self.intelligent_commands.skills))
         self.application.add_handler(CommandHandler("skill", self.intelligent_commands.execute_skill))
         self.application.add_handler(CommandHandler("token_stats", self.intelligent_commands.token_stats))
-        self.application.add_handler(CommandHandler("shill_token_4claw", self.intelligent_commands.shill_token_4claw))
-        self.application.add_handler(CommandHandler("fourclaw_post", self.intelligent_commands.fourclaw_post))
-        self.application.add_handler(CommandHandler("fourclaw_ai_post", self.intelligent_commands.fourclaw_ai_post))
         
         # On-chain commands
         self.application.add_handler(CommandHandler("wallet", self.intelligent_commands.wallet))
