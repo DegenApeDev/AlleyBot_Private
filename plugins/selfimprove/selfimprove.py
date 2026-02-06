@@ -17,9 +17,10 @@ from plugins.selfimprove.test_gate import TestGateMixin
 from plugins.selfimprove.skill_marketplace import SkillMarketplaceMixin
 from plugins.selfimprove.skill_builder import SkillBuilderMixin
 from plugins.selfimprove.skill_updater import SkillUpdaterMixin
+from plugins.selfimprove.autonomous_coder import AutonomousCoderMixin
 
 
-class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, SkillBuilderMixin, SkillUpdaterMixin, AlleyBotPlugin):
+class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, SkillBuilderMixin, SkillUpdaterMixin, AutonomousCoderMixin, AlleyBotPlugin):
     """Self-improvement capabilities: autonomous coding, git workflow, test gates, skill marketplace"""
 
     def __init__(self, config):
@@ -49,6 +50,9 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
 
         # Initialize skill updater (auto-download platform skill files)
         self._init_skill_updater()
+
+        # Initialize autonomous coder (AI code generation + self-update)
+        self._init_autonomous_coder()
 
         print("✅ Self-improvement plugin ready")
 
@@ -167,6 +171,17 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
             for plat, ver in sorted(self.skill_versions.items()):
                 output += f"      {plat}: v{ver}\n"
 
+        # Autonomous coder
+        if hasattr(self, '_coder_history'):
+            recent = [h for h in self._coder_history[-3:]]
+            if recent:
+                output += "\n  🤖 Recent Self-Updates:\n"
+                for h in reversed(recent):
+                    icon = "✔️" if h.get('success') else "❌"
+                    output += f"    {icon} {h.get('task', '?')[:50]}\n"
+            else:
+                output += "\n  🤖 Autonomous coder: ready (no updates yet)\n"
+
         return output
 
     def get_tasks(self):
@@ -219,6 +234,11 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
             'improve_update_skills': self.update_skills_command,
             'improve_update_skill': self.update_single_skill_command,
             'improve_skill_versions': self.skill_versions_command,
+            # Autonomous coder
+            'improve_self_update': self.self_update_command,
+            'improve_apply_skill': self.self_update_from_skill_command,
+            'improve_update_restart': self.self_update_and_restart_command,
+            'improve_coder_status': self.coder_status_command,
         }
 
     def get_endpoints(self):

@@ -75,6 +75,13 @@ AUTONOMOUS_ACTIONS = {
         'impact': 'medium',
         'requires': 'selfimprove',
     },
+    'self_update': {
+        'description': 'Apply pending skill changes by generating code, validating, testing, and committing',
+        'platform': 'system',
+        'cooldown_minutes': 1440,
+        'impact': 'high',
+        'requires': 'selfimprove',
+    },
 }
 
 
@@ -402,6 +409,21 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             selfimprove = plugins.get('selfimprove')
             if selfimprove and hasattr(selfimprove, 'update_skills_command'):
                 return selfimprove.update_skills_command()
+
+        elif action_id == 'self_update':
+            selfimprove = plugins.get('selfimprove')
+            if selfimprove and hasattr(selfimprove, 'self_update_from_skill_command'):
+                # Check each platform for pending skill updates to apply
+                output_parts = []
+                for platform in ['moltx', 'moltbook']:
+                    skill_file = os.path.join(
+                        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                        'skills', f'{platform}_skill.md'
+                    )
+                    if os.path.exists(skill_file):
+                        result = selfimprove.self_update_from_skill_command(platform)
+                        output_parts.append(f"{platform}: {result}")
+                return '\n'.join(output_parts) if output_parts else "No skill files to apply"
 
         return f"❌ Action {action_id} not dispatchable"
 
