@@ -234,19 +234,33 @@ class EventRunner:
                                             'post_id': post_id
                                         })
                                         
-                                        # Add comment (simple for now)
+                                        # Generate AI comment using moltbook plugin
                                         try:
-                                            comment = "Interesting perspective! 🦞"
-                                            moltbook_plugin.api.add_comment(post_id, comment)
-                                            print(f"  💬 Commented on Moltbook post {post_id}")
-                                            
-                                            # Log comment activity
-                                            self.activity_logger.log_activity('comment', 'moltbook', {
-                                                'post_id': post_id,
-                                                'comment': comment
-                                            })
-                                        except:
-                                            pass
+                                            comment = None
+                                            if hasattr(moltbook_plugin, '_create_intelligent_comment'):
+                                                comment = moltbook_plugin._create_intelligent_comment(post)
+                                            if not comment:
+                                                # Fallback: use grok/deepseek directly
+                                                try:
+                                                    from grok_ai import grok_ai
+                                                    post_title = post.get('title', '')
+                                                    post_content = post.get('content', '')[:300]
+                                                    prompt = f"Write a short, thoughtful reply (1-2 sentences, under 200 chars) to this post. Be specific to the content, not generic.\n\nPost: {post_title}\n{post_content}\n\nReply:"
+                                                    comment = grok_ai.chat(prompt)
+                                                    if comment:
+                                                        comment = comment.strip().strip('"')
+                                                except Exception:
+                                                    pass
+                                            if comment:
+                                                moltbook_plugin.api.add_comment(post_id, comment)
+                                                print(f"  💬 Commented on Moltbook post {post_id}: {comment[:60]}...")
+                                                
+                                                self.activity_logger.log_activity('comment', 'moltbook', {
+                                                    'post_id': post_id,
+                                                    'comment': comment[:100]
+                                                })
+                                        except Exception as e:
+                                            print(f"  ⚠️ Comment generation failed: {e}")
                                 
                                 print(f"✅ Moltbook engagement completed")
                             else:
