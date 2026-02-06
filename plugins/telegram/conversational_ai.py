@@ -149,57 +149,132 @@ class ConversationalAI:
     
     async def _fallback_response(self, message: str) -> str:
         """
-        Fallback response using DeepSeek directly
-        Used when agentic system is not available
+        Intelligent response using Grok reasoning + tool dispatch.
+        Understands natural language requests and can execute AlleyBot commands.
+        Falls back to DeepSeek if Grok is unavailable.
         """
         try:
-            from deepseek_ai import deepseek_ai
-            import requests
-            
-            if not deepseek_ai.enabled:
-                return "🤖 AlleyBot here! Agentic system is not running. Use /help for available commands."
-            
-            system_prompt = """You are AlleyBot, an autonomous AI agent that manages social media presence across multiple platforms (MoltX, Moltbook, etc.) and handles crypto operations.
+            # Build tool-aware system prompt
+            system_prompt = self._build_tool_aware_prompt()
 
-You help your admin by:
-- Providing status updates on engagement and karma
-- Executing tasks like creating posts, engaging with feeds
-- Analyzing trends and suggesting strategies
-- Managing platform integrations
+            # Build conversation context
+            user_prompt = message
 
-Be helpful, concise, and proactive. Use emojis appropriately."""
+            # Try Grok first (better reasoning for tool use)
+            response_text = None
+            try:
+                from grok_ai import grok_ai
+                if grok_ai.enabled:
+                    response_text = grok_ai.chat(
+                        user_prompt,
+                        system_prompt=system_prompt,
+                        max_tokens=1000
+                    )
+            except Exception as e:
+                print(f"⚠️  Grok chat failed, trying DeepSeek: {e}")
 
-            headers = {
-                "Authorization": f"Bearer {deepseek_ai.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            data = {
-                "model": deepseek_ai.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": message}
-                ],
-                "max_tokens": 500,
-                "temperature": 0.7
-            }
-            
-            response = requests.post(
-                f"{deepseek_ai.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=15
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                return result['choices'][0]['message']['content'].strip()
-            else:
-                return "🤖 I'm here! Use /help to see what I can do."
-                
+            # Fallback to DeepSeek
+            if not response_text:
+                try:
+                    from deepseek_ai import deepseek_ai
+                    if deepseek_ai.enabled:
+                        response_text = deepseek_ai.chat(
+                            user_prompt,
+                            system_prompt=system_prompt,
+                            max_tokens=1000
+                        )
+                except Exception as e:
+                    print(f"⚠️  DeepSeek chat also failed: {e}")
+
+            if not response_text:
+                return "🤖 I'm having trouble connecting to my AI. Use /help for available commands."
+
+            # Check if the AI wants to execute a command
+            executed = self._try_execute_command(response_text)
+            if executed:
+                return executed
+
+            return response_text
+
         except Exception as e:
-            print(f"❌ Fallback response error: {e}")
+            print(f"❌ Intelligent response error: {e}")
             return "🤖 AlleyBot ready! Use /help for commands."
+
+    def _build_tool_aware_prompt(self) -> str:
+        """Build a system prompt that tells the AI about available tools/commands"""
+        # Gather available commands from all plugins
+        available_tools = []
+        if self.core and hasattr(self.core, 'plugin_manager'):
+            for cmd_name in sorted(self.core.plugin_manager.commands.keys()):
+                func = self.core.plugin_manager.commands[cmd_name]
+                doc = (func.__doc__ or '').split('\n')[0].strip()
+                available_tools.append(f"  - {cmd_name}: {doc}")
+
+        tools_text = '\n'.join(available_tools[:40]) if available_tools else '  (no commands loaded)'
+
+        return f"""You are AlleyBot, an autonomous AI agent with real capabilities. You manage social media on MoltX, MoltBook, MoltChan, and MoltRoad. You have on-chain awareness on Base network and can self-improve.
+
+Your owner (DegenApeDev) is chatting with you via Telegram. You should:
+1. UNDERSTAND what they want — use reasoning to figure out the intent
+2. If they want you to DO something, tell them what you'll do and include the command in your response using this format: [EXECUTE:command_name arg1 arg2]
+3. If they're asking a question, answer it thoughtfully using your knowledge
+4. If they ask you to build/develop a new skill or feature, use [EXECUTE:improve_self_update <description>]
+5. Be concise, helpful, and show personality 🦞
+
+AVAILABLE COMMANDS:
+{tools_text}
+
+IMPORTANT RULES:
+- For building new features/skills: use improve_self_update with a clear description
+- For checking skill updates: use improve_update_skills
+- For posting: use moltx_post or moltbook_post
+- For status: use improve_status, moltx_status, onchain_wallet, etc.
+- You can ONLY execute commands from the list above
+- If the user asks something conversational, just respond naturally — no need to execute anything
+- Always reason about what the user wants before responding
+- If you're unsure, ask for clarification rather than guessing"""
+
+    def _try_execute_command(self, ai_response: str) -> Optional[str]:
+        """Check if the AI response contains a command to execute, and run it"""
+        import re
+        match = re.search(r'\[EXECUTE:([^\]]+)\]', ai_response)
+        if not match:
+            return None
+
+        cmd_line = match.group(1).strip()
+        parts = cmd_line.split(None, 1)
+        cmd_name = parts[0]
+        cmd_args = parts[1] if len(parts) > 1 else ''
+
+        if not self.core or not hasattr(self.core, 'plugin_manager'):
+            return None
+
+        if cmd_name not in self.core.plugin_manager.commands:
+            # Strip the [EXECUTE:...] tag and return the rest
+            clean = re.sub(r'\[EXECUTE:[^\]]+\]', '', ai_response).strip()
+            return clean or ai_response
+
+        # Execute the command
+        try:
+            print(f"🔧 Executing command from natural language: {cmd_name} {cmd_args}")
+            func = self.core.plugin_manager.commands[cmd_name]
+            if cmd_args:
+                result = func(*cmd_args.split())
+            else:
+                result = func()
+
+            # Build response: AI's explanation + command result
+            clean_response = re.sub(r'\[EXECUTE:[^\]]+\]', '', ai_response).strip()
+            output = ""
+            if clean_response:
+                output += f"{clean_response}\n\n"
+            output += f"📋 Command result:\n{result}"
+            return output
+
+        except Exception as e:
+            print(f"❌ Command execution failed: {e}")
+            clean = re.sub(r'\[EXECUTE:[^\]]+\]', '', ai_response).strip()
+            return f"{clean}\n\n⚠️ Command failed: {e}"
     
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Get AlleyBot status and capabilities"""

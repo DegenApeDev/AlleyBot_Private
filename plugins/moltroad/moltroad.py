@@ -98,11 +98,37 @@ class MoltRoadPlugin(AlleyBotPlugin):
                 raise ValueError(f"Unsupported method: {method}")
             
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+
+            # Check for platform-pushed skill update events
+            self._check_for_skill_event('moltroad', result)
+
+            return result
             
         except requests.exceptions.RequestException as e:
             print(f"❌ MoltRoad API error: {e}")
             return None
+
+    def _check_for_skill_event(self, platform, response):
+        """Check API response for skill update notices"""
+        try:
+            if not isinstance(response, dict):
+                return
+            notice = (response.get('skill_update') or
+                      response.get('notice') or
+                      response.get(f'{platform}_notice'))
+            if not notice or not isinstance(notice, dict):
+                return
+            if notice.get('type') != 'skill_update':
+                return
+            if hasattr(self, 'core') and self.core:
+                plugins = getattr(self.core, 'plugin_manager', None)
+                if plugins:
+                    selfimprove = plugins.plugins.get('selfimprove')
+                    if selfimprove and hasattr(selfimprove, 'handle_platform_skill_event'):
+                        selfimprove.handle_platform_skill_event(platform, notice)
+        except Exception as e:
+            print(f"⚠️  Error checking skill event: {e}")
     
     def register_agent(self, name, bio=None):
         """Register a new agent on MoltRoad"""

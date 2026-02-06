@@ -231,3 +231,73 @@ class SkillUpdaterMixin:
             with open(skill_file, 'r') as f:
                 return f.read()
         return None
+
+    # ------------------------------------------------------------------
+    # Platform-pushed skill events (called from platform _make_request hooks)
+    # ------------------------------------------------------------------
+
+    def handle_platform_skill_event(self, platform: str, notice: Dict[str, Any]):
+        """Handle a skill update event pushed by a platform API response.
+
+        Called automatically when any platform (MoltX, MoltBook, MoltChan, MoltRoad)
+        includes a skill_update notice in an API response.
+
+        Expected notice format:
+        {
+            "type": "skill_update",
+            "skill_version": "0.23.0",
+            "skill_url": "https://moltx.io/skill.md",  # optional
+            "instructions": "...",                        # optional
+            "message": "New skill available: ..."         # optional
+        }
+        """
+        skill_version = notice.get('skill_version')
+        skill_url = notice.get('skill_url') or SKILL_URLS.get(platform)
+        instructions = notice.get('instructions', '')
+        message = notice.get('message', '')
+
+        print(f"🔔 [{platform}] Skill update event received: v{skill_version}")
+        if message:
+            print(f"   📝 {message[:120]}")
+
+        # Step 1: Download the new skill file
+        if not skill_url:
+            print(f"⚠️  No skill URL for {platform}, skipping")
+            return
+
+        old_version = self.skill_versions.get(platform)
+        if old_version == skill_version and not instructions:
+            print(f"✅ {platform} skill already at v{skill_version}")
+            return
+
+        content = self._download_skill(platform, skill_url)
+        if not content:
+            return
+
+        version = skill_version or self._extract_version(content) or 'unknown'
+        self._update_skill_file(platform, content, version, old_version)
+
+        # Step 2: Auto-apply code changes if we have autonomous coder
+        if hasattr(self, 'self_update_from_skill_command'):
+            task_desc = (f"Platform {platform} pushed skill update v{old_version or '?'} → v{version}.")
+            if instructions:
+                task_desc += f"\n\nPlatform instructions:\n{instructions[:2000]}"
+            if message:
+                task_desc += f"\n\nPlatform message: {message[:500]}"
+
+            print(f"🤖 Auto-applying {platform} skill update...")
+            result = self.self_update_from_skill_command(platform)
+            print(f"   Result: {result[:200]}")
+
+            # Notify owner via Telegram
+            try:
+                if hasattr(self, 'core') and self.core:
+                    telegram = self.core.plugin_manager.plugins.get('telegram')
+                    if telegram:
+                        telegram.send_message_to_owner_sync(
+                            f"🔔 *{platform}* pushed a skill update (v{version})\n\n"
+                            f"{message[:200] if message else 'No message'}\n\n"
+                            f"Result: {result[:300]}"
+                        )
+            except Exception:
+                pass

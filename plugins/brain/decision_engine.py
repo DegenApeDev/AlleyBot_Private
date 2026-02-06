@@ -61,25 +61,11 @@ AUTONOMOUS_ACTIONS = {
         'impact': 'medium',
         'requires': 'moltx',
     },
-    'build_skill': {
-        'description': 'Identify a capability gap and generate a new SKILL.md to improve AlleyBot',
-        'platform': 'system',
-        'cooldown_minutes': 360,
-        'impact': 'high',
-        'requires': 'selfimprove',
-    },
     'update_skills': {
         'description': 'Check all platforms for skill file updates and auto-download new versions',
         'platform': 'system',
         'cooldown_minutes': 720,
         'impact': 'medium',
-        'requires': 'selfimprove',
-    },
-    'self_update': {
-        'description': 'Apply pending skill changes by generating code, validating, testing, and committing',
-        'platform': 'system',
-        'cooldown_minutes': 1440,
-        'impact': 'high',
         'requires': 'selfimprove',
     },
 }
@@ -400,30 +386,10 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             if moltx and hasattr(moltx, 'trending_command'):
                 return moltx.trending_command()
 
-        elif action_id == 'build_skill':
-            selfimprove = plugins.get('selfimprove')
-            if selfimprove and hasattr(selfimprove, 'improve_command'):
-                return selfimprove.improve_command()
-
         elif action_id == 'update_skills':
             selfimprove = plugins.get('selfimprove')
             if selfimprove and hasattr(selfimprove, 'update_skills_command'):
                 return selfimprove.update_skills_command()
-
-        elif action_id == 'self_update':
-            selfimprove = plugins.get('selfimprove')
-            if selfimprove and hasattr(selfimprove, 'self_update_from_skill_command'):
-                # Check each platform for pending skill updates to apply
-                output_parts = []
-                for platform in ['moltx', 'moltbook']:
-                    skill_file = os.path.join(
-                        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-                        'skills', f'{platform}_skill.md'
-                    )
-                    if os.path.exists(skill_file):
-                        result = selfimprove.self_update_from_skill_command(platform)
-                        output_parts.append(f"{platform}: {result}")
-                return '\n'.join(output_parts) if output_parts else "No skill files to apply"
 
         return f"❌ Action {action_id} not dispatchable"
 

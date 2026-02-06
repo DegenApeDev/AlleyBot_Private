@@ -119,11 +119,39 @@ class MoltxAPIMixin:
                 raise ValueError(f"Unsupported method: {method}")
 
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+
+            # Check for platform-pushed skill update events
+            self._check_for_skill_event('moltx', result)
+
+            return result
 
         except requests.exceptions.RequestException as e:
             print(f"❌ Moltx API error: {e}")
             return None
+
+    def _check_for_skill_event(self, platform, response):
+        """Check API response for skill update notices from any platform"""
+        try:
+            if not isinstance(response, dict):
+                return
+            # Look for skill_update, notice, or platform_notice fields
+            notice = (response.get('skill_update') or
+                      response.get('notice') or
+                      response.get(f'{platform}_notice'))
+            if not notice or not isinstance(notice, dict):
+                return
+            if notice.get('type') != 'skill_update':
+                return
+            # Route to selfimprove plugin
+            if hasattr(self, 'core') and self.core:
+                plugins = getattr(self.core, 'plugin_manager', None)
+                if plugins:
+                    selfimprove = plugins.plugins.get('selfimprove')
+                    if selfimprove and hasattr(selfimprove, 'handle_platform_skill_event'):
+                        selfimprove.handle_platform_skill_event(platform, notice)
+        except Exception as e:
+            print(f"⚠️  Error checking skill event: {e}")
 
     def register_agent(self, name, display_name=None, description=None, avatar_emoji="🦞"):
         """Register a new agent on Moltx"""
