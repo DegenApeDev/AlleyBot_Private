@@ -106,15 +106,31 @@ class AnalyticsPlugin(AlleyBotPlugin):
             posts_today = 5  # TODO: Track daily posts
             ai_generations = total_posts  # All posts are AI-generated
             
-            # Get recent activity
+            # Get recent activity — brain actions first, then platform posts
             recent_activity = []
-            for activity in platform_stats.get('recent_activity', [])[:15]:
-                recent_activity.append({
-                    'platform': activity.get('platform', 'Unknown'),
-                    'content': activity.get('title', activity.get('content', ''))[:100],
-                    'timestamp': activity.get('timestamp', 'Just now'),
-                    'url': activity.get('url', '')
-                })
+            try:
+                brain = self.core.plugin_manager.plugins.get('brain')
+                if brain and hasattr(brain, 'action_history') and brain.action_history:
+                    for entry in reversed(brain.action_history[-15:]):
+                        recent_activity.append(self._format_brain_action(entry))
+            except Exception:
+                pass
+            if not recent_activity:
+                try:
+                    history = self.core.get_memory('brain_action_history') or []
+                    if isinstance(history, list):
+                        for entry in reversed(history[-15:]):
+                            recent_activity.append(self._format_brain_action(entry))
+                except Exception:
+                    pass
+            if not recent_activity:
+                for activity in platform_stats.get('recent_activity', [])[:15]:
+                    recent_activity.append({
+                        'platform': activity.get('platform', 'Unknown'),
+                        'content': activity.get('title', activity.get('content', ''))[:100],
+                        'timestamp': activity.get('timestamp', 'Just now'),
+                        'url': activity.get('url', '')
+                    })
             
             # AI Model Stats - try to get real data
             deepseek_calls = 0
@@ -309,26 +325,104 @@ class AnalyticsPlugin(AlleyBotPlugin):
             return jsonify({'success': False, 'error': str(e)})
     
     def api_recent_activity(self):
-        """API endpoint for recent activity feed"""
+        """API endpoint for recent activity feed — pulls from brain action history"""
         try:
-            # Try to get activity logger from event runner
-            activity_data = []
-            stats = {}
+            activities = []
             
-            if hasattr(self.core, 'event_runner') and hasattr(self.core.event_runner, 'activity_logger'):
-                activity_logger = self.core.event_runner.activity_logger
-                activity_data = activity_logger.get_recent_activities(limit=100)
-                stats = activity_logger.get_stats()
+            # Source 1: Brain action history (primary source)
+            try:
+                brain = self.core.plugin_manager.plugins.get('brain')
+                if brain and hasattr(brain, 'action_history'):
+                    for entry in reversed(brain.action_history[-30:]):
+                        activities.append(self._format_brain_action(entry))
+            except Exception:
+                pass
+            
+            # Source 2: Persisted action history from memory (if brain not loaded)
+            if not activities:
+                try:
+                    history = self.core.get_memory('brain_action_history') or []
+                    if isinstance(history, list):
+                        for entry in reversed(history[-30:]):
+                            activities.append(self._format_brain_action(entry))
+                except Exception:
+                    pass
+            
+            # Source 3: Platform recent posts from aggregator
+            if not activities:
+                try:
+                    platform_stats = self.aggregator.get_all_stats()
+                    for item in platform_stats.get('recent_activity', [])[:20]:
+                        activities.append({
+                            'platform': item.get('platform', 'Unknown'),
+                            'content': item.get('title', item.get('content', ''))[:120],
+                            'timestamp': item.get('timestamp', ''),
+                            'url': item.get('url', ''),
+                        })
+                except Exception:
+                    pass
             
             return jsonify({
                 'success': True,
-                'activities': activity_data,
-                'stats': stats,
+                'activities': activities[:30],
+                'total': len(activities),
                 'timestamp': datetime.now().isoformat()
             })
             
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)})
+    
+    def _format_brain_action(self, entry):
+        """Format a brain action history entry for the dashboard feed"""
+        action = entry.get('action', 'unknown')
+        platform = entry.get('platform', 'system')
+        success = entry.get('success', False)
+        output = entry.get('output', '')
+        reason = entry.get('reason', '')
+        timestamp = entry.get('timestamp', '')
+        
+        # Build human-readable description
+        icon = '✅' if success else '❌'
+        action_labels = {
+            'moltx_engage': 'Engaged with Moltx feed',
+            'moltx_post': 'Created a post on Moltx',
+            'moltbook_heartbeat': 'Engaged with MoltBook feed',
+            'moltbook_post': 'Created a post on MoltBook',
+            'moltchan_engage': 'Engaged on MoltChan',
+            'moltroad_engage': 'Engaged on MoltRoad',
+            'check_comments': 'Checked and replied to comments',
+            'analyze_trending': 'Analyzed trending topics',
+            'onchain_heartbeat': 'Monitored on-chain activity',
+            'build_skill': 'Generated a new skill',
+        }
+        label = action_labels.get(action, action.replace('_', ' ').title())
+        
+        # Use output snippet if available, otherwise reason
+        detail = ''
+        if output and not output.startswith('Error'):
+            detail = output[:120]
+        elif reason:
+            detail = reason[:120]
+        
+        content = f"{icon} {label}"
+        if detail:
+            content += f" — {detail}"
+        
+        # Format timestamp for display
+        display_time = timestamp
+        try:
+            from datetime import datetime as dt
+            ts = dt.fromisoformat(timestamp)
+            display_time = ts.strftime('%I:%M %p')
+        except Exception:
+            pass
+        
+        return {
+            'platform': platform.title() if platform else 'System',
+            'content': content,
+            'timestamp': display_time,
+            'url': '',
+        }
     
     def api_interactions(self):
         """API endpoint for recent interactions from all platforms"""
