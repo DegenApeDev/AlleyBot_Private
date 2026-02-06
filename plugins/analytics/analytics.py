@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from plugin_manager import AlleyBotPlugin
 from plugins.analytics.platform_aggregator import PlatformStatsAggregator
+from plugins.analytics.agent_card import AgentCardGenerator
 
 class AnalyticsPlugin(AlleyBotPlugin):
     """Analytics and dashboard plugin"""
@@ -26,6 +27,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
     def initialize(self, api, core):
         super().initialize(api, core)
         self.aggregator = PlatformStatsAggregator(core)
+        self.agent_card = AgentCardGenerator(core)
         self._setup_dashboard()
         print("📊 Analytics system initialized")
     
@@ -57,7 +59,8 @@ class AnalyticsPlugin(AlleyBotPlugin):
             '/api/metrics': self.api_metrics,
             '/api/activity': self.api_activity,
             '/api/recent_activity': self.api_recent_activity,
-            '/api/interactions': self.api_interactions
+            '/api/interactions': self.api_interactions,
+            '/.well-known/agent-card.json': self.api_agent_card,
         }
     
     def _setup_dashboard(self):
@@ -228,6 +231,14 @@ class AnalyticsPlugin(AlleyBotPlugin):
             traceback.print_exc()
             return f"Dashboard error: {e}"
     
+    def api_agent_card(self):
+        """Dynamic ERC-8004 agent card built from loaded plugins"""
+        try:
+            card = self.agent_card.generate()
+            return jsonify(card)
+        except Exception as e:
+            return jsonify({'error': str(e)})
+
     def api_stats(self):
         """API endpoint for stats"""
         try:

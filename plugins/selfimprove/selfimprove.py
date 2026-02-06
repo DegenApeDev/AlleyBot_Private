@@ -239,7 +239,37 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
             'improve_apply_skill': self.self_update_from_skill_command,
             'improve_update_restart': self.self_update_and_restart_command,
             'improve_coder_status': self.coder_status_command,
+            # ERC-8004 on-chain profile
+            'improve_erc8004_preview': self.erc8004_preview_command,
+            'improve_erc8004_update': self.erc8004_update_command,
         }
+
+    def erc8004_preview_command(self, *args):
+        """Preview ERC-8004 on-chain profile update (dry run)"""
+        try:
+            from plugins.analytics.agent_card import AgentCardGenerator
+            gen = AgentCardGenerator(self.core)
+            return gen.update_onchain(dry_run=True)
+        except Exception as e:
+            return f"❌ ERC-8004 preview failed: {e}"
+
+    def erc8004_update_command(self, *args):
+        """Update ERC-8004 on-chain profile with current skills (agent #22899)"""
+        try:
+            from plugins.analytics.agent_card import AgentCardGenerator
+            gen = AgentCardGenerator(self.core)
+
+            # Also save the static agent-card.json
+            import os
+            static_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                'static', '.well-known', 'agent-card.json'
+            )
+            gen.save_static(static_path)
+
+            return gen.update_onchain(dry_run=False)
+        except Exception as e:
+            return f"❌ ERC-8004 update failed: {e}"
 
     def get_endpoints(self):
         """Return web endpoints"""
