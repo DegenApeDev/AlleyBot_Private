@@ -487,8 +487,10 @@ if __name__ == "__main__":
         if len(sys.argv) > 1:
             if sys.argv[1] == 'autonomous':
                 # Check for enhanced mode flag
-                enhanced = len(sys.argv) > 2 and sys.argv[2] == '--enhanced'
-                core.run_autonomous(enhanced=enhanced)
+                if len(sys.argv) > 2 and sys.argv[2] == '--enhanced':
+                    core.run_enhanced_autonomous()
+                else:
+                    core.run_autonomous()
             elif sys.argv[1] == 'interactive':
                 core.run_interactive()
             else:
