@@ -8,9 +8,9 @@ from typing import Dict, List, Any, Optional
 
 # Well-known tokens on Base
 KNOWN_TOKENS = {
-    'ALLEY': {
-        'address': '0x4ac87f6bf79f622768bFD2ec2b9F4c4B9267BB07',
-        'symbol': 'ALLEY',
+    'ALYBOT': {
+        'address': '0x08a18FE29158B1de5704F99cA396Ad9B2B6a58F3',
+        'symbol': 'ALYBOT',
         'name': 'AlleyBot',
         'decimals': 18,
     },
@@ -123,10 +123,10 @@ class TokenTrackerMixin:
         if not self.web3_provider.wallet_address:
             return "❌ No wallet address configured"
 
-        # Always include ALLEY token
+        # Always include ALYBOT token
         tokens_to_check = dict(self.tracked_tokens)
-        if 'ALLEY' not in tokens_to_check:
-            tokens_to_check['ALLEY'] = KNOWN_TOKENS['ALLEY']
+        if 'ALYBOT' not in tokens_to_check:
+            tokens_to_check['ALYBOT'] = KNOWN_TOKENS['ALYBOT']
 
         output = "💰 Token Balances\n"
         output += f"📍 Wallet: {self.web3_provider.wallet_address[:10]}...{self.web3_provider.wallet_address[-6:]}\n"

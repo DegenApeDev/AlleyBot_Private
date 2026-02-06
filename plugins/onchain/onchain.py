@@ -45,8 +45,8 @@ class OnChainPlugin(TokenTrackerMixin, TxMonitorMixin, AlleyBotPlugin):
             self._init_tx_monitor()
 
             # Auto-track AlleyBot token
-            if 'ALLEY' not in self.tracked_tokens:
-                self.tracked_tokens['ALLEY'] = ALLEYBOT_TOKEN
+            if 'ALYBOT' not in self.tracked_tokens:
+                self.tracked_tokens['ALYBOT'] = ALLEYBOT_TOKEN
                 self._save_tracked_tokens()
 
             # Show initial balance
@@ -56,7 +56,7 @@ class OnChainPlugin(TokenTrackerMixin, TxMonitorMixin, AlleyBotPlugin):
 
             alley_result = self.web3_provider.get_token_balance(ALLEYBOT_TOKEN['address'])
             if alley_result['success']:
-                print(f"  🪙 ALLEY: {alley_result['balance']:,.4f}")
+                print(f"  🪙 ALYBOT: {alley_result['balance']:,.4f}")
 
             print("✅ On-chain plugin ready")
         else:

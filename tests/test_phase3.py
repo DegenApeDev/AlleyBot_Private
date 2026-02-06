@@ -90,7 +90,7 @@ class TestWeb3Provider(unittest.TestCase):
     def test_alleybot_token_defined(self):
         """ALLEYBOT_TOKEN constant should be defined"""
         from plugins.onchain.web3_provider import ALLEYBOT_TOKEN
-        self.assertEqual(ALLEYBOT_TOKEN['symbol'], 'ALLEY')
+        self.assertEqual(ALLEYBOT_TOKEN['symbol'], 'ALYBOT')
         self.assertTrue(ALLEYBOT_TOKEN['address'].startswith('0x'))
         self.assertEqual(ALLEYBOT_TOKEN['decimals'], 18)
 
@@ -104,7 +104,7 @@ class TestWeb3Provider(unittest.TestCase):
             '0x0000000000000000000000000000000000000000'
         )
         self.assertTrue(result['success'])
-        self.assertEqual(result['symbol'], 'ALLEY')
+        self.assertEqual(result['symbol'], 'ALYBOT')
         self.assertEqual(result['decimals'], 18)
 
     def test_contract_read(self):
@@ -116,7 +116,7 @@ class TestWeb3Provider(unittest.TestCase):
             ALLEYBOT_TOKEN['address'], ERC20_ABI, 'symbol'
         )
         self.assertTrue(result['success'])
-        self.assertEqual(result['result'], 'ALLEY')
+        self.assertEqual(result['result'], 'ALYBOT')
 
     def test_transaction_lookup_invalid(self):
         """Should handle invalid tx hash gracefully"""
@@ -192,7 +192,7 @@ class TestTokenTracker(unittest.TestCase):
     def test_known_tokens(self):
         """Known tokens should include ALLEY, USDC, WETH"""
         from plugins.onchain.token_tracker import KNOWN_TOKENS
-        self.assertIn('ALLEY', KNOWN_TOKENS)
+        self.assertIn('ALYBOT', KNOWN_TOKENS)
         self.assertIn('USDC', KNOWN_TOKENS)
         self.assertIn('WETH', KNOWN_TOKENS)
 
