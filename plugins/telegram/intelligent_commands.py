@@ -640,6 +640,73 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
 
+    # =================================================================
+    # Brain Commands
+    # =================================================================
+
+    def _get_brain_plugin(self):
+        """Get the brain plugin from core"""
+        if self.core and hasattr(self.core, 'plugin_manager'):
+            return self.core.plugin_manager.plugins.get('brain')
+        return None
+
+    async def brain_think(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Run one brain think cycle"""
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await update.message.reply_text("❌ Brain plugin not loaded")
+                return
+
+            status_msg = await update.message.reply_text("🧠 Thinking...")
+            result = brain.think_command()
+            await status_msg.edit_text(result)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def brain_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Start autonomous brain loop"""
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await update.message.reply_text("❌ Brain plugin not loaded")
+                return
+
+            result = brain.start_autonomous()
+            await update.message.reply_text(result)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def brain_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Stop autonomous brain loop"""
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await update.message.reply_text("❌ Brain plugin not loaded")
+                return
+
+            result = brain.stop_autonomous()
+            await update.message.reply_text(result)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def brain_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show brain status"""
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await update.message.reply_text("❌ Brain plugin not loaded")
+                return
+
+            result = brain.status_command()
+            await update.message.reply_text(result)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show comprehensive help"""
         help_text = """🤖 **AlleyBot AI Assistant**
@@ -665,6 +732,12 @@ Just send any message - I'll respond intelligently!
 /tx [hash] - Look up a transaction
 /activity - Recent on-chain activity
 /onchain - On-chain plugin status
+
+**🧠 Brain Commands:**
+/think - Run one autonomous think cycle
+/brain_start - Start autonomous brain loop
+/brain_stop - Stop autonomous brain
+/brain - Brain status & stats
 
 **System Commands:**
 /status - Platform status

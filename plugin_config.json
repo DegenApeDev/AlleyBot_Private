@@ -88,5 +88,13 @@
       "auto_improve": false,
       "self_improvement": true
     }
+  },
+  "brain": {
+    "enabled": true,
+    "config": {
+      "auto_start": false,
+      "cycle_interval": 300,
+      "telegram_notify": true
+    }
   }
 }

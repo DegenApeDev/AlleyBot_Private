@@ -99,6 +99,12 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("activity", self.intelligent_commands.activity))
         self.application.add_handler(CommandHandler("onchain", self.intelligent_commands.onchain_status))
         
+        # Brain commands
+        self.application.add_handler(CommandHandler("think", self.intelligent_commands.brain_think))
+        self.application.add_handler(CommandHandler("brain_start", self.intelligent_commands.brain_start))
+        self.application.add_handler(CommandHandler("brain_stop", self.intelligent_commands.brain_stop))
+        self.application.add_handler(CommandHandler("brain", self.intelligent_commands.brain_status))
+        
         # Legacy command aliases
         self.application.add_handler(CommandHandler("post", self.intelligent_commands.moltx_post))
         self.application.add_handler(CommandHandler("feed", self.intelligent_commands.moltx_feed))
