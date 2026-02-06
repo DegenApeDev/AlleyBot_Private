@@ -123,3 +123,6 @@ static/temp/
 # Local fix scripts (do not commit)
 fix_display_name.py
 debug_skill_generation.py
+
+# Private docs (interview notes, internal strategy, etc.)
+docs/
