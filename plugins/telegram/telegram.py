@@ -21,8 +21,9 @@ class Telegram(AlleyBotPlugin):
         self.enabled = config.get('enabled', False)
         self.core = None
         
-        # Owner configuration
-        self.owner_user_id = 6172568442  # DegenApeDev's Telegram user ID
+        # Owner configuration - use env var, never hardcode
+        admin_id = os.getenv('TELEGRAM_ADMIN_CHAT_ID', '')
+        self.owner_user_id = int(admin_id) if admin_id.isdigit() else None
         self.owner_name = "DegenApeDev"
         
         # Telegram bot configuration

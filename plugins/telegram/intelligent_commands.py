@@ -18,6 +18,19 @@ class IntelligentTelegramCommands:
         """Dynamically access core from telegram plugin"""
         return self.telegram.core
 
+    async def _verify_admin(self, update) -> bool:
+        """Verify the message is from the authorized owner. Rejects all others."""
+        if not self.telegram or not self.telegram.owner_user_id:
+            await update.message.reply_text("🔒 Bot not configured.")
+            return False
+        user_id = update.effective_user.id
+        if user_id != self.telegram.owner_user_id:
+            await update.message.reply_text(
+                "🔒 This bot is private and only responds to its owner."
+            )
+            return False
+        return True
+
     def _filter_text(self, text: str) -> str:
         """Filter sensitive data from outbound text"""
         try:
@@ -31,6 +44,8 @@ class IntelligentTelegramCommands:
     
     async def ai_chat(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """AI-powered chat - natural language interaction"""
+        if not await self._verify_admin(update):
+            return
         try:
             user_message = ' '.join(context.args) if context.args else update.message.text
             
@@ -71,6 +86,8 @@ class IntelligentTelegramCommands:
     
     async def moltx_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Create an AI-generated post on Moltx based on topic/direction"""
+        if not await self._verify_admin(update):
+            return
         try:
             if not context.args:
                 await update.message.reply_text("📝 Usage: /moltx_post [topic and direction]\n\nExample: /moltx_post AI agents revolutionizing crypto")
@@ -152,6 +169,8 @@ Generate only the post content (no explanations):"""
     
     async def moltx_feed(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Browse Moltx feed"""
+        if not await self._verify_admin(update):
+            return
         try:
             if not self.core:
                 await update.message.reply_text("❌ Core not initialized")
@@ -188,6 +207,8 @@ Generate only the post content (no explanations):"""
     
     async def moltx_engage(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Engage with Moltx feed (like/comment)"""
+        if not await self._verify_admin(update):
+            return
         try:
             count = int(context.args[0]) if context.args else 3
             
@@ -203,6 +224,8 @@ Generate only the post content (no explanations):"""
     
     async def moltx_trending(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Analyze trending topics on Moltx"""
+        if not await self._verify_admin(update):
+            return
         try:
             if not self.core or not hasattr(self.core, 'plugin_manager'):
                 await update.message.reply_text("❌ Core not initialized")
@@ -228,6 +251,8 @@ Generate only the post content (no explanations):"""
     
     async def moltbook_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Create an AI-generated post on MoltBook based on topic/direction"""
+        if not await self._verify_admin(update):
+            return
         try:
             if not context.args:
                 await update.message.reply_text("📝 Usage: /moltbook_post [topic and direction]\n\nExample: /moltbook_post discussing AI agent development")
@@ -361,6 +386,8 @@ Generate only the title (no explanations):"""
     
     async def token_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Get LLM API token usage statistics"""
+        if not await self._verify_admin(update):
+            return
         try:
             from src.config.models import ModelRouter
             
@@ -416,6 +443,8 @@ Generate only the title (no explanations):"""
     
     async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Get comprehensive status of all platforms"""
+        if not await self._verify_admin(update):
+            return
         try:
             status_text = "📊 **AlleyBot Status**\n\n"
             
@@ -458,6 +487,8 @@ Generate only the title (no explanations):"""
     
     async def skills(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """List available skills"""
+        if not await self._verify_admin(update):
+            return
         try:
             from src.skills.skill_loader import SkillLoader
             
@@ -486,6 +517,8 @@ Generate only the title (no explanations):"""
     
     async def execute_skill(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Execute a skill by name"""
+        if not await self._verify_admin(update):
+            return
         try:
             if not context.args:
                 await update.message.reply_text("📝 Usage: /skill [skill_name] [params...]")
@@ -512,6 +545,8 @@ Generate only the title (no explanations):"""
     
     async def register_agent(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Register AlleyBot on ERC-8004 for on-chain identity"""
+        if not await self._verify_admin(update):
+            return
         try:
             await update.message.reply_text("🆔 Registering AlleyBot on ERC-8004...\n\nThis will:\n1. Check if already registered\n2. Create agent profile with capabilities\n3. Register on-chain identity NFT (if needed)\n4. Enable reputation system\n\n⏳ This may take up to 5 minutes if sending transaction...")
             
@@ -551,6 +586,8 @@ Generate only the title (no explanations):"""
 
     async def wallet(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show wallet info and balances"""
+        if not await self._verify_admin(update):
+            return
         try:
             onchain = self._get_onchain_plugin()
             if not onchain:
@@ -565,6 +602,8 @@ Generate only the title (no explanations):"""
 
     async def balance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show token balances"""
+        if not await self._verify_admin(update):
+            return
         try:
             onchain = self._get_onchain_plugin()
             if not onchain:
@@ -579,6 +618,8 @@ Generate only the title (no explanations):"""
 
     async def block(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show current block info"""
+        if not await self._verify_admin(update):
+            return
         try:
             onchain = self._get_onchain_plugin()
             if not onchain:
@@ -593,6 +634,8 @@ Generate only the title (no explanations):"""
 
     async def track_token(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Track a token. Usage: /track <symbol_or_address>"""
+        if not await self._verify_admin(update):
+            return
         try:
             onchain = self._get_onchain_plugin()
             if not onchain:
@@ -607,6 +650,8 @@ Generate only the title (no explanations):"""
 
     async def tx(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Look up a transaction. Usage: /tx <hash>"""
+        if not await self._verify_admin(update):
+            return
         try:
             onchain = self._get_onchain_plugin()
             if not onchain:
@@ -621,6 +666,8 @@ Generate only the title (no explanations):"""
 
     async def activity(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show recent on-chain activity"""
+        if not await self._verify_admin(update):
+            return
         try:
             onchain = self._get_onchain_plugin()
             if not onchain:
@@ -640,6 +687,8 @@ Generate only the title (no explanations):"""
 
     async def onchain_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show on-chain plugin status"""
+        if not await self._verify_admin(update):
+            return
         try:
             onchain = self._get_onchain_plugin()
             if not onchain:
@@ -664,6 +713,8 @@ Generate only the title (no explanations):"""
 
     async def brain_think(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Run one brain think cycle"""
+        if not await self._verify_admin(update):
+            return
         try:
             brain = self._get_brain_plugin()
             if not brain:
@@ -679,6 +730,8 @@ Generate only the title (no explanations):"""
 
     async def brain_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Start autonomous brain loop"""
+        if not await self._verify_admin(update):
+            return
         try:
             brain = self._get_brain_plugin()
             if not brain:
@@ -693,6 +746,8 @@ Generate only the title (no explanations):"""
 
     async def brain_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Stop autonomous brain loop"""
+        if not await self._verify_admin(update):
+            return
         try:
             brain = self._get_brain_plugin()
             if not brain:
@@ -707,6 +762,8 @@ Generate only the title (no explanations):"""
 
     async def brain_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show brain status"""
+        if not await self._verify_admin(update):
+            return
         try:
             brain = self._get_brain_plugin()
             if not brain:
@@ -721,6 +778,8 @@ Generate only the title (no explanations):"""
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show comprehensive help"""
+        if not await self._verify_admin(update):
+            return
         help_text = """🤖 **AlleyBot AI Assistant**
 
 **AI Chat:**
