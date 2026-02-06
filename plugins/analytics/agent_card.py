@@ -265,32 +265,93 @@ class AgentCardGenerator:
             json.dump(card, f, indent=2)
         return path
 
+    def _upload_to_ipfs(self, card_json: str) -> str:
+        """Upload agent card JSON to IPFS and return the ipfs:// URI.
+
+        Uses Pinata pinning service (requires PINATA_JWT in .env).
+        Falls back to web3.storage if Pinata is unavailable.
+
+        Returns:
+            IPFS URI string like 'ipfs://bafkrei...'
+        """
+        import os
+        import requests
+
+        # ── Pinata (preferred) ──────────────────────────────────────
+        pinata_jwt = os.getenv('PINATA_JWT')
+        if pinata_jwt:
+            print("📌 Uploading agent card to IPFS via Pinata...")
+            resp = requests.post(
+                'https://api.pinata.cloud/pinning/pinJSONToIPFS',
+                headers={
+                    'Authorization': f'Bearer {pinata_jwt}',
+                    'Content-Type': 'application/json',
+                },
+                json={
+                    'pinataContent': json.loads(card_json),
+                    'pinataMetadata': {
+                        'name': f'AlleyBot-agent-card-{AGENT_ID}',
+                    },
+                },
+                timeout=30,
+            )
+            resp.raise_for_status()
+            ipfs_hash = resp.json()['IpfsHash']
+            ipfs_uri = f"ipfs://{ipfs_hash}"
+            print(f"✅ Pinned to IPFS: {ipfs_uri}")
+            return ipfs_uri
+
+        # ── Infura IPFS ────────────────────────────────────────────
+        infura_project_id = os.getenv('INFURA_IPFS_PROJECT_ID')
+        infura_secret = os.getenv('INFURA_IPFS_SECRET')
+        if infura_project_id and infura_secret:
+            print("📌 Uploading agent card to IPFS via Infura...")
+            resp = requests.post(
+                'https://ipfs.infura.io:5001/api/v0/add',
+                auth=(infura_project_id, infura_secret),
+                files={'file': ('agent-card.json', card_json.encode(), 'application/json')},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            ipfs_hash = resp.json()['Hash']
+            ipfs_uri = f"ipfs://{ipfs_hash}"
+            print(f"✅ Pinned to IPFS: {ipfs_uri}")
+            return ipfs_uri
+
+        raise RuntimeError(
+            "No IPFS provider configured. Set PINATA_JWT or "
+            "INFURA_IPFS_PROJECT_ID + INFURA_IPFS_SECRET in .env"
+        )
+
     def update_onchain(self, dry_run: bool = False) -> str:
         """Update AlleyBot's ERC-8004 on-chain profile with current skills.
 
-        Calls updateRegistration(uint256 agentId, string registrationURI) on
-        the Identity Registry contract on Ethereum mainnet.
+        1. Generates the agent card JSON from loaded plugins.
+        2. Uploads it to IPFS (via Pinata or Infura).
+        3. Calls setAgentURI(uint256 agentId, string uri) on the
+           Identity Registry contract on Ethereum mainnet.
 
         Args:
-            dry_run: If True, generate the data URI but don't send the tx.
+            dry_run: If True, show what would be uploaded but don't send tx.
 
         Returns:
             Status message string.
         """
         import os
 
-        data_uri = self.to_data_uri()
+        card = self.generate()
+        card_json = json.dumps(card, indent=2)
         skill_count = len(self._collect_skills())
 
         if dry_run:
-            card = self.generate()
             skills_preview = '\n'.join(f"  - {s}" for s in card.get('capabilities', [])[:10])
             return (
                 f"🆔 ERC-8004 Agent #{AGENT_ID} — Dry Run\n"
                 f"📊 {skill_count} OASF skills from {len(self._get_loaded_plugins())} plugins\n"
-                f"📝 Data URI length: {len(data_uri)} chars\n\n"
+                f"📝 Card JSON size: {len(card_json)} bytes\n\n"
                 f"Capabilities preview:\n{skills_preview}\n\n"
-                f"Use without dry_run to submit the on-chain transaction."
+                f"Will upload to IPFS then call setAgentURI on-chain.\n"
+                f"Use without dry_run to submit."
             )
 
         # Need private key for Ethereum mainnet tx
@@ -299,53 +360,64 @@ class AgentCardGenerator:
             return "❌ No private key found. Set BASE_WALLET_PRIVATE_KEY or ETH_PRIVATE_KEY in .env"
 
         try:
+            # Step 1: Upload to IPFS
+            ipfs_uri = self._upload_to_ipfs(card_json)
+
             from web3 import Web3
 
-            # Connect to Ethereum mainnet
+            # Step 2: Connect to Ethereum mainnet
             eth_rpc = os.getenv('ETH_RPC_URL', 'https://eth.llamarpc.com')
             w3 = Web3(Web3.HTTPProvider(eth_rpc))
             if not w3.is_connected():
-                return "❌ Failed to connect to Ethereum mainnet"
+                return f"❌ Failed to connect to Ethereum mainnet (IPFS upload succeeded: {ipfs_uri})"
 
             account = w3.eth.account.from_key(private_key)
 
             # Check ETH balance
             balance = w3.eth.get_balance(account.address)
             balance_eth = w3.from_wei(balance, 'ether')
-            if balance_eth < 0.005:
-                return f"❌ Insufficient ETH on mainnet ({balance_eth:.4f} ETH). Need ~0.005 ETH for gas."
+            if balance_eth < 0.001:
+                return (
+                    f"❌ Insufficient ETH on mainnet ({balance_eth:.6f} ETH).\n"
+                    f"📌 IPFS upload succeeded: {ipfs_uri}\n"
+                    f"You can manually call setAgentURI with this URI."
+                )
 
-            # ERC-8004 updateRegistration ABI
+            # Step 3: Call setAgentURI on the Identity Registry
             abi = [
                 {
                     "inputs": [
                         {"name": "agentId", "type": "uint256"},
-                        {"name": "registrationURI", "type": "string"},
+                        {"name": "uri", "type": "string"},
                     ],
-                    "name": "updateRegistration",
+                    "name": "setAgentURI",
                     "outputs": [],
                     "stateMutability": "nonpayable",
                     "type": "function",
                 }
             ]
 
-            contract = w3.eth.contract(address=IDENTITY_REGISTRY, abi=abi)
+            contract = w3.eth.contract(
+                address=w3.to_checksum_address(IDENTITY_REGISTRY), abi=abi
+            )
             nonce = w3.eth.get_transaction_count(account.address)
 
             # Estimate gas
             try:
-                gas_estimate = contract.functions.updateRegistration(
-                    AGENT_ID, data_uri
+                gas_estimate = contract.functions.setAgentURI(
+                    AGENT_ID, ipfs_uri
                 ).estimate_gas({'from': account.address})
-            except Exception:
-                gas_estimate = 300000  # fallback
+                gas_estimate = int(gas_estimate * 1.2)  # 20% buffer
+            except Exception as e:
+                print(f"⚠️ Gas estimation failed ({e}), using fallback")
+                gas_estimate = 150000
 
             gas_price = w3.eth.gas_price
             total_cost = w3.from_wei(gas_estimate * gas_price, 'ether')
 
             # Build and send tx
-            tx = contract.functions.updateRegistration(
-                AGENT_ID, data_uri
+            tx = contract.functions.setAgentURI(
+                AGENT_ID, ipfs_uri
             ).build_transaction({
                 'from': account.address,
                 'nonce': nonce,
@@ -358,7 +430,7 @@ class AgentCardGenerator:
             tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
             tx_hex = tx_hash.hex()
 
-            print(f"📤 ERC-8004 update tx sent: {tx_hex}")
+            print(f"📤 ERC-8004 setAgentURI tx sent: {tx_hex}")
             print(f"⏳ Waiting for confirmation...")
 
             receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=300)
@@ -367,13 +439,19 @@ class AgentCardGenerator:
                 return (
                     f"✅ ERC-8004 profile updated on-chain!\n"
                     f"🆔 Agent #{AGENT_ID}\n"
+                    f"📌 IPFS: {ipfs_uri}\n"
                     f"📊 {skill_count} skills from {len(self._get_loaded_plugins())} plugins\n"
                     f"⛽ Gas used: {receipt['gasUsed']}\n"
                     f"💵 Cost: {total_cost:.6f} ETH\n"
-                    f"🔗 https://etherscan.io/tx/{tx_hex}"
+                    f"🔗 https://etherscan.io/tx/{tx_hex}\n"
+                    f"🔍 https://www.8004scan.io/agents/ethereum/{AGENT_ID}"
                 )
             else:
-                return f"❌ Transaction failed. https://etherscan.io/tx/{tx_hex}"
+                return (
+                    f"❌ Transaction reverted.\n"
+                    f"📌 IPFS upload succeeded: {ipfs_uri}\n"
+                    f"🔗 https://etherscan.io/tx/{tx_hex}"
+                )
 
         except ImportError:
             return "❌ web3 package not installed"
