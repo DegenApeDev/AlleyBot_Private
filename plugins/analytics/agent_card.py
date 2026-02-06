@@ -97,12 +97,11 @@ PLUGIN_SKILL_MAP = {
         ],
     },
     'a2a': {
-        'category': 'interoperability',
+        'category': 'agent_orchestration',
         'skills': [
-            'interoperability/agent_to_agent_protocol',
-            'interoperability/task_delegation',
-            'interoperability/agent_discovery',
-            'interoperability/x402_payment_gate',
+            'agent_orchestration/agent_coordination',
+            'agent_orchestration/negotiation_resolution',
+            'tool_interaction/api_schema_understanding',
         ],
     },
 }

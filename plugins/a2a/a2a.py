@@ -78,10 +78,11 @@ class A2APlugin(A2AServerMixin, A2ASecurityMixin, A2ATaskHandlerMixin, AlleyBotP
         endpoints = self.get_a2a_endpoints()
 
         lines = [
-            "🤝 A2A Protocol Status",
+            "🤝 A2A Protocol Status (RC v1.0)",
             f"{'='*40}",
             f"Server: {'🟢 Running' if server_running else '🔴 Stopped'}",
             f"Port: {self._a2a_port}",
+            f"Tasks stored: {len(self._tasks)}",
             f"",
             f"📊 Requests",
             f"  Total: {security['total_requests']}",
