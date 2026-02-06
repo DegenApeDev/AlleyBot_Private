@@ -15,9 +15,10 @@ from plugin_manager import AlleyBotPlugin
 from plugins.selfimprove.git_workflow import GitWorkflowMixin
 from plugins.selfimprove.test_gate import TestGateMixin
 from plugins.selfimprove.skill_marketplace import SkillMarketplaceMixin
+from plugins.selfimprove.skill_builder import SkillBuilderMixin
 
 
-class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, AlleyBotPlugin):
+class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, SkillBuilderMixin, AlleyBotPlugin):
     """Self-improvement capabilities: autonomous coding, git workflow, test gates, skill marketplace"""
 
     def __init__(self, config):
@@ -41,78 +42,15 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
         except ImportError:
             print("⚠️  autonomous_coder.py not found, code generation limited to skill_generator")
 
-        # Wire skill workflow if available
-        try:
-            from autonomous_skill_workflow import AutonomousSkillWorkflow
-            self.skill_workflow = AutonomousSkillWorkflow(core)
-            print("✅ Autonomous skill workflow loaded")
-        except ImportError:
-            self.skill_workflow = None
-            print("⚠️  autonomous_skill_workflow.py not available")
+        # Initialize skill builder (SKILL.md discovery + AI generation)
+        self._init_skill_builder()
+        print(f"🧩 Skill builder ready ({len(self.loaded_skills)} skills discovered)")
 
         print("✅ Self-improvement plugin ready")
 
     def improve_command(self, *args):
-        """Run a full self-improvement cycle: generate ideas, develop skill, test, branch, commit"""
-        if not self.skill_workflow:
-            return "❌ Skill workflow not available"
-
-        output = "🧠 Starting Self-Improvement Cycle\n\n"
-
-        # Step 1: Generate skill ideas
-        try:
-            ideas = self.skill_workflow.generate_skill_ideas()
-            output += f"💡 Generated {len(ideas)} skill ideas\n"
-            if not ideas:
-                return output + "📭 No skill ideas generated. Try again later."
-        except Exception as e:
-            return output + f"❌ Idea generation failed: {e}"
-
-        # Step 2: Show top idea
-        top = ideas[0]
-        output += f"🎯 Top idea: {top.get('topic', '?')} (score: {top.get('score', 0):.2f})\n"
-        output += f"   Source: {top.get('source', '?')} | Platform: {top.get('platform', '?')}\n\n"
-
-        # Step 3: Create improvement branch
-        feature_name = top.get('topic', 'skill-improvement')
-        branch_result = self.create_improvement_branch(feature_name)
-        if branch_result['success']:
-            output += f"🔀 Branch: {branch_result['branch']}\n"
-        else:
-            output += f"⚠️  Branch creation skipped: {branch_result['error']}\n"
-
-        # Step 4: Develop the skill
-        try:
-            skill_result = self.skill_workflow.develop_top_skill(ideas)
-            if skill_result:
-                output += f"✅ Skill developed: {skill_result['code_result'].get('draft_id', '?')}\n"
-            else:
-                output += "❌ Skill development failed\n"
-                return output
-        except Exception as e:
-            output += f"❌ Skill development error: {e}\n"
-            return output
-
-        # Step 5: Run test gate
-        gate = self.merge_gate_check()
-        output += f"\n{gate['summary']}\n"
-
-        # Step 6: Commit if tests pass
-        if gate['gate_passed']:
-            commit_result = self.commit_changes(f"Add skill: {feature_name}")
-            if commit_result['success']:
-                output += f"✅ Committed on {commit_result['branch']}\n"
-            else:
-                output += f"⚠️  Commit skipped: {commit_result.get('error', '?')}\n"
-
-            # Switch back to base
-            self.switch_back_to_base()
-            output += "🔀 Switched back to base branch\n"
-            output += "📋 Branch ready for human review\n"
-        else:
-            output += "⚠️  Not committing - tests failed. Fix issues first.\n"
-
-        return output
+        """Run a self-improvement cycle: identify gaps, generate a new skill"""
+        return self.build_skill_command(*args)
 
     def drafts_command(self, *args):
         """Show pending code drafts from autonomous coder"""
@@ -198,12 +136,11 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
         else:
             output += "  📝 Autonomous coder: not loaded\n"
 
-        # Skill workflow
-        if self.skill_workflow:
-            queue = self.skill_workflow.get_skill_queue_status()
-            output += f"  🧩 Skill queue: {queue['queue_size']} pending\n"
-        else:
-            output += "  🧩 Skill workflow: not loaded\n"
+        # Skill builder
+        output += f"  🧩 Skills discovered: {len(self.loaded_skills)}\n"
+        if self.loaded_skills:
+            for name in list(self.loaded_skills.keys())[:5]:
+                output += f"      📄 {name}\n"
 
         # Test gate
         recent_tests = self.test_results_history[-3:] if self.test_results_history else []
@@ -226,7 +163,7 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
         """Return scheduled tasks"""
         tasks = {}
 
-        if self.config.get('auto_improve', False) and self.skill_workflow:
+        if self.config.get('auto_improve', False):
             tasks['self_improvement_cycle'] = {
                 'function': lambda: self.improve_command(),
                 'schedule': '0 */6 * * *',
@@ -241,6 +178,8 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
             # Core
             'improve': self.improve_command,
             'improve_status': self.status_command,
+            'improve_skills': self.list_skills_command,
+            'improve_build': self.build_skill_command,
             # Git workflow
             'improve_branch': self.git_branch_command,
             'improve_commit': self.git_commit_command,

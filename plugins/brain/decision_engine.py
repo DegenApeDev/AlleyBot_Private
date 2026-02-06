@@ -61,10 +61,8 @@ AUTONOMOUS_ACTIONS = {
         'impact': 'medium',
         'requires': 'moltx',
     },
-    # build_skill disabled — SkillGenerator archived, always returns "not available"
-    # Re-enable when self-improvement system is rebuilt
-    '_build_skill_disabled': {
-        'description': 'DISABLED - Identify a capability gap and generate a new skill',
+    'build_skill': {
+        'description': 'Identify a capability gap and generate a new SKILL.md to improve AlleyBot',
         'platform': 'system',
         'cooldown_minutes': 360,
         'impact': 'high',

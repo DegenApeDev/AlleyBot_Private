@@ -174,7 +174,7 @@ class TestDecisionEngine(unittest.TestCase):
         """AUTONOMOUS_ACTIONS should have expected actions"""
         from plugins.brain.decision_engine import AUTONOMOUS_ACTIONS
         expected = ['moltx_engage', 'moltx_post', 'moltbook_heartbeat',
-                    'onchain_heartbeat', 'check_comments']
+                    'onchain_heartbeat', 'check_comments', 'build_skill']
         for action in expected:
             self.assertIn(action, AUTONOMOUS_ACTIONS, f"Missing action: {action}")
 
