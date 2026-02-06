@@ -137,7 +137,7 @@ class AgentCardGenerator:
                 },
                 {
                     "name": "A2A",
-                    "endpoint": "https://alleybot.xyz/.well-known/agent-card.json",
+                    "endpoint": "https://apeshit.fun/.well-known/agent-card.json",
                     "version": "0.3.0",
                 },
             ],
