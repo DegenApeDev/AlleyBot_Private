@@ -356,10 +356,10 @@ class TestSilentExceptBlocksFixed(unittest.TestCase):
         bare = self._check_no_bare_except(path)
         self.assertEqual(bare, [], f"Bare except: found at lines {bare} in react_agent.py")
 
-    def test_enhanced_autonomous_no_bare_except(self):
-        path = PROJECT_ROOT / 'enhanced_autonomous.py'
+    def test_alleybot_core_no_bare_except(self):
+        path = PROJECT_ROOT / 'alleybot_core.py'
         bare = self._check_no_bare_except(path)
-        self.assertEqual(bare, [], f"Bare except: found at lines {bare} in enhanced_autonomous.py")
+        self.assertEqual(bare, [], f"Bare except: found at lines {bare} in alleybot_core.py")
 
     def test_moltbook_plugin_no_bare_except(self):
         path = PROJECT_ROOT / 'plugins' / 'moltbook' / 'moltbook.py'
