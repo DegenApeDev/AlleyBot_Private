@@ -290,24 +290,123 @@ Return ONLY valid JSON, no markdown or explanation."""
             results['error'] = f"Failed to apply changes: {apply_result.get('error', '?')}"
             return results
 
-        # Step 4: Run test suite
+        # Step 4: Run test suite (with debug-and-retry on failure)
         test_modules = plan.get('test_modules', ['tests.test_fixes', 'tests.test_phase2',
                                                    'tests.test_phase3', 'tests.test_phase4',
                                                    'tests.test_phase5'])
-        print("🧪 Running test suite...")
-        test_result = self.run_test_suite(test_modules)
-        results['tests'] = test_result
+        max_fix_attempts = 2
+        attempt = 0
 
-        if not test_result.get('success'):
-            # Tests failed - revert changes
-            print("❌ Tests failed, reverting changes...")
-            self._revert_changes(results['generated_files'])
-            results['error'] = f"Tests failed: {test_result.get('failures', '?')} failures, {test_result.get('errors', '?')} errors"
-            return results
+        while True:
+            print(f"🧪 Running test suite{f' (fix attempt {attempt})' if attempt > 0 else ''}...")
+            test_result = self.run_test_suite(test_modules)
+            results['tests'] = test_result
+
+            if test_result.get('success'):
+                break  # Tests passed!
+
+            attempt += 1
+            if attempt > max_fix_attempts:
+                # Exhausted retries — revert and give up
+                print(f"❌ Tests still failing after {max_fix_attempts} fix attempts, reverting...")
+                self._revert_changes(results['generated_files'])
+                results['error'] = (
+                    f"Tests failed after {max_fix_attempts} fix attempts: "
+                    f"{test_result.get('failures', '?')} failures, "
+                    f"{test_result.get('errors', '?')} errors"
+                )
+                return results
+
+            # Debug-and-retry: feed errors back to AI for a fix
+            print(f"🔧 Test failure detected — asking AI to fix (attempt {attempt}/{max_fix_attempts})...")
+            error_output = test_result.get('output_tail', '')
+            fixed = self._debug_and_fix(results['generated_files'], error_output, plan)
+
+            if not fixed:
+                print("❌ AI could not produce a fix, reverting...")
+                self._revert_changes(results['generated_files'])
+                results['error'] = (
+                    f"Tests failed and auto-fix unsuccessful: "
+                    f"{test_result.get('failures', '?')} failures, "
+                    f"{test_result.get('errors', '?')} errors\n"
+                    f"Error: {error_output[-300:]}"
+                )
+                return results
+
+            # Re-apply the fixed code
+            print("📝 Applying fixed code...")
+            for gf in results['generated_files']:
+                full_path = os.path.join(self.project_root, gf['path'])
+                try:
+                    with open(full_path, 'w') as f:
+                        f.write(gf['code'])
+                except Exception as e:
+                    print(f"  ⚠️  Failed to write fix for {gf['path']}: {e}")
 
         results['applied'] = True
-        print(f"✅ Update applied: {plan.get('summary', '?')}")
+        results['fix_attempts'] = attempt
+        print(f"✅ Update applied: {plan.get('summary', '?')}"
+              f"{f' (after {attempt} fix(es))' if attempt > 0 else ''}")
         return results
+
+    # ------------------------------------------------------------------
+    # Debug-and-fix: AI-powered error correction
+    # ------------------------------------------------------------------
+
+    def _debug_and_fix(self, generated_files: List[Dict], error_output: str,
+                       plan: Dict) -> bool:
+        """Feed test errors back to AI and get fixed code.
+
+        Mutates generated_files in-place with corrected code.
+        Returns True if at least one file was fixed, False if AI couldn't help.
+        """
+        any_fixed = False
+
+        for gf in generated_files:
+            path = gf['path']
+            current_code = gf['code']
+
+            fix_prompt = f"""The following Python code was generated for AlleyBot but FAILED tests.
+
+FILE: {path}
+PLAN: {plan.get('summary', '?')}
+
+CURRENT CODE:
+```python
+{current_code[:6000]}
+```
+
+TEST ERROR OUTPUT:
+```
+{error_output[-1500:]}
+```
+
+Fix the code so the tests pass. Common issues:
+- Import errors (wrong module path, missing import)
+- Attribute errors (wrong method name, missing self parameter)
+- Type errors (wrong argument count, wrong types)
+- Logic errors (wrong return value, missing edge case)
+
+Return ONLY the complete fixed Python file. No explanations, no markdown fences."""
+
+            fixed_code = self._generate_code_with_ai(fix_prompt, max_tokens=6000)
+
+            if not fixed_code:
+                print(f"  ⚠️  AI returned no fix for {path}")
+                continue
+
+            # Validate the fix
+            safety = self.validate_code_safety(fixed_code)
+            if not safety['safe']:
+                print(f"  ⚠️  AI fix for {path} failed safety check: {safety['issues']}")
+                continue
+
+            # Update in-place
+            gf['code'] = fixed_code
+            any_fixed = True
+            print(f"  🔧 Got fix for {path} ({len(fixed_code)} bytes)")
+
+        return any_fixed
 
     # ------------------------------------------------------------------
     # Apply / Revert file changes
@@ -484,11 +583,11 @@ Return ONLY valid JSON, no markdown or explanation."""
         result = self._execute_plan(plan)
 
         if result.get('error'):
-            self._log_update(task, plan, False, result['error'])
+            self._log_coder_update(task, plan, False, result['error'])
             return f"❌ Self-update failed: {result['error']}"
 
         if not result.get('applied'):
-            self._log_update(task, plan, False, "Changes not applied")
+            self._log_coder_update(task, plan, False, "Changes not applied")
             return "❌ Self-update failed: changes were not applied"
 
         # Step 3: Commit and push
@@ -496,15 +595,18 @@ Return ONLY valid JSON, no markdown or explanation."""
         commit_result = self._commit_and_push(plan.get('summary', task[:50]), files)
 
         if not commit_result['success']:
-            self._log_update(task, plan, True, f"Applied but commit failed: {commit_result.get('error')}")
+            self._log_coder_update(task, plan, True, f"Applied but commit failed: {commit_result.get('error')}")
             return f"⚠️  Code applied but commit failed: {commit_result.get('error')}"
 
-        self._log_update(task, plan, True, None)
+        self._log_coder_update(task, plan, True, None)
 
         tests = result.get('tests', {})
+        fix_attempts = result.get('fix_attempts', 0)
         output = f"✅ Self-update complete: {plan.get('summary', '?')}\n"
         output += f"  📝 Files: {len(files)}\n"
         output += f"  🧪 Tests: {tests.get('tests_run', '?')} passed\n"
+        if fix_attempts:
+            output += f"  🔧 Auto-fixed {fix_attempts} test failure(s)\n"
         output += f"  📦 Committed and pushed\n"
 
         return output
@@ -542,7 +644,7 @@ Return ONLY valid JSON, no markdown or explanation."""
 
         return output
 
-    def _log_update(self, task: str, plan: Optional[Dict], success: bool, error: Optional[str]):
+    def _log_coder_update(self, task: str, plan: Optional[Dict], success: bool, error: Optional[str]):
         """Log an update attempt"""
         entry = {
             'task': task[:200],
