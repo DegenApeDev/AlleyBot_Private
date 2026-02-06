@@ -81,5 +81,12 @@
       "network": "mainnet",
       "heartbeat_enabled": true
     }
+  },
+  "selfimprove": {
+    "enabled": true,
+    "config": {
+      "auto_improve": false,
+      "self_improvement": true
+    }
   }
 }

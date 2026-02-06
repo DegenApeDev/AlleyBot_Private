@@ -132,6 +132,9 @@ class AgenticAlleyBot:
         web3_prov = getattr(onchain_plugin, 'web3_provider', None) if onchain_plugin else None
         w3_instance = getattr(web3_prov, 'w3', None) if web3_prov and getattr(web3_prov, 'connected', False) else None
         self.onchain_plugin = onchain_plugin
+        self.selfimprove_plugin = core.plugin_manager.plugins.get('selfimprove')
+        if self.selfimprove_plugin:
+            print("✅ Self-improvement plugin linked")
         self.opportunity_detector = OnChainOpportunityDetector(
             moltbook_api=getattr(core.plugin_manager.plugins.get('moltbook'), 'api', None),
             web3_provider=w3_instance
@@ -220,6 +223,20 @@ class AgenticAlleyBot:
                 func=lambda x: self._get_opportunities_tool(x),
                 description="Get current on-chain opportunities. Input: 'all' or platform name"
             )
+        ])
+        
+        # Add self-improvement tools
+        tools.extend([
+            Tool(
+                name="run_tests",
+                func=lambda x: self._run_tests_tool(x),
+                description="Run project test suite. Input: 'all' or specific test module name"
+            ),
+            Tool(
+                name="self_improve",
+                func=lambda x: self._self_improve_tool(x),
+                description="Run autonomous self-improvement cycle. Input: 'full' or 'ideas'"
+            ),
         ])
         
         return tools
@@ -423,6 +440,44 @@ class AgenticAlleyBot:
         
         return output
     
+    def _run_tests_tool(self, input_str: str) -> str:
+        """Run project test suite tool"""
+        if not self.selfimprove_plugin:
+            return "❌ Self-improvement plugin not available"
+
+        if input_str and input_str != 'all':
+            modules = [input_str]
+        else:
+            modules = None
+
+        result = self.selfimprove_plugin.run_test_suite(modules)
+        if result.get('success'):
+            return f"✅ Tests passed: {result['tests_run']} tests, 0 failures"
+        elif result.get('error'):
+            return f"❌ Test error: {result['error']}"
+        else:
+            return (
+                f"❌ Tests failed: {result.get('tests_run', 0)} tests, "
+                f"{result.get('failures', '?')} failures, "
+                f"{result.get('errors', '?')} errors"
+            )
+
+    def _self_improve_tool(self, input_str: str) -> str:
+        """Run self-improvement cycle tool"""
+        if not self.selfimprove_plugin:
+            return "❌ Self-improvement plugin not available"
+
+        if input_str == 'ideas' and self.selfimprove_plugin.skill_workflow:
+            ideas = self.selfimprove_plugin.skill_workflow.generate_skill_ideas()
+            if not ideas:
+                return "📭 No skill ideas generated"
+            output = f"💡 {len(ideas)} skill ideas:\n"
+            for idea in ideas[:5]:
+                output += f"  • {idea.get('topic', '?')} (score: {idea.get('score', 0):.2f})\n"
+            return output
+
+        return self.selfimprove_plugin.improve_command()
+
     def _setup_initial_goals(self):
         """Set up initial hierarchical goals"""
         # Long-term goal
