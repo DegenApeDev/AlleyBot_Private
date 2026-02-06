@@ -209,8 +209,8 @@ class TestTestGate(unittest.TestCase):
         from plugins.selfimprove.selfimprove import SelfImprovePlugin
         p = SelfImprovePlugin({})
         p.project_root = str(PROJECT_ROOT)
-        # Run test_phase2 (no network calls) to avoid RPC conflicts when run in full suite
-        result = p.run_test_suite(['tests.test_phase2'])
+        # Run test_fixes (Phase 1, no network calls, always present)
+        result = p.run_test_suite(['tests.test_fixes'])
         self.assertTrue(result['success'])
         self.assertGreater(result['tests_run'], 0)
 
