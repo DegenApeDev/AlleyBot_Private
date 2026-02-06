@@ -8,9 +8,21 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from plugin_manager import AlleyBotPlugin
-from relationship_intelligence import RelationshipIntelligence
-from strategic_engagement import StrategicEngagement
-from learning_system import LearningSystem
+
+try:
+    from archive_old_files.relationship_intelligence import RelationshipIntelligence
+except ImportError:
+    RelationshipIntelligence = None
+
+try:
+    from archive_old_files.strategic_engagement import StrategicEngagement
+except ImportError:
+    StrategicEngagement = None
+
+try:
+    from archive_old_files.learning_system import LearningSystem
+except ImportError:
+    LearningSystem = None
 
 class IntelligencePlugin(AlleyBotPlugin):
     """Intelligence systems plugin"""
@@ -24,10 +36,10 @@ class IntelligencePlugin(AlleyBotPlugin):
     def initialize(self, api, core):
         super().initialize(api, core)
         
-        # Initialize intelligence systems
-        self.relationship_intelligence = RelationshipIntelligence()
-        self.strategic_engagement = StrategicEngagement()
-        self.learning_system = LearningSystem()
+        # Initialize intelligence systems (archived modules, may be unavailable)
+        self.relationship_intelligence = RelationshipIntelligence() if RelationshipIntelligence else None
+        self.strategic_engagement = StrategicEngagement() if StrategicEngagement else None
+        self.learning_system = LearningSystem() if LearningSystem else None
         
         print("🧠 Intelligence systems initialized")
     

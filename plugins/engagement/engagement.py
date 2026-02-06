@@ -8,8 +8,16 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from plugin_manager import AlleyBotPlugin
-from comment_supporter import CommentSupporter
-from own_post_comment_upvoter import OwnPostCommentUpvoter
+
+try:
+    from archive_old_files.comment_supporter import CommentSupporter
+except ImportError:
+    CommentSupporter = None
+
+try:
+    from archive_old_files.own_post_comment_upvoter import OwnPostCommentUpvoter
+except ImportError:
+    OwnPostCommentUpvoter = None
 
 class EngagementPlugin(AlleyBotPlugin):
     """Engagement and community building plugin"""
@@ -22,9 +30,9 @@ class EngagementPlugin(AlleyBotPlugin):
     def initialize(self, api, core):
         super().initialize(api, core)
         
-        # Initialize engagement systems
-        self.comment_supporter = CommentSupporter()
-        self.own_post_upvoter = OwnPostCommentUpvoter()
+        # Initialize engagement systems (archived modules, may be unavailable)
+        self.comment_supporter = CommentSupporter() if CommentSupporter else None
+        self.own_post_upvoter = OwnPostCommentUpvoter() if OwnPostCommentUpvoter else None
         
         print("🤝 Engagement systems initialized")
     
