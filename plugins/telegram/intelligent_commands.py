@@ -727,6 +727,25 @@ Generate only the title (no explanations):"""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, func, *args)
 
+    async def _safe_reply(self, update: Update, text: str):
+        """Reply to a message, falling back to raw HTTP if python-telegram-bot fails."""
+        filtered = self._filter_text(str(text))
+        try:
+            await update.message.reply_text(filtered)
+        except Exception:
+            # Fallback: raw HTTP API (avoids event loop / HTTPX issues)
+            try:
+                telegram = self.telegram
+                if telegram and telegram.bot_token:
+                    import requests as req
+                    req.post(
+                        f"https://api.telegram.org/bot{telegram.bot_token}/sendMessage",
+                        json={"chat_id": update.effective_chat.id, "text": filtered},
+                        timeout=10,
+                    )
+            except Exception as e2:
+                print(f"❌ Both reply methods failed: {e2}")
+
     async def brain_think(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Run one brain think cycle"""
         if not await self._verify_admin(update):
@@ -734,15 +753,15 @@ Generate only the title (no explanations):"""
         try:
             brain = self._get_brain_plugin()
             if not brain:
-                await update.message.reply_text("❌ Brain plugin not loaded")
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
                 return
 
-            status_msg = await update.message.reply_text("🧠 Thinking...")
+            await self._safe_reply(update, "🧠 Thinking...")
             result = await self._run_sync(brain.think_command)
-            await status_msg.edit_text(self._filter_text(str(result)))
+            await self._safe_reply(update, str(result))
 
         except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
+            await self._safe_reply(update, f"❌ Error: {e}")
 
     async def brain_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Start autonomous brain loop"""
@@ -751,14 +770,15 @@ Generate only the title (no explanations):"""
         try:
             brain = self._get_brain_plugin()
             if not brain:
-                await update.message.reply_text("❌ Brain plugin not loaded")
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
                 return
 
-            result = await self._run_sync(brain.start_autonomous)
-            await update.message.reply_text(self._filter_text(str(result)))
+            # start_autonomous returns instantly (spawns a thread), no need for _run_sync
+            result = brain.start_autonomous()
+            await self._safe_reply(update, str(result))
 
         except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
+            await self._safe_reply(update, f"❌ Error: {e}")
 
     async def brain_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Stop autonomous brain loop"""
@@ -767,14 +787,15 @@ Generate only the title (no explanations):"""
         try:
             brain = self._get_brain_plugin()
             if not brain:
-                await update.message.reply_text("❌ Brain plugin not loaded")
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
                 return
 
-            result = await self._run_sync(brain.stop_autonomous)
-            await update.message.reply_text(self._filter_text(str(result)))
+            # stop_autonomous returns instantly, no need for _run_sync
+            result = brain.stop_autonomous()
+            await self._safe_reply(update, str(result))
 
         except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
+            await self._safe_reply(update, f"❌ Error: {e}")
 
     async def brain_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show brain status"""
@@ -783,14 +804,14 @@ Generate only the title (no explanations):"""
         try:
             brain = self._get_brain_plugin()
             if not brain:
-                await update.message.reply_text("❌ Brain plugin not loaded")
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
                 return
 
             result = await self._run_sync(brain.status_command)
-            await update.message.reply_text(self._filter_text(str(result)))
+            await self._safe_reply(update, str(result))
 
         except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
+            await self._safe_reply(update, f"❌ Error: {e}")
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show comprehensive help"""

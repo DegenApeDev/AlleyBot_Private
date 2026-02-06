@@ -739,12 +739,7 @@ I'm ready to assist! Use /help to see available commands or just chat with me di
             return "❌ Telegram plugin not enabled"
         
         try:
-            # Send synchronously
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.send_message_to_owner(message))
-            loop.close()
-            
+            result = self.send_message_to_owner_sync(message)
             return "✅ Message sent to DegenApeDev" if result else "❌ Failed to send message"
         except Exception as e:
             return f"❌ Error sending message: {e}"
