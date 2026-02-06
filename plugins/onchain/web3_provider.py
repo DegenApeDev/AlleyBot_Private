@@ -45,8 +45,8 @@ ERC20_ABI = [
 
 # AlleyBot token on Base
 ALLEYBOT_TOKEN = {
-    'address': '0x4ac87f6bf79f622768bFD2ec2b9F4c4B9267BB07',
-    'symbol': 'ALLEY',
+    'address': '0x08a18FE29158B1de5704F99cA396Ad9B2B6a58F3',
+    'symbol': 'ALYBOT',
     'name': 'AlleyBot',
     'decimals': 18,
 }
