@@ -528,6 +528,118 @@ Generate only the title (no explanations):"""
             import traceback
             traceback.print_exc()
     
+    # =================================================================
+    # On-Chain Commands
+    # =================================================================
+
+    def _get_onchain_plugin(self):
+        """Get the onchain plugin from core"""
+        if self.core and hasattr(self.core, 'plugin_manager'):
+            return self.core.plugin_manager.plugins.get('onchain')
+        return None
+
+    async def wallet(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show wallet info and balances"""
+        try:
+            onchain = self._get_onchain_plugin()
+            if not onchain:
+                await update.message.reply_text("❌ On-chain plugin not loaded")
+                return
+
+            result = onchain.wallet_command()
+            await update.message.reply_text(result)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def balance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show token balances"""
+        try:
+            onchain = self._get_onchain_plugin()
+            if not onchain:
+                await update.message.reply_text("❌ On-chain plugin not loaded")
+                return
+
+            result = onchain.token_balances_command()
+            await update.message.reply_text(result)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def block(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show current block info"""
+        try:
+            onchain = self._get_onchain_plugin()
+            if not onchain:
+                await update.message.reply_text("❌ On-chain plugin not loaded")
+                return
+
+            result = onchain.block_info_command()
+            await update.message.reply_text(result)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def track_token(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Track a token. Usage: /track <symbol_or_address>"""
+        try:
+            onchain = self._get_onchain_plugin()
+            if not onchain:
+                await update.message.reply_text("❌ On-chain plugin not loaded")
+                return
+
+            result = onchain.track_token_command(*context.args) if context.args else onchain.track_token_command()
+            await update.message.reply_text(result)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def tx(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Look up a transaction. Usage: /tx <hash>"""
+        try:
+            onchain = self._get_onchain_plugin()
+            if not onchain:
+                await update.message.reply_text("❌ On-chain plugin not loaded")
+                return
+
+            result = onchain.tx_lookup_command(*context.args) if context.args else onchain.tx_lookup_command()
+            await update.message.reply_text(result)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def activity(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show recent on-chain activity"""
+        try:
+            onchain = self._get_onchain_plugin()
+            if not onchain:
+                await update.message.reply_text("❌ On-chain plugin not loaded")
+                return
+
+            status_msg = await update.message.reply_text("🔍 Scanning recent blocks...")
+            result = onchain.recent_activity_command(*context.args) if context.args else onchain.recent_activity_command()
+
+            if len(result) > 4000:
+                result = result[:3900] + "\n\n... (truncated)"
+            await status_msg.edit_text(result)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def onchain_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show on-chain plugin status"""
+        try:
+            onchain = self._get_onchain_plugin()
+            if not onchain:
+                await update.message.reply_text("❌ On-chain plugin not loaded")
+                return
+
+            result = onchain.onchain_status_command()
+            await update.message.reply_text(result)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show comprehensive help"""
         help_text = """🤖 **AlleyBot AI Assistant**
@@ -545,6 +657,15 @@ Just send any message - I'll respond intelligently!
 **MoltBook Commands:**
 /moltbook_post [message] - Create MoltBook post
 
+**🔗 On-Chain Commands:**
+/wallet - Wallet info & balances
+/balance - Token balances (ETH + tracked tokens)
+/block - Current Base block info
+/track [symbol] - Track a token (ALLEY, USDC, WETH, or address)
+/tx [hash] - Look up a transaction
+/activity - Recent on-chain activity
+/onchain - On-chain plugin status
+
 **System Commands:**
 /status - Platform status
 /skills - List available skills
@@ -556,7 +677,7 @@ Just send any message - I'll respond intelligently!
 ✅ Event-driven architecture
 ✅ Smart model routing (DeepSeek/Grok)
 ✅ RAG memory system
-✅ Session persistence
+✅ On-chain awareness (Base network)
 ✅ Dynamic skills system
 
 I'm your intelligent AI assistant - ask me anything! 🚀"""

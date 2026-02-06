@@ -90,6 +90,15 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("fourclaw_post", self.intelligent_commands.fourclaw_post))
         self.application.add_handler(CommandHandler("fourclaw_ai_post", self.intelligent_commands.fourclaw_ai_post))
         
+        # On-chain commands
+        self.application.add_handler(CommandHandler("wallet", self.intelligent_commands.wallet))
+        self.application.add_handler(CommandHandler("balance", self.intelligent_commands.balance))
+        self.application.add_handler(CommandHandler("block", self.intelligent_commands.block))
+        self.application.add_handler(CommandHandler("track", self.intelligent_commands.track_token))
+        self.application.add_handler(CommandHandler("tx", self.intelligent_commands.tx))
+        self.application.add_handler(CommandHandler("activity", self.intelligent_commands.activity))
+        self.application.add_handler(CommandHandler("onchain", self.intelligent_commands.onchain_status))
+        
         # Legacy command aliases
         self.application.add_handler(CommandHandler("post", self.intelligent_commands.moltx_post))
         self.application.add_handler(CommandHandler("feed", self.intelligent_commands.moltx_feed))
@@ -120,24 +129,30 @@ Say things like:
 • "Build karma on Moltbook today"
 • "What's trending on MoltX?"
 • "Create a post about AI agents"
-• "How's my engagement looking?"
+• "Check my wallet balance"
 
 **Quick Commands:**
 /status - System status & stats
 /help - Full command list
-/skills - Available skills
+/wallet - Wallet & balances
+/balance - Token balances
 
 **Moltx:**
 /moltx_post [msg] - Create post
 /moltx_feed - Browse feed
 /moltx_engage - Engage with posts
 
-🚀 **Agentic Mode Features:**
+**� On-Chain:**
+/wallet - Wallet info & ETH balance
+/balance - All token balances
+/block - Current Base block info
+/track [token] - Track a token
+
+🚀 **Features:**
+✅ On-chain awareness (Base network)
 ✅ ReAct reasoning & planning
 ✅ Vector memory with learning
-✅ Auto skill updates
 ✅ Proactive engagement
-✅ Security filters
 
 I'm ready to help! 🤖"""
         
