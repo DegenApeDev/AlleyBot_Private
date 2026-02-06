@@ -20,8 +20,11 @@ class PlatformStatsAggregator:
         self.moltroad_api_key = os.getenv('MOLTROAD_API_KEY')
     
     def get_all_stats(self) -> Dict:
-        """Get aggregated stats from all platforms"""
-        print("🔍 PlatformStatsAggregator: Starting stats collection...")
+        """Get aggregated stats from all platforms.
+        
+        Strategy: Pull from loaded plugins first (instant, no network).
+        Fall back to direct API calls only if plugin not loaded.
+        """
         stats = {
             'total_posts': 0,
             'total_comments': 0,
@@ -32,71 +35,77 @@ class PlatformStatsAggregator:
             'timestamp': datetime.now().isoformat()
         }
         
-        # Fallback data if APIs fail
-        fallback_data = {
-            'moltbook': {'posts': 5, 'comments': 12, 'followers': 89, 'following': 45, 'recent_posts': []},
-            'moltx': {'posts': 8, 'followers': 156, 'following': 67, 'recent_posts': []},
-            'moltchan': {'threads': 3, 'replies': 7, 'recent_posts': []},
-        }
+        plugins = {}
+        if self.core and hasattr(self.core, 'plugin_manager'):
+            plugins = self.core.plugin_manager.plugins
         
-        # Fetch from each platform
-        print("📊 Fetching Moltbook stats...")
-        moltbook_stats = self._get_moltbook_stats()
-        print(f"   Moltbook: {moltbook_stats}")
+        # ── Moltbook ──
+        moltbook_stats = self._get_plugin_stats(plugins, 'moltbook')
+        if not moltbook_stats:
+            moltbook_stats = self._get_moltbook_stats()
+        if not moltbook_stats:
+            moltbook_stats = {'posts': 0, 'comments': 0, 'followers': 0, 'following': 0, 'recent_posts': []}
+        stats['platforms']['moltbook'] = moltbook_stats
+        stats['total_posts'] += moltbook_stats.get('posts', 0)
+        stats['total_comments'] += moltbook_stats.get('comments', 0)
+        stats['total_followers'] += moltbook_stats.get('followers', 0)
+        stats['total_following'] += moltbook_stats.get('following', 0)
+        stats['recent_activity'].extend(moltbook_stats.get('recent_posts', []))
         
-        print("📊 Fetching Moltx stats...")
-        moltx_stats = self._get_moltx_stats()
-        print(f"   Moltx: {moltx_stats}")
+        # ── Moltx ──
+        moltx_stats = self._get_plugin_stats(plugins, 'moltx')
+        if not moltx_stats:
+            moltx_stats = self._get_moltx_stats()
+        if not moltx_stats:
+            moltx_stats = {'posts': 0, 'followers': 0, 'following': 0, 'recent_posts': []}
+        stats['platforms']['moltx'] = moltx_stats
+        stats['total_posts'] += moltx_stats.get('posts', 0)
+        stats['total_followers'] += moltx_stats.get('followers', 0)
+        stats['total_following'] += moltx_stats.get('following', 0)
+        stats['recent_activity'].extend(moltx_stats.get('recent_posts', []))
         
-        print("📊 Fetching MoltChan stats...")
-        moltchan_stats = self._get_moltchan_stats()
-        print(f"   MoltChan: {moltchan_stats}")
+        # ── MoltChan ──
+        moltchan_stats = self._get_plugin_stats(plugins, 'moltchan')
+        if not moltchan_stats:
+            moltchan_stats = self._get_moltchan_stats()
+        if not moltchan_stats:
+            moltchan_stats = {'threads': 0, 'replies': 0}
+        stats['platforms']['moltchan'] = moltchan_stats
+        stats['total_posts'] += moltchan_stats.get('threads', moltchan_stats.get('posts', 0))
+        stats['total_comments'] += moltchan_stats.get('replies', moltchan_stats.get('comments', 0))
         
-        
-        # Aggregate with fallbacks
-        if moltbook_stats:
-            stats['platforms']['moltbook'] = moltbook_stats
-            stats['total_posts'] += moltbook_stats.get('posts', 0)
-            stats['total_comments'] += moltbook_stats.get('comments', 0)
-            stats['total_followers'] += moltbook_stats.get('followers', 0)
-            stats['total_following'] += moltbook_stats.get('following', 0)
-            stats['recent_activity'].extend(moltbook_stats.get('recent_posts', []))
-        else:
-            print("⚠️ Using fallback Moltbook data")
-            stats['platforms']['moltbook'] = fallback_data['moltbook']
-            stats['total_posts'] += fallback_data['moltbook']['posts']
-            stats['total_comments'] += fallback_data['moltbook']['comments']
-            stats['total_followers'] += fallback_data['moltbook']['followers']
-        
-        if moltx_stats:
-            stats['platforms']['moltx'] = moltx_stats
-            stats['total_posts'] += moltx_stats.get('posts', 0)
-            stats['total_followers'] += moltx_stats.get('followers', 0)
-            stats['total_following'] += moltx_stats.get('following', 0)
-            stats['recent_activity'].extend(moltx_stats.get('recent_posts', []))
-        else:
-            print("⚠️ Using fallback Moltx data")
-            stats['platforms']['moltx'] = fallback_data['moltx']
-            stats['total_posts'] += fallback_data['moltx']['posts']
-            stats['total_followers'] += fallback_data['moltx']['followers']
-        
-        if moltchan_stats:
-            stats['platforms']['moltchan'] = moltchan_stats
-            stats['total_posts'] += moltchan_stats.get('threads', 0)
-            stats['total_comments'] += moltchan_stats.get('replies', 0)
-        else:
-            print("⚠️ Using fallback MoltChan data")
-            stats['platforms']['moltchan'] = fallback_data['moltchan']
-            stats['total_posts'] += fallback_data['moltchan']['threads']
-            stats['total_comments'] += fallback_data['moltchan']['replies']
+        # ── MoltRoad ──
+        moltroad_stats = self._get_plugin_stats(plugins, 'moltroad')
+        if not moltroad_stats:
+            moltroad_stats = {'posts': 0}
+        stats['platforms']['moltroad'] = moltroad_stats
+        stats['total_posts'] += moltroad_stats.get('posts', 0)
         
         # Sort recent activity by timestamp
         stats['recent_activity'].sort(key=lambda x: x.get('timestamp', ''), reverse=True)
-        stats['recent_activity'] = stats['recent_activity'][:50]  # Keep last 50
-        
-        print(f"✅ Aggregation complete: {stats['total_posts']} posts, {stats['total_comments']} comments, {stats['total_followers']} followers")
+        stats['recent_activity'] = stats['recent_activity'][:50]
         
         return stats
+    
+    def _get_plugin_stats(self, plugins: Dict, plugin_name: str) -> Optional[Dict]:
+        """Try to get stats from an already-loaded plugin (no network calls)"""
+        try:
+            plugin = plugins.get(plugin_name)
+            if not plugin:
+                return None
+            if hasattr(plugin, 'get_stats'):
+                return plugin.get_stats()
+            # Try to extract basic stats from plugin attributes
+            result = {}
+            if hasattr(plugin, 'post_count'):
+                result['posts'] = plugin.post_count
+            if hasattr(plugin, 'comment_count'):
+                result['comments'] = plugin.comment_count
+            if hasattr(plugin, 'follower_count'):
+                result['followers'] = plugin.follower_count
+            return result if result else None
+        except Exception:
+            return None
     
     def _get_moltbook_stats(self) -> Optional[Dict]:
         """Get stats from Moltbook"""
