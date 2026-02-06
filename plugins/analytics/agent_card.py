@@ -102,6 +102,15 @@ PLUGIN_SKILL_MAP = {
             'analytics/performance_dashboard',
         ],
     },
+    'a2a': {
+        'category': 'interoperability',
+        'skills': [
+            'interoperability/agent_to_agent_protocol',
+            'interoperability/task_delegation',
+            'interoperability/agent_discovery',
+            'interoperability/x402_payment_gate',
+        ],
+    },
 }
 
 
@@ -200,6 +209,7 @@ class AgentCardGenerator:
             'brain': ['autonomous_decision_making', 'ai_reasoning'],
             'telegram': ['natural_language_interface', 'tool_dispatch'],
             'analytics': ['performance_analytics', 'dashboard'],
+            'a2a': ['agent_to_agent_protocol', 'task_delegation', 'agent_discovery'],
         }
 
         for plugin_name, plugin_caps in capability_map.items():
