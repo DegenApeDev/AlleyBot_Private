@@ -598,41 +598,15 @@ AlleyBot encountered an issue and needs attention!"""
                 print(f"❌ Error stopping Telegram bot: {e}")
     
     def initialize(self, api, core):
-        """Initialize plugin with core system"""
+        """Initialize plugin with core system.
+        
+        NOTE: Polling is NOT started here. The production mode's
+        telegram_webhook.start_polling_async() handles that to avoid
+        two competing polling connections on the same bot token.
+        """
         super().initialize(api, core)
         if self.enabled:
-            print("✅ Telegram plugin ready")
-            
-            # Only auto-start if not already running
-            if self.is_running:
-                print("⚠️  Telegram bot already running, skipping auto-start")
-                return
-            
-            # Auto-start the Telegram bot in background without blocking
-            try:
-                # Start the bot in the background (non-blocking)
-                import threading
-                
-                def start_bot_delayed():
-                    import time
-                    time.sleep(1)  # Small delay to let AlleyBot finish initializing
-                    
-                    # Double-check if still not running
-                    if not self.is_running:
-                        self._start_bot_background()
-                        print("🤖 Telegram bot auto-started")
-                        
-                        # Send startup notification to owner
-                        self._send_startup_notification()
-                    else:
-                        print("⚠️  Bot started elsewhere, skipping delayed start")
-                
-                # Start in background thread to avoid blocking
-                start_thread = threading.Thread(target=start_bot_delayed, daemon=True)
-                start_thread.start()
-                
-            except Exception as e:
-                print(f"⚠️  Failed to auto-start Telegram bot: {e}")
+            print("✅ Telegram plugin ready (polling will start via production mode)")
     
     def _send_startup_notification(self):
         """Send startup notification to the owner"""
