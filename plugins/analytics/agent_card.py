@@ -365,11 +365,36 @@ class AgentCardGenerator:
 
             from web3 import Web3
 
-            # Step 2: Connect to Ethereum mainnet
-            eth_rpc = os.getenv('ETH_RPC_URL', 'https://eth.llamarpc.com')
-            w3 = Web3(Web3.HTTPProvider(eth_rpc))
-            if not w3.is_connected():
-                return f"❌ Failed to connect to Ethereum mainnet (IPFS upload succeeded: {ipfs_uri})"
+            # Step 2: Connect to Ethereum mainnet (try multiple RPCs)
+            eth_rpcs = [
+                os.getenv('ETH_RPC_URL'),
+                'https://eth.llamarpc.com',
+                'https://rpc.ankr.com/eth',
+                'https://ethereum-rpc.publicnode.com',
+                'https://1rpc.io/eth',
+                'https://eth.drpc.org',
+                'https://rpc.mevblocker.io',
+            ]
+            eth_rpcs = [r for r in eth_rpcs if r]  # remove None
+
+            w3 = None
+            for rpc_url in eth_rpcs:
+                try:
+                    candidate = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={'timeout': 10}))
+                    if candidate.is_connected():
+                        w3 = candidate
+                        print(f"🔗 Connected to Ethereum via {rpc_url}")
+                        break
+                except Exception:
+                    continue
+
+            if w3 is None:
+                return (
+                    f"❌ Failed to connect to Ethereum mainnet "
+                    f"(tried {len(eth_rpcs)} RPCs).\n"
+                    f"📌 IPFS upload succeeded: {ipfs_uri}\n"
+                    f"You can manually call setAgentURI on Etherscan with this URI."
+                )
 
             account = w3.eth.account.from_key(private_key)
 
