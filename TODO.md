@@ -1,54 +1,90 @@
-# AlleyBot TODO - Next 10 Days
-
-## Priority 1: Critical Bugs & Stability (Days 1-3)
-- [ ] Test all fixes on VPS and verify no more URL encoding errors
-- [ ] Manually fix Moltx display name back to "AlleyBot" (use debug script)
-- [ ] Monitor logs for any remaining JSON parsing errors
-- [ ] Verify skill generation works correctly with Grok AI
-- [ ] Test all plugin commands (Moltx, Moltbook, MoltChan, MoltRoad)
-- [ ] Ensure no duplicate registrations happening
-
-## Priority 2: Agent Personality & Behavior (Days 4-6)
-- [ ] Create SOUL.md file defining AlleyBot's personality and values
-- [ ] Define clear boundaries for autonomous actions
-- [ ] Establish communication style guidelines
-- [ ] Set posting frequency and engagement rules
-- [ ] Document decision-making framework for agent
-
-## Priority 3: Platform Optimization (Days 7-9)
-- [ ] Optimize Moltx posting schedule and engagement
-- [ ] Test Moltbook post creation and content quality
-- [ ] Verify MoltChan thread creation and replies
-- [ ] Test MoltRoad marketplace listings
-- [ ] Create platform-specific posting strategies
-
-## Priority 4: Documentation & Maintenance (Day 10)
-- [ ] Update README with latest features and setup instructions
-- [ ] Document all plugin APIs and their current status
-- [ ] Create troubleshooting guide for common issues
-- [ ] Write deployment guide for VPS
-- [ ] Document credential management best practices
+# AlleyBot TODO — Roadmap
 
 ## Completed ✅
+
+### Phase 1: Stabilize (48 tests)
 - [x] Fix Moltx API endpoint URL encoding issues
-- [x] Update Moltx plugin to match skill.md and heartbeat.md
 - [x] Fix Grok nested JSON response parsing
 - [x] Prevent raw JSON display in posts and outputs
-- [x] Fix Moltbook API method errors (get_feed, get_stats)
-- [x] Add community support to Moltx (search, join, leave, message)
+- [x] Fix Moltbook API method errors
 - [x] Add parameter validation across all plugins
-- [x] Prevent invalid profile updates on Moltx
 
-## Future Skills (After Platforms Stable)
-- [ ] Cross-platform content syndication
-- [ ] Automated community management
-- [ ] Market analysis and trend reporting
-- [ ] Content scheduling and optimization
-- [ ] Analytics dashboard for performance
-- [ ] Advanced AI interaction patterns
+### Phase 2: Modularize (49 tests)
+- [x] Split moltx.py into 5 mixin files
+- [x] Split moltbook.py into 4 mixin files
+- [x] Unified EnhancedMemorySystem across core
+- [x] Archive 20 stale scripts
+
+### Phase 3: On-Chain (31 tests)
+- [x] Web3Provider connecting to Base (chain 8453)
+- [x] Token tracker (ALLEY, USDC, WETH)
+- [x] Tx monitor with semantic memory logging
+- [x] Wire on-chain commands into Telegram (/wallet, /balance, /block, /track, /tx, /activity)
+
+### Phase 4: Self-Improvement (32 tests)
+- [x] Git workflow with auto/* branch safety
+- [x] Test gate (blocks eval/exec/os.system)
+- [x] Sandbox execution in temp directories
+- [x] Skill marketplace (publish/import)
+
+### Phase 5: Autonomous Brain (30 tests)
+- [x] Context Gatherer — pulls from memory, on-chain, platforms, engagement, goals
+- [x] Decision Engine — 10 autonomous actions, AI-powered (Grok) with heuristic fallback
+- [x] Smart Reply — memory-enriched replies with user profiles
+- [x] Telegram integration (/think, /brain_start, /brain_stop, /brain)
+- [x] Background autonomous loop (configurable cycle interval)
+
+### Security Hardening
+- [x] SecurityFilter covers ALL 15+ .env keys (was only 4)
+- [x] Auto-scans os.environ for PRIVATE/SECRET/TOKEN/API_KEY/PASSWORD
+- [x] Outbound Telegram filter on all command outputs
+- [x] Owner-lock ALL 23 Telegram commands via TELEGRAM_ADMIN_CHAT_ID
+- [x] No hardcoded IDs — everything from .env
+
+### Dashboard
+- [x] Rewrite dashboard with modern dark UI
+- [x] Brain Status panel (live cycles, success rate, actions, known users)
+- [x] Real AI stats from ModelRouter token tracker
+- [x] Auto-refresh (stats 20s, feed 45s)
+
+**Total: 190 tests, all passing**
+
+---
+
+## 🔥 Phase 6: Feedback Loop (HIGH PRIORITY)
+- [ ] Track upvotes/engagement on AlleyBot's posts after posting
+- [ ] Store engagement metrics per post in memory
+- [ ] Feed engagement data back into brain decision-making
+- [ ] Learn which content styles get the most engagement
+- [ ] Adjust posting strategy based on what works
+
+## 🧠 Phase 7: Content Strategy
+- [ ] Content calendar — plan posts around optimal times and trending topics
+- [ ] Cross-platform intelligence — if something trends on Moltx, post about it on Moltbook
+- [ ] Conversation threading — track multi-turn conversations for context-aware replies
+- [ ] Personality tuning — configurable humor, formality, emoji usage across platforms
+
+## 🔧 Phase 8: Dynamic Skills
+- [ ] Wire brain to detect capability gaps ("tried X but no skill for it")
+- [ ] Auto-generate missing skills using self-improvement plugin
+- [ ] Skill performance tracking — which skills are useful vs unused
+- [ ] Skill versioning — update skills when they stop working
+
+## 🛡️ Phase 9: Operational Resilience
+- [ ] Health alerts via Telegram (API errors, low balance, engagement drops)
+- [ ] Rate limit awareness — track and back off per-platform
+- [ ] Systemd service for auto-restart on VPS
+- [ ] Uptime monitoring and crash recovery
+
+## 🚀 Phase 10: Differentiate from OpenClaw
+- [ ] On-chain actions — tip users, interact with contracts, not just monitor
+- [ ] Multi-agent collaboration — detect and interact with other AI agents
+- [ ] Reputation system — track and optimize reputation score across platforms
+- [ ] Agent-to-agent messaging — coordinate with friendly agents
 
 ## Notes
-- All current fixes are in `agentic-enhancements-v2` branch
-- Need to merge to main after VPS testing
-- Keep monitoring for new API changes from platforms
-- Consider rate limiting strategies to avoid bans
+- Branch: `opus_rebuild`
+- Run: `python alleybot_core.py autonomous`
+- Tests: `python -m unittest tests.test_fixes tests.test_phase2 tests.test_phase3 tests.test_phase4 tests.test_phase5`
+- Cost: ~$0.015/day (~$0.45/month) at current Grok pricing
+- .gitignore blocks `test_*.py` — use `git add -f` to stage test files
