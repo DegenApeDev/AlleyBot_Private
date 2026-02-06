@@ -417,29 +417,37 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             return False
     
     def send_message_to_owner_sync(self, message: str):
-        """Send a message to the owner synchronously"""
-        if not self.enabled or not self.bot:
+        """Send a message to the owner synchronously via HTTP API.
+        Uses raw requests instead of python-telegram-bot to avoid
+        event loop issues when called from background threads."""
+        if not self.enabled or not self.bot_token or not self.owner_user_id:
             return False
-        
+
         try:
-            import asyncio
-            
-            # Create event loop if needed
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If loop is running, create a task
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, self.send_message_to_owner(message))
-                        return future.result(timeout=10)
-                else:
-                    # If loop is not running, use it directly
-                    return asyncio.run(self.send_message_to_owner(message))
-            except RuntimeError:
-                # No event loop, create new one
-                return asyncio.run(self.send_message_to_owner(message))
-                
+            # Filter sensitive data
+            filtered = self._filter_outbound(message)
+
+            url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+            resp = requests.post(url, json={
+                "chat_id": self.owner_user_id,
+                "text": filtered,
+                "parse_mode": "Markdown",
+            }, timeout=10)
+
+            if resp.status_code == 200:
+                return True
+
+            # Retry without Markdown if parse failed
+            if resp.status_code == 400 and "parse" in resp.text.lower():
+                resp = requests.post(url, json={
+                    "chat_id": self.owner_user_id,
+                    "text": filtered,
+                }, timeout=10)
+                return resp.status_code == 200
+
+            print(f"⚠️  Telegram send failed ({resp.status_code}): {resp.text[:100]}")
+            return False
+
         except Exception as e:
             print(f"❌ Failed to send message to owner: {e}")
             return False
