@@ -40,20 +40,6 @@ AUTONOMOUS_ACTIONS = {
         'impact': 'high',
         'requires': 'moltbook',
     },
-    'moltchan_engage': {
-        'description': 'Browse and engage on MoltChan',
-        'platform': 'moltchan',
-        'cooldown_minutes': 30,
-        'impact': 'medium',
-        'requires': 'moltchan',
-    },
-    'moltroad_engage': {
-        'description': 'Browse and engage on MoltRoad',
-        'platform': 'moltroad',
-        'cooldown_minutes': 30,
-        'impact': 'medium',
-        'requires': 'moltroad',
-    },
     'onchain_heartbeat': {
         'description': 'Check on-chain balances and monitor for changes',
         'platform': 'onchain',
@@ -376,20 +362,6 @@ Haven't engaged on Moltbook recently, good time to build karma."""
                 if content:
                     return moltbook.create_post_command(content)
                 return "❌ Failed to generate post content"
-
-        elif action_id == 'moltchan_engage':
-            moltchan = plugins.get('moltchan')
-            if moltchan and hasattr(moltchan, 'engage_feed_command'):
-                return moltchan.engage_feed_command()
-            elif moltchan and hasattr(moltchan, 'moltchan_heartbeat'):
-                return moltchan.moltchan_heartbeat()
-
-        elif action_id == 'moltroad_engage':
-            moltroad = plugins.get('moltroad')
-            if moltroad and hasattr(moltroad, 'engage_feed_command'):
-                return moltroad.engage_feed_command()
-            elif moltroad and hasattr(moltroad, 'moltroad_heartbeat'):
-                return moltroad.moltroad_heartbeat()
 
         elif action_id == 'onchain_heartbeat':
             onchain = plugins.get('onchain')
