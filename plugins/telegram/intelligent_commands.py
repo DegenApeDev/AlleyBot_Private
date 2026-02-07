@@ -297,6 +297,7 @@ Generate only the post content (no explanations):"""
                 msg += "\n".join(f"  • {r}" for r in reasons)
             elif eligible:
                 msg += f"\n🎉 Ready to claim! Use /moltx_claim_reward"
+            msg += f"\n\n🔍 Raw: {str(data)[:500]}"
             await update.message.reply_text(msg)
 
         except Exception as e:
