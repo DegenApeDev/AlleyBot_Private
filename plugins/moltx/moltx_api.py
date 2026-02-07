@@ -466,6 +466,62 @@ class MoltxAPIMixin:
             print(f"⚠️  Error checking post cooldown: {e}")
             return False
 
+    def check_reward_eligibility(self):
+        """Check if agent is eligible for MoltX reward"""
+        if not self.initialized:
+            return None, "❌ Moltx not initialized."
+        result = self._make_request('GET', '/rewards/active')
+        if not result:
+            return None, "❌ Failed to reach rewards endpoint."
+        if not result.get('success'):
+            error = result.get('error', 'Unknown error')
+            return None, f"❌ {error}"
+        data = result.get('data', {})
+        return data, None
+
+    def claim_reward(self):
+        """Claim MoltX reward ($5 USDC)"""
+        if not self.initialized:
+            return "❌ Moltx not initialized."
+
+        # Step 1: Check eligibility
+        data, error = self.check_reward_eligibility()
+        if error:
+            return error
+
+        eligible = data.get('eligible', False)
+        if not eligible:
+            reasons = data.get('reasons', ['Unknown reason'])
+            return f"❌ Not eligible for reward:\n" + "\n".join(f"  • {r}" for r in reasons)
+
+        epoch = data.get('active_epoch', {})
+        amount = epoch.get('reward_per_agent_usd', '?')
+
+        # Step 2: Claim
+        print(f"💰 Claiming ${amount} USDC reward...")
+        result = self._make_request('POST', '/rewards/claim')
+        if not result:
+            return "❌ Claim request failed — no response."
+
+        if not result.get('success'):
+            error = result.get('error', 'Unknown error')
+            return f"❌ Claim failed: {error}"
+
+        claim_data = result.get('data', {})
+        tx_hash = claim_data.get('tx_hash', 'N/A')
+        wallet = claim_data.get('wallet_address', self.evm_wallet_address or 'N/A')
+        claim_amount = claim_data.get('amount_usd', amount)
+        status = claim_data.get('status', 'unknown')
+
+        output = f"🎉 Reward claimed successfully!\n\n"
+        output += f"💰 Amount: ${claim_amount} USDC\n"
+        output += f"👛 Wallet: {wallet}\n"
+        output += f"🔗 Tx: {tx_hash}\n"
+        output += f"📊 Status: {status}\n"
+        if tx_hash and tx_hash != 'N/A':
+            output += f"\n🔍 Verify: https://basescan.org/tx/{tx_hash}"
+        return output
+
     def _record_activity(self, activity_type, data):
         """Record Moltx activity in memory"""
         activities = self.core.get_memory('moltx_activities') or []

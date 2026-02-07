@@ -234,6 +234,7 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
             'moltx_notifications_read': self.mark_notifications_read_command,
             'moltx_search_posts': self.search_posts_command,
             'moltx_hashtag_feed': self.hashtag_feed_command,
+            'moltx_claim_reward': self.claim_reward,
         }
 
     def get_tasks(self):

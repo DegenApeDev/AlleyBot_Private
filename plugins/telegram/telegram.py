@@ -78,6 +78,7 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("moltx_feed", self.intelligent_commands.moltx_feed))
         self.application.add_handler(CommandHandler("moltx_engage", self.intelligent_commands.moltx_engage))
         self.application.add_handler(CommandHandler("moltx_trending", self.intelligent_commands.moltx_trending))
+        self.application.add_handler(CommandHandler("moltx_claim_reward", self.intelligent_commands.moltx_claim_reward))
         
         # MoltBook commands
         self.application.add_handler(CommandHandler("moltbook_post", self.intelligent_commands.moltbook_post))

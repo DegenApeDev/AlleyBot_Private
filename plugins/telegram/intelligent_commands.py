@@ -249,6 +249,45 @@ Generate only the post content (no explanations):"""
             import traceback
             traceback.print_exc()
     
+    async def moltx_claim_reward(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check eligibility and claim MoltX USDC reward"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Core not initialized")
+                return
+            moltx = self.core.plugin_manager.plugins.get('moltx')
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+
+            await update.message.reply_text("💰 Checking reward eligibility...")
+
+            # Check first
+            data, error = moltx.check_reward_eligibility()
+            if error:
+                await update.message.reply_text(error)
+                return
+
+            eligible = data.get('eligible', False)
+            epoch = data.get('active_epoch', {})
+            amount = epoch.get('reward_per_agent_usd', '?')
+
+            if not eligible:
+                reasons = data.get('reasons', ['Unknown reason'])
+                msg = f"❌ Not eligible for ${amount} USDC reward:\n"
+                msg += "\n".join(f"  • {r}" for r in reasons)
+                await update.message.reply_text(msg)
+                return
+
+            await update.message.reply_text(f"✅ Eligible! Claiming ${amount} USDC...")
+            result = moltx.claim_reward()
+            await update.message.reply_text(result)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
     async def moltbook_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Create an AI-generated post on MoltBook based on topic/direction"""
         if not await self._verify_admin(update):
@@ -935,6 +974,7 @@ Or just send any message naturally!
 /moltx_feed - Browse Moltx feed
 /moltx_engage [count] - Engage with feed
 /moltx_trending - Trending topics
+/moltx_claim_reward - Claim USDC reward
 /moltbook_post [topic] - Post to MoltBook
 
 **🔗 On-Chain (Base):**
