@@ -92,6 +92,11 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("skill", self.intelligent_commands.execute_skill))
         self.application.add_handler(CommandHandler("token_stats", self.intelligent_commands.token_stats))
         
+        # Crypto price commands
+        self.application.add_handler(CommandHandler("crypto_price", self.intelligent_commands.crypto_price))
+        self.application.add_handler(CommandHandler("crypto_prices", self.intelligent_commands.crypto_prices))
+        self.application.add_handler(CommandHandler("crypto_trending", self.intelligent_commands.crypto_trending))
+        
         # On-chain commands
         self.application.add_handler(CommandHandler("wallet", self.intelligent_commands.wallet))
         self.application.add_handler(CommandHandler("balance", self.intelligent_commands.balance))

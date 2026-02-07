@@ -654,6 +654,64 @@ Generate only the title (no explanations):"""
             await update.message.reply_text(f"❌ Error: {e}")
     
     # =================================================================
+    # Crypto Price Commands
+    # =================================================================
+
+    def _get_crypto_plugin(self):
+        """Get the crypto plugin from core"""
+        if self.core and hasattr(self.core, 'plugin_manager'):
+            return self.core.plugin_manager.plugins.get('crypto')
+        return None
+
+    async def crypto_price(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check crypto price. Usage: /crypto_price btc"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            crypto = self._get_crypto_plugin()
+            if not crypto:
+                await update.message.reply_text("❌ Crypto plugin not loaded")
+                return
+            if not context.args:
+                await update.message.reply_text("💰 Usage: /crypto_price <symbol>\n\nExamples: /crypto_price btc\n/crypto_price eth\n/crypto_price sol")
+                return
+            result = crypto.price_command(context.args[0])
+            await update.message.reply_text(result)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def crypto_prices(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check multiple crypto prices. Usage: /crypto_prices btc,eth,sol"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            crypto = self._get_crypto_plugin()
+            if not crypto:
+                await update.message.reply_text("❌ Crypto plugin not loaded")
+                return
+            if not context.args:
+                await update.message.reply_text("💰 Usage: /crypto_prices btc,eth,sol")
+                return
+            result = crypto.multi_price_command(','.join(context.args))
+            await update.message.reply_text(result)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def crypto_trending(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show trending coins on CoinGecko"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            crypto = self._get_crypto_plugin()
+            if not crypto:
+                await update.message.reply_text("❌ Crypto plugin not loaded")
+                return
+            result = crypto.trending_command()
+            await update.message.reply_text(result)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    # =================================================================
     # On-Chain Commands
     # =================================================================
 
@@ -1050,7 +1108,12 @@ Or just send any message naturally!
 /moltx_claim_reward - Claim USDC reward
 /moltbook_post [topic] - Post to MoltBook
 
-**🔗 On-Chain (Base):**
+**� Crypto Prices:**
+/crypto_price [symbol] - Price check (btc, eth, sol...)
+/crypto_prices [list] - Multiple prices (btc,eth,sol)
+/crypto_trending - Trending coins
+
+**�🔗 On-Chain (Base):**
 /wallet - Wallet info & balances
 /balance - Token balances
 /block - Current block info

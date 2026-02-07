@@ -97,6 +97,10 @@
       "telegram_notify": true
     }
   },
+  "crypto": {
+    "enabled": true,
+    "config": {}
+  },
   "a2a": {
     "enabled": true,
     "config": {
