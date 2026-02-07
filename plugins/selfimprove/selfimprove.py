@@ -241,6 +241,7 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
             'improve_coder_status': self.coder_status_command,
             # ERC-8004 on-chain profile
             'improve_erc8004_preview': self.erc8004_preview_command,
+            'improve_erc8004_rebuild': self.erc8004_rebuild_command,
             'improve_erc8004_update': self.erc8004_update_command,
         }
 
@@ -252,6 +253,57 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
             return gen.update_onchain(dry_run=True)
         except Exception as e:
             return f"❌ ERC-8004 preview failed: {e}"
+
+    def erc8004_rebuild_command(self, *args):
+        """Rebuild agent card from live plugins/tasks and save to static file (no on-chain tx)"""
+        try:
+            import os, json
+            from plugins.analytics.agent_card import AgentCardGenerator
+            gen = AgentCardGenerator(self.core)
+            card = gen.generate()
+
+            # Save to static file
+            static_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                'static', '.well-known', 'agent-card.json'
+            )
+            gen.save_static(static_path)
+
+            # Build summary
+            skills = gen._collect_skills()
+            caps = card.get('capabilities', [])
+            a2a_skills = []
+            for svc in card.get('services', []):
+                if svc.get('name') == 'A2A':
+                    a2a_skills = svc.get('a2aSkills', [])
+                    break
+
+            free = [s for s in a2a_skills if 'free' in s.get('tags', [])]
+            paid = [s for s in a2a_skills if 'paid' in s.get('tags', [])]
+
+            lines = [
+                f"✅ Agent card rebuilt and saved!",
+                f"🆔 ERC-8004 Agent #22899",
+                f"📊 {len(skills)} OASF skills, {len(caps)} capabilities",
+                f"🤝 {len(a2a_skills)} A2A tasks ({len(free)} free, {len(paid)} paid)",
+                f"",
+            ]
+            for s in a2a_skills:
+                price = s.get('pricing', {}).get('amount', 'free')
+                tag = '💰' if 'paid' in s.get('tags', []) else '🟢'
+                lines.append(f"  {tag} {s['id']} (${price})")
+
+            a2a_svc = next((s for s in card.get('services', []) if s.get('name') == 'A2A'), {})
+            lines.append(f"")
+            lines.append(f"🌐 A2A endpoint: {a2a_svc.get('endpoint', 'N/A')}")
+            lines.append(f"📁 Saved to: {static_path}")
+            lines.append(f"📝 Card size: {len(json.dumps(card))} bytes")
+            lines.append(f"")
+            lines.append(f"⚠️ Run /improve_erc8004_update to push on-chain")
+
+            return '\n'.join(lines)
+        except Exception as e:
+            return f"❌ Agent card rebuild failed: {e}"
 
     def erc8004_update_command(self, *args):
         """Update ERC-8004 on-chain profile with current skills (agent #22899)"""
