@@ -249,6 +249,25 @@ Generate only the post content (no explanations):"""
             import traceback
             traceback.print_exc()
     
+    async def moltx_claim(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Submit X/Twitter claim tweet to verify MoltX agent"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await update.message.reply_text("🐦 Usage: /moltx_claim [tweet_url]\n\nExample: /moltx_claim https://x.com/DegenApeDev/status/123456")
+                return
+            tweet_url = context.args[0]
+            moltx = self.core.plugin_manager.plugins.get('moltx') if self.core else None
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+            await update.message.reply_text(f"🐦 Submitting claim tweet...\n{tweet_url}")
+            result = moltx.claim_agent(tweet_url)
+            await update.message.reply_text(result)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
     async def moltx_claim_reward(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Check eligibility and claim MoltX USDC reward"""
         if not await self._verify_admin(update):
