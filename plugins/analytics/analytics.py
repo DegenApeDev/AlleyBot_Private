@@ -77,7 +77,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
     def _get_brain_stats(self):
         """Collect brain plugin stats"""
         data = {'brain_cycles': 0, 'brain_success_rate': 0, 'brain_available_actions': 0,
-                'brain_known_users': 0, 'brain_running': False}
+                'brain_running': False}
         try:
             brain = self.core.plugin_manager.plugins.get('brain')
             if brain:
@@ -85,7 +85,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 data['brain_running'] = getattr(brain, 'autonomous_running', False)
                 if hasattr(brain, 'get_available_actions'):
                     data['brain_available_actions'] = len(brain.get_available_actions())
-                data['brain_known_users'] = len(getattr(brain, 'user_profiles', {}))
+                # brain_known_users removed from dashboard
                 try:
                     ctx = brain.gather_full_context()
                     eng = ctx.get('engagement', {})

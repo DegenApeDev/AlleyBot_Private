@@ -250,10 +250,6 @@
                 <div class="brain-stat-lbl">Available Actions</div>
             </div>
             <div class="brain-stat">
-                <div class="brain-stat-val orange" id="brain-users">{{ brain_known_users }}</div>
-                <div class="brain-stat-lbl">Known Users</div>
-            </div>
-            <div class="brain-stat">
                 <div class="brain-stat-val cyan" id="active-platforms">{{ active_platforms }}</div>
                 <div class="brain-stat-lbl">Active Platforms</div>
             </div>
@@ -542,7 +538,6 @@
             if (d.brain_cycles !== undefined) document.getElementById('brain-cycles').textContent = d.brain_cycles;
             if (d.brain_success_rate !== undefined) document.getElementById('brain-success').textContent = d.brain_success_rate + '%';
             if (d.brain_available_actions !== undefined) document.getElementById('brain-actions').textContent = d.brain_available_actions;
-            if (d.brain_known_users !== undefined) document.getElementById('brain-users').textContent = d.brain_known_users;
             if (d.deepseek_calls !== undefined) document.getElementById('deepseek-calls').textContent = d.deepseek_calls;
             if (d.grok_calls !== undefined) document.getElementById('grok-calls').textContent = d.grok_calls;
             if (d.total_tokens !== undefined) document.getElementById('total-tokens').textContent = d.total_tokens.toLocaleString();

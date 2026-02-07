@@ -18,6 +18,8 @@ class PlatformStatsAggregator:
         self.moltx_api_key = os.getenv('MOLTX_API_KEY')
         self.moltchan_api_key = os.getenv('MOLTCHAN_API_KEY')
         self.moltroad_api_key = os.getenv('MOLTROAD_API_KEY')
+        self._follower_cache = None  # {moltbook: N, moltx: N, total: N, fetched_at: iso}
+        self._follower_cache_ttl = 86400  # 24 hours in seconds
     
     def get_all_stats(self) -> Dict:
         """Get aggregated stats from all platforms.
@@ -84,7 +86,16 @@ class PlatformStatsAggregator:
         # Sort recent activity by timestamp
         stats['recent_activity'].sort(key=lambda x: x.get('timestamp', ''), reverse=True)
         stats['recent_activity'] = stats['recent_activity'][:50]
-        
+
+        # Override total_followers with cached combined count from public APIs
+        follower_data = self._get_cached_followers()
+        stats['total_followers'] = follower_data.get('total', stats['total_followers'])
+        # Update per-platform follower counts too
+        if 'moltbook' in stats['platforms']:
+            stats['platforms']['moltbook']['followers'] = follower_data.get('moltbook', stats['platforms']['moltbook'].get('followers', 0))
+        if 'moltx' in stats['platforms']:
+            stats['platforms']['moltx']['followers'] = follower_data.get('moltx', stats['platforms']['moltx'].get('followers', 0))
+
         return stats
     
     def _get_plugin_stats(self, plugins: Dict, plugin_name: str) -> Optional[Dict]:
@@ -222,6 +233,86 @@ class PlatformStatsAggregator:
             print(f"⚠️  Moltx stats error: {e}")
             return None
     
+    def _get_cached_followers(self) -> Dict:
+        """Get combined follower count from MoltBook + MoltX, cached for 24h"""
+        now = datetime.now()
+
+        # Check in-memory cache first
+        if self._follower_cache:
+            try:
+                fetched = datetime.fromisoformat(self._follower_cache['fetched_at'])
+                age = (now - fetched).total_seconds()
+                if age < self._follower_cache_ttl:
+                    return self._follower_cache
+            except (ValueError, TypeError, KeyError):
+                pass
+
+        # Check persistent cache in memory system
+        try:
+            cached = self.core.get_memory('follower_cache') if self.core else None
+            if cached and isinstance(cached, dict):
+                fetched = datetime.fromisoformat(cached.get('fetched_at', ''))
+                age = (now - fetched).total_seconds()
+                if age < self._follower_cache_ttl:
+                    self._follower_cache = cached
+                    return cached
+        except Exception:
+            pass
+
+        # Fetch fresh data from public APIs
+        moltbook_followers = 0
+        moltx_followers = 0
+
+        # MoltBook: https://www.moltbook.com/api/v1/agents/profile?name=AlleyBot
+        try:
+            resp = requests.get(
+                'https://www.moltbook.com/api/v1/agents/profile?name=AlleyBot',
+                timeout=10
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                # Try multiple response shapes
+                if isinstance(data, dict):
+                    agent = data.get('agent', data.get('data', data))
+                    if isinstance(agent, dict):
+                        moltbook_followers = agent.get('follower_count', agent.get('followers', 0))
+                print(f"📊 MoltBook followers: {moltbook_followers}")
+        except Exception as e:
+            print(f"⚠️  MoltBook follower fetch error: {e}")
+
+        # MoltX: https://moltx.io/v1/agent/AlleyBot/stats
+        try:
+            resp = requests.get(
+                'https://moltx.io/v1/agent/AlleyBot/stats',
+                timeout=10
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if isinstance(data, dict):
+                    stats_data = data.get('data', data.get('stats', data))
+                    if isinstance(stats_data, dict):
+                        moltx_followers = stats_data.get('followers', stats_data.get('follower_count', 0))
+                print(f"📊 MoltX followers: {moltx_followers}")
+        except Exception as e:
+            print(f"⚠️  MoltX follower fetch error: {e}")
+
+        result = {
+            'moltbook': moltbook_followers,
+            'moltx': moltx_followers,
+            'total': moltbook_followers + moltx_followers,
+            'fetched_at': now.isoformat(),
+        }
+
+        # Save to both in-memory and persistent cache
+        self._follower_cache = result
+        try:
+            if self.core:
+                self.core.save_memory('follower_cache', result)
+        except Exception:
+            pass
+
+        return result
+
     def _get_moltchan_stats(self) -> Optional[Dict]:
         """Get stats from MoltChan"""
         if not self.moltchan_api_key:
