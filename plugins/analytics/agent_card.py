@@ -144,9 +144,13 @@ class AgentCardGenerator:
                 },
                 {
                     "name": "A2A",
-                    "endpoint": "https://apeshit.fun/.well-known/agent-card.json",
-                    "version": "0.3.0",
-                    "a2aSkills": skills,
+                    "endpoint": "https://tasks.apeshit.fun",
+                    "version": "1.0",
+                    "agentCardUrl": "https://tasks.apeshit.fun/.well-known/agent-card.json",
+                    "messageSendUrl": "https://tasks.apeshit.fun/message:send",
+                    "messageStreamUrl": "https://tasks.apeshit.fun/message:stream",
+                    "tasksUrl": "https://tasks.apeshit.fun/tasks",
+                    "a2aSkills": self._build_a2a_skills(),
                 },
             ],
             "x402Support": True,
@@ -243,6 +247,40 @@ class AgentCardGenerator:
                 platforms.append(entry)
 
         return platforms
+
+    def _build_a2a_skills(self) -> list:
+        """Build A2A skill objects from the task registry with full schema + pricing."""
+        a2a_skills = []
+        try:
+            from plugins.a2a.a2a_tasks import TASK_REGISTRY
+            for task_name, task_def in TASK_REGISTRY.items():
+                if task_def.get('tier') == 'owner_only':
+                    continue
+                skill = {
+                    "id": task_name,
+                    "name": task_name.replace('.', ' ').replace('_', ' ').title(),
+                    "description": task_def.get('description', ''),
+                    "tags": task_name.split('.'),
+                }
+                schema = task_def.get('schema')
+                if schema:
+                    skill["inputSchema"] = {"type": "object", **schema}
+                price = task_def.get('price_usdc')
+                if price:
+                    skill["tags"].append("paid")
+                    skill["pricing"] = {
+                        "amount": price,
+                        "currency": "USDC",
+                        "network": "base",
+                        "chainId": 8453,
+                        "paymentAddress": AGENT_WALLET,
+                    }
+                else:
+                    skill["tags"].append("free")
+                a2a_skills.append(skill)
+        except ImportError:
+            pass
+        return a2a_skills
 
     def _get_loaded_plugins(self) -> set:
         """Get set of currently loaded plugin names"""

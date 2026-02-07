@@ -81,7 +81,7 @@ class A2AServerMixin:
         """Initialize the A2A HTTP server."""
         self._a2a_port = self.config.get('port', 7002)
         self._a2a_host = self.config.get('host', '0.0.0.0')
-        self._a2a_base_url = self.config.get('base_url', 'https://apeshit.fun')
+        self._a2a_base_url = self.config.get('base_url', 'https://tasks.apeshit.fun')
         self._a2a_start_time = time.time()
         self._a2a_app = None
         self._server_thread = None
@@ -168,18 +168,37 @@ class A2AServerMixin:
         """Return A2A-spec AgentCard at /.well-known/agent-card.json."""
         base = self._a2a_base_url.rstrip('/')
 
-        # Build skills from task registry
+        # Build skills from task registry with full schema + pricing
         a2a_skills = []
         available = self.list_available_tasks()
         for task_name, info in available.items():
+            from plugins.a2a.a2a_tasks import TASK_REGISTRY
+            task_def = TASK_REGISTRY.get(task_name, {})
             skill = {
                 "id": task_name,
                 "name": task_name.replace('.', ' ').replace('_', ' ').title(),
                 "description": info['description'],
                 "tags": task_name.split('.'),
             }
+            # Add input schema if defined
+            schema = task_def.get('schema')
+            if schema:
+                skill["inputSchema"] = {
+                    "type": "object",
+                    **schema,
+                }
+            # Add pricing for paid tasks
             if info.get('price_usdc'):
                 skill["tags"].append("paid")
+                skill["pricing"] = {
+                    "amount": info['price_usdc'],
+                    "currency": "USDC",
+                    "network": "base",
+                    "chainId": 8453,
+                    "paymentAddress": "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5",
+                }
+            else:
+                skill["tags"].append("free")
             a2a_skills.append(skill)
 
         card = {

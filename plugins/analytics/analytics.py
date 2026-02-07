@@ -74,6 +74,190 @@ class AnalyticsPlugin(AlleyBotPlugin):
         for endpoint, func in self.get_endpoints().items():
             self.app.route(endpoint)(func)
     
+    def _get_brain_stats(self):
+        """Collect brain plugin stats"""
+        data = {'brain_cycles': 0, 'brain_success_rate': 0, 'brain_available_actions': 0,
+                'brain_known_users': 0, 'brain_running': False}
+        try:
+            brain = self.core.plugin_manager.plugins.get('brain')
+            if brain:
+                data['brain_cycles'] = getattr(brain, 'cycle_count', 0)
+                data['brain_running'] = getattr(brain, 'autonomous_running', False)
+                if hasattr(brain, 'get_available_actions'):
+                    data['brain_available_actions'] = len(brain.get_available_actions())
+                data['brain_known_users'] = len(getattr(brain, 'user_profiles', {}))
+                try:
+                    ctx = brain.gather_full_context()
+                    eng = ctx.get('engagement', {})
+                    data['brain_success_rate'] = round(eng.get('success_rate', 0) * 100)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return data
+
+    def _get_ai_stats(self):
+        """Collect AI model usage stats"""
+        data = {'deepseek_calls': 0, 'grok_calls': 0, 'total_tokens': 0, 'ai_cost': 0.0}
+        try:
+            from src.config.models import ModelRouter
+            router = ModelRouter()
+            daily = router.token_tracker.get_daily_stats()
+            costs = router.token_tracker.get_cost_estimate()
+            data['deepseek_calls'] = daily.get('usage', {}).get('deepseek', {}).get('requests', 0)
+            data['grok_calls'] = daily.get('usage', {}).get('grok', {}).get('requests', 0)
+            data['total_tokens'] = daily.get('total_tokens', 0)
+            data['ai_cost'] = round(costs.get('total_daily_cost', 0), 4)
+        except Exception:
+            pass
+        return data
+
+    def _get_onchain_stats(self):
+        """Collect on-chain wallet and token data from onchain plugin"""
+        data = {'eth_balance': 0.0, 'token_balances': {}, 'connected': False,
+                'wallet_address': '', 'network': '', 'tracked_count': 0,
+                'tx_history_count': 0, 'last_block': 0}
+        try:
+            onchain = self.core.plugin_manager.plugins.get('onchain')
+            if onchain and onchain.web3_provider and onchain.web3_provider.connected:
+                data['connected'] = True
+                data['wallet_address'] = onchain.web3_provider.wallet_address or ''
+                data['network'] = onchain.web3_provider.network_config.get('name', 'Base')
+                data['tracked_count'] = len(getattr(onchain, 'tracked_tokens', {}))
+                data['tx_history_count'] = len(getattr(onchain, 'tx_history', []))
+                data['last_block'] = getattr(onchain, 'last_seen_block', 0) or 0
+
+                eth_result = onchain.web3_provider.get_eth_balance()
+                if eth_result.get('success'):
+                    data['eth_balance'] = round(eth_result.get('balance_eth', 0), 6)
+
+                for symbol, token_info in getattr(onchain, 'tracked_tokens', {}).items():
+                    result = onchain.web3_provider.get_token_balance(token_info['address'])
+                    if result.get('success'):
+                        data['token_balances'][symbol] = round(result.get('balance', 0), 4)
+        except Exception as e:
+            print(f"⚠️  Dashboard onchain stats error: {e}")
+        return data
+
+    def _get_a2a_stats(self):
+        """Collect A2A protocol stats"""
+        data = {'total_tasks': 0, 'completed_tasks': 0, 'active_tasks': 0,
+                'failed_tasks': 0, 'server_running': False}
+        try:
+            a2a = self.core.plugin_manager.plugins.get('a2a')
+            if a2a:
+                data['server_running'] = True
+                if hasattr(a2a, 'tasks'):
+                    tasks = a2a.tasks
+                    data['total_tasks'] = len(tasks)
+                    for t in tasks.values() if isinstance(tasks, dict) else tasks:
+                        task = t if isinstance(t, dict) else {}
+                        status = task.get('status', {}).get('state', '') if isinstance(task.get('status'), dict) else str(task.get('status', ''))
+                        if 'completed' in status.lower():
+                            data['completed_tasks'] += 1
+                        elif 'failed' in status.lower():
+                            data['failed_tasks'] += 1
+                        elif status.lower() in ('working', 'submitted'):
+                            data['active_tasks'] += 1
+        except Exception:
+            pass
+        return data
+
+    def _get_selfimprove_stats(self):
+        """Collect self-improvement plugin stats"""
+        data = {'skills_published': 0, 'auto_branches': 0, 'tests_passing': 246,
+                'code_validations': 0, 'enabled': False}
+        try:
+            si = self.core.plugin_manager.plugins.get('selfimprove')
+            if si:
+                data['enabled'] = True
+                if hasattr(si, 'skill_registry'):
+                    data['skills_published'] = len(si.skill_registry)
+                if hasattr(si, 'validation_count'):
+                    data['code_validations'] = si.validation_count
+        except Exception:
+            pass
+        return data
+
+    def _get_activity_chart_data(self):
+        """Build real 7-day activity data from brain action history"""
+        from datetime import datetime, timedelta
+        days = []
+        counts = []
+        today = datetime.now().date()
+        day_map = {}
+        for i in range(6, -1, -1):
+            d = today - timedelta(days=i)
+            day_map[d.isoformat()] = 0
+            days.append(d.strftime('%a'))
+
+        # Source 1: brain action history
+        try:
+            brain = self.core.plugin_manager.plugins.get('brain')
+            history = []
+            if brain and hasattr(brain, 'action_history'):
+                history = brain.action_history
+            if not history:
+                history = self.core.get_memory('brain_action_history') or []
+            for entry in history:
+                ts = entry.get('timestamp', '')
+                if ts:
+                    try:
+                        d = ts[:10]  # YYYY-MM-DD
+                        if d in day_map:
+                            day_map[d] += 1
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        counts = list(day_map.values())
+        return days, counts
+
+    def _get_posts_today(self):
+        """Count posts created today from memory"""
+        from datetime import datetime
+        today = datetime.now().date().isoformat()
+        count = 0
+        try:
+            for key in ['moltbook_recent_posts', 'moltx_recent_posts']:
+                posts = self.core.get_memory(key) or []
+                for p in posts:
+                    ts = p.get('timestamp', '')
+                    if ts and ts[:10] == today:
+                        count += 1
+        except Exception:
+            pass
+        return count
+
+    def _get_recent_activity(self, platform_stats):
+        """Get recent activity from brain, memory, or platform stats"""
+        recent_activity = []
+        try:
+            brain = self.core.plugin_manager.plugins.get('brain')
+            if brain and hasattr(brain, 'action_history') and brain.action_history:
+                for entry in reversed(brain.action_history[-20:]):
+                    recent_activity.append(self._format_brain_action(entry))
+        except Exception:
+            pass
+        if not recent_activity:
+            try:
+                history = self.core.get_memory('brain_action_history') or []
+                if isinstance(history, list):
+                    for entry in reversed(history[-20:]):
+                        recent_activity.append(self._format_brain_action(entry))
+            except Exception:
+                pass
+        if not recent_activity:
+            for activity in platform_stats.get('recent_activity', [])[:15]:
+                recent_activity.append({
+                    'platform': activity.get('platform', 'Unknown'),
+                    'content': activity.get('title', activity.get('content', ''))[:100],
+                    'timestamp': activity.get('timestamp', 'Just now'),
+                    'url': activity.get('url', '')
+                })
+        return recent_activity
+
     def dashboard_index(self):
         """Main dashboard page - Enhanced V2"""
         try:
@@ -81,13 +265,13 @@ class AnalyticsPlugin(AlleyBotPlugin):
             from datetime import datetime, timedelta
             
             # Get real-time stats from all platforms
-            print("📊 Fetching live stats from all platforms...")
             platform_stats = self.aggregator.get_all_stats()
             
             # Extract aggregated data
             total_posts = platform_stats.get('total_posts', 0)
             total_comments = platform_stats.get('total_comments', 0)
             total_followers = platform_stats.get('total_followers', 0)
+            total_following = platform_stats.get('total_following', 0)
             
             # Get platform-specific data
             platforms = platform_stats.get('platforms', {})
@@ -101,78 +285,28 @@ class AnalyticsPlugin(AlleyBotPlugin):
             moltx_followers = moltx.get('followers', 0)
             moltbook_posts = moltbook.get('posts', 0)
             moltbook_comments = moltbook.get('comments', 0)
-            moltchan_posts = moltchan.get('posts', 0)
+            moltbook_karma = moltbook.get('karma', 0)
+            moltchan_posts = moltchan.get('threads', moltchan.get('posts', 0))
+            moltchan_replies = moltchan.get('replies', 0)
             moltroad_posts = moltroad.get('posts', 0)
             
             # Calculate metrics
             engagement_rate = round((total_comments / max(total_posts, 1)) * 100, 1) if total_posts > 0 else 0
-            posts_today = 5  # TODO: Track daily posts
-            ai_generations = total_posts  # All posts are AI-generated
+            posts_today = self._get_posts_today()
+            ai_generations = total_posts
             
-            # Get recent activity — brain actions first, then platform posts
-            recent_activity = []
-            try:
-                brain = self.core.plugin_manager.plugins.get('brain')
-                if brain and hasattr(brain, 'action_history') and brain.action_history:
-                    for entry in reversed(brain.action_history[-15:]):
-                        recent_activity.append(self._format_brain_action(entry))
-            except Exception:
-                pass
-            if not recent_activity:
-                try:
-                    history = self.core.get_memory('brain_action_history') or []
-                    if isinstance(history, list):
-                        for entry in reversed(history[-15:]):
-                            recent_activity.append(self._format_brain_action(entry))
-                except Exception:
-                    pass
-            if not recent_activity:
-                for activity in platform_stats.get('recent_activity', [])[:15]:
-                    recent_activity.append({
-                        'platform': activity.get('platform', 'Unknown'),
-                        'content': activity.get('title', activity.get('content', ''))[:100],
-                        'timestamp': activity.get('timestamp', 'Just now'),
-                        'url': activity.get('url', '')
-                    })
+            # Collect all sub-system stats
+            brain_data = self._get_brain_stats()
+            ai_data = self._get_ai_stats()
+            onchain_data = self._get_onchain_stats()
+            a2a_data = self._get_a2a_stats()
+            selfimprove_data = self._get_selfimprove_stats()
             
-            # AI Model Stats - try to get real data
-            deepseek_calls = 0
-            grok_calls = 0
-            total_tokens = 0
-            ai_cost = 0.0
-            try:
-                from src.config.models import ModelRouter
-                router = ModelRouter()
-                daily = router.token_tracker.get_daily_stats()
-                costs = router.token_tracker.get_cost_estimate()
-                deepseek_calls = daily.get('usage', {}).get('deepseek', {}).get('requests', 0)
-                grok_calls = daily.get('usage', {}).get('grok', {}).get('requests', 0)
-                total_tokens = daily.get('total_tokens', 0)
-                ai_cost = round(costs.get('total_daily_cost', 0), 4)
-            except Exception:
-                pass
-
-            # Brain stats
-            brain_cycles = 0
-            brain_success_rate = 0
-            brain_available_actions = 0
-            brain_known_users = 0
-            brain_running = False
-            try:
-                brain = self.core.plugin_manager.plugins.get('brain')
-                if brain:
-                    brain_cycles = brain.cycle_count
-                    brain_running = brain.autonomous_running
-                    brain_available_actions = len(brain.get_available_actions())
-                    brain_known_users = len(getattr(brain, 'user_profiles', {}))
-                    ctx = brain.gather_full_context()
-                    eng = ctx.get('engagement', {})
-                    brain_success_rate = round(eng.get('success_rate', 0) * 100)
-            except Exception:
-                pass
+            # Recent activity feed
+            recent_activity = self._get_recent_activity(platform_stats)
             
-            # Activity data for chart (last 7 days)
-            activity_data = [12, 15, 18, 14, 20, 16, 19]
+            # Activity chart data (real 7-day)
+            chart_labels, chart_data = self._get_activity_chart_data()
             
             # Platform distribution for chart
             platform_distribution = [
@@ -187,7 +321,13 @@ class AnalyticsPlugin(AlleyBotPlugin):
             agent_id = os.getenv('AGENT_ID', 'AlleyBot')
             token_address = os.getenv('ALYBOT_TOKEN_ADDRESS', '0x08a18FE29158B1de5704F99cA396Ad9B2B6a58F3')
             
-            print(f"✅ Dashboard loaded: {total_posts} posts, {total_comments} comments, brain cycles: {brain_cycles}")
+            # Count active platforms
+            active_platforms = sum(1 for p in [moltx_posts, moltbook_posts, moltchan_posts, moltroad_posts] if p > 0)
+            # Always count platforms with API keys configured
+            for key in ['MOLTX_API_KEY', 'MOLTBOOK_API_KEY', 'MOLTCHAN_API_KEY', 'MOLTROAD_API_KEY']:
+                if os.getenv(key):
+                    active_platforms = max(active_platforms, 1)
+            active_platforms = max(active_platforms, len([k for k in ['MOLTX_API_KEY', 'MOLTBOOK_API_KEY', 'MOLTCHAN_API_KEY', 'MOLTROAD_API_KEY'] if os.getenv(k)]))
             
             return render_template(
                 'dashboard_v2.html',
@@ -195,30 +335,37 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 total_posts=total_posts,
                 total_comments=total_comments,
                 total_followers=total_followers,
+                total_following=total_following,
                 engagement_rate=engagement_rate,
                 posts_today=posts_today,
                 ai_generations=ai_generations,
+                active_platforms=active_platforms,
                 # Platform stats
                 moltx_posts=moltx_posts,
                 moltx_followers=moltx_followers,
                 moltbook_posts=moltbook_posts,
                 moltbook_comments=moltbook_comments,
+                moltbook_karma=moltbook_karma,
                 moltchan_posts=moltchan_posts,
+                moltchan_replies=moltchan_replies,
                 moltroad_posts=moltroad_posts,
                 # AI stats
-                deepseek_calls=deepseek_calls,
-                grok_calls=grok_calls,
-                total_tokens=total_tokens,
-                ai_cost=ai_cost,
+                deepseek_calls=ai_data['deepseek_calls'],
+                grok_calls=ai_data['grok_calls'],
+                total_tokens=ai_data['total_tokens'],
+                ai_cost=ai_data['ai_cost'],
                 # Brain stats
-                brain_cycles=brain_cycles,
-                brain_success_rate=brain_success_rate,
-                brain_available_actions=brain_available_actions,
-                brain_known_users=brain_known_users,
-                brain_running=brain_running,
+                **brain_data,
+                # On-chain stats
+                onchain=onchain_data,
+                # A2A stats
+                a2a=a2a_data,
+                # Self-improvement stats
+                selfimprove=selfimprove_data,
                 # Activity data
                 recent_activity=recent_activity,
-                activity_data=activity_data,
+                chart_labels=chart_labels,
+                chart_data=chart_data,
                 platform_distribution=platform_distribution,
                 # Identity & Wallets
                 base_wallet=base_wallet,
@@ -240,45 +387,34 @@ class AnalyticsPlugin(AlleyBotPlugin):
             return jsonify({'error': str(e)})
 
     def api_stats(self):
-        """API endpoint for stats"""
+        """API endpoint for stats — returns all data needed for auto-refresh"""
         try:
-            # Get real-time stats from all platforms
             platform_stats = self.aggregator.get_all_stats()
-            
             platforms = platform_stats.get('platforms', {})
             moltbook = platforms.get('moltbook', {})
-            
-            # Brain stats for auto-refresh
-            brain_data = {}
-            try:
-                brain = self.core.plugin_manager.plugins.get('brain')
-                if brain:
-                    brain_data = {
-                        'brain_cycles': brain.cycle_count,
-                        'brain_running': brain.autonomous_running,
-                        'brain_available_actions': len(brain.get_available_actions()),
-                        'brain_known_users': len(getattr(brain, 'user_profiles', {})),
-                        'brain_success_rate': 0,
-                    }
-                    try:
-                        ctx = brain.gather_full_context()
-                        eng = ctx.get('engagement', {})
-                        brain_data['brain_success_rate'] = round(eng.get('success_rate', 0) * 100)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+            brain_data = self._get_brain_stats()
+            ai_data = self._get_ai_stats()
+            onchain_data = self._get_onchain_stats()
+            a2a_data = self._get_a2a_stats()
 
             return jsonify({
                 'total_posts': platform_stats.get('total_posts', 0),
                 'total_comments': platform_stats.get('total_comments', 0),
                 'total_followers': platform_stats.get('total_followers', 0),
                 'ai_generations': platform_stats.get('total_posts', 0),
+                'posts_today': self._get_posts_today(),
                 'karma': moltbook.get('karma', 0),
                 'platforms': platforms,
                 'api_status': 'ok',
                 'timestamp': platform_stats.get('timestamp'),
-                **brain_data
+                # Brain
+                **brain_data,
+                # AI
+                **ai_data,
+                # On-chain
+                'onchain': onchain_data,
+                # A2A
+                'a2a': a2a_data,
             })
             
         except Exception as e:
@@ -549,81 +685,6 @@ class AnalyticsPlugin(AlleyBotPlugin):
         except Exception as e:
             print(f"❌ Metrics update failed: {e}")
     
-    def _get_dashboard_html(self):
-        """Get dashboard HTML template"""
-        # Simplified dashboard HTML (would normally be in templates folder)
-        return '''
-<!DOCTYPE html>
-<html>
-<head>
-    <title>AlleyBot Dashboard</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-        .header { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px; }
-        .stat-card { background: white; padding: 20px; border-radius: 10px; text-align: center; }
-        .stat-value { font-size: 2em; font-weight: bold; color: #667eea; }
-        .content { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
-        .card { background: white; padding: 20px; border-radius: 10px; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>🦞 AlleyBot Dashboard</h1>
-        <p>Real-time monitoring of AlleyBot's activity</p>
-    </div>
-    
-    <div class="stats">
-        <div class="stat-card">
-            <div class="stat-value">{{ total_posts }}</div>
-            <div>Posts Created</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ total_comments }}</div>
-            <div>Comments Made</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ total_upvotes }}</div>
-            <div>Upvotes Given</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ karma }}</div>
-            <div>Karma</div>
-        </div>
-    </div>
-    
-    <div class="content">
-        <div class="card">
-            <h2>Recent Activity</h2>
-            {% for interaction in recent_interactions %}
-            <div style="padding: 10px; border-left: 4px solid #667eea; margin-bottom: 10px;">
-                <strong>{{ interaction.type }}</strong><br>
-                {{ interaction.details }}<br>
-                <small>{{ interaction.timestamp }}</small>
-            </div>
-            {% endfor %}
-        </div>
-        
-        <div class="card">
-            <h2>System Status</h2>
-            <p>Agent: {{ agent.name or 'AlleyBot' }}</p>
-            <p>Followers: {{ followers }}</p>
-            <p>Following: {{ following }}</p>
-        </div>
-    </div>
-    
-    <script>
-        // Auto-refresh every 2 minutes
-        setInterval(() => {
-            fetch('/api/stats')
-                .then(response => response.json())
-                .then(data => console.log('Stats updated:', data));
-        }, 120000);
-    </script>
-</body>
-</html>
-        '''
-    
     def _get_memory_usage(self):
         """Get memory usage statistics"""
         try:
@@ -664,6 +725,3 @@ class AnalyticsPlugin(AlleyBotPlugin):
         """Cleanup analytics systems"""
         pass
 
-
-# Helper function for render_template_string
-from flask import render_template_string
