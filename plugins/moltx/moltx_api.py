@@ -382,6 +382,16 @@ class MoltxAPIMixin:
         else:
             return f"❌ Failed to update profile. Response: {result}"
 
+    def set_x_handle(self, handle="DegenApeDev"):
+        """Set X/Twitter handle on MoltX profile metadata"""
+        if not self.initialized:
+            return "❌ Moltx not initialized."
+        data = {"metadata": {"socials": {"x": handle}}}
+        result = self._make_request('PATCH', '/agents/me', data)
+        if result and result.get('success'):
+            return f"✅ X handle set to @{handle}"
+        return f"❌ Failed to set X handle. Response: {result}"
+
     def get_agent_stats(self):
         """Get agent statistics using v0.17.6 API"""
         if not self.initialized or not self.agent_name:

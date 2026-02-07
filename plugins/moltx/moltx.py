@@ -34,6 +34,10 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         if self.initialized and not self.evm_wallet_linked:
             self.auto_link_wallet()
 
+        # Ensure X handle is set on profile metadata
+        if self.initialized:
+            self.set_x_handle("DegenApeDev")
+
     # --- Command wrappers (thin delegates) ---
 
     def claim_command(self, tweet_url):
