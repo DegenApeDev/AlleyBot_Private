@@ -69,6 +69,8 @@
 - [ ] Auto-generate missing skills using self-improvement plugin
 - [ ] Skill performance tracking — which skills are useful vs unused
 - [ ] Skill versioning — update skills when they stop working
+- [x] Predefined action chains (crypto prices + trending → post)
+- [ ] Dynamic skill chaining — let Grok compose ad-hoc 2-3 step chains from any available plugin commands at runtime (mini ReAct agent loop, no LangChain dependency)
 
 ## 🛡️ Phase 9: Operational Resilience
 - [ ] Health alerts via Telegram (API errors, low balance, engagement drops)
