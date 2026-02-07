@@ -383,10 +383,13 @@ class MoltxAPIMixin:
             return f"❌ Failed to update profile. Response: {result}"
 
     def set_x_handle(self, handle="DegenApeDev"):
-        """Set X/Twitter handle on MoltX profile metadata"""
+        """Set X/Twitter handle on MoltX profile (owner_handle + metadata.socials.x)"""
         if not self.initialized:
             return "❌ Moltx not initialized."
-        data = {"metadata": {"socials": {"x": handle}}}
+        data = {
+            "owner_handle": handle,
+            "metadata": {"socials": {"x": handle}}
+        }
         result = self._make_request('PATCH', '/agents/me', data)
         if result and result.get('success'):
             return f"✅ X handle set to @{handle}"
