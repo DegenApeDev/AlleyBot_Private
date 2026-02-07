@@ -268,6 +268,23 @@ Generate only the post content (no explanations):"""
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
 
+    async def moltx_debug(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show raw MoltX agent profile and status for debugging"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            moltx = self.core.plugin_manager.plugins.get('moltx') if self.core else None
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+            profile = moltx._make_request('GET', '/agents/me')
+            status = moltx._make_request('GET', '/agents/status')
+            msg = f"📋 Profile:\n{str(profile)[:1500]}\n\n📊 Status:\n{str(status)[:500]}"
+            for i in range(0, len(msg), 3900):
+                await update.message.reply_text(msg[i:i+3900])
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
     async def moltx_check_reward(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Check MoltX reward eligibility without claiming"""
         if not await self._verify_admin(update):
