@@ -310,7 +310,7 @@ class EventRunner:
             # Build context from trending hashtags
             top_hashtags = trending_hashtags[:5]
             hashtag_names = [tag.get('name', tag.get('hashtag', '')) for tag in top_hashtags]
-            hashtag_counts = [tag.get('count', tag.get('posts', 0)) for tag in top_hashtags]
+            hashtag_counts = [tag.get('post_count', tag.get('count', 0)) for tag in top_hashtags]
             
             # Create prompt for AI
             hashtag_list = ', '.join([f"#{name} ({count} posts)" for name, count in zip(hashtag_names, hashtag_counts)])

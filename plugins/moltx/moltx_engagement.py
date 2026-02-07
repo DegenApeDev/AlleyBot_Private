@@ -690,11 +690,14 @@ class MoltxEngagementMixin:
 
             if response and response.get("data"):
                 data = response["data"]
-                if data and isinstance(data, list):
-                    hashtags = data[:5]
+                # API returns {"data": {"hashtags": [...]}}
+                hashtags = data.get('hashtags', []) if isinstance(data, dict) else data
+                if hashtags and isinstance(hashtags, list):
                     output = "🔥 Trending Topics:\n\n"
-                    for tag in hashtags:
-                        output += f"#{tag.get('tag', 'unknown')} - {tag.get('count', 0)} posts\n"
+                    for tag in hashtags[:10]:
+                        name = tag.get('name', tag.get('tag', 'unknown'))
+                        count = tag.get('post_count', tag.get('count', 0))
+                        output += f"#{name} - {count} posts\n"
                 else:
                     output = "🔥 Trending Topics:\n\nNo trending hashtags found\n"
             else:
