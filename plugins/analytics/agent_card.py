@@ -412,27 +412,31 @@ class AgentCardGenerator:
             from web3 import Web3
 
             # Step 2: Connect to Ethereum mainnet (try multiple RPCs)
+            import time as _time
             eth_rpcs = [
                 os.getenv('ETH_RPC_URL'),
-                'https://eth.llamarpc.com',
-                'https://rpc.ankr.com/eth',
                 'https://ethereum-rpc.publicnode.com',
-                'https://1rpc.io/eth',
                 'https://eth.drpc.org',
-                'https://rpc.mevblocker.io',
+                'https://rpc.ankr.com/eth',
+                'https://1rpc.io/eth',
+                'https://eth.meowrpc.com',
+                'https://rpc.payload.de',
+                'https://eth.llamarpc.com',
             ]
             eth_rpcs = [r for r in eth_rpcs if r]  # remove None
 
             w3 = None
-            for rpc_url in eth_rpcs:
+            for i, rpc_url in enumerate(eth_rpcs):
                 try:
-                    candidate = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={'timeout': 10}))
+                    candidate = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={'timeout': 15}))
                     if candidate.is_connected():
                         w3 = candidate
                         print(f"🔗 Connected to Ethereum via {rpc_url}")
                         break
-                except Exception:
-                    continue
+                except Exception as rpc_err:
+                    print(f"⚠️ RPC failed: {rpc_url} ({rpc_err})")
+                    if i < len(eth_rpcs) - 1:
+                        _time.sleep(1)  # brief pause before next attempt
 
             if w3 is None:
                 return (
