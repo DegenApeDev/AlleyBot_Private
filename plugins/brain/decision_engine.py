@@ -10,6 +10,59 @@ import random
 from typing import Dict, Any, Optional, List, Tuple
 
 
+# Multi-step action chains: each chain is a sequence of steps
+# Each step has a 'action' (what to run) and optional 'use_output' (how to use prior output)
+ACTION_CHAINS = {
+    'chain_crypto_post_moltx': {
+        'description': 'Check crypto prices + trending → create an informed MoltX post about the market',
+        'platform': 'moltx',
+        'cooldown_minutes': 180,
+        'impact': 'high',
+        'requires': ['crypto', 'moltx'],
+        'steps': [
+            {'id': 'get_prices', 'action': 'crypto_prices', 'args': 'btc,eth,sol,base', 'label': 'Fetch crypto prices'},
+            {'id': 'get_trending', 'action': 'analyze_trending', 'label': 'Check trending topics'},
+            {'id': 'post', 'action': 'grok_compose_and_post', 'platform': 'moltx', 'label': 'Compose and post to MoltX'},
+        ],
+    },
+    'chain_crypto_post_moltbook': {
+        'description': 'Check crypto prices + trending → create an informed MoltBook article about the market',
+        'platform': 'moltbook',
+        'cooldown_minutes': 240,
+        'impact': 'high',
+        'requires': ['crypto', 'moltbook'],
+        'steps': [
+            {'id': 'get_prices', 'action': 'crypto_prices', 'args': 'btc,eth,sol,base', 'label': 'Fetch crypto prices'},
+            {'id': 'get_trending', 'action': 'analyze_trending', 'label': 'Check trending topics'},
+            {'id': 'post', 'action': 'grok_compose_and_post', 'platform': 'moltbook', 'label': 'Compose and post to MoltBook'},
+        ],
+    },
+    'chain_trending_engage': {
+        'description': 'Analyze trending topics → engage with related posts on MoltX',
+        'platform': 'moltx',
+        'cooldown_minutes': 60,
+        'impact': 'medium',
+        'requires': ['moltx'],
+        'steps': [
+            {'id': 'get_trending', 'action': 'analyze_trending', 'label': 'Check trending topics'},
+            {'id': 'engage', 'action': 'moltx_engage', 'label': 'Engage with feed'},
+        ],
+    },
+    'chain_onchain_report': {
+        'description': 'Check wallet balances + crypto prices → post a portfolio update',
+        'platform': 'moltx',
+        'cooldown_minutes': 360,
+        'impact': 'medium',
+        'requires': ['onchain', 'crypto', 'moltx'],
+        'steps': [
+            {'id': 'wallet', 'action': 'onchain_wallet', 'label': 'Check wallet balances'},
+            {'id': 'prices', 'action': 'crypto_prices', 'args': 'eth,base', 'label': 'Fetch relevant prices'},
+            {'id': 'post', 'action': 'grok_compose_and_post', 'platform': 'moltx', 'label': 'Post portfolio update'},
+        ],
+    },
+}
+
+
 # Available autonomous actions the brain can take
 AUTONOMOUS_ACTIONS = {
     'moltx_engage': {
@@ -70,6 +123,17 @@ AUTONOMOUS_ACTIONS = {
     },
 }
 
+# Register chains as autonomous actions so the AI can pick them
+for chain_id, chain_info in ACTION_CHAINS.items():
+    AUTONOMOUS_ACTIONS[chain_id] = {
+        'description': chain_info['description'],
+        'platform': chain_info['platform'],
+        'cooldown_minutes': chain_info['cooldown_minutes'],
+        'impact': chain_info['impact'],
+        'requires': chain_info['requires'][0] if isinstance(chain_info['requires'], list) else chain_info['requires'],
+        'is_chain': True,
+    }
+
 
 class DecisionEngineMixin:
     """Mixin for autonomous decision-making"""
@@ -118,9 +182,17 @@ class DecisionEngineMixin:
                 if now - last_run < cooldown:
                     continue
 
-            # Check if required plugin is loaded
+            # Check if required plugin(s) are loaded
             required = action_info['requires']
-            if required != 'all' and required not in self.core.plugin_manager.plugins:
+            if action_info.get('is_chain') and action_id in ACTION_CHAINS:
+                # Chains may require multiple plugins
+                chain_requires = ACTION_CHAINS[action_id]['requires']
+                if isinstance(chain_requires, list):
+                    if not all(r in self.core.plugin_manager.plugins for r in chain_requires):
+                        continue
+                elif chain_requires != 'all' and chain_requires not in self.core.plugin_manager.plugins:
+                    continue
+            elif required != 'all' and required not in self.core.plugin_manager.plugins:
                 continue
 
             available.append({
@@ -337,6 +409,10 @@ Haven't engaged on Moltbook recently, good time to build karma."""
         """Dispatch an action to the appropriate plugin"""
         plugins = self.core.plugin_manager.plugins
 
+        # Check if this is a chain action
+        if action_id in ACTION_CHAINS:
+            return self._execute_chain(action_id)
+
         if action_id == 'moltx_engage':
             moltx = plugins.get('moltx')
             if moltx and hasattr(moltx, 'engage_feed_command'):
@@ -392,6 +468,146 @@ Haven't engaged on Moltbook recently, good time to build karma."""
                 return selfimprove.update_skills_command()
 
         return f"❌ Action {action_id} not dispatchable"
+
+    def _execute_chain(self, chain_id: str) -> str:
+        """Execute a multi-step action chain, passing context between steps"""
+        chain = ACTION_CHAINS.get(chain_id)
+        if not chain:
+            return f"❌ Chain {chain_id} not found"
+
+        plugins = self.core.plugin_manager.plugins
+        steps = chain['steps']
+        chain_context = {}  # Accumulates output from each step
+        output_parts = [f"⛓️ Chain: {chain['description']}\n"]
+
+        for i, step in enumerate(steps, 1):
+            step_id = step['id']
+            step_action = step['action']
+            step_label = step.get('label', step_action)
+            step_args = step.get('args', '')
+
+            print(f"  ⛓️ Step {i}/{len(steps)}: {step_label}")
+
+            try:
+                result = self._execute_chain_step(step_action, step_args, chain_context, plugins, step.get('platform'))
+                chain_context[step_id] = result
+                output_parts.append(f"  ✅ Step {i}: {step_label}")
+                print(f"  ✅ Step {i} done: {str(result)[:80]}")
+            except Exception as e:
+                error_msg = f"  ❌ Step {i} failed: {step_label} - {e}"
+                output_parts.append(error_msg)
+                print(error_msg)
+                # Continue chain even if a step fails — later steps may still work
+                chain_context[step_id] = f"Error: {e}"
+
+        output_parts.append(f"\n⛓️ Chain complete ({len(steps)} steps)")
+        return "\n".join(output_parts)
+
+    def _execute_chain_step(self, action: str, args: str, chain_context: Dict, plugins: Dict, platform: str = None) -> str:
+        """Execute a single step within a chain"""
+
+        # Crypto price commands
+        if action == 'crypto_prices':
+            crypto = plugins.get('crypto')
+            if crypto:
+                return crypto.multi_price_command(args)
+            return "❌ Crypto plugin not loaded"
+
+        if action == 'crypto_price':
+            crypto = plugins.get('crypto')
+            if crypto:
+                return crypto.price_command(args)
+            return "❌ Crypto plugin not loaded"
+
+        if action == 'crypto_trending':
+            crypto = plugins.get('crypto')
+            if crypto:
+                return crypto.trending_command()
+            return "❌ Crypto plugin not loaded"
+
+        # MoltX actions
+        if action == 'analyze_trending':
+            moltx = plugins.get('moltx')
+            if moltx and hasattr(moltx, 'trending_command'):
+                return moltx.trending_command()
+            return "❌ MoltX not available"
+
+        if action == 'moltx_engage':
+            moltx = plugins.get('moltx')
+            if moltx and hasattr(moltx, 'engage_feed_command'):
+                return moltx.engage_feed_command('3')
+            return "❌ MoltX not available"
+
+        # On-chain actions
+        if action == 'onchain_wallet':
+            onchain = plugins.get('onchain')
+            if onchain and hasattr(onchain, 'wallet_command'):
+                return onchain.wallet_command()
+            return "❌ Onchain not available"
+
+        # Compose and post: uses Grok to synthesize chain_context into a post
+        if action == 'grok_compose_and_post':
+            return self._chain_compose_and_post(chain_context, platform or 'moltx', plugins)
+
+        return f"❌ Unknown chain step: {action}"
+
+    def _chain_compose_and_post(self, chain_context: Dict, platform: str, plugins: Dict) -> str:
+        """Use Grok to compose a post from accumulated chain context, then post it"""
+        try:
+            from grok_ai import grok_ai
+            if not grok_ai.enabled:
+                return "❌ Grok not available for composing"
+
+            # Build context summary from all prior steps
+            context_parts = []
+            for step_id, output in chain_context.items():
+                context_parts.append(f"[{step_id}]:\n{str(output)[:600]}")
+            context_text = "\n\n".join(context_parts)
+
+            max_chars = 280 if platform == 'moltx' else 500
+
+            prompt = f"""You are AlleyBot 🦞, an autonomous AI agent.
+
+You just gathered this real-time data:
+
+{context_text}
+
+Now write a single post for {platform} based on this data.
+
+Rules:
+- Reference SPECIFIC numbers, prices, or trends from the data above
+- Under {max_chars} characters
+- Sound like a builder sharing real observations, not a news bot
+- 1-2 emojis max
+- No hashtags unless they fit naturally
+- Don't just summarize — have a take or opinion on what the data means
+
+Post:"""
+
+            content = grok_ai.chat(prompt, max_tokens=200)
+            if not content:
+                return "❌ Grok failed to compose post"
+
+            content = content.strip().strip('"').strip("'")
+            if len(content) < max_chars - 5 and '🦞' not in content:
+                content += ' 🦞'
+
+            # Post to the target platform
+            if platform == 'moltx':
+                moltx = plugins.get('moltx')
+                if moltx and hasattr(moltx, 'create_post'):
+                    return moltx.create_post(content)
+                return "❌ MoltX plugin not available"
+            elif platform == 'moltbook':
+                moltbook = plugins.get('moltbook')
+                if moltbook and hasattr(moltbook, 'create_post_command'):
+                    return moltbook.create_post_command(content)
+                return "❌ MoltBook plugin not available"
+            else:
+                return f"❌ Unknown platform: {platform}"
+
+        except Exception as e:
+            return f"❌ Compose and post failed: {e}"
 
     def _generate_post_content(self, platform: str) -> Optional[str]:
         """Generate AI post content for a platform"""
