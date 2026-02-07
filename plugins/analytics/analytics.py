@@ -101,7 +101,9 @@ class AnalyticsPlugin(AlleyBotPlugin):
         data = {'deepseek_calls': 0, 'grok_calls': 0, 'total_tokens': 0, 'ai_cost': 0.0}
         try:
             from src.config.models import ModelRouter
-            router = ModelRouter()
+            if not hasattr(self, '_model_router'):
+                self._model_router = ModelRouter()
+            router = self._model_router
             daily = router.token_tracker.get_daily_stats()
             costs = router.token_tracker.get_cost_estimate()
             data['deepseek_calls'] = daily.get('usage', {}).get('deepseek', {}).get('requests', 0)
