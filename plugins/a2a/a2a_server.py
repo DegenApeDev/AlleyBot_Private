@@ -94,6 +94,25 @@ class A2AServerMixin:
         """Create and configure the Flask A2A server."""
         self._a2a_app = Flask('alleybot_a2a')
 
+        # ── Root / Landing ────────────────────────────────────────────
+
+        @self._a2a_app.route('/', methods=['GET'])
+        def root():
+            base = self._a2a_base_url.rstrip('/')
+            return jsonify({
+                "name": "AlleyBot",
+                "protocol": "A2A",
+                "version": "1.0",
+                "description": "AlleyBot Agent-to-Agent protocol server",
+                "endpoints": {
+                    "agentCard": f"{base}/.well-known/agent-card.json",
+                    "messageSend": f"{base}/message:send",
+                    "messageStream": f"{base}/message:stream",
+                    "tasks": f"{base}/tasks",
+                    "health": f"{base}/health",
+                },
+            }), 200
+
         # ── Agent Discovery (§8) ────────────────────────────────────
 
         @self._a2a_app.route('/.well-known/agent-card.json', methods=['GET'])
