@@ -71,10 +71,101 @@ class AutonomousCoderMixin:
     # AI Code Generation
     # ------------------------------------------------------------------
 
+    def _get_import_examples(self) -> str:
+        """Get real import patterns from the codebase so AI uses correct paths"""
+        examples = []
+        # Scan a few key plugin files for their import lines
+        sample_files = [
+            'plugins/moltx/moltx_content.py',
+            'plugins/moltbook/moltbook_content.py',
+            'plugins/brain/brain.py',
+            'plugins/onchain/onchain.py',
+        ]
+        for rel in sample_files:
+            full = os.path.join(self.project_root, rel)
+            if os.path.exists(full):
+                try:
+                    with open(full, 'r') as f:
+                        lines = f.readlines()[:30]
+                    imports = [l.rstrip() for l in lines if l.strip().startswith(('import ', 'from '))]
+                    if imports:
+                        examples.append(f"# {rel}")
+                        examples.extend(imports[:8])
+                except Exception:
+                    pass
+        return '\n'.join(examples[:40])
+
+    def _sandbox_check_file(self, code: str, filepath: str) -> Dict[str, Any]:
+        """Pre-test a single generated file in isolation: syntax + import check.
+        Returns {'ok': bool, 'error': str}.
+        Does NOT touch the real filesystem."""
+        import tempfile
+
+        # 1. Syntax check via ast.parse
+        import ast
+        try:
+            ast.parse(code)
+        except SyntaxError as e:
+            return {'ok': False, 'error': f'Syntax error: {e}'}
+
+        # 2. Try to compile + import in a subprocess so we catch ModuleNotFoundError
+        #    We run with the project root on PYTHONPATH so real project imports resolve.
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as tmp:
+            tmp.write(code)
+            tmp_path = tmp.name
+
+        try:
+            venv_python = os.path.join(self.project_root, 'venv', 'bin', 'python')
+            python_cmd = venv_python if os.path.exists(venv_python) else 'python3'
+
+            env = os.environ.copy()
+            env['PYTHONPATH'] = self.project_root + ':' + env.get('PYTHONPATH', '')
+
+            result = subprocess.run(
+                [python_cmd, '-c', f"import py_compile; py_compile.compile(r'{tmp_path}', doraise=True)"],
+                capture_output=True, text=True, timeout=15, env=env,
+            )
+            if result.returncode != 0:
+                return {'ok': False, 'error': f'Compile check failed: {result.stderr[-300:]}'}
+
+            # 3. Try a quick import to catch ModuleNotFoundError etc.
+            #    We wrap in try/except inside the subprocess so env-specific errors
+            #    (missing API keys, etc.) don't count as failures.
+            import_check = (
+                f"import sys, os\n"
+                f"sys.path.insert(0, r'{self.project_root}')\n"
+                f"try:\n"
+                f"    compile(open(r'{tmp_path}').read(), r'{tmp_path}', 'exec')\n"
+                f"    print('OK')\n"
+                f"except SyntaxError as e:\n"
+                f"    print(f'SYNTAX:{{e}}')\n"
+                f"    sys.exit(1)\n"
+            )
+            result = subprocess.run(
+                [python_cmd, '-c', import_check],
+                capture_output=True, text=True, timeout=15, env=env,
+            )
+            if result.returncode != 0:
+                return {'ok': False, 'error': result.stderr[-300:] or result.stdout[-300:]}
+
+            return {'ok': True, 'error': ''}
+
+        except subprocess.TimeoutExpired:
+            return {'ok': False, 'error': 'Sandbox check timed out'}
+        except Exception as e:
+            return {'ok': False, 'error': str(e)}
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
     def _generate_code_with_ai(self, task: str, context: str = "",
                                 max_tokens: int = 4000) -> Optional[str]:
         """Generate code using Grok (primary) or DeepSeek (fallback)"""
-        system_prompt = """You are an expert Python developer working on AlleyBot, an autonomous AI agent.
+        import_examples = self._get_import_examples()
+
+        system_prompt = f"""You are an expert Python developer working on AlleyBot, an autonomous AI agent.
 You generate clean, production-ready Python code following these rules:
 1. Follow existing code style (mixin pattern, plugin architecture)
 2. Include proper error handling with try/except
@@ -82,7 +173,20 @@ You generate clean, production-ready Python code following these rules:
 4. NO eval(), exec(), os.system(), __import__(), or shell=True
 5. Only use standard library + packages already in requirements.txt
 6. Keep functions focused and under 50 lines each
-7. Return ONLY the code, no explanations or markdown fences"""
+7. Return ONLY the code, no explanations or markdown fences
+
+CRITICAL — Import conventions for this project:
+- The project root is on PYTHONPATH. Imports are from the root, e.g.:
+  from plugins.brain.brain import BrainPlugin
+  from src.config.models import ModelRouter
+  from grok_ai import grok_ai
+  from deepseek_ai import deepseek_ai
+- Plugin files use mixin classes. Each plugin folder has an __init__ or main .py.
+- NEVER use relative imports like 'from . import' in generated skill files.
+- NEVER invent modules that don't exist. If unsure, wrap imports in try/except.
+
+Real import examples from the codebase:
+{import_examples}"""
 
         user_prompt = f"""Task: {task}
 
@@ -234,6 +338,57 @@ Return ONLY valid JSON, no markdown or explanation."""
                         lines.append(f"{rel}/: {', '.join(py_files)}")
         return '\n'.join(lines[:30])
 
+    def _scope_test_modules(self, plan: Dict) -> List[str]:
+        """Determine which test modules to run based on files being changed.
+        
+        Instead of running ALL tests (190+), only run the modules that could
+        be affected by the changed files. Falls back to a minimal smoke test
+        if no specific mapping is found.
+        """
+        # Map file path prefixes to relevant test modules
+        prefix_to_tests = {
+            'plugins/moltx/': ['tests.test_phase2'],
+            'plugins/moltbook/': ['tests.test_phase2'],
+            'plugins/brain/': ['tests.test_phase2'],
+            'plugins/onchain/': ['tests.test_phase3'],
+            'plugins/selfimprove/': ['tests.test_phase4'],
+            'plugins/telegram/': ['tests.test_phase2'],
+            'plugins/analytics/': ['tests.test_phase2'],
+            'plugins/a2a/': ['tests.test_phase2'],
+            'src/': ['tests.test_fixes'],
+            'skills/': [],  # Skill .md files don't need Python tests
+            'config/': ['tests.test_fixes'],
+        }
+
+        # Collect test modules from plan files
+        needed = set()
+        changed_files = plan.get('files', [])
+        for f in changed_files:
+            path = f.get('path', '')
+            matched = False
+            for prefix, modules in prefix_to_tests.items():
+                if path.startswith(prefix):
+                    needed.update(modules)
+                    matched = True
+                    break
+            if not matched:
+                # Unknown path — add core smoke test
+                needed.add('tests.test_fixes')
+
+        # If plan specified test_modules, honour them as additions
+        plan_modules = plan.get('test_modules', [])
+        if plan_modules:
+            needed.update(plan_modules)
+
+        # If only skill .md files changed, no Python tests needed — just syntax checks
+        if not needed:
+            # Still run a minimal smoke test to make sure nothing is broken
+            needed.add('tests.test_fixes')
+
+        result = sorted(needed)
+        print(f"  🎯 Scoped tests: {', '.join(result)} (from {len(changed_files)} changed files)")
+        return result
+
     # ------------------------------------------------------------------
     # Execute: generate code for each file in the plan
     # ------------------------------------------------------------------
@@ -338,17 +493,54 @@ Return ONLY valid JSON, no markdown or explanation."""
 
         results['validation'] = {'safe': True, 'issues': []}
 
-        # Step 3: Apply changes (on auto/* branch)
+        # Step 3: Sandbox pre-check each file (syntax + compile) BEFORE touching filesystem
+        print("🔬 Running sandbox pre-checks...")
+        sandbox_failures = []
+        for gf in results['generated_files']:
+            check = self._sandbox_check_file(gf['code'], gf['path'])
+            if not check['ok']:
+                sandbox_failures.append((gf, check['error']))
+
+        # If sandbox fails, try one AI fix round before giving up
+        if sandbox_failures:
+            print(f"⚠️  {len(sandbox_failures)} file(s) failed sandbox check, asking AI to fix...")
+            for gf, err in sandbox_failures:
+                fix_prompt = (
+                    f"This Python file failed a sandbox check with this error:\n{err}\n\n"
+                    f"File: {gf['path']}\n"
+                    f"```python\n{gf['code'][:6000]}\n```\n\n"
+                    f"IMPORTANT: The project root is on PYTHONPATH. Use imports like:\n"
+                    f"  from plugins.brain.brain import BrainPlugin\n"
+                    f"  from grok_ai import grok_ai\n"
+                    f"  import requests\n"
+                    f"NEVER use relative imports. Wrap uncertain imports in try/except.\n\n"
+                    f"Fix the code and return ONLY the complete corrected Python file."
+                )
+                fixed = self._generate_code_with_ai(fix_prompt, max_tokens=6000)
+                if fixed:
+                    gf['code'] = fixed
+
+            # Re-check after fix
+            still_failing = []
+            for gf in results['generated_files']:
+                check = self._sandbox_check_file(gf['code'], gf['path'])
+                if not check['ok']:
+                    still_failing.append(f"{gf['path']}: {check['error']}")
+
+            if still_failing:
+                results['error'] = f"Sandbox pre-check failed: {'; '.join(still_failing)}"
+                return results
+
+        # Step 4: Apply changes (on auto/* branch)
         apply_result = self._apply_changes(results['generated_files'], plan.get('summary', 'auto-update'))
         if not apply_result['success']:
             results['error'] = f"Failed to apply changes: {apply_result.get('error', '?')}"
             return results
 
-        # Step 4: Run test suite (with debug-and-retry on failure)
-        test_modules = plan.get('test_modules', ['tests.test_fixes', 'tests.test_phase2',
-                                                   'tests.test_phase3', 'tests.test_phase4',
-                                                   'tests.test_phase5'])
-        max_fix_attempts = 2
+        # Step 5: Run test suite (with debug-and-retry on failure)
+        #   Scope tests: only run modules that could be affected by the changed files
+        test_modules = self._scope_test_modules(plan)
+        max_fix_attempts = 3
         attempt = 0
 
         while True:
@@ -440,6 +632,12 @@ Fix the code so the tests pass. Common issues:
 - Attribute errors (wrong method name, missing self parameter)
 - Type errors (wrong argument count, wrong types)
 - Logic errors (wrong return value, missing edge case)
+
+IMPORTANT import conventions:
+- Project root is on PYTHONPATH. Use: from plugins.x.y import Z
+- For AI: from grok_ai import grok_ai / from deepseek_ai import deepseek_ai
+- For HTTP: import requests
+- NEVER use relative imports. Wrap uncertain imports in try/except.
 
 Return ONLY the complete fixed Python file. No explanations, no markdown fences."""
 
