@@ -250,6 +250,12 @@ class A2AServerMixin:
             "defaultInputModes": ["text/plain", "application/json"],
             "defaultOutputModes": ["text/plain", "application/json"],
             "skills": a2a_skills,
+            "registrations": [
+                {
+                    "agentId": 22899,
+                    "agentRegistry": "eip155:1:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+                }
+            ],
         }
 
         return jsonify(card), 200, {'Content-Type': 'application/json'}
