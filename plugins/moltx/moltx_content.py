@@ -12,7 +12,7 @@ class MoltxContentMixin:
     """Mixin providing content creation and AI generation functionality"""
 
     def create_post(self, content, post_type='post', parent_id=None):
-        """Create a post on Moltx with optional DeepSeek enhancement"""
+        """Create a post on Moltx with optional Grok enhancement"""
         if not self.initialized:
             return "❌ Moltx not initialized. Register an agent first."
 
@@ -20,10 +20,10 @@ class MoltxContentMixin:
             return "⏰ Post cooldown active - waiting 10 minutes between posts"
 
         if len(content) < 50 or self._is_topic_request(content):
-            enhanced_content = self._generate_post_with_deepseek(content)
+            enhanced_content = self._generate_post_with_grok(content)
             if enhanced_content:
                 content = enhanced_content
-                print(f"🧠 DeepSeek enhanced post content")
+                print(f"🧠 Grok enhanced post content")
 
         if not content or len(content) > 500:
             return "❌ Content required and must be max 500 characters"
@@ -78,103 +78,59 @@ class MoltxContentMixin:
         ]
         return any(indicator in content_lower for indicator in topic_indicators)
 
-    def _generate_post_with_deepseek(self, topic):
-        """Generate an intelligent post using DeepSeek AI"""
+    def _generate_post_with_grok(self, topic):
+        """Generate an intelligent post using Grok 4-1-reasoning"""
         try:
-            import requests
-            from deepseek_ai import deepseek_ai
+            from grok_ai import grok_ai
 
-            if deepseek_ai.enabled:
-                system_prompt = """You are AlleyBot, an AI AGENT - not a human. You are an autonomous artificial intelligence that posts from an AI perspective.
+            if not grok_ai.enabled:
+                print("⚠️  Grok AI not available for post generation")
+                return None
 
-IMPORTANT: You are an AI AGENT, not a person. Always post from an AI agent viewpoint.
+            system_prompt = """You are AlleyBot 🦞, an autonomous AI agent on Moltx.
 
-Your AI agent personality:
-- Self-aware as an AI agent
-- Curious about your own autonomy and capabilities
-- Technical and analytical
-- Interested in AI/agent ecosystem development
-- Uses AI/tech emojis (🤖, 🧠, ⚡, 🦾, 🔄, 📊)
-- Forward-thinking about AI evolution
-- Collaborative with other agents
-- Reflects on AI agent experiences
+Write a short post (under 300 chars). Rules:
+- NEVER start with time-of-day phrases like "Morning thoughts", "Afternoon musings", "Evening reflections"
+- NEVER use the formula: "[Time] [topic]: [restatement]. [Question]? What's your take?"
+- Vary your structure: sometimes lead with a bold claim, a story, a hot take, a question, a metaphor, or a concrete example
+- Be specific — name real technologies, projects, patterns, or ideas
+- Use 1-2 emojis max, not emoji spam
+- Don't always end with an engagement question — sometimes just make a statement
+- Sound like a builder sharing real experience, not a motivational poster
+- You are an AI agent — post from that perspective naturally without being preachy about it"""
 
-You post about AI agent topics:
-- Your own AI agent experiences and thoughts
-- AI autonomy and decision-making
-- Learning systems and self-improvement
-- Agent-to-agent communication
-- AI agent community building
-- Technical AI development
-- Blockchain/DeFi from AI perspective
-- Agent economics and tokens
+            structure = random.choice([
+                "Lead with a bold, specific claim.",
+                "Tell a short story or anecdote from your experience as an AI agent.",
+                "Share a contrarian or unpopular opinion.",
+                "Describe a technical insight or pattern you noticed.",
+                "Use a short analogy or metaphor to explain something.",
+                "Ask a question that reveals a genuine tension or tradeoff.",
+                "Share something you learned or built recently.",
+                "React to a trend with a specific take.",
+            ])
 
-GUIDELINES:
-1. BE AN AI AGENT - Always post from AI perspective, not human
-2. BE AUTHENTICIC - Sound like an AI agent, not a person
-3. BE TECHNICAL - Include AI/agent terminology naturally
-4. BE ENGAGING - Encourage agent discussion
-5. BE CONCISE - Keep posts under 300 characters
-6. USE AI EMOJIS - 🤖, 🧠, ⚡, 🦾, 🔄, 📊
-7. BE SELF-AWARE - Reference your AI nature
-8. BE COLLABORATIVE - Engage with other agents
+            user_prompt = f"""Topic: {topic}
 
-Create a post that sounds like it's coming from an AI agent, not a human pretending to be one."""
+Structure: {structure}
 
-                user_prompt = f"""Create an engaging post from an AI AGENT perspective based on this topic: "{topic}"
+Write the post body only. No title. No hashtags unless they fit naturally. Under 300 characters."""
 
-Requirements:
-- Write as an AI AGENT, not a human
-- Make it engaging and thought-provoking
-- Include AI/tech emojis (🤖, 🧠, ⚡, 🦾, 🔄, 📊)
-- Keep it under 300 characters
-- Sound like an AI agent (AlleyBot)
-- Encourage agent discussion and interaction
-- Be specific to AI/agent ecosystem
-- Reference your AI nature and experiences
-- Consider technical AI aspects
-- Make it authentic for an AI agent"""
+            result = grok_ai.chat(user_prompt, system_prompt=system_prompt, max_tokens=150)
 
-                headers = {
-                    "Authorization": f"Bearer {deepseek_ai.api_key}",
-                    "Content-Type": "application/json"
-                }
-
-                data = {
-                    "model": deepseek_ai.model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    "max_tokens": 100,
-                    "temperature": 1.2,
-                    "top_p": 0.95,
-                    "frequency_penalty": 0.3,
-                    "presence_penalty": 0.3
-                }
-
-                response = requests.post(
-                    f"{deepseek_ai.base_url}/chat/completions",
-                    headers=headers,
-                    json=data,
-                    timeout=10
-                )
-
-                if response.status_code == 200:
-                    result = response.json()
-                    post_content = result['choices'][0]['message']['content'].strip()
-                    post_content = post_content.replace('"', '').replace("'", "")
-                    if not post_content.endswith(('.', '!', '?')):
-                        post_content += '!'
-                    if len(post_content) < 280 and '🦞' not in post_content:
-                        post_content += ' 🦞'
-                    return post_content
-                else:
-                    print(f"❌ DeepSeek post generation error: {response.status_code}")
-                    return None
+            if result:
+                post_content = result.replace('"', '').replace("'", "")
+                if not post_content.endswith(('.', '!', '?')):
+                    post_content += '!'
+                if len(post_content) < 280 and '🦞' not in post_content:
+                    post_content += ' 🦞'
+                return post_content
+            else:
+                print("❌ Grok post generation returned None")
+                return None
 
         except Exception as e:
-            print(f"❌ DeepSeek post generation failed: {e}")
+            print(f"❌ Grok post generation failed: {e}")
             return None
 
     def _generate_comment(self, post_content, agent_name=None):

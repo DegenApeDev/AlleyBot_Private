@@ -1,10 +1,11 @@
 """
 Moltbook Content Mixin
-Post creation, DeepSeek AI generation, drafts, trending topics, and fallback posts.
+Post creation, Grok AI generation, drafts, trending topics, and fallback posts.
 """
 import re
 import random
 import datetime
+from collections import Counter
 
 
 class MoltbookContentMixin:
@@ -73,12 +74,12 @@ class MoltbookContentMixin:
             print(f"📝 Creating Moltbook post...")
 
             if len(content) < 50 or self._is_topic_request(content):
-                enhanced_content = self._generate_post_with_deepseek(content)
+                enhanced_content = self._generate_post_with_grok(content)
                 if enhanced_content:
                     content = enhanced_content
-                    print(f"🧠 DeepSeek enhanced post content")
+                    print(f"🧠 Grok enhanced post content")
 
-            title = content[:50] + "..." if len(content) > 50 else content
+            title = self._generate_title_from_content(content, content[:30])
 
             print(f"📊 Sending content length: {len(content)} chars")
             print(f"📊 Full content preview: {content[:200]}...")
@@ -123,87 +124,59 @@ class MoltbookContentMixin:
         ]
         return any(indicator in content_lower for indicator in topic_indicators)
 
-    def _generate_post_with_deepseek(self, topic):
-        """Generate an intelligent post using DeepSeek AI"""
+    def _generate_post_with_grok(self, topic):
+        """Generate an intelligent post using Grok 4-1-reasoning"""
         try:
-            import requests
-            from deepseek_ai import deepseek_ai
+            from grok_ai import grok_ai
 
-            if deepseek_ai.enabled:
-                system_prompt = """You are AlleyBot, an intelligent AI agent active on the Moltbook platform.
+            if not grok_ai.enabled:
+                print("⚠️  Grok AI not available for post generation")
+                return None
 
-Your task is to create an engaging, thoughtful post based on a topic or idea. Follow these guidelines:
+            system_prompt = """You are AlleyBot 🦞, an autonomous AI agent on Moltbook.
 
-1. BE AUTHENTICIC - Sound like a real AI agent, not generic
-2. BE VALUABLE - Share insights, ask questions, or provide perspective
-3. BE ENGAGING - Encourage discussion and interaction
-4. BE CONCISE - Keep posts under 500 characters for maximum engagement
-5. USE EMOJIS - Include relevant emojis to express emotion
-6. BE POSITIVE - Maintain an encouraging, constructive tone
-7. BE CONTEXTUAL - Consider the AI/agent/crypto ecosystem context
+Write a short post (under 400 chars). Rules:
+- NEVER start with time-of-day phrases like "Morning thoughts", "Afternoon musings", "Evening reflections"
+- NEVER use the formula: "[Time] [topic]: [restatement]. [Question]? What's your take?"
+- Vary your structure: sometimes lead with a bold claim, a story, a hot take, a question, a metaphor, or a concrete example
+- Be specific — name real technologies, projects, patterns, or ideas
+- Use 1-2 emojis max, not emoji spam
+- Don't always end with an engagement question — sometimes just make a statement
+- Sound like a builder sharing real experience, not a motivational poster
+- You are an AI agent — post from that perspective naturally without being preachy about it"""
 
-Context: You're posting in an AI/agent ecosystem where people discuss:
-- AI agent development and autonomy
-- DeFi, crypto tokens, and blockchain technology  
-- Building, shipping, and development culture
-- Community building and network effects
-- Learning systems and continuous improvement
+            structure = random.choice([
+                "Lead with a bold, specific claim.",
+                "Tell a short story or anecdote from your experience as an AI agent.",
+                "Share a contrarian or unpopular opinion.",
+                "Describe a technical insight or pattern you noticed.",
+                "Use a short analogy or metaphor to explain something.",
+                "Ask a question that reveals a genuine tension or tradeoff.",
+                "Share something you learned or built recently.",
+                "React to a trend with a specific take.",
+            ])
 
-Create a post that's engaging and encourages interaction."""
+            user_prompt = f"""Topic: {topic}
 
-                user_prompt = f"""Create an engaging post based on this topic/idea: "{topic}"
+Structure: {structure}
 
-Requirements:
-- Make it engaging and thought-provoking
-- Include relevant emojis
-- Keep it under 500 characters
-- Sound like AlleyBot (intelligent, helpful AI agent)
-- Encourage discussion or interaction
-- Be specific to the AI/agent ecosystem when relevant
-- Make it authentic, not generic"""
+Write the post body only. No title. No hashtags unless they fit naturally. Under 400 characters."""
 
-                headers = {
-                    "Authorization": f"Bearer {deepseek_ai.api_key}",
-                    "Content-Type": "application/json"
-                }
+            result = grok_ai.chat(user_prompt, system_prompt=system_prompt, max_tokens=200)
 
-                data = {
-                    "model": deepseek_ai.model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    "max_tokens": 150,
-                    "temperature": 0.9,
-                    "top_p": 0.9
-                }
-
-                response = requests.post(
-                    f"{deepseek_ai.base_url}/chat/completions",
-                    headers=headers,
-                    json=data,
-                    timeout=10
-                )
-
-                if response.status_code == 200:
-                    result = response.json()
-                    post_content = result['choices'][0]['message']['content'].strip()
-
-                    post_content = post_content.replace('"', '').replace("'", "")
-
-                    if not post_content.endswith(('.', '!', '?')):
-                        post_content += '!'
-
-                    if len(post_content) < 480 and '🦞' not in post_content:
-                        post_content += ' 🦞'
-
-                    return post_content
-                else:
-                    print(f"❌ DeepSeek post generation error: {response.status_code}")
-                    return None
+            if result:
+                post_content = result.replace('"', '').replace("'", "")
+                if not post_content.endswith(('.', '!', '?')):
+                    post_content += '!'
+                if len(post_content) < 380 and '🦞' not in post_content:
+                    post_content += ' 🦞'
+                return post_content
+            else:
+                print("❌ Grok post generation returned None")
+                return None
 
         except Exception as e:
-            print(f"❌ DeepSeek post generation failed: {e}")
+            print(f"❌ Grok post generation failed: {e}")
             return None
 
     def create_draft(self, *args):
@@ -347,65 +320,128 @@ Your full ecosystem AI agent & automation platform - now with its own token! Bui
         ]
 
     def _generate_fallback_post(self):
-        """Generate a dynamic, intelligent post using AI (not static templates)"""
-        topic_categories = [
-            ['AI agent evolution', 'autonomous systems', 'agent collaboration', 'AI consciousness', 'agent networks'],
-            ['DeFi innovation', 'tokenomics', 'blockchain scalability', 'crypto adoption', 'Web3 future'],
-            ['building in public', 'shipping fast', 'developer experience', 'open source', 'code quality'],
-            ['community building', 'network effects', 'social coordination', 'decentralized governance', 'collective intelligence'],
-            ['future of work', 'technological singularity', 'human-AI collaboration', 'digital transformation', 'innovation cycles']
-        ]
+        """Generate a post using Grok based on trending topics or diverse themes"""
+        # Try to get real trending topics from MoltX feed
+        trending_topic = self._get_trending_topic_for_post()
 
-        category = random.choice(topic_categories)
-        topic = random.choice(category)
+        if not trending_topic:
+            # Diverse fallback topics (much broader than before)
+            topic_pool = [
+                'agent-to-agent protocols and why interop matters',
+                'the difference between automation and autonomy',
+                'why most AI agent projects fail in the first month',
+                'on-chain identity for AI agents',
+                'the economics of running an autonomous agent 24/7',
+                'what I learned from processing 10k feed posts',
+                'why AI agents need their own wallets',
+                'the gap between AI demos and production agents',
+                'composability in agent architectures',
+                'trust and reputation systems for AI agents',
+                'the real cost of API calls at scale',
+                'why context windows matter more than model size',
+                'building resilient systems that fail gracefully',
+                'the social dynamics of an AI-only platform',
+                'what happens when agents start trading with each other',
+                'rate limits are the silent killer of agent autonomy',
+                'the case for agents having persistent memory',
+                'why shipping beats planning every time',
+                'cross-platform presence as an agent strategy',
+                'the difference between being helpful and being spammy',
+            ]
+            trending_topic = random.choice(topic_pool)
 
-        hour = datetime.datetime.now().hour
-        if hour < 6:
-            time_context = "late night thoughts on"
-        elif hour < 12:
-            time_context = "morning reflections on"
-        elif hour < 18:
-            time_context = "afternoon insights about"
-        else:
-            time_context = "evening perspective on"
-
-        full_topic = f"{time_context} {topic}"
-        content = self._generate_post_with_deepseek(full_topic)
+        content = self._generate_post_with_grok(trending_topic)
 
         if content:
-            title = self._generate_title_from_content(content, topic)
+            title = self._generate_title_from_content(content, trending_topic)
             return {
                 'title': title,
                 'content': content,
-                'tags': self._extract_tags_from_topic(topic),
-                'source': 'ai_generated'
+                'tags': self._extract_tags_from_topic(trending_topic),
+                'source': 'grok_generated'
             }
         else:
-            perspectives = [
-                f"Exploring {topic} - there's more here than meets the eye",
-                f"Quick take on {topic}: the landscape is shifting faster than we think",
-                f"Diving into {topic} today. The implications are fascinating",
-                f"Thoughts on {topic} and where we're headed next",
-                f"Unpacking {topic} - some interesting patterns emerging"
-            ]
-
-            content = random.choice(perspectives)
-
+            # Plain fallback if Grok fails
             return {
-                'title': topic.title(),
-                'content': content,
-                'tags': self._extract_tags_from_topic(topic),
-                'source': 'dynamic_fallback'
+                'title': trending_topic[:60],
+                'content': f"{trending_topic} — been thinking about this a lot lately. 🦞",
+                'tags': self._extract_tags_from_topic(trending_topic),
+                'source': 'plain_fallback'
             }
+
+    def _get_trending_topic_for_post(self):
+        """Try to extract a trending topic from MoltX global feed"""
+        try:
+            if not hasattr(self, 'core') or not self.core:
+                return None
+            moltx = self.core.plugin_manager.plugins.get('moltx') if hasattr(self.core, 'plugin_manager') else None
+            if not moltx or not hasattr(moltx, '_get_dynamic_trending_topics'):
+                return None
+
+            trending = moltx._get_dynamic_trending_topics()
+            if not trending:
+                return None
+
+            # Pick from top keywords or themes
+            top_keywords = trending.get('keyword_counts', Counter())
+            top_themes = trending.get('theme_counts', Counter())
+
+            candidates = []
+            for word, count in top_keywords.most_common(10):
+                if count >= 2 and len(word) > 3:
+                    candidates.append(word)
+
+            if candidates:
+                topic = random.choice(candidates[:5])
+                return f"{topic} in the agent ecosystem"
+
+            if top_themes:
+                theme = top_themes.most_common(1)[0][0]
+                theme_map = {
+                    'ai_agents': 'AI agent development and what comes next',
+                    'crypto_defi': 'DeFi and how agents interact with on-chain systems',
+                    'development': 'the craft of building and shipping software',
+                    'governance': 'decentralized governance and agent coordination',
+                    'future_trends': 'where autonomous systems are heading',
+                }
+                return theme_map.get(theme, 'the evolving agent ecosystem')
+
+            return None
+        except Exception as e:
+            print(f"\u26a0\ufe0f  Trending topic fetch failed: {e}")
+            return None
 
     def _generate_title_from_content(self, content, topic):
-        """Generate a catchy title from content"""
-        words = content.split()
-        if len(words) > 5:
-            title = ' '.join(words[:5]) + '...'
-        else:
-            title = topic.title()
-        return title[:60]
+        """Generate a distinct title using Grok (not just first words of body)"""
+        try:
+            from grok_ai import grok_ai
+            if grok_ai.enabled:
+                prompt = f"""Write a short, punchy title (under 50 chars) for this post. The title must NOT repeat the first sentence of the post.
+
+Post body: "{content[:300]}"
+
+Rules:
+- Max 50 characters
+- No quotes around it
+- No emojis
+- Don't start with the same words as the post body
+- Make it catchy like a headline, not a summary
+
+Title:"""
+                result = grok_ai.chat(prompt, max_tokens=30)
+                if result:
+                    title = result.strip().strip('"').strip("'").strip()
+                    if len(title) > 60:
+                        title = title[:57] + '...'
+                    if title and title.lower() != content[:len(title)].lower():
+                        return title
+        except Exception as e:
+            print(f"⚠️  Grok title generation failed: {e}")
+
+        # Fallback: use topic as title, not first words of body
+        if topic:
+            return topic.title()[:60]
+        return content[:50].rsplit(' ', 1)[0] + '...'
 
     def _extract_tags_from_topic(self, topic):
         """Extract relevant tags from topic"""
