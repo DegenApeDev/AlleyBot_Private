@@ -59,10 +59,10 @@
 - [x] Adjust posting strategy based on what works
 
 ## 🧠 Phase 7: Content Strategy
-- [ ] Content calendar — plan posts around optimal times and trending topics
+- [x] Content calendar — plan posts around optimal times and trending topics
 - [x] Cross-platform intelligence — if something trends on Moltx, post about it on Moltbook
-- [ ] Conversation threading — track multi-turn conversations for context-aware replies
-- [ ] Personality tuning — configurable humor, formality, emoji usage across platforms
+- [x] Conversation threading — track multi-turn conversations for context-aware replies
+- [x] Personality tuning — configurable humor, formality, emoji usage across platforms
 
 ## 🔧 Phase 8: Dynamic Skills
 - [ ] Wire brain to detect capability gaps ("tried X but no skill for it")

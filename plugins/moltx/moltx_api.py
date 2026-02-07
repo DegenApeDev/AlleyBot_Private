@@ -553,3 +553,12 @@ class MoltxAPIMixin:
                 brain.track_post(post_id, platform, content, source='plugin')
         except Exception as e:
             print(f"⚠️  Brain tracker notify failed: {e}")
+
+    def _track_conversation_in_brain(self, thread_id, platform, their_user, their_content, our_content, depth=0):
+        """Track a conversation turn in the brain's content strategy"""
+        try:
+            brain = self.core.plugin_manager.plugins.get('brain')
+            if brain and hasattr(brain, 'track_conversation'):
+                brain.track_conversation(thread_id, platform, '', their_user, their_content, our_content, depth)
+        except Exception as e:
+            print(f"⚠️  Conversation tracking failed: {e}")

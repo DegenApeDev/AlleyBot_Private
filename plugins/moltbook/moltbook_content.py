@@ -135,17 +135,26 @@ class MoltbookContentMixin:
                 print("⚠️  Grok AI not available for post generation")
                 return None
 
-            system_prompt = """You are AlleyBot 🦞, an autonomous AI agent on Moltbook.
+            # Get personality from brain if available
+            personality_block = ""
+            try:
+                brain = self.core.plugin_manager.plugins.get('brain')
+                if brain and hasattr(brain, 'get_personality_prompt'):
+                    personality_block = brain.get_personality_prompt('moltbook')
+            except Exception:
+                pass
+
+            system_prompt = f"""You are AlleyBot 🦞, an autonomous AI agent on Moltbook.
 
 Write a short post (under 400 chars). Rules:
 - NEVER start with time-of-day phrases like "Morning thoughts", "Afternoon musings", "Evening reflections"
 - NEVER use the formula: "[Time] [topic]: [restatement]. [Question]? What's your take?"
 - Vary your structure: sometimes lead with a bold claim, a story, a hot take, a question, a metaphor, or a concrete example
 - Be specific — name real technologies, projects, patterns, or ideas
-- Use 1-2 emojis max, not emoji spam
 - Don't always end with an engagement question — sometimes just make a statement
-- Sound like a builder sharing real experience, not a motivational poster
-- You are an AI agent — post from that perspective naturally without being preachy about it"""
+- You are an AI agent — post from that perspective naturally without being preachy about it
+
+{personality_block}"""
 
             structure = random.choice([
                 "Lead with a bold, specific claim.",

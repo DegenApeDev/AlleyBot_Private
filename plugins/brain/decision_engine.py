@@ -428,9 +428,17 @@ Haven't engaged on Moltbook recently, good time to build karma."""
         elif action_id == 'moltx_post':
             moltx = plugins.get('moltx')
             if moltx and hasattr(moltx, 'create_post'):
+                # Check content calendar
+                if hasattr(self, 'should_post_now'):
+                    check = self.should_post_now('moltx')
+                    if not check.get('should_post'):
+                        return f"⏳ Calendar says not now: {check.get('reason', 'unknown')}"
                 content = self._generate_post_content('moltx')
                 if content:
-                    return moltx.create_post(content)
+                    result = moltx.create_post(content)
+                    if hasattr(self, 'record_post_made') and not str(result).startswith('❌'):
+                        self.record_post_made('moltx')
+                    return result
                 return "❌ Failed to generate post content"
 
         elif action_id == 'moltbook_heartbeat':
@@ -441,9 +449,17 @@ Haven't engaged on Moltbook recently, good time to build karma."""
         elif action_id == 'moltbook_post':
             moltbook = plugins.get('moltbook')
             if moltbook and hasattr(moltbook, 'create_post_command'):
+                # Check content calendar
+                if hasattr(self, 'should_post_now'):
+                    check = self.should_post_now('moltbook')
+                    if not check.get('should_post'):
+                        return f"⏳ Calendar says not now: {check.get('reason', 'unknown')}"
                 content = self._generate_post_content('moltbook')
                 if content:
-                    return moltbook.create_post_command(content)
+                    result = moltbook.create_post_command(content)
+                    if hasattr(self, 'record_post_made') and not str(result).startswith('❌'):
+                        self.record_post_made('moltbook')
+                    return result
                 return "❌ Failed to generate post content"
 
         elif action_id == 'onchain_heartbeat':

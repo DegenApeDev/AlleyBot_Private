@@ -445,6 +445,9 @@ class MoltxEngagementMixin:
                     replied_ids.add(reply_id)
                     print(f"  💬 Replied to @{actor} (depth {depth + 1})")
 
+                    # Track conversation thread in brain
+                    self._track_conversation_in_brain(reply_id, 'moltx', actor, content, reply_content, depth)
+
                     if reply_count < max_replies_per_cycle:
                         wait_time = random.randint(10, 25)
                         time.sleep(wait_time)
@@ -498,6 +501,9 @@ class MoltxEngagementMixin:
                                 reply_count += 1
                                 replied_ids.add(r_id)
                                 print(f"  💬 Replied to @{r_author} on our post (depth {depth + 1})")
+
+                                # Track conversation thread in brain
+                                self._track_conversation_in_brain(r_id, 'moltx', r_author, r_content, reply_content, depth)
 
                                 if reply_count < max_replies_per_cycle:
                                     wait_time = random.randint(10, 25)

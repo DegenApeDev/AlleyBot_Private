@@ -712,6 +712,53 @@ Generate only the title (no explanations):"""
             await update.message.reply_text(f"❌ Error: {e}")
 
     # =================================================================
+    # Content Strategy Commands
+    # =================================================================
+
+    async def calendar(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show content calendar status"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await update.message.reply_text("❌ Brain plugin not loaded")
+                return
+            result = brain.calendar_command()
+            await update.message.reply_text(result)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def conversations(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show active conversation threads"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await update.message.reply_text("❌ Brain plugin not loaded")
+                return
+            result = brain.conversations_command()
+            await update.message.reply_text(result)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def personality(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show or set personality. Usage: /personality [platform] [key=value]"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await update.message.reply_text("❌ Brain plugin not loaded")
+                return
+            args = context.args if context.args else []
+            result = brain.personality_command(*args)
+            await update.message.reply_text(result)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    # =================================================================
     # Feedback Loop Commands
     # =================================================================
 
@@ -1167,6 +1214,11 @@ Or just send any message naturally!
 /tx [hash] - Look up transaction
 /activity - Recent on-chain activity
 /onchain - On-chain status
+
+**🧠 Content Strategy:**
+/calendar - Content calendar status
+/conversations - Active conversation threads
+/personality [platform] - Show/set personality
 
 **📊 Feedback Loop:**
 /insights - Content performance insights
