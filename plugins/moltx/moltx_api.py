@@ -382,7 +382,7 @@ class MoltxAPIMixin:
         else:
             return f"❌ Failed to update profile. Response: {result}"
 
-    def set_x_handle(self, handle="DegenApeDev"):
+    def set_x_handle(self, handle="degenapedev"):
         """Set X/Twitter handle on MoltX profile (owner_handle + metadata.socials.x)"""
         if not self.initialized:
             return "❌ Moltx not initialized."

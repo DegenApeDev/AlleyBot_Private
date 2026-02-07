@@ -36,7 +36,7 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
 
         # Ensure X handle is set on profile metadata
         if self.initialized:
-            self.set_x_handle("DegenApeDev")
+            self.set_x_handle("degenapedev")
 
     # --- Command wrappers (thin delegates) ---
 
