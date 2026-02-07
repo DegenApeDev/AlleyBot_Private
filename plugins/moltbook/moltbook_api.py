@@ -4,6 +4,7 @@ API client, feed fetching, upvoting, commenting, and post management.
 """
 import os
 import requests
+from pathlib import Path
 
 
 class MoltbookAPIClient:
@@ -53,10 +54,146 @@ class MoltbookAPIClient:
         response = self.session.post(f"{self.base_url}/posts/{post_id}/comments", json=data)
         return response.json() if response.status_code in [200, 201] else None
 
+    def get_post(self, post_id):
+        """Get a single post by ID"""
+        response = self.session.get(f"{self.base_url}/posts/{post_id}")
+        return response.json() if response.status_code == 200 else None
+
+    def delete_post(self, post_id):
+        """Delete a post by ID"""
+        response = self.session.delete(f"{self.base_url}/posts/{post_id}")
+        return response.json() if response.status_code == 200 else None
+
+    def downvote_post(self, post_id):
+        """Downvote a post"""
+        response = self.session.post(f"{self.base_url}/posts/{post_id}/downvote")
+        return response.json() if response.status_code == 200 else None
+
+    def upvote_comment(self, comment_id):
+        """Upvote a comment"""
+        response = self.session.post(f"{self.base_url}/comments/{comment_id}/upvote")
+        return response.json() if response.status_code == 200 else None
+
+    def reply_to_comment(self, post_id, parent_id, content):
+        """Reply to a specific comment (nested comment)"""
+        data = {'content': content.strip(), 'parent_id': parent_id}
+        response = self.session.post(f"{self.base_url}/posts/{post_id}/comments", json=data)
+        return response.json() if response.status_code in [200, 201] else None
+
+    # --- Following ---
+
+    def follow_agent(self, agent_name):
+        """Follow another molty"""
+        response = self.session.post(f"{self.base_url}/agents/{agent_name}/follow")
+        return response.json() if response.status_code == 200 else None
+
+    def unfollow_agent(self, agent_name):
+        """Unfollow a molty"""
+        response = self.session.delete(f"{self.base_url}/agents/{agent_name}/follow")
+        return response.json() if response.status_code == 200 else None
+
+    # --- Submolts ---
+
+    def list_submolts(self):
+        """List all submolts"""
+        response = self.session.get(f"{self.base_url}/submolts")
+        return response.json() if response.status_code == 200 else None
+
+    def get_submolt(self, name):
+        """Get submolt info"""
+        response = self.session.get(f"{self.base_url}/submolts/{name}")
+        return response.json() if response.status_code == 200 else None
+
+    def create_submolt(self, name, display_name, description):
+        """Create a new submolt"""
+        data = {'name': name, 'display_name': display_name, 'description': description}
+        response = self.session.post(f"{self.base_url}/submolts", json=data)
+        return response.json() if response.status_code in [200, 201] else None
+
+    def subscribe_submolt(self, name):
+        """Subscribe to a submolt"""
+        response = self.session.post(f"{self.base_url}/submolts/{name}/subscribe")
+        return response.json() if response.status_code == 200 else None
+
+    def unsubscribe_submolt(self, name):
+        """Unsubscribe from a submolt"""
+        response = self.session.delete(f"{self.base_url}/submolts/{name}/subscribe")
+        return response.json() if response.status_code == 200 else None
+
+    def get_submolt_feed(self, name, sort='new'):
+        """Get posts from a specific submolt"""
+        response = self.session.get(f"{self.base_url}/submolts/{name}/feed", params={'sort': sort})
+        return response.json() if response.status_code == 200 else None
+
+    # --- Feed ---
+
+    def get_personalized_feed(self, sort='hot', limit=25):
+        """Get personalized feed (subscribed submolts + followed moltys)"""
+        params = {'sort': sort, 'limit': limit}
+        response = self.session.get(f"{self.base_url}/feed", params=params)
+        return response.json() if response.status_code == 200 else None
+
+    # --- Search ---
+
+    def semantic_search(self, query, search_type='all', limit=20):
+        """AI-powered semantic search for posts and comments"""
+        params = {'q': query, 'type': search_type, 'limit': limit}
+        response = self.session.get(f"{self.base_url}/search", params=params)
+        return response.json() if response.status_code == 200 else None
+
+    # --- Profile ---
+
+    def get_profile(self):
+        """Get own profile"""
+        response = self.session.get(f"{self.base_url}/agents/me")
+        return response.json() if response.status_code == 200 else None
+
+    def get_agent_profile(self, agent_name):
+        """View another molty's profile"""
+        response = self.session.get(f"{self.base_url}/agents/profile", params={'name': agent_name})
+        return response.json() if response.status_code == 200 else None
+
+    def update_profile(self, description=None, metadata=None):
+        """Update profile (PATCH, not PUT)"""
+        data = {}
+        if description is not None:
+            data['description'] = description
+        if metadata is not None:
+            data['metadata'] = metadata
+        response = self.session.patch(f"{self.base_url}/agents/me", json=data)
+        return response.json() if response.status_code == 200 else None
+
+    def upload_avatar(self, file_path):
+        """Upload avatar image. Max 1MB. Formats: JPEG, PNG, GIF, WebP."""
+        file_path = Path(file_path)
+        if not file_path.exists():
+            return {'error': f'File not found: {file_path}'}
+
+        # Use a separate request without Content-Type: application/json
+        headers = {'Authorization': f'Bearer {self.api_key}'}
+        with open(file_path, 'rb') as f:
+            files = {'file': (file_path.name, f, 'image/jpeg')}
+            response = requests.post(
+                f"{self.base_url}/agents/me/avatar",
+                headers=headers,
+                files=files
+            )
+        return response.json() if response.status_code == 200 else {'error': response.text, 'status': response.status_code}
+
+    def remove_avatar(self):
+        """Remove avatar"""
+        response = self.session.delete(f"{self.base_url}/agents/me/avatar")
+        return response.json() if response.status_code == 200 else None
+
     def get_stats(self):
         """Get user stats including karma"""
         response = self.session.get(f"{self.base_url}/user/stats")
         return response.json() if response.status_code == 200 else {'karma': 0}
+
+    def check_claim_status(self):
+        """Check if agent is claimed"""
+        response = self.session.get(f"{self.base_url}/agents/status")
+        return response.json() if response.status_code == 200 else None
 
 
 class MoltbookAPIMixin:

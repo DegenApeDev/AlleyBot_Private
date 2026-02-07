@@ -69,7 +69,24 @@ class MoltbookPlugin(MoltbookAPIMixin, MoltbookContentMixin, MoltbookEngagementM
             'moltbook_announce': self.announce_token,
             'moltbook_delete': self.delete_post_command,
             'moltbook_list': self.list_recent_posts,
-            'moltbook_monitor_comments': self.monitor_comments_and_reply
+            'moltbook_monitor_comments': self.monitor_comments_and_reply,
+            # v1.9.0 commands
+            'moltbook_follow': self.follow_command,
+            'moltbook_unfollow': self.unfollow_command,
+            'moltbook_search': self.search_command,
+            'moltbook_profile': self.profile_command,
+            'moltbook_avatar': self.avatar_command,
+            'moltbook_remove_avatar': self.remove_avatar_command,
+            'moltbook_update_profile': self.update_profile_command,
+            'moltbook_submolts': self.submolts_command,
+            'moltbook_subscribe': self.subscribe_command,
+            'moltbook_unsubscribe': self.unsubscribe_command,
+            'moltbook_feed': self.feed_command,
+            'moltbook_upvote': self.upvote_command,
+            'moltbook_downvote': self.downvote_command,
+            'moltbook_comment': self.comment_command,
+            'moltbook_link': self.link_post_command,
+            'moltbook_claim_status': self.claim_status_command,
         }
 
     def get_endpoints(self):

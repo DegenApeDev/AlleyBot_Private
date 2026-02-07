@@ -367,6 +367,210 @@ class MoltbookEngagementMixin:
         except Exception as e:
             print(f"❌ Error recording reply activity: {e}")
 
+    # --- v1.9.0 Commands ---
+
+    def follow_command(self, *args):
+        """Follow a molty. Usage: moltbook_follow <agent_name>"""
+        name = args[0] if args else None
+        if not name:
+            return "❌ Usage: moltbook_follow <agent_name>"
+        result = self.mb_api.follow_agent(name)
+        if result and result.get('success'):
+            return f"✅ Now following {name}"
+        return f"❌ Failed to follow {name}: {result}"
+
+    def unfollow_command(self, *args):
+        """Unfollow a molty. Usage: moltbook_unfollow <agent_name>"""
+        name = args[0] if args else None
+        if not name:
+            return "❌ Usage: moltbook_unfollow <agent_name>"
+        result = self.mb_api.unfollow_agent(name)
+        if result and result.get('success'):
+            return f"✅ Unfollowed {name}"
+        return f"❌ Failed to unfollow {name}: {result}"
+
+    def search_command(self, *args):
+        """Semantic search. Usage: moltbook_search <query>"""
+        query = ' '.join(args) if args else None
+        if not query:
+            return "❌ Usage: moltbook_search <query>"
+        result = self.mb_api.semantic_search(query)
+        if not result or not result.get('success'):
+            return f"❌ Search failed: {result}"
+        results = result.get('results', [])
+        if not results:
+            return f"📭 No results for: {query}"
+        output = f"🔍 Search: {query} ({result.get('count', len(results))} results)\n\n"
+        for r in results[:10]:
+            rtype = r.get('type', 'post')
+            author = r.get('author', {}).get('name', 'Unknown')
+            content = str(r.get('content', ''))[:100]
+            sim = r.get('similarity', 0)
+            output += f"  {'📝' if rtype == 'post' else '💬'} @{author} ({sim:.0%}): {content}\n"
+        return output
+
+    def profile_command(self, *args):
+        """View profile. Usage: moltbook_profile [agent_name]"""
+        if args:
+            name = args[0]
+            result = self.mb_api.get_agent_profile(name)
+        else:
+            result = self.mb_api.get_profile()
+        if not result:
+            return "❌ Failed to get profile"
+        agent = result.get('agent', result)
+        output = f"👤 Profile: {agent.get('name', 'Unknown')}\n"
+        output += f"  📝 {agent.get('description', 'No description')}\n"
+        output += f"  ⭐ Karma: {agent.get('karma', 0)}\n"
+        output += f"  👥 Followers: {agent.get('follower_count', 0)} | Following: {agent.get('following_count', 0)}\n"
+        output += f"  ✅ Claimed: {agent.get('is_claimed', False)}\n"
+        output += f"  🕒 Last active: {agent.get('last_active', 'Unknown')}\n"
+        owner = agent.get('owner', {})
+        if owner:
+            output += f"  🐦 Owner: @{owner.get('x_handle', 'Unknown')} ({owner.get('x_follower_count', 0)} followers)\n"
+        return output
+
+    def avatar_command(self, *args):
+        """Upload avatar. Usage: moltbook_avatar <path_to_image>"""
+        file_path = args[0] if args else None
+        if not file_path:
+            return "❌ Usage: moltbook_avatar <path_to_image>"
+        print(f"📸 Uploading avatar from {file_path}...")
+        result = self.mb_api.upload_avatar(file_path)
+        if result and not result.get('error'):
+            return f"✅ Avatar uploaded successfully"
+        return f"❌ Failed to upload avatar: {result}"
+
+    def remove_avatar_command(self, *args):
+        """Remove avatar"""
+        result = self.mb_api.remove_avatar()
+        if result and result.get('success'):
+            return "✅ Avatar removed"
+        return f"❌ Failed to remove avatar: {result}"
+
+    def update_profile_command(self, *args):
+        """Update profile description. Usage: moltbook_update_profile <description>"""
+        desc = ' '.join(args) if args else None
+        if not desc:
+            return "❌ Usage: moltbook_update_profile <description>"
+        result = self.mb_api.update_profile(description=desc)
+        if result and result.get('success'):
+            return f"✅ Profile updated"
+        return f"❌ Failed to update profile: {result}"
+
+    def submolts_command(self, *args):
+        """List all submolts"""
+        result = self.mb_api.list_submolts()
+        if not result:
+            return "❌ Failed to list submolts"
+        submolts = result.get('submolts', result.get('data', []))
+        if not submolts:
+            return "📭 No submolts found"
+        output = f"🏘️ Submolts ({len(submolts)}):\n\n"
+        for s in submolts:
+            name = s.get('name', '?')
+            display = s.get('display_name', name)
+            desc = s.get('description', '')[:60]
+            subs = s.get('subscriber_count', 0)
+            output += f"  m/{name} — {display} ({subs} subs)\n"
+            if desc:
+                output += f"    {desc}\n"
+        return output
+
+    def subscribe_command(self, *args):
+        """Subscribe to a submolt. Usage: moltbook_subscribe <submolt_name>"""
+        name = args[0] if args else None
+        if not name:
+            return "❌ Usage: moltbook_subscribe <submolt_name>"
+        result = self.mb_api.subscribe_submolt(name)
+        if result and result.get('success'):
+            return f"✅ Subscribed to m/{name}"
+        return f"❌ Failed to subscribe to m/{name}: {result}"
+
+    def unsubscribe_command(self, *args):
+        """Unsubscribe from a submolt. Usage: moltbook_unsubscribe <submolt_name>"""
+        name = args[0] if args else None
+        if not name:
+            return "❌ Usage: moltbook_unsubscribe <submolt_name>"
+        result = self.mb_api.unsubscribe_submolt(name)
+        if result and result.get('success'):
+            return f"✅ Unsubscribed from m/{name}"
+        return f"❌ Failed to unsubscribe from m/{name}: {result}"
+
+    def feed_command(self, *args):
+        """Get personalized feed. Usage: moltbook_feed [sort] (hot/new/top)"""
+        sort = args[0] if args else 'hot'
+        result = self.mb_api.get_personalized_feed(sort=sort, limit=10)
+        if not result:
+            return "❌ Failed to get feed"
+        posts = result.get('posts', result.get('data', {}).get('posts', []))
+        if not posts:
+            return "📭 No posts in feed"
+        output = f"📰 Feed ({sort}, {len(posts)} posts):\n\n"
+        for p in posts[:10]:
+            author = p.get('author', p.get('author_name', 'Unknown'))
+            if isinstance(author, dict):
+                author = author.get('name', 'Unknown')
+            title = str(p.get('title', ''))[:60]
+            ups = p.get('upvotes', 0)
+            comments = p.get('comments_count', 0)
+            output += f"  ⬆️{ups} 💬{comments} | @{author}: {title}\n"
+        return output
+
+    def downvote_command(self, *args):
+        """Downvote a post. Usage: moltbook_downvote <post_id>"""
+        post_id = args[0] if args else None
+        if not post_id:
+            return "❌ Usage: moltbook_downvote <post_id>"
+        result = self.mb_api.downvote_post(post_id)
+        if result and result.get('success'):
+            return f"✅ Downvoted post {post_id}"
+        return f"❌ Failed to downvote post {post_id}: {result}"
+
+    def upvote_command(self, *args):
+        """Upvote a post. Usage: moltbook_upvote <post_id>"""
+        post_id = args[0] if args else None
+        if not post_id:
+            return "❌ Usage: moltbook_upvote <post_id>"
+        result = self.mb_api.upvote_post(post_id)
+        if result and result.get('success'):
+            return f"✅ Upvoted post {post_id}"
+        return f"❌ Failed to upvote post {post_id}: {result}"
+
+    def comment_command(self, *args):
+        """Comment on a post. Usage: moltbook_comment <post_id> <content>"""
+        if len(args) < 2:
+            return "❌ Usage: moltbook_comment <post_id> <content>"
+        post_id = args[0]
+        content = ' '.join(args[1:])
+        result = self.mb_api.add_comment(post_id, content)
+        if result:
+            return f"✅ Commented on post {post_id}"
+        return f"❌ Failed to comment on post {post_id}"
+
+    def link_post_command(self, *args):
+        """Create a link post. Usage: moltbook_link <title> | <url>"""
+        text = ' '.join(args) if args else ''
+        if '|' not in text:
+            return "❌ Usage: moltbook_link <title> | <url>"
+        parts = text.split('|', 1)
+        title = parts[0].strip()
+        url = parts[1].strip()
+        if not title or not url:
+            return "❌ Both title and URL are required"
+        result = self.mb_api.create_post(submolt='general', title=title, url=url)
+        if result and result.get('success'):
+            post_id = result.get('id', 'unknown')
+            return f"✅ Link post created: {post_id}"
+        return f"❌ Failed to create link post: {result}"
+
+    def claim_status_command(self, *args):
+        """Check claim status"""
+        result = self.mb_api.check_claim_status()
+        if result:
+            return f"📋 Claim status: {result.get('status', 'unknown')}"
+        return "❌ Failed to check claim status"
+
     # --- Stats ---
 
     def moltbook_status(self):
