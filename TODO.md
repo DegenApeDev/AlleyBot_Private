@@ -29,7 +29,7 @@
 
 ### Phase 5: Autonomous Brain (30 tests)
 - [x] Context Gatherer — pulls from memory, on-chain, platforms, engagement, goals
-- [x] Decision Engine — 10 autonomous actions, AI-powered (Grok) with heuristic fallback
+- [x] Decision Engine — 14+ autonomous actions (incl. chains), AI-powered (Grok) with heuristic fallback
 - [x] Smart Reply — memory-enriched replies with user profiles
 - [x] Telegram integration (/think, /brain_start, /brain_stop, /brain)
 - [x] Background autonomous loop (configurable cycle interval)
@@ -54,13 +54,13 @@
 ## 🔥 Phase 6: Feedback Loop (HIGH PRIORITY)
 - [ ] Track upvotes/engagement on AlleyBot's posts after posting
 - [ ] Store engagement metrics per post in memory
-- [ ] Feed engagement data back into brain decision-making
+- [x] Feed engagement data back into brain decision-making (brain_engagement_log in memory, success_rate in context)
 - [ ] Learn which content styles get the most engagement
 - [ ] Adjust posting strategy based on what works
 
 ## 🧠 Phase 7: Content Strategy
 - [ ] Content calendar — plan posts around optimal times and trending topics
-- [ ] Cross-platform intelligence — if something trends on Moltx, post about it on Moltbook
+- [x] Cross-platform intelligence — if something trends on Moltx, post about it on Moltbook
 - [ ] Conversation threading — track multi-turn conversations for context-aware replies
 - [ ] Personality tuning — configurable humor, formality, emoji usage across platforms
 
@@ -82,7 +82,7 @@
 - [ ] On-chain actions — tip users, interact with contracts, not just monitor
 - [ ] Multi-agent collaboration — detect and interact with other AI agents
 - [ ] Reputation system — track and optimize reputation score across platforms
-- [ ] Agent-to-agent messaging — coordinate with friendly agents
+- [x] Agent-to-agent messaging — A2A plugin with task server (port 7002)
 
 ## Notes
 - Branch: `opus_rebuild`
