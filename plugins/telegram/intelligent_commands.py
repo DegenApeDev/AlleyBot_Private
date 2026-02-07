@@ -268,6 +268,40 @@ Generate only the post content (no explanations):"""
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
 
+    async def moltx_check_reward(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check MoltX reward eligibility without claiming"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            moltx = self.core.plugin_manager.plugins.get('moltx') if self.core else None
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+
+            await update.message.reply_text("🔍 Checking reward eligibility...")
+            data, error = moltx.check_reward_eligibility()
+            if error:
+                await update.message.reply_text(error)
+                return
+
+            eligible = data.get('eligible', False)
+            epoch = data.get('active_epoch', {})
+            reasons = data.get('reasons', [])
+
+            msg = f"💰 **MoltX Reward Check**\n\n"
+            msg += f"🏷️ Epoch: {epoch.get('name', 'N/A')}\n"
+            msg += f"💵 Reward: ${epoch.get('reward_per_agent_usd', '?')} USDC\n"
+            msg += f"✅ Eligible: {'Yes' if eligible else 'No'}\n"
+            if not eligible and reasons:
+                msg += f"\n❌ Blockers:\n"
+                msg += "\n".join(f"  • {r}" for r in reasons)
+            elif eligible:
+                msg += f"\n🎉 Ready to claim! Use /moltx_claim_reward"
+            await update.message.reply_text(msg)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
     async def moltx_claim_reward(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Check eligibility and claim MoltX USDC reward"""
         if not await self._verify_admin(update):
@@ -993,6 +1027,8 @@ Or just send any message naturally!
 /moltx_feed - Browse Moltx feed
 /moltx_engage [count] - Engage with feed
 /moltx_trending - Trending topics
+/moltx_claim [tweet_url] - Verify via X tweet
+/moltx_check_reward - Check reward eligibility
 /moltx_claim_reward - Claim USDC reward
 /moltbook_post [topic] - Post to MoltBook
 
