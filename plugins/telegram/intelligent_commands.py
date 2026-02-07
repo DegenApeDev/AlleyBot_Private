@@ -543,37 +543,6 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
     
-    async def register_agent(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Register AlleyBot on ERC-8004 for on-chain identity"""
-        if not await self._verify_admin(update):
-            return
-        try:
-            await update.message.reply_text("🆔 Registering AlleyBot on ERC-8004...\n\nThis will:\n1. Check if already registered\n2. Create agent profile with capabilities\n3. Register on-chain identity NFT (if needed)\n4. Enable reputation system\n\n⏳ This may take up to 5 minutes if sending transaction...")
-            
-            # Run the registration script with longer timeout for transaction confirmation
-            import subprocess
-            result = subprocess.run(
-                ['python', 'utils/register_erc8004_agent.py'],
-                capture_output=True,
-                text=True,
-                timeout=360,  # 6 minutes to allow for transaction confirmation
-                input='yes\n'  # Auto-confirm registration
-            )
-            
-            if result.returncode == 0:
-                output = result.stdout
-                # Send full output as it contains instructions or confirmation
-                await update.message.reply_text(f"{output[-2000:]}")  # Last 2000 chars
-            else:
-                await update.message.reply_text(f"❌ Registration failed:\n{result.stderr[-500:]}")
-                
-        except subprocess.TimeoutExpired:
-            await update.message.reply_text("⏰ Registration timed out. This might mean:\n1. Transaction is still pending on Ethereum\n2. Network congestion\n3. Check Etherscan for your wallet's recent transactions\n\nTry running /register_agent again to check status.")
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
-            import traceback
-            traceback.print_exc()
-    
     # =================================================================
     # On-Chain Commands
     # =================================================================
@@ -813,54 +782,191 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
 
+    # =================================================================
+    # A2A Commands
+    # =================================================================
+
+    def _get_a2a_plugin(self):
+        """Get the A2A plugin from core"""
+        if self.core and hasattr(self.core, 'plugin_manager'):
+            return self.core.plugin_manager.plugins.get('a2a')
+        return None
+
+    async def a2a_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show A2A server status"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            a2a = self._get_a2a_plugin()
+            if not a2a:
+                await self._safe_reply(update, "❌ A2A plugin not loaded")
+                return
+            result = await self._run_sync(a2a.status_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def a2a_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Start A2A server"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            a2a = self._get_a2a_plugin()
+            if not a2a:
+                await self._safe_reply(update, "❌ A2A plugin not loaded")
+                return
+            result = await self._run_sync(a2a.start_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def a2a_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Stop A2A server"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            a2a = self._get_a2a_plugin()
+            if not a2a:
+                await self._safe_reply(update, "❌ A2A plugin not loaded")
+                return
+            result = await self._run_sync(a2a.stop_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def a2a_tasks(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """List available A2A tasks"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            a2a = self._get_a2a_plugin()
+            if not a2a:
+                await self._safe_reply(update, "❌ A2A plugin not loaded")
+                return
+            result = await self._run_sync(a2a.tasks_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    # =================================================================
+    # Self-Improve / ERC-8004 Commands
+    # =================================================================
+
+    def _get_selfimprove_plugin(self):
+        """Get the selfimprove plugin from core"""
+        if self.core and hasattr(self.core, 'plugin_manager'):
+            return self.core.plugin_manager.plugins.get('selfimprove')
+        return None
+
+    async def improve_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show self-improvement plugin status"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            si = self._get_selfimprove_plugin()
+            if not si:
+                await self._safe_reply(update, "❌ Self-improve plugin not loaded")
+                return
+            result = await self._run_sync(si.status_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def erc8004_rebuild(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Rebuild agent card from live plugins (no on-chain tx)"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            si = self._get_selfimprove_plugin()
+            if not si:
+                await self._safe_reply(update, "❌ Self-improve plugin not loaded")
+                return
+            await self._safe_reply(update, "🔄 Rebuilding agent card...")
+            result = await self._run_sync(si.erc8004_rebuild_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def erc8004_update(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Push agent card on-chain (IPFS + setAgentURI)"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            si = self._get_selfimprove_plugin()
+            if not si:
+                await self._safe_reply(update, "❌ Self-improve plugin not loaded")
+                return
+            await self._safe_reply(update, "🚀 Uploading to IPFS and updating on-chain...")
+            result = await self._run_sync(si.erc8004_update_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def erc8004_preview(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Preview agent card update (dry run)"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            si = self._get_selfimprove_plugin()
+            if not si:
+                await self._safe_reply(update, "❌ Self-improve plugin not loaded")
+                return
+            result = await self._run_sync(si.erc8004_preview_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    # =================================================================
+    # Help
+    # =================================================================
+
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show comprehensive help"""
         if not await self._verify_admin(update):
             return
-        help_text = """🤖 **AlleyBot AI Assistant**
+        help_text = """🦞 **AlleyBot Commands**
 
-**AI Chat:**
-/chat [message] - Chat with AI (uses RAG memory)
-Just send any message - I'll respond intelligently!
+**💬 AI Chat:**
+/chat [message] - Chat with AI
+Or just send any message naturally!
 
-**Moltx Commands:**
-/moltx_post [message] - Create Moltx post
+**📢 Social Platforms:**
+/moltx_post [topic] - Post to Moltx
 /moltx_feed - Browse Moltx feed
 /moltx_engage [count] - Engage with feed
-/moltx_trending - Analyze trending topics
+/moltx_trending - Trending topics
+/moltbook_post [topic] - Post to MoltBook
 
-**MoltBook Commands:**
-/moltbook_post [message] - Create MoltBook post
-
-**🔗 On-Chain Commands:**
+**🔗 On-Chain (Base):**
 /wallet - Wallet info & balances
-/balance - Token balances (ETH + tracked tokens)
-/block - Current Base block info
-/track [symbol] - Track a token (ALLEY, USDC, WETH, or address)
-/tx [hash] - Look up a transaction
+/balance - Token balances
+/block - Current block info
+/track [symbol] - Track a token
+/tx [hash] - Look up transaction
 /activity - Recent on-chain activity
-/onchain - On-chain plugin status
+/onchain - On-chain status
 
-**🧠 Brain Commands:**
-/think - Run one autonomous think cycle
-/brain_start - Start autonomous brain loop
-/brain_stop - Stop autonomous brain
-/brain - Brain status & stats
+**🧠 Brain:**
+/think - One think cycle
+/brain_start - Start autonomous mode
+/brain_stop - Stop autonomous mode
+/brain - Brain status
 
-**System Commands:**
+**🤝 A2A Protocol:**
+/a2a_status - Server status
+/a2a_start - Start A2A server
+/a2a_stop - Stop A2A server
+/a2a_tasks - List available tasks
+
+**🆔 ERC-8004 Agent Card:**
+/erc8004_rebuild - Rebuild card from live plugins
+/erc8004_preview - Preview card (dry run)
+/erc8004_update - Push card on-chain (costs gas)
+
+**⚙️ System:**
 /status - Platform status
-/skills - List available skills
-/skill [name] [params] - Execute skill
-/token_stats - LLM API token usage & costs
-/help - Show this help
-
-**Production Features:**
-✅ Event-driven architecture
-✅ Smart model routing (DeepSeek/Grok)
-✅ RAG memory system
-✅ On-chain awareness (Base network)
-✅ Dynamic skills system
-
-I'm your intelligent AI assistant - ask me anything! 🚀"""
+/token_stats - LLM token usage & costs
+/improve_status - Self-improvement status
+/help - This help"""
         
         await update.message.reply_text(help_text)

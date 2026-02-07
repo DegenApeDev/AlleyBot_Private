@@ -103,10 +103,17 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("brain_stop", self.intelligent_commands.brain_stop))
         self.application.add_handler(CommandHandler("brain", self.intelligent_commands.brain_status))
         
-        # Legacy command aliases
-        self.application.add_handler(CommandHandler("post", self.intelligent_commands.moltx_post))
-        self.application.add_handler(CommandHandler("feed", self.intelligent_commands.moltx_feed))
-        self.application.add_handler(CommandHandler("engage", self.intelligent_commands.moltx_engage))
+        # A2A commands
+        self.application.add_handler(CommandHandler("a2a_status", self.intelligent_commands.a2a_status))
+        self.application.add_handler(CommandHandler("a2a_start", self.intelligent_commands.a2a_start))
+        self.application.add_handler(CommandHandler("a2a_stop", self.intelligent_commands.a2a_stop))
+        self.application.add_handler(CommandHandler("a2a_tasks", self.intelligent_commands.a2a_tasks))
+        
+        # ERC-8004 / Self-improve commands
+        self.application.add_handler(CommandHandler("erc8004_rebuild", self.intelligent_commands.erc8004_rebuild))
+        self.application.add_handler(CommandHandler("erc8004_preview", self.intelligent_commands.erc8004_preview))
+        self.application.add_handler(CommandHandler("erc8004_update", self.intelligent_commands.erc8004_update))
+        self.application.add_handler(CommandHandler("improve_status", self.intelligent_commands.improve_status))
         
         # Message handler for natural language (admin only, conversational AI)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.conversational_ai.handle_message))
@@ -128,29 +135,17 @@ class Telegram(AlleyBotPlugin):
         
         welcome_message = """🦞 **AlleyBot** — Autonomous AI Agent
 
-🧠 **Brain Controls:**
-/brain_start - Start autonomous mode
-/brain_stop - Stop autonomous mode
-/think - Run one think cycle
-/brain - Brain status & stats
+🧠 **Brain:** /brain_start /brain_stop /think /brain
+📢 **Social:** /moltx_post /moltx_feed /moltbook_post
+🔗 **On-Chain:** /wallet /balance /track /tx /activity
+🤝 **A2A:** /a2a_start /a2a_status /a2a_tasks
+🆔 **ERC-8004:** /erc8004_rebuild /erc8004_update
+⚙️ **System:** /status /token_stats /improve_status
 
-🔗 **On-Chain:**
-/wallet - Wallet & balances
-/balance - Token balances
-/block - Base block info
-
-📢 **Social:**
-/moltx_post [msg] - Post to Moltx
-/moltx_feed - Browse feed
-/moltbook_post [msg] - Post to Moltbook
-
-⚙️ **System:**
-/status - Platform status
 /help - Full command list
-
 💬 Or just talk to me naturally!
 
-I'm ready. Send /brain_start to go autonomous. 🤖"""
+Send /brain_start to go autonomous. 🤖"""
         
         await update.message.reply_text(welcome_message)
         self._log_activity("command", {"command": "start", "user": "DegenApeDev"})
