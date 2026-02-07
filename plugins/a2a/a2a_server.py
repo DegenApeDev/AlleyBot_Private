@@ -353,19 +353,29 @@ class A2AServerMixin:
         # Execute the task
         result = self.execute_task(task_type, sanitized_params, agent_id)
 
-        # Build response
+        # Build response (filter through security to prevent secret leaks)
+        try:
+            from security_filter import security_filter as _sf
+            _filter = _sf.filter_message
+        except ImportError:
+            _filter = lambda t: (t, False)
+
         if result.success:
             response_text = json.dumps(result.data) if isinstance(result.data, dict) else str(result.data)
+            response_text, was_filtered = _filter(response_text)
+            if was_filtered:
+                print(f"⚠️  SECURITY: Filtered sensitive data from A2A response for task {task_type}")
             agent_msg = _make_message("ROLE_AGENT", [_make_text_part(response_text)])
             artifact = _make_artifact([_make_text_part(response_text)], name=task_type)
             task_obj = _make_task(task_id, context_id, TASK_STATE_COMPLETED,
                                  messages=[user_msg, agent_msg], artifacts=[artifact])
         else:
-            agent_msg = _make_message("ROLE_AGENT", [_make_text_part(f"Error: {result.error}")])
+            error_text, _ = _filter(f"Error: {result.error}")
+            agent_msg = _make_message("ROLE_AGENT", [_make_text_part(error_text)])
             task_obj = _make_task(task_id, context_id, TASK_STATE_FAILED,
                                  messages=[user_msg, agent_msg])
             task_obj["status"]["message"] = _make_message(
-                "ROLE_AGENT", [_make_text_part(result.error)])
+                "ROLE_AGENT", [_make_text_part(error_text)])
 
         self._store_task(task_id, task_obj)
 
@@ -433,8 +443,18 @@ class A2AServerMixin:
             # Execute
             result = self.execute_task(task_type, task_params, agent_id)
 
+            # Security filter
+            try:
+                from security_filter import security_filter as _sf
+                _sec_filter = _sf.filter_message
+            except ImportError:
+                _sec_filter = lambda t: (t, False)
+
             if result.success:
                 response_text = json.dumps(result.data) if isinstance(result.data, dict) else str(result.data)
+                response_text, _was_filtered = _sec_filter(response_text)
+                if _was_filtered:
+                    print(f"⚠️  SECURITY: Filtered sensitive data from A2A stream for task {task_type}")
                 # Event 3: Artifact
                 artifact = _make_artifact([_make_text_part(response_text)], name=task_type)
                 artifact_event = {
@@ -458,6 +478,7 @@ class A2AServerMixin:
                 yield f"data: {json.dumps(final_status)}\n\n"
             else:
                 # Event 3: Failed
+                error_text, _ = _sec_filter(result.error or "Task failed")
                 final_status = {
                     "statusUpdate": {
                         "taskId": task_id,
@@ -466,7 +487,7 @@ class A2AServerMixin:
                             "state": TASK_STATE_FAILED,
                             "timestamp": datetime.utcnow().isoformat() + "Z",
                             "message": _make_message("ROLE_AGENT",
-                                                     [_make_text_part(result.error or "Task failed")]),
+                                                     [_make_text_part(error_text)]),
                         },
                     }
                 }
