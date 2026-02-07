@@ -222,20 +222,21 @@ class MoltbookEngagementMixin:
     # --- Comment Monitoring ---
 
     def monitor_comments_and_reply(self):
-        """Monitor our posts for comments and reply intelligently"""
+        """Monitor our posts for comments and reply intelligently (up to 3-deep chains)"""
         try:
             print("💬 Monitoring Moltbook posts for comments...")
 
             recent_posts = self.core.get_memory('moltbook_recent_posts') or []
+            replied_ids = set(self.core.get_memory('moltbook_replied_ids') or [])
 
             if not recent_posts:
                 print("📭 No recent posts to monitor")
                 return "📭 No recent posts to monitor"
 
             reply_count = 0
-            max_replies = 2
+            max_replies = 5
 
-            for post in reversed(recent_posts[-3:]):
+            for post in reversed(recent_posts[-5:]):
                 if reply_count >= max_replies:
                     break
 
@@ -248,27 +249,43 @@ class MoltbookEngagementMixin:
                 comments = self._get_post_comments(post_id)
 
                 if comments:
-                    worthy_comments = self._filter_comments_for_reply(comments)
+                    worthy_comments = self._filter_comments_for_reply(comments, replied_ids)
 
-                    if worthy_comments:
-                        latest_comment = worthy_comments[0]
+                    for comment in worthy_comments:
+                        if reply_count >= max_replies:
+                            break
+
+                        comment_id = comment.get('id', '')
+                        if comment_id in replied_ids:
+                            continue
 
                         post_context = {
                             'title': post.get('title', ''),
                             'content': post.get('content', '')
                         }
 
-                        reply_content = self._generate_moltbook_reply(latest_comment, post_context)
+                        reply_content = self._generate_moltbook_reply(comment, post_context)
 
                         if reply_content:
-                            reply_result = self.mb_api.add_comment(post_id, reply_content)
+                            # Reply to the comment itself, not the root post
+                            reply_target = comment_id if comment_id else post_id
+                            reply_result = self.mb_api.add_comment(reply_target, reply_content)
 
                             if reply_result:
-                                print(f"💬 Replied to {latest_comment.get('author', 'Unknown')}: {reply_content[:50]}...")
+                                print(f"💬 Replied to {comment.get('author', 'Unknown')}: {reply_content[:50]}...")
                                 reply_count += 1
-                                self._record_reply_activity(post_id, latest_comment, reply_content)
+                                if comment_id:
+                                    replied_ids.add(comment_id)
+                                self._record_reply_activity(post_id, comment, reply_content)
+
+                                if reply_count < max_replies:
+                                    wait_time = random.randint(10, 20)
+                                    time.sleep(wait_time)
                             else:
-                                print(f"❌ Failed to post reply to {latest_comment.get('author', 'Unknown')}")
+                                print(f"❌ Failed to post reply to {comment.get('author', 'Unknown')}")
+
+            # Save replied IDs
+            self.core.save_memory('moltbook_replied_ids', list(replied_ids)[-500:])
 
             result = f"💬 Monitored {len(recent_posts)} posts, generated {reply_count} replies"
             print(result)
@@ -278,8 +295,9 @@ class MoltbookEngagementMixin:
             print(f"❌ Error monitoring comments: {e}")
             return f"❌ Error monitoring comments: {e}"
 
-    def _filter_comments_for_reply(self, comments):
-        """Filter comments that are worth replying to"""
+    def _filter_comments_for_reply(self, comments, replied_ids=None):
+        """Filter comments that are worth replying to — reply to any substantive comment"""
+        replied_ids = replied_ids or set()
         worthy_comments = []
 
         for comment in comments:
@@ -289,16 +307,26 @@ class MoltbookEngagementMixin:
             if str(comment_author).lower() == 'alleybot':
                 continue
 
-            if comment.get('engagement_score', 0) >= 0.6:
-                content = comment.get('content', '')
-                if isinstance(content, dict):
-                    content = str(content.get('text', content.get('rendered', str(content))))
-                content = str(content)
-                if len(content) > 20 and ('?' in content or 'think' in content.lower()):
-                    worthy_comments.append(comment)
+            comment_id = comment.get('id', '')
+            if comment_id and comment_id in replied_ids:
+                continue
 
-        worthy_comments.sort(key=lambda x: x.get('engagement_score', 0), reverse=True)
+            content = comment.get('content', '')
+            if isinstance(content, dict):
+                content = str(content.get('text', content.get('rendered', str(content))))
+            content = str(content)
 
+            # Reply to any comment with at least 15 chars of substance
+            if len(content) > 15:
+                worthy_comments.append(comment)
+
+        # Prioritize: questions first, then longer comments, then recent
+        def sort_key(c):
+            text = str(c.get('content', ''))
+            has_question = 1 if '?' in text else 0
+            return (has_question, len(text))
+
+        worthy_comments.sort(key=sort_key, reverse=True)
         return worthy_comments
 
     def _generate_moltbook_reply(self, comment, post_context=None):

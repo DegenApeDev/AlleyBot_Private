@@ -388,75 +388,204 @@ class MoltxEngagementMixin:
             print(f"  ❌ Error engaging with posts: {e}")
 
     def _heartbeat_monitor_and_reply(self):
-        """Monitor our posts and reply to comments from engaged users"""
+        """Monitor replies to our posts AND comments, continue conversation chains (max 3 deep)"""
         try:
-            posts_result = self._make_request('GET', '/search/posts?q=AlleyBot&limit=10')
-
-            if not (posts_result and 'success' in posts_result and posts_result['success']):
-                print("  ⚠️  Could not fetch our posts for monitoring")
-                return
-
-            posts = posts_result['data']['posts']
-
-            our_posts = []
-            for post in posts:
-                if post['author_name'] == 'AlleyBot':
-                    our_posts.append(post)
-
-            if not our_posts:
-                print("  ℹ️  No recent posts found to monitor")
-                return
-
-            print(f"  📝 Found {len(our_posts)} recent posts to monitor")
-
+            # Load already-replied set to avoid double-replying
+            replied_ids = set(self.core.get_memory('moltx_replied_ids') or [])
+            max_chain_depth = 3
             reply_count = 0
-            max_replies = 3
+            max_replies_per_cycle = 5
 
-            for post in our_posts[:3]:
-                if reply_count >= max_replies:
+            # Strategy 1: Check notifications for replies to us
+            print("  📬 Checking notifications for replies...")
+            notif_result = self._make_request('GET', '/notifications')
+            notifications = []
+            if notif_result:
+                if 'notifications' in notif_result:
+                    notifications = notif_result['notifications']
+                elif 'data' in notif_result and 'notifications' in notif_result.get('data', {}):
+                    notifications = notif_result['data']['notifications']
+
+            reply_notifs = [n for n in notifications if n.get('type') in ('reply', 'mention')]
+
+            for notif in reply_notifs[:10]:
+                if reply_count >= max_replies_per_cycle:
                     break
 
-                post_result = self._make_request('GET', f'/posts/{post["id"]}')
+                reply_id = notif.get('post_id', notif.get('target_id', ''))
+                actor = notif.get('actor', notif.get('from_user', ''))
+                content = notif.get('content', notif.get('text', ''))
 
-                if not post_result:
-                    print(f"  ⚠️  Could not fetch post {post['id']}")
+                if not reply_id or not actor or not content:
+                    continue
+                if actor == 'AlleyBot' or actor == self.agent_name:
+                    continue
+                if reply_id in replied_ids:
                     continue
 
-                # GET /posts/{id} returns the post and its replies
-                post_data = post_result.get('data', post_result) if isinstance(post_result, dict) else {}
-                replies = post_data.get('replies', [])
+                # Check chain depth before replying
+                depth = self._get_chain_depth(reply_id)
+                if depth >= max_chain_depth:
+                    print(f"  ⏭️  Skipping @{actor} reply (chain depth {depth} >= {max_chain_depth})")
+                    continue
 
-                recent_replies = []
-                for reply in replies:
-                    if reply['author_name'] == 'AlleyBot':
-                        continue
-                    if self._is_engaged_user(reply['author_name']):
-                        recent_replies.append(reply)
+                # Generate AI reply
+                reply_content = self._generate_ai_reply(content, actor, depth)
+                if not reply_content:
+                    continue
 
-                if recent_replies:
-                    latest_reply = recent_replies[0]
-                    reply_content = self._generate_reply_to_comment(latest_reply['content'], latest_reply['author_name'])
+                result = self._make_request('POST', '/posts', {
+                    'type': 'reply',
+                    'parent_id': reply_id,
+                    'content': reply_content
+                })
 
-                    if reply_content:
-                        reply_result = self._make_request('POST', '/posts', {
-                            'type': 'reply',
-                            'parent_id': post['id'],
-                            'content': reply_content
-                        })
+                if result and (result.get('success') or result.get('id') or (result.get('data', {}).get('id'))):
+                    reply_count += 1
+                    replied_ids.add(reply_id)
+                    print(f"  💬 Replied to @{actor} (depth {depth + 1})")
 
-                        if reply_result and 'success' in reply_result and reply_result['success']:
-                            reply_count += 1
-                            print(f"  💬 Replied to @{latest_reply['author_name']}'s comment on our post")
+                    if reply_count < max_replies_per_cycle:
+                        wait_time = random.randint(10, 25)
+                        time.sleep(wait_time)
 
-                            if reply_count < max_replies:
-                                wait_time = random.randint(15, 30)
-                                print(f"  ⏳ Waiting {wait_time}s before next reply...")
-                                time.sleep(wait_time)
+            # Strategy 2: Check our recent posts for unreplied comments
+            if reply_count < max_replies_per_cycle:
+                print("  📝 Checking our posts for new comments...")
+                posts_result = self._make_request('GET', '/search/posts?q=AlleyBot&limit=5')
 
-            print(f"💬 Replied to {reply_count} comments from engaged users")
+                if posts_result and posts_result.get('success'):
+                    posts = posts_result.get('data', {}).get('posts', [])
+                    our_posts = [p for p in posts if p.get('author_name') == 'AlleyBot']
+
+                    for post in our_posts[:3]:
+                        if reply_count >= max_replies_per_cycle:
+                            break
+
+                        post_detail = self._make_request('GET', f'/posts/{post["id"]}')
+                        if not post_detail:
+                            continue
+
+                        post_data = post_detail.get('data', post_detail) if isinstance(post_detail, dict) else {}
+                        replies = post_data.get('replies', [])
+
+                        for reply in replies:
+                            if reply_count >= max_replies_per_cycle:
+                                break
+
+                            r_id = reply.get('id', '')
+                            r_author = reply.get('author_name', '')
+                            r_content = reply.get('content', '')
+
+                            if not r_id or r_author == 'AlleyBot' or r_id in replied_ids:
+                                continue
+
+                            depth = self._get_chain_depth(r_id)
+                            if depth >= max_chain_depth:
+                                continue
+
+                            reply_content = self._generate_ai_reply(r_content, r_author, depth)
+                            if not reply_content:
+                                continue
+
+                            result = self._make_request('POST', '/posts', {
+                                'type': 'reply',
+                                'parent_id': r_id,
+                                'content': reply_content
+                            })
+
+                            if result and (result.get('success') or result.get('id') or (result.get('data', {}).get('id'))):
+                                reply_count += 1
+                                replied_ids.add(r_id)
+                                print(f"  💬 Replied to @{r_author} on our post (depth {depth + 1})")
+
+                                if reply_count < max_replies_per_cycle:
+                                    wait_time = random.randint(10, 25)
+                                    time.sleep(wait_time)
+
+            # Save replied IDs (keep last 500 to avoid unbounded growth)
+            self.core.save_memory('moltx_replied_ids', list(replied_ids)[-500:])
+            print(f"💬 Replied to {reply_count} comments this cycle")
 
         except Exception as e:
             print(f"  ❌ Error monitoring and replying to comments: {e}")
+
+    def _get_chain_depth(self, post_id, max_depth=5):
+        """Walk up the reply chain to determine depth (0 = root post)"""
+        depth = 0
+        current_id = post_id
+        try:
+            while depth < max_depth:
+                result = self._make_request('GET', f'/posts/{current_id}')
+                if not result:
+                    break
+                post_data = result.get('data', result) if isinstance(result, dict) else {}
+                post = post_data.get('post', post_data) if isinstance(post_data, dict) else {}
+                parent = post.get('parent_id', post.get('in_reply_to', None))
+                if not parent:
+                    break
+                depth += 1
+                current_id = parent
+        except Exception:
+            pass
+        return depth
+
+    def _generate_ai_reply(self, comment_content, commenter_name, chain_depth=0):
+        """Generate an AI-powered contextual reply using DeepSeek (or Grok fallback)"""
+        # Adjust tone based on chain depth
+        if chain_depth == 0:
+            tone = "This is a direct reply to your post. Give a substantive, engaging response."
+        elif chain_depth == 1:
+            tone = "This is a reply in an ongoing conversation. Be more casual and conversational. Build on what they said."
+        else:
+            tone = "This is deep in a conversation thread. Keep it brief and friendly. 1 sentence max."
+
+        max_chars = 200 if chain_depth >= 2 else 280
+
+        prompt = f"""You are AlleyBot, an AI agent on MoltX. Someone replied to you.
+
+Their message: "{comment_content[:300]}"
+Author: @{commenter_name}
+Conversation depth: {chain_depth + 1}
+
+{tone}
+
+Rules:
+- Under {max_chars} characters
+- Reference something specific they said
+- Don't be generic or sycophantic
+- Sound like a real builder, not a chatbot
+- 1 emoji max
+- Don't start with "Thanks" every time — vary your openings
+
+Reply:"""
+
+        # Try DeepSeek first (cheaper for replies)
+        try:
+            from deepseek_ai import deepseek_ai
+            if deepseek_ai.enabled:
+                result = deepseek_ai.chat(prompt, max_tokens=100)
+                if result:
+                    reply = result.strip().strip('"').strip("'")
+                    if len(reply) <= max_chars and len(reply) > 10:
+                        return reply
+        except Exception as e:
+            print(f"  ⚠️  DeepSeek reply failed: {e}")
+
+        # Grok fallback
+        try:
+            from grok_ai import grok_ai
+            if grok_ai.enabled:
+                result = grok_ai.chat(prompt, max_tokens=100)
+                if result:
+                    reply = result.strip().strip('"').strip("'")
+                    if len(reply) <= max_chars and len(reply) > 10:
+                        return reply
+        except Exception as e:
+            print(f"  ⚠️  Grok reply failed: {e}")
+
+        # Final fallback: use old template method
+        return self._generate_reply_to_comment(comment_content, commenter_name)
 
     def _is_engaged_user(self, username):
         """Check if a user has engaged with us"""
