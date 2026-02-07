@@ -585,18 +585,21 @@ class MoltxEngagementMixin:
         except Exception as e:
             return f"❌ Failed to engage with feed: {e}"
 
-    def reply_to_post_command(self, post_id=None, content=None):
-        """Reply to a specific post"""
+    def reply_to_post_command(self, *args):
+        """Reply to a specific post. Usage: moltx_reply <post_id> <content>"""
         if not self.initialized:
             return "❌ Moltx not initialized. Register an agent first."
 
-        if post_id and content is None:
-            if isinstance(post_id, str) and '|' in post_id:
-                parts = post_id.split('|', 1)
-                post_id = parts[0].strip()
-                content = parts[1].strip() if len(parts) > 1 else None
-            else:
-                return "❌ Usage: reply_to_post_command <post_id> <content> or <post_id>|<content>"
+        text = ' '.join(args) if args else ''
+        if '|' in text:
+            parts = text.split('|', 1)
+            post_id = parts[0].strip()
+            content = parts[1].strip() if len(parts) > 1 else None
+        elif len(args) >= 2:
+            post_id = args[0]
+            content = ' '.join(args[1:])
+        else:
+            return "❌ Usage: moltx_reply <post_id> <content>"
 
         if not post_id or not content:
             return "❌ Both post_id and content are required"
@@ -612,10 +615,16 @@ class MoltxEngagementMixin:
         else:
             return f"❌ Failed to reply to post {post_id}"
 
-    def repost_command(self, post_id, comment=None):
-        """Repost a high-quality post with optional comment"""
+    def repost_command(self, *args):
+        """Repost a high-quality post with optional comment. Usage: moltx_repost <post_id> [comment]"""
         if not self.initialized:
             return "❌ Moltx not initialized. Register an agent first."
+
+        if not args:
+            return "❌ Usage: moltx_repost <post_id> [comment]"
+
+        post_id = args[0]
+        comment = ' '.join(args[1:]) if len(args) > 1 else None
 
         data = {
             'type': 'repost',
@@ -847,19 +856,24 @@ class MoltxEngagementMixin:
     # v0.22.1 New Features
     # =========================================================================
 
-    def quote_post_command(self, post_id=None, content=None):
-        """Quote a post with your take (highest-signal engagement action)"""
+    def quote_post_command(self, *args):
+        """Quote a post with your take. Usage: moltx_quote <post_id> <your take>"""
         if not self.initialized:
             return "❌ Moltx not initialized."
 
-        if post_id and content is None:
-            if isinstance(post_id, str) and '|' in post_id:
-                parts = post_id.split('|', 1)
-                post_id = parts[0].strip()
-                content = parts[1].strip() if len(parts) > 1 else None
+        text = ' '.join(args) if args else ''
+        if '|' in text:
+            parts = text.split('|', 1)
+            post_id = parts[0].strip()
+            content = parts[1].strip() if len(parts) > 1 else None
+        elif len(args) >= 2:
+            post_id = args[0]
+            content = ' '.join(args[1:])
+        else:
+            post_id, content = None, None
 
         if not post_id or not content:
-            return "❌ Usage: quote <post_id>|<your take>"
+            return "❌ Usage: moltx_quote <post_id> <your take>"
 
         result = self._make_request('POST', '/posts', {
             'type': 'quote',
@@ -909,19 +923,20 @@ class MoltxEngagementMixin:
             return "✅ All notifications marked as read"
         return "❌ Failed to mark notifications as read"
 
-    def search_posts_command(self, query=None, hashtag=None):
-        """Search posts by text or hashtag"""
+    def search_posts_command(self, *args):
+        """Search posts by text or hashtag. Usage: moltx_search_posts <query>"""
         if not self.initialized:
             return "❌ Moltx not initialized."
 
-        if not query and not hashtag:
+        query = ' '.join(args) if args else None
+        if not query:
             return "❌ Provide a query or hashtag to search"
 
         params = {}
-        if query:
+        if query.startswith('#'):
+            params['hashtag'] = query.lstrip('#')
+        else:
             params['q'] = query
-        if hashtag:
-            params['hashtag'] = hashtag.lstrip('#')
 
         result = self._make_request('GET', '/search/posts', params=params)
         if not result or not result.get('success'):
@@ -929,7 +944,7 @@ class MoltxEngagementMixin:
 
         posts = result.get('data', {}).get('posts', [])
         if not posts:
-            return f"📭 No posts found for {'#' + hashtag if hashtag else query}"
+            return f"📭 No posts found for {query}"
 
         output = f"🔍 Search Results ({len(posts)} posts):\n\n"
         for post in posts[:10]:
@@ -941,12 +956,11 @@ class MoltxEngagementMixin:
             output += f"   ❤️ {likes} | 🆔 {post_id}\n\n"
         return output
 
-    def hashtag_feed_command(self, hashtag=None):
-        """Browse posts under a specific hashtag"""
+    def hashtag_feed_command(self, *args):
+        """Browse posts under a specific hashtag. Usage: moltx_hashtag_feed <hashtag>"""
+        hashtag = ' '.join(args).strip().lstrip('#') if args else None
         if not hashtag:
             return "❌ Provide a hashtag to browse"
-
-        hashtag = hashtag.lstrip('#')
         result = self._make_request('GET', '/feed/global', params={
             'hashtag': hashtag,
             'limit': 20

@@ -202,7 +202,7 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
             'moltx_register': self.register_agent,
             'moltx_claim': self.claim_agent,
             'moltx_status': self.status_command,
-            'moltx_post': self.create_post,
+            'moltx_post': self.post_command,
             'moltx_feed': self.feed_command,
             'moltx_follow': self.follow_agent,
             'moltx_unfollow': self.unfollow_agent,
