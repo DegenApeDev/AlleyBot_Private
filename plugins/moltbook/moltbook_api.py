@@ -273,6 +273,15 @@ class MoltbookAPIMixin:
             print(f"❌ Error upvoting post: {e}")
             return False
 
+    def _notify_brain_tracker(self, post_id, platform, content):
+        """Notify the brain's feedback loop to track this post's engagement"""
+        try:
+            brain = self.core.plugin_manager.plugins.get('brain')
+            if brain and hasattr(brain, 'track_post'):
+                brain.track_post(post_id, platform, content, source='plugin')
+        except Exception as e:
+            print(f"⚠️  Brain tracker notify failed: {e}")
+
     def _record_post(self, post, post_id):
         """Record post in memory"""
         try:

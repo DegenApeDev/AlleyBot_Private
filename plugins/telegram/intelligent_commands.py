@@ -712,6 +712,52 @@ Generate only the title (no explanations):"""
             await update.message.reply_text(f"❌ Error: {e}")
 
     # =================================================================
+    # Feedback Loop Commands
+    # =================================================================
+
+    async def insights(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show content performance insights"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await update.message.reply_text("❌ Brain plugin not loaded")
+                return
+            result = brain.feedback_insights_command()
+            await update.message.reply_text(result)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def check_engagement(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check engagement on tracked posts"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await update.message.reply_text("❌ Brain plugin not loaded")
+                return
+            result = brain.feedback_check_command()
+            await update.message.reply_text(result)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def tracked_posts(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show tracked posts and their engagement"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await update.message.reply_text("❌ Brain plugin not loaded")
+                return
+            result = brain.feedback_tracked_command()
+            await update.message.reply_text(result)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    # =================================================================
     # On-Chain Commands
     # =================================================================
 
@@ -1121,6 +1167,11 @@ Or just send any message naturally!
 /tx [hash] - Look up transaction
 /activity - Recent on-chain activity
 /onchain - On-chain status
+
+**📊 Feedback Loop:**
+/insights - Content performance insights
+/check_engagement - Check engagement on tracked posts
+/tracked_posts - Show tracked posts & scores
 
 **🧠 Brain:**
 /think - One think cycle

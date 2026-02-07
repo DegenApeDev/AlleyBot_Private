@@ -22,9 +22,10 @@ from plugin_manager import AlleyBotPlugin
 from plugins.brain.context_gatherer import ContextGathererMixin
 from plugins.brain.decision_engine import DecisionEngineMixin
 from plugins.brain.smart_reply import SmartReplyMixin
+from plugins.brain.feedback_loop import FeedbackLoopMixin
 
 
-class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, AlleyBotPlugin):
+class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, FeedbackLoopMixin, AlleyBotPlugin):
     """AlleyBot's autonomous brain - decides what to do, when, and how"""
 
     def __init__(self, config):
@@ -41,6 +42,7 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Al
         self._init_context_gatherer()
         self._init_decision_engine()
         self._init_smart_reply()
+        self._init_feedback_loop()
 
         # Auto-start if configured
         if self.config.get('auto_start', False):
@@ -238,6 +240,9 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Al
             'brain_history': self.history_command,
             'brain_status': self.status_command,
             'brain_reply': self.smart_reply_command,
+            'brain_insights': self.feedback_insights_command,
+            'brain_check_engagement': self.feedback_check_command,
+            'brain_tracked': self.feedback_tracked_command,
         }
 
     def get_tasks(self):
@@ -253,4 +258,6 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Al
         self.stop_autonomous()
         self._save_decision_state()
         self._save_user_profiles()
+        self._save_post_tracker()
+        self._save_style_scores()
         print("🧠 Brain plugin cleaned up")

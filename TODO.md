@@ -52,11 +52,11 @@
 ---
 
 ## 🔥 Phase 6: Feedback Loop (HIGH PRIORITY)
-- [ ] Track upvotes/engagement on AlleyBot's posts after posting
-- [ ] Store engagement metrics per post in memory
+- [x] Track upvotes/engagement on AlleyBot's posts after posting
+- [x] Store engagement metrics per post in memory
 - [x] Feed engagement data back into brain decision-making (brain_engagement_log in memory, success_rate in context)
-- [ ] Learn which content styles get the most engagement
-- [ ] Adjust posting strategy based on what works
+- [x] Learn which content styles get the most engagement
+- [x] Adjust posting strategy based on what works
 
 ## 🧠 Phase 7: Content Strategy
 - [ ] Content calendar — plan posts around optimal times and trending topics

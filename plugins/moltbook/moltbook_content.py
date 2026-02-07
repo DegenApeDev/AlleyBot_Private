@@ -43,6 +43,7 @@ class MoltbookContentMixin:
                 print(f"🔍 API Response structure: {list(result.keys())}")
 
                 self._record_post(post, post_id)
+                self._notify_brain_tracker(post_id, 'moltbook', post.get('content', ''))
                 return f"✅ Moltbook post created successfully: {post_id}"
             else:
                 print(f"❌ Failed to create Moltbook post: {result}")
@@ -99,6 +100,7 @@ class MoltbookContentMixin:
                     'content': content,
                     'tags': ['AI', 'agents', 'alleybot']
                 }, post_id)
+                self._notify_brain_tracker(post_id, 'moltbook', content)
 
                 return f"✅ Moltbook post created successfully: {post_id}"
             else:
@@ -156,9 +158,20 @@ Write a short post (under 400 chars). Rules:
                 "React to a trend with a specific take.",
             ])
 
+            # Get learned style hints from brain feedback loop
+            style_hint = ""
+            try:
+                brain = self.core.plugin_manager.plugins.get('brain')
+                if brain and hasattr(brain, 'get_style_prompt_hint'):
+                    hint = brain.get_style_prompt_hint()
+                    if hint:
+                        style_hint = f"\n\nPERFORMANCE DATA:\n{hint}"
+            except Exception:
+                pass
+
             user_prompt = f"""Topic: {topic}
 
-Structure: {structure}
+Structure: {structure}{style_hint}
 
 Write the post body only. No title. No hashtags unless they fit naturally. Under 400 characters."""
 

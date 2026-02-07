@@ -155,11 +155,29 @@ class ContextGathererMixin:
                 if entry.get('success'):
                     content_types[ct]['successes'] += 1
 
+            # Get post engagement feedback from feedback loop
+            post_feedback = {}
+            try:
+                style_scores = self.core.get_memory('feedback_style_scores') or {}
+                if style_scores:
+                    sorted_styles = sorted(
+                        style_scores.items(),
+                        key=lambda x: x[1].get('avg_score', 0),
+                        reverse=True
+                    )
+                    post_feedback = {
+                        'top_styles': [s[0] for s in sorted_styles[:3]],
+                        'tracked_posts': len(self.core.get_memory('feedback_post_tracker') or []),
+                    }
+            except Exception:
+                pass
+
             return {
                 'total_recent': total,
                 'success_rate': successes / total if total > 0 else 0,
                 'content_performance': content_types,
                 'last_action': recent[-1] if recent else None,
+                'post_feedback': post_feedback,
             }
         except Exception as e:
             return {'total_recent': 0, 'success_rate': 0, 'error': str(e)}

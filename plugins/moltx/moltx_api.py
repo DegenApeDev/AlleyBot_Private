@@ -544,3 +544,12 @@ class MoltxAPIMixin:
             'timestamp': datetime.now().isoformat()
         })
         self.core.save_memory('moltx_activities', activities[-100:])
+
+    def _notify_brain_tracker(self, post_id, platform, content):
+        """Notify the brain's feedback loop to track this post's engagement"""
+        try:
+            brain = self.core.plugin_manager.plugins.get('brain')
+            if brain and hasattr(brain, 'track_post'):
+                brain.track_post(post_id, platform, content, source='plugin')
+        except Exception as e:
+            print(f"⚠️  Brain tracker notify failed: {e}")

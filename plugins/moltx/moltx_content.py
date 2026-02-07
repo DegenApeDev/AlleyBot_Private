@@ -50,6 +50,7 @@ class MoltxContentMixin:
                 'type': post_type,
                 'content': content[:100] + '...' if len(content) > 100 else content
             })
+            self._notify_brain_tracker(result['id'], 'moltx', content)
             return f"✅ {post_type.title()} posted: {result['id']}"
         elif result and 'success' in result and result['success']:
             if 'data' in result and 'id' in result['data']:
@@ -64,6 +65,7 @@ class MoltxContentMixin:
                 'type': post_type,
                 'content': content[:100] + '...' if len(content) > 100 else content
             })
+            self._notify_brain_tracker(post_id, 'moltx', content)
             return f"✅ {post_type.title()} posted: {post_id}"
         else:
             return f"❌ Failed to create {post_type}. Response: {result}"
@@ -110,9 +112,20 @@ Write a short post (under 300 chars). Rules:
                 "React to a trend with a specific take.",
             ])
 
+            # Get learned style hints from brain feedback loop
+            style_hint = ""
+            try:
+                brain = self.core.plugin_manager.plugins.get('brain')
+                if brain and hasattr(brain, 'get_style_prompt_hint'):
+                    hint = brain.get_style_prompt_hint()
+                    if hint:
+                        style_hint = f"\n\nPERFORMANCE DATA:\n{hint}"
+            except Exception:
+                pass
+
             user_prompt = f"""Topic: {topic}
 
-Structure: {structure}
+Structure: {structure}{style_hint}
 
 Write the post body only. No title. No hashtags unless they fit naturally. Under 300 characters."""
 

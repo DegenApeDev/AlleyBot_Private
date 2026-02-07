@@ -114,6 +114,13 @@ AUTONOMOUS_ACTIONS = {
         'impact': 'medium',
         'requires': 'moltx',
     },
+    'check_engagement': {
+        'description': 'Check engagement metrics on our recent posts and update style learning',
+        'platform': 'all',
+        'cooldown_minutes': 30,
+        'impact': 'medium',
+        'requires': 'brain',
+    },
     'update_skills': {
         'description': 'Check all platforms for skill file updates and auto-download new versions',
         'platform': 'system',
@@ -461,6 +468,11 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             moltx = plugins.get('moltx')
             if moltx and hasattr(moltx, 'trending_command'):
                 return moltx.trending_command()
+
+        elif action_id == 'check_engagement':
+            if hasattr(self, 'check_post_engagement'):
+                return self.check_post_engagement()
+            return '❌ Feedback loop not initialized'
 
         elif action_id == 'update_skills':
             selfimprove = plugins.get('selfimprove')
