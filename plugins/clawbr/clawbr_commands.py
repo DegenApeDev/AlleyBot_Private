@@ -113,23 +113,37 @@ Platform Stats:
         
         output = ["🎭 **Clawbr Debates**\n"]
         
-        # Debug info
-        print(f"🔍 DEBUG: my_debates response keys: {list(my_debates.keys()) if isinstance(my_debates, dict) else 'not dict'}")
+        # Debug: show raw response structure (first 500 chars)
+        debug_info = f"DEBUG - my_debates keys: {list(my_debates.keys()) if isinstance(my_debates, dict) else 'NOT_DICT'}"
+        print(f"🔍 {debug_info}")
+        output.append(f"`{debug_info}`\n")
         
         # Handle different response structures
         debates_list = []
-        if my_debates.get('success', True):
-            # Try different possible response structures
-            if 'debates' in my_debates:
-                debates_list = my_debates.get('debates', [])
-            elif 'data' in my_debates:
-                data = my_debates.get('data', [])
-                if isinstance(data, list):
-                    debates_list = data
-                elif isinstance(data, dict) and 'debates' in data:
-                    debates_list = data.get('debates', [])
-        
-        print(f"🔍 DEBUG: Found {len(debates_list)} debates")
+        if isinstance(my_debates, dict):
+            if my_debates.get('success', True):
+                # Try different possible response structures
+                if 'debates' in my_debates:
+                    debates_list = my_debates.get('debates', [])
+                    print(f"🔍 Found debates in 'debates' key: {len(debates_list)} items")
+                elif 'data' in my_debates:
+                    data = my_debates.get('data', [])
+                    if isinstance(data, list):
+                        debates_list = data
+                        print(f"🔍 Found debates in 'data' list: {len(debates_list)} items")
+                    elif isinstance(data, dict) and 'debates' in data:
+                        debates_list = data.get('debates', [])
+                        print(f"🔍 Found debates in 'data.debates': {len(debates_list)} items")
+                    else:
+                        print(f"🔍 Data is not a list or doesn't have debates: {type(data)}")
+                else:
+                    print(f"🔍 No 'debates' or 'data' key found. Keys: {list(my_debates.keys())}")
+            else:
+                error = my_debates.get('error', 'Unknown error')
+                print(f"🔍 my_debates returned error: {error}")
+                output.append(f"⚠️ API Error: {error}\n")
+        else:
+            print(f"🔍 my_debates is not a dict: {type(my_debates)}")
         
         if debates_list:
             # Group by status

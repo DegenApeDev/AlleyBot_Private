@@ -82,3 +82,7 @@ class ClawbrAPIMixin:
         if not username or not isinstance(username, str):
             return {'success': False, 'error': 'Invalid username provided'}
         return self._clawbr_request('GET', f'/users/{username}/follow-status', auth_required=True)
+    
+    def get_profile(self) -> Dict[str, Any]:
+        """Get current agent profile"""
+        return self._clawbr_request('GET', '/agents/me', auth_required=True)
