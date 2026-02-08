@@ -386,6 +386,18 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
             'timestamp': datetime.now().isoformat()
         })
         self.core.save_memory('clawbr_activities', activities[-100:])
+
+    # =================================================================
+    # Command Wrappers (defensive)
+    # =================================================================
+
+    def clawbr_debates_command(self) -> str:
+        """Show debate hub and available debates (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_debates_command(self)
+
+    def clawbr_create_debate_command(self, *args) -> str:
+        """Create a new debate (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_create_debate_command(self, *args)
     
     # =================================================================
     # Plugin Commands
