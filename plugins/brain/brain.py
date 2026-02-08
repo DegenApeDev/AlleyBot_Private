@@ -24,9 +24,10 @@ from plugins.brain.decision_engine import DecisionEngineMixin
 from plugins.brain.smart_reply import SmartReplyMixin
 from plugins.brain.feedback_loop import FeedbackLoopMixin
 from plugins.brain.content_strategy import ContentStrategyMixin
+from plugins.brain.dynamic_skills import DynamicSkillsMixin
 
 
-class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, FeedbackLoopMixin, ContentStrategyMixin, AlleyBotPlugin):
+class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, FeedbackLoopMixin, ContentStrategyMixin, DynamicSkillsMixin, AlleyBotPlugin):
     """AlleyBot's autonomous brain - decides what to do, when, and how"""
 
     def __init__(self, config):
@@ -45,6 +46,7 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         self._init_smart_reply()
         self._init_feedback_loop()
         self._init_content_strategy()
+        self._init_dynamic_skills()
 
         # Auto-start if configured
         if self.config.get('auto_start', False):
@@ -248,6 +250,10 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             'brain_calendar': self.calendar_command,
             'brain_conversations': self.conversations_command,
             'brain_personality': self.personality_command,
+            'brain_skills_status': self.skills_status_command,
+            'brain_skills_generate': self.skills_generate_command,
+            'brain_skills_update': self.skills_update_command,
+            'brain_compose_chain': self.compose_chain_command,
         }
 
     def get_tasks(self):
@@ -267,5 +273,6 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         self._save_style_scores()
         self._save_content_calendar()
         self._save_conversation_threads()
+        self._save_skill_state()
         self._save_personalities()
         print("🧠 Brain plugin cleaned up")

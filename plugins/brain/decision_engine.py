@@ -179,6 +179,13 @@ AUTONOMOUS_ACTIONS = {
         'impact': 'medium',
         'requires': 'selfimprove',
     },
+    'dynamic_chain_compose': {
+        'description': 'Phase 8: Dynamically compose and execute a 2-3 step action chain based on current context',
+        'platform': 'brain',
+        'cooldown_minutes': 120,
+        'impact': 'high',
+        'requires': 'brain',
+    },
 }
 
 # Register chains as autonomous actions so the AI can pick them
@@ -428,6 +435,19 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             result['output'] = f"Error: {e}"
             print(f"❌ Brain action failed: {e}")
 
+        # Phase 8: Detect capability gaps and auto-generate skills on failure
+        if not result['success'] and hasattr(self, 'detect_capability_gap'):
+            gap = self.detect_capability_gap(action_id, result.get('output', ''))
+            if gap:
+                print(f"🔍 Capability gap detected: {gap[:60]}...")
+                if hasattr(self, 'auto_generate_skill'):
+                    gen_result = self.auto_generate_skill(gap, action_id)
+                    if gen_result.get('success'):
+                        result['skill_generated'] = gen_result['skill_name']
+                        result['output'] += f"\n🔧 Auto-generated skill: {gen_result['skill_name']}"
+                    else:
+                        print(f"⚠️  Failed to auto-generate skill: {gen_result.get('error', 'unknown')}")
+
         # Record cooldown
         self.action_cooldowns[action_id] = now
 
@@ -594,6 +614,56 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             selfimprove = plugins.get('selfimprove')
             if selfimprove and hasattr(selfimprove, 'update_skills_command'):
                 return selfimprove.update_skills_command()
+
+        elif action_id == 'dynamic_chain_compose':
+            # Phase 8: Dynamic skill chaining
+            if hasattr(self, 'compose_dynamic_chain'):
+                # Compose chain based on current context
+                available = self.get_available_actions()
+                available_ids = [a['id'] for a in available]
+
+                # Use context to determine a goal
+                ctx = self.gather_full_context() if hasattr(self, 'gather_full_context') else {}
+                platforms = ctx.get('platforms', {})
+
+                # Pick a platform that needs attention
+                goal_platform = None
+                for name, info in platforms.items():
+                    if info.get('loaded') and not info.get('last_activity'):
+                        goal_platform = name
+                        break
+
+                if not goal_platform:
+                    goal_platform = random.choice(['moltx', 'moltbook', 'clawbr']) if random else 'moltx'
+
+                goal = f"Create engaging content for {goal_platform} based on current trends"
+                chain = self.compose_dynamic_chain(goal, available_ids)
+
+                if chain:
+                    # Execute the dynamic chain
+                    output_parts = [f"🔗 Dynamic Chain: {goal}\n"]
+                    chain_context = {}
+
+                    for i, step in enumerate(chain, 1):
+                        step_action = step.get('action')
+                        step_args = step.get('args', '')
+                        step_reason = step.get('reason', 'No reason')
+
+                        print(f"  🔗 Step {i}/{len(chain)}: {step_action} - {step_reason}")
+
+                        try:
+                            result = self._execute_chain_step(step_action, step_args, chain_context, plugins)
+                            chain_context[f"step_{i}"] = result
+                            output_parts.append(f"  ✅ Step {i}: {step_action} - {str(result)[:80]}")
+                        except Exception as e:
+                            output_parts.append(f"  ❌ Step {i}: {step_action} - {e}")
+                            chain_context[f"step_{i}"] = f"Error: {e}"
+
+                    output_parts.append(f"\n🔗 Dynamic chain complete ({len(chain)} steps)")
+                    return "\n".join(output_parts)
+                else:
+                    return "❌ Failed to compose dynamic chain"
+            return "❌ Dynamic chain composition not available"
 
         return f"❌ Action {action_id} not dispatchable"
 

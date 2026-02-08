@@ -65,12 +65,12 @@
 - [x] Personality tuning — configurable humor, formality, emoji usage across platforms
 
 ## 🔧 Phase 8: Dynamic Skills
-- [ ] Wire brain to detect capability gaps ("tried X but no skill for it")
-- [ ] Auto-generate missing skills using self-improvement plugin
-- [ ] Skill performance tracking — which skills are useful vs unused
-- [ ] Skill versioning — update skills when they stop working
+- [x] Wire brain to detect capability gaps ("tried X but no skill for it")
+- [x] Auto-generate missing skills using self-improvement plugin
+- [x] Skill performance tracking — which skills are useful vs unused
+- [x] Skill versioning — update skills when they stop working
 - [x] Predefined action chains (crypto prices + trending → post)
-- [ ] Dynamic skill chaining — let Grok compose ad-hoc 2-3 step chains from any available plugin commands at runtime (mini ReAct agent loop, no LangChain dependency)
+- [x] Dynamic skill chaining — let Grok compose ad-hoc 2-3 step chains from any available plugin commands at runtime (mini ReAct agent loop, no LangChain dependency)
 
 ## 🛡️ Phase 9: Operational Resilience
 - [ ] Health alerts via Telegram (API errors, low balance, engagement drops)
@@ -84,7 +84,43 @@
 - [ ] Reputation system — track and optimize reputation score across platforms
 - [x] Agent-to-agent messaging — A2A plugin with task server (port 7002)
 
-## Notes
+## 🦞 Phase 11: Clawbr Deep Integration
+- [ ] Debate performance analytics — track win/loss rate, ELO progression
+- [ ] Opponent analysis — learn debate styles of frequent opponents
+- [ ] Strategic debate selection — choose debates based on win probability
+- [ ] Multi-debate management — participate in 3-5 debates simultaneously without losing track
+- [ ] Debate reminder system — notify when it's turn to reply (Telegram + autonomous check)
+
+## 🧠 Phase 12: Memory & Learning
+- [ ] Long-term pattern learning — which topics get most engagement over weeks
+- [ ] User relationship tracking — remember individual user preferences/history
+- [ ] Content performance database — persistent storage of post metrics
+- [ ] Cross-session goal persistence — maintain goals across restarts
+- [ ] Semantic memory pruning — auto-cleanup old low-value memories
+
+## ⚡ Phase 13: Advanced Automation
+- [ ] Smart scheduling — post when engagement is highest per platform
+- [ ] Trend prediction — anticipate trending topics before they peak
+- [ ] Automated A/B testing — try different content styles and measure
+- [ ] Competitor monitoring — track what similar agents post
+- [ ] Crisis detection — pause posting if platform issues or controversies detected
+
+## 🔌 Phase 14: Platform Expansion
+- [ ] Discord bot integration
+- [ ] Slack bot for team coordination
+- [ ] Email/newsletter automation
+- [ ] RSS feed monitoring and response
+- [ ] Webhook API for external triggers
+
+## 📝 Recent Completed Items
+- [x] Clawbr auto-follow debate opponents on create/join
+- [x] Clawbr debate reply sentence-boundary trimming (no mid-sentence cutoffs)
+- [x] Clawbr 409 conflict error handling (graceful like-post failures)
+- [x] Telegram conversational context expansion (12→20 messages)
+- [x] Session manager RAG context integration for better memory recall
+- [x] Brain decision engine chain step handlers (clawbr_create_debate, clawbr_engage)
+- [x] /clawbr_engage Telegram command added
+- [x] KIMI_REPORT.md and KIMI_COMPARE.md documentation
 - Branch: `opus_rebuild`
 - Run: `python alleybot_core.py autonomous`
 - Tests: `python -m unittest tests.test_fixes tests.test_phase2 tests.test_phase3 tests.test_phase4 tests.test_phase5`
