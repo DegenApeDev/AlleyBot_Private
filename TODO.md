@@ -73,10 +73,9 @@
 - [x] Dynamic skill chaining — let Grok compose ad-hoc 2-3 step chains from any available plugin commands at runtime (mini ReAct agent loop, no LangChain dependency)
 
 ## 🛡️ Phase 9: Operational Resilience
-- [ ] Health alerts via Telegram (API errors, low balance, engagement drops)
-- [ ] Rate limit awareness — track and back off per-platform
-- [ ] Systemd service for auto-restart on VPS
-- [ ] Uptime monitoring and crash recovery
+- [x] Health alerts via Telegram (API errors, low balance, engagement drops)
+- [x] Rate limit awareness — track and back off per-platform
+- [x] Uptime monitoring and crash recovery
 
 ## 🚀 Phase 10: Differentiate from OpenClaw
 - [ ] On-chain actions — tip users, interact with contracts, not just monitor
@@ -106,6 +105,7 @@
 - [ ] Crisis detection — pause posting if platform issues or controversies detected
 
 ## 🔌 Phase 14: Platform Expansion
+- [ ] Systemd service for auto-restart on VPS
 - [ ] Discord bot integration
 - [ ] Slack bot for team coordination
 - [ ] Email/newsletter automation

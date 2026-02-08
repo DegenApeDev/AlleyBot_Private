@@ -425,6 +425,24 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             'output': '',
         }
 
+        # Phase 9: Check rate limits before executing
+        platform = action.get('platform', 'brain')
+        if hasattr(self, 'is_rate_limited') and platform != 'brain':
+            is_limited, retry_after = self.is_rate_limited(platform)
+            if is_limited:
+                result['output'] = f"⏳ Rate limited on {platform}, retry in {retry_after}s"
+                result['rate_limited'] = True
+                return result
+
+        # Phase 9: Record request and apply backoff
+        if hasattr(self, 'record_request') and platform != 'brain':
+            self.record_request(platform)
+            delay = self.get_backoff_delay(platform)
+            if delay > 0:
+                import time
+                print(f"  ⏱️  Rate limiting: sleeping {delay}s")
+                time.sleep(delay)
+
         try:
             output = self._dispatch_action(action_id)
             result['success'] = output is not None and not str(output).startswith('❌')
@@ -435,7 +453,10 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             result['output'] = f"Error: {e}"
             print(f"❌ Brain action failed: {e}")
 
-        # Phase 8: Detect capability gaps and auto-generate skills on failure
+        # Phase 9: Record API errors for health monitoring
+        if not result['success'] and hasattr(self, 'record_api_error'):
+            platform = action.get('platform', 'unknown')
+            self.record_api_error(platform, result.get('output', ''), action_id)
         if not result['success'] and hasattr(self, 'detect_capability_gap'):
             gap = self.detect_capability_gap(action_id, result.get('output', ''))
             if gap:

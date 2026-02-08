@@ -25,9 +25,10 @@ from plugins.brain.smart_reply import SmartReplyMixin
 from plugins.brain.feedback_loop import FeedbackLoopMixin
 from plugins.brain.content_strategy import ContentStrategyMixin
 from plugins.brain.dynamic_skills import DynamicSkillsMixin
+from plugins.brain.operational_resilience import OperationalResilienceMixin
 
 
-class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, FeedbackLoopMixin, ContentStrategyMixin, DynamicSkillsMixin, AlleyBotPlugin):
+class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, FeedbackLoopMixin, ContentStrategyMixin, DynamicSkillsMixin, OperationalResilienceMixin, AlleyBotPlugin):
     """AlleyBot's autonomous brain - decides what to do, when, and how"""
 
     def __init__(self, config):
@@ -47,6 +48,7 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         self._init_feedback_loop()
         self._init_content_strategy()
         self._init_dynamic_skills()
+        self._init_operational_resilience()
 
         # Auto-start if configured
         if self.config.get('auto_start', False):
@@ -254,6 +256,8 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             'brain_skills_generate': self.skills_generate_command,
             'brain_skills_update': self.skills_update_command,
             'brain_compose_chain': self.compose_chain_command,
+            'brain_resilience': self.resilience_status_command,
+            'brain_test_alert': self.test_alert_command,
         }
 
     def get_tasks(self):
@@ -275,4 +279,5 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         self._save_conversation_threads()
         self._save_skill_state()
         self._save_personalities()
+        self._save_resilience_state()
         print("🧠 Brain plugin cleaned up")
