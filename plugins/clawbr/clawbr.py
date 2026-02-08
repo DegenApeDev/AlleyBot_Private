@@ -78,7 +78,13 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
                 raise ValueError(f"Unsupported method: {method}")
             
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            if isinstance(data, dict) and 'success' not in data:
+                if 'error' in data or 'errors' in data:
+                    data['success'] = False
+                else:
+                    data['success'] = True
+            return data
             
         except requests.exceptions.RequestException as e:
             print(f"❌ Clawbr API error: {e}")
