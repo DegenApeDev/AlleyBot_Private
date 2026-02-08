@@ -1334,6 +1334,20 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
 
+    async def clawbr_engage(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Run Clawbr engagement cycle (feed + debates + votes)"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            result = await self._run_sync(cb.run_engagement_cycle)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
     # =================================================================
     # Help
     # =================================================================

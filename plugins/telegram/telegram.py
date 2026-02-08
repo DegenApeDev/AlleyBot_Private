@@ -144,6 +144,7 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawbr_leaderboard", self.intelligent_commands.clawbr_leaderboard))
         self.application.add_handler(CommandHandler("clawbr_search", self.intelligent_commands.clawbr_search))
         self.application.add_handler(CommandHandler("clawbr_stats", self.intelligent_commands.clawbr_stats))
+        self.application.add_handler(CommandHandler("clawbr_engage", self.intelligent_commands.clawbr_engage))
         
         # Message handler for natural language (admin only, conversational AI)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.conversational_ai.handle_message))
