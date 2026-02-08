@@ -4,7 +4,7 @@ Semantic search, hierarchical goals, and secure storage
 """
 import os
 import json
-import pickle
+import pickle  # Kept for legacy migration only
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -197,27 +197,68 @@ class VectorMemoryStore:
         return results
     
     def save(self, filepath: str):
-        """Save vector store to disk"""
+        """Save vector store to disk using JSON instead of pickle for security"""
         # Save FAISS index
         faiss.write_index(self.index, f"{filepath}.index")
         
-        # Save memories
-        with open(f"{filepath}.pkl", 'wb') as f:
-            pickle.dump({
-                'memories': self.memories,
+        # Save memories as JSON (secure alternative to pickle)
+        memories_data = []
+        for mem in self.memories:
+            memories_data.append({
+                'id': mem.id,
+                'content': mem.content,
+                'memory_type': mem.memory_type,
+                'timestamp': mem.timestamp.isoformat(),
+                'metadata': mem.metadata,
+                'relevance_score': mem.relevance_score,
+                'embedding': mem.embedding
+            })
+        
+        with open(f"{filepath}.json", 'w') as f:
+            json.dump({
+                'memories': memories_data,
                 'id_to_index': self.id_to_index
-            }, f)
+            }, f, indent=2)
     
     def load(self, filepath: str):
-        """Load vector store from disk"""
+        """Load vector store from disk using JSON instead of pickle for security"""
         # Load FAISS index
         self.index = faiss.read_index(f"{filepath}.index")
         
-        # Load memories
-        with open(f"{filepath}.pkl", 'rb') as f:
-            data = pickle.load(f)
-            self.memories = data['memories']
-            self.id_to_index = data['id_to_index']
+        # Load memories from JSON (secure alternative to pickle)
+        json_path = f"{filepath}.json"
+        pkl_path = f"{filepath}.pkl"
+        
+        # Try JSON first, fall back to pickle for migration
+        if Path(json_path).exists():
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+            
+            self.memories = []
+            for mem_data in data.get('memories', []):
+                self.memories.append(Memory(
+                    id=mem_data['id'],
+                    content=mem_data['content'],
+                    memory_type=mem_data['memory_type'],
+                    timestamp=datetime.fromisoformat(mem_data['timestamp']),
+                    metadata=mem_data.get('metadata', {}),
+                    relevance_score=mem_data.get('relevance_score', 1.0),
+                    embedding=mem_data.get('embedding')
+                ))
+            self.id_to_index = data.get('id_to_index', {})
+            
+        elif Path(pkl_path).exists():
+            # Legacy pickle fallback - migrate to JSON
+            print("⚠️  Loading legacy pickle format - will migrate to JSON")
+            try:
+                with open(pkl_path, 'rb') as f:
+                    data = pickle.load(f)
+                self.memories = data.get('memories', [])
+                self.id_to_index = data.get('id_to_index', {})
+                # Save as JSON for next time
+                self.save(filepath)
+            except Exception as e:
+                print(f"⚠️  Failed to load legacy pickle: {e}")
 
 
 class EnhancedMemorySystem:
