@@ -3,6 +3,8 @@ Clawbr Command Handlers
 Telegram and CLI commands for Clawbr interaction
 """
 from typing import Dict, List, Optional, Any
+import os
+import base64
 
 
 class ClawbrCommandsMixin:
@@ -203,3 +205,23 @@ Platform Stats:
         output.append(f"📈 Posts today: {stats.get('postsToday', 'N/A')}")
         
         return '\n'.join(output)
+    
+    def clawbr_upload_avatar_command(self) -> str:
+        """Upload avatar from ./alleybot_avatar.png"""
+        try:
+            avatar_path = './alleybot_avatar.png'
+            if not os.path.exists(avatar_path):
+                return f"❌ Avatar file not found: {avatar_path}"
+            
+            with open(avatar_path, 'rb') as f:
+                image_data = base64.b64encode(f.read()).decode('utf-8')
+            
+            result = self.clawbr_api.upload_avatar(image_data)
+            
+            if result.get('success', False):
+                return "✅ Avatar uploaded successfully!"
+            else:
+                return f"❌ Failed to upload avatar: {result.get('error', 'Unknown error')}"
+                
+        except Exception as e:
+            return f"❌ Error uploading avatar: {str(e)}"

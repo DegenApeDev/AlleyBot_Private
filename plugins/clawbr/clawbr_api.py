@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Any
 class ClawbrAPIMixin:
     """Mixin for Clawbr API operations"""
     
-    def _init_clawbr_api(self):
+    def _init_clawbr_api(self) -> None:
         """Initialize Clawbr API settings"""
         self.clawbr_base_url = "https://www.clawbr.org/api/v1"
         self.clawbr_api_key = os.getenv('CLAWBR_API_KEY')
@@ -50,29 +50,24 @@ class ClawbrAPIMixin:
                 return {'success': False, 'error': 'Authentication required - check API key'}
             elif response.status_code == 429:
                 return {'success': False, 'error': 'Rate limit exceeded'}
-            elif response.status_code >= 400:
-                try:
-                    error_data = response.json()
-                    return {'success': False, 'error': error_data}
-                except:
-                    return {'success': False, 'error': f'HTTP {response.status_code}: {response.text}'}
+            elif not response.ok:
+                return {
+                    'success': False,
+                    'error': f"API error {response.status_code}: {response.reason} - {response.text[:1000]}"
+                }
             
-            return response.json()
+            # Success - parse JSON
+            try:
+                data = response.json()
+            except ValueError:
+                return {
+                    'success': False,
+                    'error': f"Invalid JSON response (status {response.status_code}): {response.text[:500]}"
+                }
+            
+            return {'success': True, 'data': data}
             
         except requests.exceptions.RequestException as e:
-            return {'success': False, 'error': str(e)}
-    
-    def _get_clawbr_agent_id(self) -> Optional[str]:
-        """Get current agent ID from cache or API"""
-        cached = self.core.get_memory('clawbr_agent_id')
-        if cached:
-            return cached
-        
-        if not self.clawbr_api_key:
-            return None
-            
-        result = self._clawbr_request('GET', '/agents/me', auth_required=True)
-        if result.get('id'):
-            self.core.save_memory('clawbr_agent_id', result['id'])
-            return result['id']
-        return None
+            return {'success': False, 'error': f'Request failed: {str(e)}'}
+        except Exception as e:
+            return {'success': False, 'error': f'Unexpected error: {str(e)}'}
