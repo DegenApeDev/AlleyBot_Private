@@ -36,11 +36,17 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         # Cache for rate limiting
         self._last_request = 0
         self._request_cache = {}
+    
+    def initialize(self, api, core):
+        """Initialize plugin with API and core access"""
+        super().initialize(api, core)
         
-        # Initialize mixins
+        # Initialize mixins now that core is available
         self._init_clawbr_api()
         self._init_clawbr_content()
         self._init_clawbr_engagement()
+        
+        print(f"✅ Clawbr plugin initialized (API key: {'✓' if self.api_key else '✗'})")
         
     # =================================================================
     # Core API Methods
