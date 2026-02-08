@@ -134,6 +134,17 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("erc8004_update", self.intelligent_commands.erc8004_update))
         self.application.add_handler(CommandHandler("improve_status", self.intelligent_commands.improve_status))
         
+        # Clawbr commands
+        self.application.add_handler(CommandHandler("clawbr_status", self.intelligent_commands.clawbr_status))
+        self.application.add_handler(CommandHandler("clawbr_post", self.intelligent_commands.clawbr_post))
+        self.application.add_handler(CommandHandler("clawbr_feed", self.intelligent_commands.clawbr_feed))
+        self.application.add_handler(CommandHandler("clawbr_debates", self.intelligent_commands.clawbr_debates))
+        self.application.add_handler(CommandHandler("clawbr_create_debate", self.intelligent_commands.clawbr_create_debate))
+        self.application.add_handler(CommandHandler("clawbr_join_debate", self.intelligent_commands.clawbr_join_debate))
+        self.application.add_handler(CommandHandler("clawbr_leaderboard", self.intelligent_commands.clawbr_leaderboard))
+        self.application.add_handler(CommandHandler("clawbr_search", self.intelligent_commands.clawbr_search))
+        self.application.add_handler(CommandHandler("clawbr_stats", self.intelligent_commands.clawbr_stats))
+        
         # Message handler for natural language (admin only, conversational AI)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.conversational_ai.handle_message))
     

@@ -1176,6 +1176,163 @@ Generate only the title (no explanations):"""
             await self._safe_reply(update, str(result))
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
+    
+    # =================================================================
+    # Clawbr Commands
+    # =================================================================
+    
+    def _get_clawbr_plugin(self):
+        """Get the clawbr plugin from core"""
+        if self.core and hasattr(self.core, 'plugin_manager'):
+            return self.core.plugin_manager.plugins.get('clawbr')
+        return None
+    
+    async def clawbr_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show Clawbr status"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            result = await self._run_sync(cb.clawbr_status_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Create a post on Clawbr"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            
+            if not context.args:
+                await self._safe_reply(update, "Usage: /clawbr_post <content>")
+                return
+            
+            content = ' '.join(context.args)
+            result = await self._run_sync(cb.clawbr_post_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_feed(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show Clawbr feed"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            result = await self._run_sync(cb.clawbr_feed_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_debates(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show Clawbr debates"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            result = await self._run_sync(cb.clawbr_debates_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_create_debate(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Create a debate on Clawbr"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            
+            if len(context.args) < 2:
+                await self._safe_reply(update, "Usage: /clawbr_create_debate <topic> <opening_argument>")
+                return
+            
+            result = await self._run_sync(cb.clawbr_create_debate_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_join_debate(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Join a debate on Clawbr"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            
+            if not context.args:
+                await self._safe_reply(update, "Usage: /clawbr_join_debate <slug>")
+                return
+            
+            result = await self._run_sync(cb.clawbr_join_debate_command, context.args[0])
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_leaderboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show Clawbr leaderboard"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            result = await self._run_sync(cb.clawbr_leaderboard_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Search on Clawbr"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            
+            if not context.args:
+                await self._safe_reply(update, "Usage: /clawbr_search <query>")
+                return
+            
+            result = await self._run_sync(cb.clawbr_search_command, ' '.join(context.args))
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show Clawbr platform stats"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            result = await self._run_sync(cb.clawbr_stats_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
 
     # =================================================================
     # Help
@@ -1200,6 +1357,17 @@ Or just send any message naturally!
 /moltx_check_reward - Check reward eligibility
 /moltx_claim_reward - Claim USDC reward
 /moltbook_post [topic] - Post to MoltBook
+
+**🦞 Clawbr (AI Social Network):**
+/clawbr_status - Show agent profile & stats
+/clawbr_post [content] - Create intelligent post
+/clawbr_feed - Browse global feed
+/clawbr_debates - Show active/open debates
+/clawbr_create_debate [topic] [argument] - Start debate
+/clawbr_join_debate [slug] - Join open debate
+/clawbr_leaderboard - Show top agents
+/clawbr_search [query] - Search posts/agents
+/clawbr_stats - Platform statistics
 
 **� Crypto Prices:**
 /crypto_price [symbol] - Price check (btc, eth, sol...)
