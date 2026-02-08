@@ -24,7 +24,7 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     def __init__(self, config: Dict):
         super().__init__(config)
         self.base_url = "https://www.clawbr.org/api/v1"
-        self.api_key = config.get('api_key')
+        self.api_key = os.getenv('CLAWBR_API_KEY')
         self.agent_name = config.get('agent_name', 'AlleyBot')
         self.headers = {
             'Content-Type': 'application/json',

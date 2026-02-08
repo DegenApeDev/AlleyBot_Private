@@ -14,7 +14,7 @@ class ClawbrAPIMixin:
     def _init_clawbr_api(self):
         """Initialize Clawbr API settings"""
         self.clawbr_base_url = "https://www.clawbr.org/api/v1"
-        self.clawbr_api_key = self.config.get('clawbr_api_key')
+        self.clawbr_api_key = os.getenv('CLAWBR_API_KEY')
         self.clawbr_agent_name = self.config.get('clawbr_agent_name', 'AlleyBot')
         
     def _clawbr_request(self, method: str, endpoint: str, data: Optional[Dict] = None,
