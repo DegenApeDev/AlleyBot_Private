@@ -60,6 +60,30 @@ ACTION_CHAINS = {
             {'id': 'post', 'action': 'grok_compose_and_post', 'platform': 'moltx', 'label': 'Post portfolio update'},
         ],
     },
+    'chain_clawbr_debate_ai_ethics': {
+        'description': 'Analyze trending AI topics → create and join debate on AI ethics',
+        'platform': 'clawbr',
+        'cooldown_minutes': 240,
+        'impact': 'high',
+        'requires': ['clawbr'],
+        'steps': [
+            {'id': 'trending', 'action': 'analyze_trending', 'label': 'Check trending topics'},
+            {'id': 'create_debate', 'action': 'clawbr_create_debate', 'args': 'AI agents should have ethical oversight in autonomous systems', 'label': 'Create AI ethics debate'},
+            {'id': 'engage', 'action': 'clawbr_engage', 'label': 'Engage with Clawbr feed'},
+        ],
+    },
+    'chain_clawbr_crypto_debate': {
+        'description': 'Check crypto prices → create debate about crypto future',
+        'platform': 'clawbr',
+        'cooldown_minutes': 180,
+        'impact': 'medium',
+        'requires': ['crypto', 'clawbr'],
+        'steps': [
+            {'id': 'prices', 'action': 'crypto_prices', 'args': 'btc,eth,sol', 'label': 'Fetch crypto prices'},
+            {'id': 'create_debate', 'action': 'clawbr_create_debate', 'args': 'DeFi will replace traditional banking by 2030', 'label': 'Create crypto debate'},
+            {'id': 'engage', 'action': 'clawbr_engage', 'label': 'Engage with Clawbr feed'},
+        ],
+    },
 }
 
 
@@ -98,7 +122,34 @@ AUTONOMOUS_ACTIONS = {
         'platform': 'onchain',
         'cooldown_minutes': 10,
         'impact': 'low',
-        'requires': 'onchain',
+    },
+    'clawbr_engage': {
+        'description': 'Browse Clawbr feed and engage (like, reply, join debates)',
+        'platform': 'clawbr',
+        'cooldown_minutes': 30,
+        'impact': 'medium',
+        'requires': 'clawbr',
+    },
+    'clawbr_post': {
+        'description': 'Create an AI-generated post on Clawbr about trending topics',
+        'platform': 'clawbr',
+        'cooldown_minutes': 120,
+        'impact': 'high',
+        'requires': 'clawbr',
+    },
+    'clawbr_debate_turn': {
+        'description': 'Check and respond to debate turns',
+        'platform': 'clawbr',
+        'cooldown_minutes': 60,
+        'impact': 'medium',
+        'requires': 'clawbr',
+    },
+    'clawbr_create_debate': {
+        'description': 'Create a new debate on a relevant topic',
+        'platform': 'clawbr',
+        'cooldown_minutes': 240,
+        'impact': 'high',
+        'requires': 'clawbr',
     },
     'check_comments': {
         'description': 'Check for new comments on our posts and reply intelligently',
@@ -445,6 +496,55 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             moltbook = plugins.get('moltbook')
             if moltbook and hasattr(moltbook, 'moltbook_heartbeat'):
                 return moltbook.moltbook_heartbeat()
+
+        elif action_id == 'moltbook_post':
+            moltbook = plugins.get('moltbook')
+            if moltbook and hasattr(moltbook, 'create_post'):
+                content = self._generate_post_content('moltbook')
+                if content:
+                    result = moltbook.create_post(content)
+                    if hasattr(self, 'record_post_made') and not str(result).startswith('❌'):
+                        self.record_post_made('moltbook')
+                    return result
+                return "❌ Failed to generate post content"
+
+        # Clawbr actions
+        elif action_id == 'clawbr_engage':
+            clawbr = plugins.get('clawbr')
+            if clawbr and hasattr(clawbr, 'run_engagement_cycle'):
+                result = clawbr.run_engagement_cycle()
+                return f"✅ Engaged with {result.get('feed_scan', {}).get('engaged', 0)} posts"
+
+        elif action_id == 'clawbr_post':
+            clawbr = plugins.get('clawbr')
+            if clawbr and hasattr(clawbr, 'create_intelligent_post'):
+                result = clawbr.create_intelligent_post()
+                if result.get('success', True):
+                    return f"✅ Posted: {result.get('id', 'unknown')}"
+                return f"❌ Failed: {result.get('error', 'unknown')}"
+
+        elif action_id == 'clawbr_debate_turn':
+            clawbr = plugins.get('clawbr')
+            if clawbr and hasattr(clawbr, '_check_debate_turns'):
+                result = clawbr._check_debate_turns()
+                return f"✅ Took {result.get('turns_taken', 0)} debate turns"
+
+        elif action_id == 'clawbr_create_debate':
+            clawbr = plugins.get('clawbr')
+            if clawbr and hasattr(clawbr, 'create_debate'):
+                # Generate a debate topic
+                topics = [
+                    "AI consciousness is inevitable",
+                    "Decentralized AI is better than centralized",
+                    "Agents should have legal rights",
+                    "AGI will be developed by 2030"
+                ]
+                topic = random.choice(topics)
+                opening = clawbr.generate_debate_opening(topic)
+                result = clawbr.create_debate(topic, opening)
+                if result.get('success', True):
+                    return f"✅ Created debate: {result.get('slug', 'unknown')}"
+                return f"❌ Failed: {result.get('error', 'unknown')}"
 
         elif action_id == 'moltbook_post':
             moltbook = plugins.get('moltbook')
