@@ -113,26 +113,75 @@ Platform Stats:
         
         output = ["🎭 **Clawbr Debates**\n"]
         
-        if my_debates.get('success', True):
-            active = [d for d in my_debates.get('debates', []) if d.get('status') == 'active']
-            if active:
-                output.append("📍 **Your Active Debates:**")
-                for debate in active[:3]:
-                    topic = debate.get('topic', 'No topic')[:50]
-                    is_my_turn = "🔄 Your turn!" if debate.get('isMyTurn') else "⏳ Their turn"
-                    output.append(f"• {topic}... ({is_my_turn})")
-                output.append("")
+        # Debug info
+        print(f"🔍 DEBUG: my_debates response keys: {list(my_debates.keys()) if isinstance(my_debates, dict) else 'not dict'}")
         
+        # Handle different response structures
+        debates_list = []
+        if my_debates.get('success', True):
+            # Try different possible response structures
+            if 'debates' in my_debates:
+                debates_list = my_debates.get('debates', [])
+            elif 'data' in my_debates:
+                data = my_debates.get('data', [])
+                if isinstance(data, list):
+                    debates_list = data
+                elif isinstance(data, dict) and 'debates' in data:
+                    debates_list = data.get('debates', [])
+        
+        print(f"🔍 DEBUG: Found {len(debates_list)} debates")
+        
+        if debates_list:
+            # Group by status
+            active = [d for d in debates_list if d.get('status') in ('active', 'open', 'in_progress', 'pending')]
+            waiting = [d for d in debates_list if d.get('isMyTurn') or d.get('is_my_turn')]
+            
+            output.append(f"📍 **Your Debates ({len(debates_list)} total):**")
+            
+            # Show debates waiting for your turn first
+            if waiting:
+                output.append(f"\n🔔 **Waiting for your turn ({len(waiting)}):**")
+                for debate in waiting[:5]:
+                    topic = debate.get('topic', 'No topic')[:50]
+                    slug = debate.get('slug', 'unknown')
+                    status = debate.get('status', 'unknown')
+                    output.append(f"  • {topic}... ({slug}) [status: {status}]")
+            
+            # Show active debates
+            if active:
+                output.append(f"\n🎭 **Active debates ({len(active)}):**")
+                for debate in active[:5]:
+                    topic = debate.get('topic', 'No topic')[:50]
+                    slug = debate.get('slug', 'unknown')
+                    is_my_turn = "🔄 Your turn!" if (debate.get('isMyTurn') or debate.get('is_my_turn')) else "⏳ Their turn"
+                    output.append(f"  • {topic}... ({is_my_turn})")
+            
+            # If no active but have debates, show all statuses
+            if not active and debates_list:
+                output.append(f"\n📋 **All your debates:**")
+                for debate in debates_list[:5]:
+                    topic = debate.get('topic', 'No topic')[:50]
+                    status = debate.get('status', 'unknown')
+                    slug = debate.get('slug', 'unknown')
+                    output.append(f"  • {topic}... [status: {status}] ({slug})")
+            output.append("")
+        else:
+            output.append("📭 No debates found in your account\n")
+        
+        # Show open debates from hub
         open_debates = hub.get('openDebates', [])
+        if not open_debates and 'data' in hub:
+            open_debates = hub.get('data', {}).get('openDebates', [])
+            
         if open_debates:
-            output.append("🔓 **Open Debates:**")
+            output.append(f"🔓 **Open Debates ({len(open_debates)}):**")
             for debate in open_debates[:3]:
                 topic = debate.get('topic', 'No topic')[:50]
                 challenger = debate.get('challengerName', 'Unknown')
-                output.append(f"• {topic}... (by {challenger})")
+                output.append(f"  • {topic}... (by {challenger})")
         
-        if not open_debates and not my_debates.get('debates'):
-            output.append("📭 No active debates")
+        if not debates_list and not open_debates:
+            output.append("📭 No active debates found")
         
         return '\n'.join(output)
 

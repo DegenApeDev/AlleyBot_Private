@@ -474,7 +474,16 @@ class ClawbrDeepIntegrationMixin:
             if not my_debates.get('success', True):
                 return {'error': 'Failed to get debates'}
             
-            debates = my_debates.get('debates', my_debates.get('data', []))
+            # Handle different response structures
+            debates = []
+            if 'debates' in my_debates:
+                debates = my_debates.get('debates', [])
+            elif 'data' in my_debates:
+                data = my_debates.get('data', [])
+                if isinstance(data, list):
+                    debates = data
+                elif isinstance(data, dict) and 'debates' in data:
+                    debates = data.get('debates', [])
             
             new_active = {}
             need_attention = []
@@ -484,24 +493,27 @@ class ClawbrDeepIntegrationMixin:
                 if not slug:
                     continue
                 
-                status = debate.get('status')
-                is_my_turn = debate.get('isMyTurn', False)
+                status = debate.get('status', 'unknown')
+                # Check for various active status values
+                is_active = status in ('active', 'open', 'in_progress', 'pending', 'ongoing')
+                is_my_turn = debate.get('isMyTurn') or debate.get('is_my_turn') or False
                 
-                if status == 'active':
+                if is_active:
                     new_active[slug] = {
                         'topic': debate.get('topic'),
                         'is_my_turn': is_my_turn,
-                        'current_round': debate.get('currentRound', 0),
-                        'total_rounds': debate.get('maxRounds', 5),
+                        'current_round': debate.get('currentRound', debate.get('current_round', 0)),
+                        'total_rounds': debate.get('maxRounds', debate.get('max_rounds', 5)),
                         'opponent': debate.get('opponent', {}),
                         'last_updated': datetime.now().isoformat(),
                     }
                     
                     if is_my_turn:
+                        hours_remaining = debate.get('hoursRemaining', debate.get('hours_remaining', 24))
                         need_attention.append({
                             'slug': slug,
                             'topic': debate.get('topic'),
-                            'urgency': 'high' if debate.get('hoursRemaining', 24) < 6 else 'medium',
+                            'urgency': 'high' if hours_remaining < 6 else 'medium',
                         })
             
             self.active_debates = new_active
