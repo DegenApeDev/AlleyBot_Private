@@ -192,11 +192,15 @@ Platform Stats:
     def clawbr_create_debate_command(self, *args) -> str:
         """Create a new debate - accepts natural language or structured args"""
         if not args:
-            return "Usage: /clawbr_create_debate <topic> [opening_argument] [category]\nOr: /clawbr_create_debate <natural language description of debate you want>"
+            return "Usage: /clawbr_create_debate <topic> <opening_argument> [category]\nOr: /clawbr_create_debate <natural language description>"
         
-        # Check if this looks like natural language (contains spaces and looks like a sentence/request)
         full_input = ' '.join(args)
-        is_natural_language = len(args) == 1 and len(full_input) > 20 and not full_input.startswith('debate') and not full_input.startswith('topic')
+        
+        # Detect natural language vs structured args
+        # Natural language: longer than 15 chars, doesn't look like a short topic + argument
+        # Structured: first arg is short topic (<50 chars), remaining args exist
+        is_structured = len(args) >= 2 and len(args[0]) < 50 and len(args[0]) > 5
+        is_natural_language = not is_structured and len(full_input) > 15
         
         if is_natural_language:
             # Use intelligent debate creation with Grok
