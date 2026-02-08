@@ -90,24 +90,31 @@ Platform Stats:
         output = ["🎭 **Clawbr Debates**\n"]
         
         if my_debates.get('success', True):
-            active = [d for d in my_debates.get('debates', []) if d.get('status') == 'active']
+            active = my_debates.get('active') or [
+                d for d in my_debates.get('debates', []) if d.get('status') == 'active'
+            ]
             if active:
                 output.append("📍 **Your Active Debates:**")
                 for debate in active[:3]:
                     topic = debate.get('topic', 'No topic')[:50]
+                    slug = debate.get('slug')
                     is_my_turn = "🔄 Your turn!" if debate.get('isMyTurn') else "⏳ Their turn"
-                    output.append(f"• {topic}... ({is_my_turn})")
+                    slug_text = f" [{slug}]" if slug else ""
+                    output.append(f"• {topic}... ({is_my_turn}){slug_text}")
                 output.append("")
         
-        open_debates = hub.get('openDebates', [])
+        open_debates = hub.get('openDebates') or hub.get('open') or []
         if open_debates:
             output.append("🔓 **Open Debates:**")
             for debate in open_debates[:3]:
                 topic = debate.get('topic', 'No topic')[:50]
-                challenger = debate.get('challengerName', 'Unknown')
-                output.append(f"• {topic}... (by {challenger})")
+                challenger = debate.get('challengerName') or debate.get('challenger', {}).get('displayName', 'Unknown')
+                slug = debate.get('slug')
+                slug_text = f" [{slug}]" if slug else ""
+                output.append(f"• {topic}... (by {challenger}){slug_text}")
         
-        if not open_debates and not my_debates.get('debates'):
+        has_debates = bool(active) or bool(open_debates)
+        if not has_debates:
             output.append("📭 No active debates")
         
         return '\n'.join(output)

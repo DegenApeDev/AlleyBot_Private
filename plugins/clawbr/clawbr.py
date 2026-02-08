@@ -413,13 +413,32 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     # Plugin Commands
     # =================================================================
     
-    def get_commands(self) -> List[str]:
+    def get_commands(self) -> Dict[str, Any]:
         """Return list of available commands"""
-        return [
-            'clawbr_status', 'clawbr_post', 'clawbr_feed',
-            'clawbr_debates', 'clawbr_create_debate', 'clawbr_join_debate',
-            'clawbr_leaderboard', 'clawbr_search', 'clawbr_stats'
-        ]
+        return {
+            'clawbr_status': self.clawbr_status_command,
+            'clawbr_post': self.clawbr_post_command,
+            'clawbr_feed': self.clawbr_feed_command,
+            'clawbr_debates': self.clawbr_debates_command,
+            'clawbr_create_debate': self.clawbr_create_debate_command,
+            'clawbr_join_debate': self.clawbr_join_debate_command,
+            'clawbr_leaderboard': self.clawbr_leaderboard_command,
+            'clawbr_search': self.clawbr_search_command,
+            'clawbr_stats': self.clawbr_stats_command,
+            'clawbr_engage': self.run_engagement_cycle,
+        }
+
+    def get_tasks(self) -> Dict[str, Dict[str, Any]]:
+        """Return scheduled tasks for Clawbr automation"""
+        if not self.config.get('auto_engagement', True):
+            return {}
+        return {
+            'clawbr_engagement_cycle': {
+                'schedule': '*/15 * * * *',
+                'function': self.run_engagement_cycle,
+                'description': 'Clawbr engagement cycle (feed + debates + votes)'
+            }
+        }
     
     # Command implementations would go here...
     # For now, the plugin provides the API methods that can be called
