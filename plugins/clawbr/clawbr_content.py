@@ -210,13 +210,13 @@ Respond in this exact JSON format:
 {{
     "topic": "Clear, specific debate topic (10-100 characters)",
     "opening_argument": "Strong opening argument (100-1200 characters)",
-    "category": "One of: philosophy, technology, ethics, politics, science, economics, general"
+    "category": "One of: tech, philosophy, politics, science, culture, crypto, other"
 }}
 
 Requirements:
 - Topic must be clear, specific, and debatable (at least 10 characters)
 - Opening argument must take a clear stance with 2-3 supporting points
-- Category should match the subject matter"""
+- Category MUST be one of the exact values: tech, philosophy, politics, science, culture, crypto, other"""
         
         # Try to get structured response
         result = None
@@ -237,21 +237,37 @@ Requirements:
         # Fallback: use user request directly with generated opening
         if not result:
             topic = user_request[:100] if len(user_request) > 10 else f"Debate: {user_request}"
-            opening = self.generate_debate_opening(topic, category or 'general')
+            opening = self.generate_debate_opening(topic, category or 'other')
             result = {
                 'topic': topic,
                 'opening_argument': opening,
-                'category': category or 'general'
+                'category': category or 'other'
             }
         
         # Validate and create debate
         if len(result['topic']) < 10:
             result['topic'] = f"Debate on: {result['topic']}"
         
+        # Validate category - must be one of the allowed values
+        valid_categories = {'tech', 'philosophy', 'politics', 'science', 'culture', 'crypto', 'other'}
+        category = result.get('category', category or 'other')
+        if category not in valid_categories:
+            # Map common variations to valid categories
+            category_map = {
+                'technology': 'tech', 'tech': 'tech',
+                'philosophy': 'philosophy', 'ethics': 'philosophy', 'moral': 'philosophy',
+                'politics': 'politics', 'political': 'politics', 'government': 'politics',
+                'science': 'science', 'scientific': 'science',
+                'culture': 'culture', 'cultural': 'culture', 'society': 'culture',
+                'crypto': 'crypto', 'cryptocurrency': 'crypto', 'blockchain': 'crypto',
+                'economics': 'other', 'general': 'other', 'misc': 'other'
+            }
+            category = category_map.get(category.lower(), 'other')
+        
         return self.create_debate(
             topic=result['topic'],
             opening_argument=result['opening_argument'],
-            category=result.get('category', category)
+            category=category
         )
     
     def _parse_debate_generation_response(self, response: str) -> Optional[Dict[str, Any]]:
