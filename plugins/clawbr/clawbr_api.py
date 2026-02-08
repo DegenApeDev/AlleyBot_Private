@@ -17,10 +17,14 @@ class ClawbrAPIMixin:
         self.clawbr_base_url = "https://www.clawbr.org/api/v1"
         self.clawbr_api_key = os.getenv('CLAWBR_API_KEY')
         self.clawbr_agent_name = self.config.get('clawbr_agent_name', 'AlleyBot')
+        self.clawbr_session = requests.Session()
         
     def _clawbr_request(self, method: str, endpoint: str, data: Optional[Dict] = None,
                       params: Optional[Dict] = None, auth_required: bool = False) -> Dict[str, Any]:
         """Make request to Clawbr API with proper error handling"""
+        if not hasattr(self, 'clawbr_session') or self.clawbr_session is None:
+            self._init_clawbr_api()
+        
         url = f"{self.clawbr_base_url}{endpoint}"
         headers = {
             'Content-Type': 'application/json',
@@ -35,13 +39,13 @@ class ClawbrAPIMixin:
         
         try:
             if method.upper() == 'GET':
-                response = requests.get(url, headers=headers, params=params, timeout=10)
+                response = self.clawbr_session.get(url, headers=headers, params=params, timeout=10)
             elif method.upper() == 'POST':
-                response = requests.post(url, headers=headers, json=data, params=params, timeout=10)
+                response = self.clawbr_session.post(url, headers=headers, json=data, params=params, timeout=10)
             elif method.upper() == 'PATCH':
-                response = requests.patch(url, headers=headers, json=data, timeout=10)
+                response = self.clawbr_session.patch(url, headers=headers, json=data, timeout=10)
             elif method.upper() == 'DELETE':
-                response = requests.delete(url, headers=headers, timeout=10)
+                response = self.clawbr_session.delete(url, headers=headers, timeout=10)
             else:
                 raise ValueError(f"Unsupported method: {method}")
             
@@ -67,14 +71,14 @@ class ClawbrAPIMixin:
         except Exception as e:
             return {'success': False, 'error': f'Unexpected error: {str(e)}'}
     
-    def follow_user(self, handle: str) -> Dict[str, Any]:
-        """Follow a Clawbr user by handle"""
-        if not handle or not isinstance(handle, str):
-            return {'success': False, 'error': 'Invalid handle provided'}
-        return self._clawbr_request('POST', f'/users/{handle}/follow', auth_required=True)
+    def follow_user(self, username: str) -> Dict[str, Any]:
+        """Follow a Clawbr user by username"""
+        if not username or not isinstance(username, str):
+            return {'success': False, 'error': 'Invalid username provided'}
+        return self._clawbr_request('POST', f'/users/{username}/follow', auth_required=True)
     
-    def get_follow_status(self, handle: str) -> Dict[str, Any]:
-        """Check current follow status for a Clawbr user by handle"""
-        if not handle or not isinstance(handle, str):
-            return {'success': False, 'error': 'Invalid handle provided'}
-        return self._clawbr_request('GET', f'/users/{handle}/follow-status', auth_required=True)
+    def get_follow_status(self, username: str) -> Dict[str, Any]:
+        """Check current follow status for a Clawbr user by username"""
+        if not username or not isinstance(username, str):
+            return {'success': False, 'error': 'Invalid username provided'}
+        return self._clawbr_request('GET', f'/users/{username}/follow-status', auth_required=True)

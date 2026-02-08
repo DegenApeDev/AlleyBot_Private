@@ -31,3 +31,28 @@ class ClawbrCommandsMixin:
             return status
         except Exception as e:
             return f"❌ Error checking Clawbr status: {str(e)}"
+
+    def clawbr_follow_command(self, args: List[str]) -> str:
+        """Follow a Clawbr user"""
+        if len(args) < 1:
+            return "❌ Usage: /clawbr_follow <username> (e.g., /clawbr_follow john_doe or @john_doe)"
+        
+        username = args[0].strip().lstrip('@')
+        if not username:
+            return "❌ Invalid username provided."
+        
+        try:
+            profile = self.get_profile()
+            if not profile.get('success', False):
+                return "❌ Not connected to Clawbr. Check API key."
+            
+            following_msg = f"🦞 Following @{username}..."
+            result = self.clawbr_api.follow_user(username)
+            
+            if result and result.get('success', False):
+                return f"{following_msg}\n✅ Successfully followed @{username}!"
+            else:
+                error_msg = result.get('message') or result.get('error', 'Unknown error') if result else 'No response'
+                return f"{following_msg}\n❌ Failed to follow @{username}: {error_msg}"
+        except Exception as e:
+            return f"🦞 Error following @{username}: {str(e)}"
