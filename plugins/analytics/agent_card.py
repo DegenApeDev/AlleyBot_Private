@@ -5,6 +5,7 @@ AlleyBot agent ID: 22899 on Ethereum mainnet.
 """
 import json
 import datetime
+import hashlib
 from typing import Dict, Any, List, Optional
 
 
@@ -286,12 +287,62 @@ class AgentCardGenerator:
 
         return platforms
 
+    def _get_card_hash(self, card: Dict[str, Any]) -> str:
+        """Generate a hash of the agent card content (excluding timestamp)"""
+        # Create a copy without the timestamp for consistent hashing
+        card_copy = {k: v for k, v in card.items() if k != 'lastUpdated'}
+        card_json = json.dumps(card_copy, sort_keys=True, separators=(',', ':'))
+        return hashlib.sha256(card_json.encode()).hexdigest()[:16]
+
+    def _get_last_uploaded_hash(self) -> Optional[str]:
+        """Get the hash of the last successfully uploaded agent card"""
+        try:
+            if self.core:
+                return self.core.get_memory('agent_card_last_hash')
+        except Exception:
+            pass
+        return None
+
+    def _save_uploaded_hash(self, hash_value: str):
+        """Save the hash of the successfully uploaded agent card"""
+        try:
+            if self.core:
+                self.core.save_memory('agent_card_last_hash', hash_value)
+        except Exception as e:
+            print(f"⚠️ Failed to save agent card hash: {e}")
+
+    def has_card_changed(self) -> bool:
+        """Check if the agent card has changed since last upload"""
+        current_card = self.generate()
+        current_hash = self._get_card_hash(current_card)
+        last_hash = self._get_last_uploaded_hash()
+        
+        if last_hash is None:
+            return True  # No previous upload, so it's "changed"
+        
+        return current_hash != last_hash
+
+    def get_card_change_info(self) -> Dict[str, Any]:
+        """Get detailed info about what changed in the agent card"""
+        current_card = self.generate()
+        current_hash = self._get_card_hash(current_card)
+        last_hash = self._get_last_uploaded_hash()
+        
+        return {
+            'current_hash': current_hash,
+            'last_hash': last_hash,
+            'has_changed': current_hash != last_hash,
+            'is_first_upload': last_hash is None,
+            'skills_count': len(self._collect_skills()),
+            'plugins_count': len(self._get_loaded_plugins()),
+        }
+
     def schedule_auto_update(self, interval_hours: int = 24):
         """
-        Schedule automatic agent card updates
+        Schedule automatic agent card updates - only if content has changed
         
         Args:
-            interval_hours: Hours between auto-updates (default 24)
+            interval_hours: Hours between auto-update checks (default 24)
         """
         import threading
         import time
@@ -299,12 +350,27 @@ class AgentCardGenerator:
         def auto_update_loop():
             while True:
                 try:
-                    print(f"🔄 Auto-updating ERC-8004 agent card (scheduled every {interval_hours}h)...")
-                    result = self.update_onchain(dry_run=False)
-                    if "✅" in result:
-                        print(f"✅ Auto-update successful")
+                    # Check if card has actually changed
+                    change_info = self.get_card_change_info()
+                    
+                    if not change_info['has_changed']:
+                        print(f"🔄 Agent card auto-check: No changes detected (hash: {change_info['current_hash'][:8]}...)")
                     else:
-                        print(f"⚠️ Auto-update issue: {result[:200]}")
+                        if change_info['is_first_upload']:
+                            print(f"🔄 Agent card auto-check: First upload (hash: {change_info['current_hash'][:8]}...)")
+                        else:
+                            print(f"🔄 Agent card auto-check: Changes detected!")
+                            print(f"   Previous: {change_info['last_hash'][:8]}...")
+                            print(f"   Current:  {change_info['current_hash'][:8]}...")
+                        
+                        print(f"🔄 Auto-updating ERC-8004 agent card (scheduled every {interval_hours}h)...")
+                        result = self.update_onchain(dry_run=False)
+                        
+                        if "✅" in result:
+                            print(f"✅ Auto-update successful")
+                        else:
+                            print(f"⚠️ Auto-update issue: {result[:200]}")
+                            
                 except Exception as e:
                     print(f"❌ Auto-update failed: {e}")
                 
@@ -314,7 +380,7 @@ class AgentCardGenerator:
         # Start auto-update thread
         update_thread = threading.Thread(target=auto_update_loop, daemon=True, name='agent-card-auto-update')
         update_thread.start()
-        print(f"🔄 Agent card auto-update scheduled every {interval_hours} hours")
+        print(f"🔄 Agent card auto-update scheduled every {interval_hours} hours (only on changes)")
 
     def get_agent_card_status(self) -> Dict[str, Any]:
         """Get current agent card status and info"""
@@ -596,11 +662,16 @@ class AgentCardGenerator:
             receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=300)
 
             if receipt['status'] == 1:
+                # Save hash of successfully uploaded card
+                card_hash = self._get_card_hash(card)
+                self._save_uploaded_hash(card_hash)
+                
                 return (
                     f"✅ ERC-8004 profile updated on-chain!\n"
                     f"🆔 Agent #{AGENT_ID}\n"
                     f"📌 IPFS: {ipfs_uri}\n"
                     f"📊 {skill_count} skills from {len(self._get_loaded_plugins())} plugins\n"
+                    f"🔐 Hash: {card_hash[:16]}...\n"
                     f"⛽ Gas used: {receipt['gasUsed']}\n"
                     f"💵 Cost: {total_cost:.6f} ETH\n"
                     f"🔗 https://etherscan.io/tx/{tx_hex}\n"
