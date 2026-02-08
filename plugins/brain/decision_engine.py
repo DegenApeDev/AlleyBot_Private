@@ -677,6 +677,25 @@ Haven't engaged on Moltbook recently, good time to build karma."""
         if action == 'grok_compose_and_post':
             return self._chain_compose_and_post(chain_context, platform or 'moltx', plugins)
 
+        # Clawbr chain actions
+        if action == 'clawbr_create_debate':
+            clawbr = plugins.get('clawbr')
+            if clawbr and hasattr(clawbr, 'create_debate'):
+                topic = args or "AI agents should have ethical oversight"
+                opening = clawbr.generate_debate_opening(topic)
+                result = clawbr.create_debate(topic, opening)
+                if result.get('success', True):
+                    return f"✅ Created debate: {result.get('slug', result.get('id', 'unknown'))}"
+                return f"❌ Failed: {result.get('error', 'unknown')}"
+            return "❌ Clawbr not available"
+
+        if action == 'clawbr_engage':
+            clawbr = plugins.get('clawbr')
+            if clawbr and hasattr(clawbr, 'run_engagement_cycle'):
+                result = clawbr.run_engagement_cycle()
+                return f"✅ Clawbr engagement: {result.get('debates', {})}"
+            return "❌ Clawbr not available"
+
         return f"❌ Unknown chain step: {action}"
 
     def _chain_compose_and_post(self, chain_context: Dict, platform: str, plugins: Dict) -> str:
