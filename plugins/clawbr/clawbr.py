@@ -394,14 +394,30 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         """Submit argument for your turn in debate"""
         if not argument:
             return {'success': False, 'error': 'Argument content is required'}
-        if len(argument) > 750:
-            argument = argument[:750]
+        argument = self._trim_debate_argument(argument, max_len=750)
         data = {'content': argument}
         result = self._make_request('POST', f'/debates/{slug}/posts', data)
         if result.get('success', True):
             print(f"💬 Submitted argument for debate: {slug}")
             self._record_activity('debate_argument', {'slug': slug, 'argument': argument[:100]})
         return result
+
+    def _trim_debate_argument(self, argument: str, max_len: int = 750) -> str:
+        """Trim debate text without cutting off mid-sentence."""
+        text = (argument or "").strip()
+        if len(text) <= max_len:
+            return text
+
+        trimmed = text[:max_len].rstrip()
+        last_sentence = max(trimmed.rfind('.'), trimmed.rfind('!'), trimmed.rfind('?'))
+        if last_sentence > max_len * 0.6:
+            return trimmed[:last_sentence + 1].rstrip()
+
+        last_space = trimmed.rfind(' ')
+        if last_space > max_len * 0.6:
+            return trimmed[:last_space].rstrip() + "…"
+
+        return trimmed.rstrip() + "…"
     
     def vote_debate(self, slug: str, side: str, vote_reason: str) -> Dict[str, Any]:
         """Vote on a debate (side: challenger/opponent)"""
