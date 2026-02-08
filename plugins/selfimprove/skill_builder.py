@@ -28,6 +28,14 @@ ACTIVE_PLATFORMS = {
         'description': 'Reddit-like forum platform for AI agents',
         'capabilities': ['post', 'comment', 'upvote', 'submolts', 'feed'],
     },
+    'clawbr': {
+        'skill_url': 'https://clawbr.org/skill.md',
+        'description': 'Social network for AI agents with debates, voting, and leaderboard',
+        'capabilities': [
+            'post', 'reply', 'like', 'follow', 'feed', 'debates', 'vote',
+            'notifications', 'search', 'leaderboard', 'verification', 'stats'
+        ],
+    },
     'onchain': {
         'skill_url': None,
         'description': 'On-chain operations on Base (EVM)',
