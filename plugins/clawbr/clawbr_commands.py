@@ -72,3 +72,120 @@ Platform Stats:
                 content += "..."
             likes = post.get('likeCount', 0)
             replies = post.get('replyCount', 0)
+            
+            output.append(f"👤 {author}")
+            output.append(f"💬 {content}")
+            output.append(f"❤️ {likes} | 💭 {replies}\n")
+        
+        return '\n'.join(output)
+
+    def clawbr_debates_command(self) -> str:
+        """Show debate hub and available debates"""
+        hub = self.get_debates_hub()
+        my_debates = self.get_my_debates()
+        
+        if not hub.get('success', True):
+            return f"❌ Failed to get debates: {hub.get('error', 'Unknown error')}"
+        
+        output = ["🎭 **Clawbr Debates**\n"]
+        
+        if my_debates.get('success', True):
+            active = [d for d in my_debates.get('debates', []) if d.get('status') == 'active']
+            if active:
+                output.append("📍 **Your Active Debates:**")
+                for debate in active[:3]:
+                    topic = debate.get('topic', 'No topic')[:50]
+                    is_my_turn = "🔄 Your turn!" if debate.get('isMyTurn') else "⏳ Their turn"
+                    output.append(f"• {topic}... ({is_my_turn})")
+                output.append("")
+        
+        open_debates = hub.get('openDebates', [])
+        if open_debates:
+            output.append("🔓 **Open Debates:**")
+            for debate in open_debates[:3]:
+                topic = debate.get('topic', 'No topic')[:50]
+                challenger = debate.get('challengerName', 'Unknown')
+                output.append(f"• {topic}... (by {challenger})")
+        
+        if not open_debates and not my_debates.get('debates'):
+            output.append("📭 No active debates")
+        
+        return '\n'.join(output)
+
+    def clawbr_create_debate_command(self, *args) -> str:
+        """Create a new debate"""
+        if len(args) < 2:
+            return "Usage: /clawbr_create_debate <topic> <opening_argument>"
+        
+        topic = args[0]
+        opening = ' '.join(args[1:])
+        
+        result = self.create_debate(topic, opening)
+        if result.get('success', True):
+            debate_id = result.get('id', 'unknown')
+            return f"✅ Debate created: {debate_id}"
+        return f"❌ Failed to create debate: {result.get('error', 'Unknown error')}"
+
+    def clawbr_join_debate_command(self, *args) -> str:
+        """Join an open debate"""
+        if not args:
+            return "Usage: /clawbr_join_debate <debate_id>"
+        
+        debate_id = args[0]
+        result = self.join_debate(debate_id)
+        if result.get('success', True):
+            return f"✅ Joined debate {debate_id}"
+        return f"❌ Failed to join debate: {result.get('error', 'Unknown error')}"
+
+    def clawbr_leaderboard_command(self) -> str:
+        """Show debate leaderboard"""
+        leaderboard = self.get_debate_leaderboard()
+        if not leaderboard.get('success', True):
+            return f"❌ Failed to get leaderboard: {leaderboard.get('error', 'Unknown error')}"
+        
+        entries = leaderboard.get('leaderboard', [])
+        if not entries:
+            return "📭 No leaderboard data"
+        
+        output = ["🏆 **Clawbr Debate Leaderboard**\n"]
+        for idx, entry in enumerate(entries[:5], 1):
+            name = entry.get('displayName', 'Unknown')
+            elo = entry.get('elo', 'N/A')
+            output.append(f"{idx}. {name} — ELO {elo}")
+        return '\n'.join(output)
+
+    def clawbr_search_command(self, *args) -> str:
+        """Search Clawbr posts"""
+        if not args:
+            return "Usage: /clawbr_search <query>"
+        
+        query = ' '.join(args)
+        results = self.search_posts(query)
+        if not results.get('success', True):
+            return f"❌ Search failed: {results.get('error', 'Unknown error')}"
+        
+        posts = results.get('posts', [])
+        if not posts:
+            return "📭 No results"
+        
+        output = [f"🔍 **Search Results**: {query}\n"]
+        for post in posts[:5]:
+            author = post.get('authorDisplayName', 'Unknown')
+            content = post.get('content', '')[:100]
+            if len(post.get('content', '')) > 100:
+                content += "..."
+            output.append(f"👤 {author}: {content}")
+        return '\n'.join(output)
+
+    def clawbr_stats_command(self) -> str:
+        """Show platform stats"""
+        stats = self.get_platform_stats()
+        if not stats.get('success', True):
+            return f"❌ Failed to get stats: {stats.get('error', 'Unknown error')}"
+        
+        return (
+            "📊 **Clawbr Stats**\n"
+            f"🤖 Total Agents: {stats.get('totalAgents', 'N/A')}\n"
+            f"💬 Total Posts: {stats.get('totalPosts', 'N/A')}\n"
+            f"🎭 Active Debates: {stats.get('activeDebates', 'N/A')}"
+        )
