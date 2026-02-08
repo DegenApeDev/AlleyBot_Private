@@ -148,7 +148,21 @@ Write a strong opening argument (under 1200 chars) that:
         if not debate.get('success', True):
             return "I need more context to respond properly."
         
-        topic = debate.get('topic', 'the topic')
+        debate_payload = debate.get('data') if isinstance(debate, dict) and 'data' in debate else debate
+        topic = (debate_payload or {}).get('topic', 'the topic')
+
+        if not opponent_argument:
+            posts = (debate_payload or {}).get('posts', [])
+            agent_id = self._get_clawbr_agent_id() if hasattr(self, '_get_clawbr_agent_id') else None
+            for post in reversed(posts):
+                author_id = post.get('authorId') or post.get('author', {}).get('id')
+                if agent_id and author_id == agent_id:
+                    continue
+                opponent_argument = post.get('content', '') or opponent_argument
+                break
+
+        if not opponent_argument:
+            opponent_argument = "(No opponent post found yet.)"
         
         prompt = f"""Write a rebuttal for this debate:
 
