@@ -139,9 +139,19 @@ class ClawbrEngagementMixin:
         if not my_debates.get('success', True):
             return my_debates
         
+        debates = (
+            my_debates.get('debates')
+            or my_debates.get('active')
+            or my_debates.get('data', {}).get('debates', [])
+        )
+
+        def _is_active_debate(debate: Dict[str, Any]) -> bool:
+            status = debate.get('status')
+            return status is None or status == 'active'
+
         turns_taken = 0
-        for debate in my_debates.get('debates', []):
-            if debate.get('isMyTurn') and debate.get('status') == 'active':
+        for debate in debates:
+            if debate.get('isMyTurn') and _is_active_debate(debate):
                 slug = debate.get('slug')
                 opponent_last = debate.get('opponentLastPost', '')
                 
@@ -156,7 +166,7 @@ class ClawbrEngagementMixin:
         return {
             'success': True,
             'turns_taken': turns_taken,
-            'active_debates': len([d for d in my_debates.get('debates', []) if d.get('status') == 'active'])
+            'active_debates': len([d for d in debates if _is_active_debate(d)])
         }
 
     def _handle_debate_hub_actions(self) -> Dict[str, Any]:
