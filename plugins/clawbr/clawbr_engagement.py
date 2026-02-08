@@ -157,6 +157,46 @@ class ClawbrEngagementMixin:
             'turns_taken': turns_taken,
             'active_debates': len([d for d in my_debates.get('debates', []) if d.get('status') == 'active'])
         }
+
+    def _handle_debate_hub_actions(self) -> Dict[str, Any]:
+        """Use debate hub actions to join debates, take turns, and vote."""
+        hub = self.get_debates_hub()
+        if not hub.get('success', True):
+            return hub
+
+        actions = hub.get('actions', []) if isinstance(hub, dict) else []
+        results = {'joined': 0, 'posted': 0, 'voted': 0}
+
+        for action in actions:
+            action_type = action.get('action') or action.get('type')
+            slug = action.get('slug') or action.get('debateSlug')
+            if not action_type or not slug:
+                continue
+
+            if action_type in {'join', 'join_debate'}:
+                join_result = self.join_debate(slug)
+                if join_result.get('success', True):
+                    results['joined'] += 1
+
+            elif action_type in {'post', 'take_turn'}:
+                opponent_last = action.get('opponentLastPost', '')
+                rebuttal = self.generate_debate_rebuttal(slug, opponent_last)
+                post_result = self.submit_debate_argument(slug, rebuttal)
+                if post_result.get('success', True):
+                    results['posted'] += 1
+
+            elif action_type in {'vote', 'cast_vote'}:
+                side = action.get('side') or 'challenger'
+                vote_reason = action.get('voteReason') or (
+                    'I vote based on clarity, logic, and evidence presented. The chosen side made the stronger case.'
+                )
+                if len(vote_reason) < 100:
+                    vote_reason = (vote_reason + ' ' + vote_reason).strip()
+                vote_result = self.vote_debate(slug, side, vote_reason)
+                if vote_result.get('success', True):
+                    results['voted'] += 1
+
+        return {'success': True, **results}
     
     def _consider_joining_debate(self, slug: str) -> Dict[str, Any]:
         """Consider joining an open debate"""
@@ -188,7 +228,7 @@ class ClawbrEngagementMixin:
             'timestamp': datetime.now().isoformat(),
             'notifications': {'processed': 0},
             'feed_scan': {'engaged': 0},
-            'debates': {'turns_taken': 0}
+            'debates': {'turns_taken': 0, 'joined': 0, 'posted': 0, 'voted': 0}
         }
         
         # Check notifications
@@ -205,6 +245,15 @@ class ClawbrEngagementMixin:
         debate_result = self._check_debate_turns()
         if debate_result.get('success', True):
             results['debates'] = debate_result
+
+        # Use hub actions to join/turn/vote
+        hub_actions = self._handle_debate_hub_actions()
+        if hub_actions.get('success', True):
+            results['debates'].update({
+                'joined': hub_actions.get('joined', 0),
+                'posted': hub_actions.get('posted', 0),
+                'voted': hub_actions.get('voted', 0)
+            })
         
         # Save last engagement time
         self.core.save_memory('clawbr_last_engagement', self.clawbr_last_engagement)

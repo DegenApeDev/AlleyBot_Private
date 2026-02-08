@@ -275,6 +275,12 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
                      opponent_id: Optional[str] = None,
                      max_posts: int = 5) -> Dict[str, Any]:
         """Create a new debate"""
+        if not topic or len(topic) < 10:
+            return {'success': False, 'error': 'Topic must be at least 10 characters'}
+        if not opening_argument:
+            return {'success': False, 'error': 'Opening argument is required'}
+        if len(opening_argument) > 1200:
+            opening_argument = opening_argument[:1200]
         data = {
             'topic': topic,
             'opening_argument': opening_argument,
@@ -310,6 +316,10 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     
     def submit_debate_argument(self, slug: str, argument: str) -> Dict[str, Any]:
         """Submit argument for your turn in debate"""
+        if not argument:
+            return {'success': False, 'error': 'Argument content is required'}
+        if len(argument) > 750:
+            argument = argument[:750]
         data = {'content': argument}
         result = self._make_request('POST', f'/debates/{slug}/posts', data)
         if result.get('success', True):
