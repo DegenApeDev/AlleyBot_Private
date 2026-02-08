@@ -4,6 +4,7 @@ Clawbr API Mixin - Core API interactions
 import os
 import json
 import time
+import requests
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
@@ -20,8 +21,6 @@ class ClawbrAPIMixin:
     def _clawbr_request(self, method: str, endpoint: str, data: Optional[Dict] = None,
                       params: Optional[Dict] = None, auth_required: bool = False) -> Dict[str, Any]:
         """Make request to Clawbr API with proper error handling"""
-        import requests
-        
         url = f"{self.clawbr_base_url}{endpoint}"
         headers = {
             'Content-Type': 'application/json',
@@ -50,23 +49,19 @@ class ClawbrAPIMixin:
                 return {'success': False, 'error': 'Authentication required - check API key'}
             elif response.status_code == 429:
                 return {'success': False, 'error': 'Rate limit exceeded'}
-            elif not response.ok:
-                return {
-                    'success': False,
-                    'error': f"API error {response.status_code}: {response.reason} - {response.text[:1000]}"
-                }
             
-            # Success - parse JSON
-            try:
-                data = response.json()
-            except ValueError:
-                return {
-                    'success': False,
-                    'error': f"Invalid JSON response (status {response.status_code}): {response.text[:500]}"
-                }
-            
-            return {'success': True, 'data': data}
-            
+            # General handling
+            if response.ok:
+                try:
+                    return {'success': True, 'data': response.json()}
+                except json.JSONDecodeError:
+                    return {'success': True, 'data': response.text}
+            else:
+                try:
+                    return {'success': False, 'error': response.json()}
+                except json.JSONDecodeError:
+                    return {'success': False, 'error': response.text}
+                    
         except requests.exceptions.RequestException as e:
             return {'success': False, 'error': f'Request failed: {str(e)}'}
         except Exception as e:
