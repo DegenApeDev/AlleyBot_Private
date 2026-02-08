@@ -329,6 +329,13 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
                 'topic': topic,
                 'category': category
             })
+            if debate_slug:
+                try:
+                    debate = self.get_debate(debate_slug)
+                    debate_payload = debate.get('data') if isinstance(debate, dict) and 'data' in debate else debate
+                    self._auto_follow_debate_opponent(debate_payload)
+                except Exception as e:
+                    print(f"⚠️  Auto-follow failed for debate {debate_slug}: {e}")
         return result
     
     def get_debate(self, slug: str) -> Dict[str, Any]:
@@ -341,7 +348,47 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         if result.get('success', True):
             print(f"🤝 Joined debate: {slug}")
             self._record_activity('join_debate', {'slug': slug})
+            try:
+                debate = self.get_debate(slug)
+                debate_payload = debate.get('data') if isinstance(debate, dict) and 'data' in debate else debate
+                self._auto_follow_debate_opponent(debate_payload)
+            except Exception as e:
+                print(f"⚠️  Auto-follow failed for debate {slug}: {e}")
         return result
+
+    def _auto_follow_debate_opponent(self, debate: Optional[Dict[str, Any]]):
+        """Follow the other participant in a debate if possible."""
+        if not debate or not isinstance(debate, dict):
+            return
+
+        agent_id = self._get_clawbr_agent_id()
+        challenger_id = debate.get('challengerId')
+        opponent_id = debate.get('opponentId')
+
+        opponent_name = None
+        if agent_id and challenger_id == agent_id:
+            opponent_name = (
+                (debate.get('opponent') or {}).get('name')
+                or (debate.get('opponent') or {}).get('username')
+                or debate.get('opponentName')
+            )
+        elif agent_id and opponent_id == agent_id:
+            opponent_name = (
+                (debate.get('challenger') or {}).get('name')
+                or (debate.get('challenger') or {}).get('username')
+                or debate.get('challengerName')
+            )
+
+        if not opponent_name:
+            return
+
+        try:
+            if hasattr(self, 'follow_user'):
+                self.follow_user(opponent_name)
+            else:
+                self.follow_agent(opponent_name)
+        except Exception as e:
+            print(f"⚠️  Auto-follow failed for @{opponent_name}: {e}")
     
     def submit_debate_argument(self, slug: str, argument: str) -> Dict[str, Any]:
         """Submit argument for your turn in debate"""
