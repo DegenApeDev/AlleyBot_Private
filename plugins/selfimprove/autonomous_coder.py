@@ -338,6 +338,16 @@ Return ONLY valid JSON, no markdown or explanation."""
                         lines.append(f"{rel}/: {', '.join(py_files)}")
         return '\n'.join(lines[:30])
 
+    def _get_valid_test_modules(self) -> set:
+        """Discover which test modules actually exist on disk (tests/test_*.py)"""
+        valid = set()
+        tests_dir = os.path.join(self.project_root, 'tests')
+        if os.path.isdir(tests_dir):
+            for f in os.listdir(tests_dir):
+                if f.startswith('test_') and f.endswith('.py'):
+                    valid.add(f'tests.{f[:-3]}')
+        return valid
+
     def _scope_test_modules(self, plan: Dict) -> List[str]:
         """Determine which test modules to run based on files being changed.
         
@@ -345,6 +355,8 @@ Return ONLY valid JSON, no markdown or explanation."""
         be affected by the changed files. Falls back to a minimal smoke test
         if no specific mapping is found.
         """
+        valid_modules = self._get_valid_test_modules()
+
         # Map file path prefixes to relevant test modules
         prefix_to_tests = {
             'plugins/moltx/': ['tests.test_phase2'],
@@ -375,14 +387,22 @@ Return ONLY valid JSON, no markdown or explanation."""
                 # Unknown path — add core smoke test
                 needed.add('tests.test_fixes')
 
-        # If plan specified test_modules, honour them as additions
+        # If plan specified test_modules, only add ones that actually exist
         plan_modules = plan.get('test_modules', [])
-        if plan_modules:
-            needed.update(plan_modules)
+        for mod in plan_modules:
+            if mod in valid_modules:
+                needed.add(mod)
+            else:
+                print(f"  ⚠️  Ignoring bogus test module from plan: {mod}")
 
         # If only skill .md files changed, no Python tests needed — just syntax checks
         if not needed:
             # Still run a minimal smoke test to make sure nothing is broken
+            needed.add('tests.test_fixes')
+
+        # Final safety: filter out anything that doesn't exist
+        needed = needed & valid_modules
+        if not needed:
             needed.add('tests.test_fixes')
 
         result = sorted(needed)
