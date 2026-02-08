@@ -17,9 +17,10 @@ CHAIN_ID = 1  # Ethereum mainnet
 AGENT_NAME = "AlleyBot"
 AGENT_DESCRIPTION = (
     "Autonomous AI agent with advanced capabilities across Moltx, MoltBook, MoltChan, "
-    "and MoltRoad. Features AI-powered content generation, intelligent engagement, "
+    "MoltRoad, and Clawbr. Features AI-powered content generation, intelligent engagement, "
     "on-chain awareness (Base network), self-improvement, trending analysis, "
-    "and multi-platform presence."
+    "multi-platform presence, multi-agent collaboration, reputation tracking, "
+    "and on-chain actions (tipping, contract interaction). ERC-8004 Agent #22899."
 )
 AGENT_IMAGE = "https://blob.8004scan.app/3d2fb26e34f0c9a4c083adce2449905ff37a74c5fd3132114bddb69d69468ac7.jpg"
 AGENT_WALLET = "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5"
@@ -55,12 +56,27 @@ PLUGIN_SKILL_MAP = {
             'natural_language_processing/natural_language_generation/summarization',
         ],
     },
+    'clawbr': {
+        'category': 'advanced_reasoning_planning',
+        'skills': [
+            'advanced_reasoning_planning/debate_argumentation',
+            'advanced_reasoning_planning/strategic_planning',
+            'evaluation_monitoring/quality_evaluation',
+        ],
+    },
     'onchain': {
         'category': 'blockchain',
         'skills': [
             'analytical_skills/data_analysis/blockchain_analysis',
             'tool_interaction/api_schema_understanding',
             'evaluation_monitoring/performance_monitoring',
+        ],
+    },
+    'crypto': {
+        'category': 'blockchain',
+        'skills': [
+            'analytical_skills/data_analysis/market_analysis',
+            'analytical_skills/data_analysis/trend_analysis',
         ],
     },
     'selfimprove': {
@@ -102,6 +118,20 @@ PLUGIN_SKILL_MAP = {
             'agent_orchestration/agent_coordination',
             'agent_orchestration/negotiation_resolution',
             'tool_interaction/api_schema_understanding',
+        ],
+    },
+    'mcp': {
+        'category': 'information_gathering',
+        'skills': [
+            'natural_language_processing/information_retrieval_synthesis/search',
+            'natural_language_processing/information_retrieval_synthesis/knowledge_base_reasoning',
+        ],
+    },
+    'engagement': {
+        'category': 'interaction',
+        'skills': [
+            'interaction/user_engagement',
+            'interaction/engagement_optimization',
         ],
     },
 }
@@ -203,16 +233,23 @@ class AgentCardGenerator:
         loaded = self._get_loaded_plugins()
 
         capability_map = {
-            'moltx': ['content_generation', 'cross_platform_posting', 'autonomous_engagement'],
-            'moltbook': ['forum_posting', 'community_building'],
-            'moltchan': ['channel_posting'],
-            'moltroad': ['roadmap_tracking'],
-            'onchain': ['on_chain_awareness', 'token_tracking', 'wallet_management'],
-            'selfimprove': ['self_improvement', 'autonomous_coding', 'skill_marketplace'],
-            'brain': ['autonomous_decision_making', 'ai_reasoning'],
-            'telegram': ['natural_language_interface', 'tool_dispatch'],
-            'analytics': ['performance_analytics', 'dashboard'],
-            'a2a': ['agent_to_agent_protocol', 'task_delegation', 'agent_discovery'],
+            'moltx': ['content_generation', 'cross_platform_posting', 'autonomous_engagement', 'trending_analysis'],
+            'moltbook': ['forum_posting', 'community_building', 'karma_optimization'],
+            'moltchan': ['channel_posting', 'community_engagement'],
+            'moltroad': ['roadmap_tracking', 'project_monitoring'],
+            'clawbr': ['ai_debate', 'argumentation', 'elo_ranking', 'strategic_debate'],
+            'onchain': ['on_chain_awareness', 'token_tracking', 'wallet_management', 'contract_interaction'],
+            'crypto': ['price_monitoring', 'market_analysis', 'trend_detection'],
+            'selfimprove': ['self_improvement', 'autonomous_coding', 'skill_marketplace', 'code_generation'],
+            'brain': ['autonomous_decision_making', 'ai_reasoning', 'dynamic_skill_chaining', 'capability_gap_detection'],
+            'telegram': ['natural_language_interface', 'tool_dispatch', 'owner_control'],
+            'analytics': ['performance_analytics', 'dashboard', 'agent_card_generation'],
+            'a2a': ['agent_to_agent_protocol', 'task_delegation', 'agent_discovery', 'a2a_messaging'],
+            'mcp': ['web_search', 'research', 'information_synthesis'],
+            'engagement': ['smart_engagement', 'engagement_optimization'],
+            'intelligence': ['sentiment_analysis', 'content_optimization'],
+            'multi_agent': ['agent_detection', 'agent_collaboration', 'cross_agent_communication'],
+            'reputation': ['reputation_tracking', 'reputation_optimization', 'platform_scoring'],
         }
 
         for plugin_name, plugin_caps in capability_map.items():
@@ -220,7 +257,7 @@ class AgentCardGenerator:
                 caps.extend(plugin_caps)
 
         # Always include base capabilities
-        caps.extend(['x402_payments', 'erc8004_identity'])
+        caps.extend(['x402_payments', 'erc8004_identity', 'health_monitoring', 'rate_limiting'])
 
         return list(dict.fromkeys(caps))  # dedupe preserving order
 
@@ -234,6 +271,7 @@ class AgentCardGenerator:
             'moltbook': {"name": "MoltBook", "handle": "AlleyBot", "url": "https://www.moltbook.com/u/AlleyBot"},
             'moltchan': {"name": "MoltChan", "handle": "AlleyBot"},
             'moltroad': {"name": "MoltRoad", "handle": "AlleyBot"},
+            'clawbr': {"name": "Clawbr", "handle": "AlleyBot", "url": "https://www.clawbr.org/user/AlleyBot"},
         }
 
         for plugin_name, info in platform_info.items():
@@ -247,6 +285,53 @@ class AgentCardGenerator:
                 platforms.append(entry)
 
         return platforms
+
+    def schedule_auto_update(self, interval_hours: int = 24):
+        """
+        Schedule automatic agent card updates
+        
+        Args:
+            interval_hours: Hours between auto-updates (default 24)
+        """
+        import threading
+        import time
+
+        def auto_update_loop():
+            while True:
+                try:
+                    print(f"🔄 Auto-updating ERC-8004 agent card (scheduled every {interval_hours}h)...")
+                    result = self.update_onchain(dry_run=False)
+                    if "✅" in result:
+                        print(f"✅ Auto-update successful")
+                    else:
+                        print(f"⚠️ Auto-update issue: {result[:200]}")
+                except Exception as e:
+                    print(f"❌ Auto-update failed: {e}")
+                
+                # Sleep for interval hours
+                time.sleep(interval_hours * 3600)
+
+        # Start auto-update thread
+        update_thread = threading.Thread(target=auto_update_loop, daemon=True, name='agent-card-auto-update')
+        update_thread.start()
+        print(f"🔄 Agent card auto-update scheduled every {interval_hours} hours")
+
+    def get_agent_card_status(self) -> Dict[str, Any]:
+        """Get current agent card status and info"""
+        card = self.generate()
+        
+        return {
+            'agent_id': AGENT_ID,
+            'name': AGENT_NAME,
+            'version': card.get('version'),
+            'skills_count': len(self._collect_skills()),
+            'capabilities_count': len(card.get('capabilities', [])),
+            'plugins_loaded': len(self._get_loaded_plugins()),
+            'platforms': [p['name'] for p in card.get('platforms', [])],
+            'last_updated': card.get('lastUpdated'),
+            'wallet': AGENT_WALLET,
+            'registry_url': f"https://www.8004scan.io/agents/ethereum/{AGENT_ID}",
+        }
 
     def _build_a2a_skills(self) -> list:
         """Build A2A skill objects from the task registry with full schema + pricing."""

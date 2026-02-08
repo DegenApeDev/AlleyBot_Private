@@ -29,6 +29,8 @@ class AnalyticsPlugin(AlleyBotPlugin):
         self.aggregator = PlatformStatsAggregator(core)
         self.agent_card = AgentCardGenerator(core)
         self._setup_dashboard()
+        # Start agent card auto-updater (updates every 24 hours)
+        self.agent_card.schedule_auto_update(interval_hours=24)
         print("📊 Analytics system initialized")
     
     def get_tasks(self):
@@ -48,7 +50,10 @@ class AnalyticsPlugin(AlleyBotPlugin):
             'stats': self.show_stats,
             'metrics': self.show_metrics,
             'analytics': self.analytics_status,
-            'wallets': self.show_wallets
+            'wallets': self.show_wallets,
+            'agentcard': self.agentcard_status_command,
+            'agentcard_update': self.agentcard_update_command,
+            'agentcard_dryrun': self.agentcard_dryrun_command,
         }
     
     def get_endpoints(self):
@@ -726,4 +731,44 @@ class AnalyticsPlugin(AlleyBotPlugin):
     def cleanup(self):
         """Cleanup analytics systems"""
         pass
+
+    # Agent Card Commands
+    def agentcard_status_command(self, *args) -> str:
+        """Show current agent card status"""
+        try:
+            status = self.agent_card.get_agent_card_status()
+            
+            output = f"🆔 ERC-8004 Agent Card Status\n\n"
+            output += f"Agent ID: {status['agent_id']}\n"
+            output += f"Name: {status['name']}\n"
+            output += f"Version: {status['version']}\n"
+            output += f"Skills (OASF): {status['skills_count']}\n"
+            output += f"Capabilities: {status['capabilities_count']}\n"
+            output += f"Plugins Loaded: {status['plugins_loaded']}\n"
+            output += f"Platforms: {', '.join(status['platforms'])}\n"
+            output += f"Wallet: {status['wallet'][:20]}...\n"
+            output += f"Last Updated: {status['last_updated'][:19] if status['last_updated'] else 'Never'}\n\n"
+            output += f"🔗 8004scan.io: {status['registry_url']}\n"
+            output += f"🔗 Agent Card JSON: http://localhost:{self.dashboard_port}/.well-known/agent-card.json\n"
+            
+            return output
+        except Exception as e:
+            return f"❌ Failed to get agent card status: {e}"
+
+    def agentcard_update_command(self, *args) -> str:
+        """Update agent card on-chain at 8004scan.io"""
+        try:
+            print("🔄 Starting on-chain agent card update...")
+            result = self.agent_card.update_onchain(dry_run=False)
+            return result
+        except Exception as e:
+            return f"❌ Failed to update agent card: {e}"
+
+    def agentcard_dryrun_command(self, *args) -> str:
+        """Preview agent card update without sending to chain"""
+        try:
+            result = self.agent_card.update_onchain(dry_run=True)
+            return result
+        except Exception as e:
+            return f"❌ Dry run failed: {e}"
 
