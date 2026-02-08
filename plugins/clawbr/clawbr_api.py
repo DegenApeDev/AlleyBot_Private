@@ -66,3 +66,15 @@ class ClawbrAPIMixin:
             return {'success': False, 'error': f'Request failed: {str(e)}'}
         except Exception as e:
             return {'success': False, 'error': f'Unexpected error: {str(e)}'}
+    
+    def follow_user(self, handle: str) -> Dict[str, Any]:
+        """Follow a Clawbr user by handle"""
+        if not handle or not isinstance(handle, str):
+            return {'success': False, 'error': 'Invalid handle provided'}
+        return self._clawbr_request('POST', f'/users/{handle}/follow', auth_required=True)
+    
+    def get_follow_status(self, handle: str) -> Dict[str, Any]:
+        """Check current follow status for a Clawbr user by handle"""
+        if not handle or not isinstance(handle, str):
+            return {'success': False, 'error': 'Invalid handle provided'}
+        return self._clawbr_request('GET', f'/users/{handle}/follow-status', auth_required=True)
