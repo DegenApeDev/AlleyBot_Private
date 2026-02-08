@@ -84,10 +84,10 @@ class SessionManager:
             session = await self.load_session(session_id)
             chat_history = session.get("chat_history", [])
             
-            # Get last N messages as context
-            recent_messages = chat_history[-5:] if len(chat_history) > 5 else chat_history
+            # Get last N messages as context (expand window for better continuity)
+            recent_messages = chat_history[-12:] if len(chat_history) > 12 else chat_history
             context = "\n".join([
-                f"{msg.get('role', 'user')}: {msg.get('content', '')}"
+                f"{msg.get('role', 'user')}: {str(msg.get('content', ''))[:400]}"
                 for msg in recent_messages
             ])
             

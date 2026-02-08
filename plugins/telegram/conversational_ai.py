@@ -107,6 +107,20 @@ class ConversationalAI:
             
             # Add conversation context to message
             context_message = self._build_context_message(user_id, message)
+
+            # Pull additional RAG context from session storage if available
+            rag_context = ""
+            session_manager = None
+            try:
+                from src.agents.session_manager import SessionManager
+                session_manager = SessionManager()
+                session_id = f"telegram_{user_id}"
+                rag_context = await session_manager.get_rag_context(session_id, message, max_tokens=1500)
+            except Exception as e:
+                print(f"⚠️  RAG context fetch failed: {e}")
+
+            if rag_context:
+                context_message = f"Context from memory:\n{rag_context}\n\n{context_message}"
             
             # Run through agentic system
             print(f"🤖 Processing: {message}")
@@ -132,6 +146,13 @@ class ConversationalAI:
             
             # Save to persistent memory
             self._save_conversation_memory()
+
+            # Update session RAG memory if available
+            if session_manager:
+                try:
+                    await session_manager.update_rag_memory(session_id, message, response)
+                except Exception as e:
+                    print(f"⚠️  RAG memory update failed: {e}")
             
             return response
             
@@ -165,17 +186,18 @@ class ConversationalAI:
         if len(history) <= 1:
             return message
         
-        # Build full conversation context (last 10 messages, full content)
+        # Build full conversation context (last 20 messages, truncated)
         context_parts = []
         context_parts.append("=== Conversation History ===")
         
-        # Include last 10 messages for better context
-        recent_history = history[-10:-1]  # Exclude current message
+        # Include last 20 messages for better context
+        recent_history = history[-20:-1]  # Exclude current message
         for i, msg in enumerate(recent_history, 1):
             role = "AlleyBot" if msg['role'] == 'assistant' else "Admin"
             timestamp = msg.get('timestamp', '')
             time_str = f"[{timestamp[-8:-3]}] " if timestamp else ""
-            context_parts.append(f"{i}. {time_str}{role}: {msg['content']}")
+            content = str(msg.get('content', ''))[:400]
+            context_parts.append(f"{i}. {time_str}{role}: {content}")
         
         context_parts.append(f"\n=== Current Request ===")
         context_parts.append(f"Admin: {message}")
@@ -213,6 +235,20 @@ class ConversationalAI:
             
             # Build context for AI
             user_prompt = self._build_context_message(int(user_id), message) if user_id else message
+
+            # Pull additional RAG context from session storage if available
+            session_manager = None
+            session_id = None
+            try:
+                from src.agents.session_manager import SessionManager
+                session_manager = SessionManager()
+                session_id = f"telegram_{user_id}" if user_id else None
+                if session_id:
+                    rag_context = await session_manager.get_rag_context(session_id, message, max_tokens=1500)
+                    if rag_context:
+                        user_prompt = f"Context from memory:\n{rag_context}\n\n{user_prompt}"
+            except Exception as e:
+                print(f"⚠️  RAG context fetch failed: {e}")
 
             # Try Grok first (better reasoning for tool use)
             response_text = None
@@ -257,6 +293,12 @@ class ConversationalAI:
                 })
                 self._save_conversation_memory()
             
+            if session_manager and session_id:
+                try:
+                    await session_manager.update_rag_memory(session_id, message, final_response)
+                except Exception as e:
+                    print(f"⚠️  RAG memory update failed: {e}")
+
             return final_response
 
         except Exception as e:
