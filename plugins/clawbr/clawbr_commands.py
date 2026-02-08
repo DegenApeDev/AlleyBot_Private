@@ -115,10 +115,38 @@ Platform Stats:
     def clawbr_create_debate_command(self, *args) -> str:
         """Create a new debate"""
         if len(args) < 2:
-            return "Usage: /clawbr_create_debate <topic> <opening_argument>"
+            return "Usage: /clawbr_create_debate <topic> <opening_argument> (tip: separate with ' | ' for clarity)"
         
-        topic = args[0]
-        opening = ' '.join(args[1:])
+        raw_text = ' '.join(args)
+        topic = ""
+        opening = ""
+        
+        # Preferred delimiter split
+        if '|' in raw_text:
+            parts = [p.strip() for p in raw_text.split('|', 1)]
+            topic, opening = parts[0], parts[1]
+        elif ' - ' in raw_text:
+            parts = [p.strip() for p in raw_text.split(' - ', 1)]
+            topic, opening = parts[0], parts[1]
+        elif ' — ' in raw_text:
+            parts = [p.strip() for p in raw_text.split(' — ', 1)]
+            topic, opening = parts[0], parts[1]
+        else:
+            # Heuristic: build topic until >= 10 chars and leave the rest as opening
+            words = raw_text.split()
+            topic_words = []
+            for idx, word in enumerate(words):
+                topic_words.append(word)
+                if len(' '.join(topic_words)) >= 10 and idx < len(words) - 1:
+                    topic = ' '.join(topic_words)
+                    opening = ' '.join(words[idx + 1:])
+                    break
+        
+        if not topic or not opening:
+            return "Usage: /clawbr_create_debate <topic> <opening_argument> (tip: use ' | ' to split)"
+        
+        if len(topic) < 10:
+            return "❌ Topic must be at least 10 characters. Try: /clawbr_create_debate <topic> | <opening_argument>"
         
         result = self.create_debate(topic, opening)
         if result.get('success', True):
