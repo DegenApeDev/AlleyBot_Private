@@ -20,6 +20,7 @@ class ConversationalAI:
         self.agentic_system = agentic_system
         self.admin_chat_id = os.getenv('TELEGRAM_ADMIN_CHAT_ID')
         self.conversation_history = {}
+        self._load_conversation_memory()
         
     def set_agentic_system(self, agentic_system):
         """Set the agentic system after initialization"""
@@ -93,14 +94,16 @@ class ConversationalAI:
             if user_id not in self.conversation_history:
                 self.conversation_history[user_id] = []
             
+            import datetime
             self.conversation_history[user_id].append({
                 'role': 'user',
-                'content': message
+                'content': message,
+                'timestamp': datetime.datetime.now().isoformat()
             })
             
-            # Keep last 10 messages for context
-            if len(self.conversation_history[user_id]) > 10:
-                self.conversation_history[user_id] = self.conversation_history[user_id][-10:]
+            # Keep last 50 messages for better context
+            if len(self.conversation_history[user_id]) > 50:
+                self.conversation_history[user_id] = self.conversation_history[user_id][-50:]
             
             # Add conversation context to message
             context_message = self._build_context_message(user_id, message)
@@ -120,16 +123,40 @@ class ConversationalAI:
                 response = f"❌ {result.get('error', 'Task failed')}"
             
             # Store assistant response
+            import datetime
             self.conversation_history[user_id].append({
                 'role': 'assistant',
-                'content': response
+                'content': response,
+                'timestamp': datetime.datetime.now().isoformat()
             })
+            
+            # Save to persistent memory
+            self._save_conversation_memory()
             
             return response
             
         except Exception as e:
             print(f"❌ Agentic response error: {e}")
             return f"❌ Error processing request: {e}"
+    
+    def _load_conversation_memory(self):
+        """Load conversation history from core memory"""
+        try:
+            if self.core:
+                saved = self.core.get_memory('telegram_conversation_history') or {}
+                self.conversation_history = saved
+                print(f"📝 Loaded {len(saved)} conversation histories from memory")
+        except Exception as e:
+            print(f"⚠️  Failed to load conversation memory: {e}")
+            self.conversation_history = {}
+    
+    def _save_conversation_memory(self):
+        """Save conversation history to core memory"""
+        try:
+            if self.core:
+                self.core.save_memory('telegram_conversation_history', self.conversation_history)
+        except Exception as e:
+            print(f"⚠️  Failed to save conversation memory: {e}")
     
     def _build_context_message(self, user_id: int, message: str) -> str:
         """Build message with conversation context"""
@@ -138,27 +165,54 @@ class ConversationalAI:
         if len(history) <= 1:
             return message
         
-        # Add recent context
-        context = "Recent conversation:\n"
-        for msg in history[-5:-1]:  # Last 4 messages (excluding current)
-            role = "You" if msg['role'] == 'assistant' else "Admin"
-            context += f"{role}: {msg['content'][:100]}\n"
+        # Build full conversation context (last 10 messages, full content)
+        context_parts = []
+        context_parts.append("=== Conversation History ===")
         
-        context += f"\nCurrent request: {message}"
-        return context
+        # Include last 10 messages for better context
+        recent_history = history[-10:-1]  # Exclude current message
+        for i, msg in enumerate(recent_history, 1):
+            role = "AlleyBot" if msg['role'] == 'assistant' else "Admin"
+            timestamp = msg.get('timestamp', '')
+            time_str = f"[{timestamp[-8:-3]}] " if timestamp else ""
+            context_parts.append(f"{i}. {time_str}{role}: {msg['content']}")
+        
+        context_parts.append(f"\n=== Current Request ===")
+        context_parts.append(f"Admin: {message}")
+        
+        return "\n".join(context_parts)
     
     async def _fallback_response(self, message: str) -> str:
         """
         Intelligent response using Grok reasoning + tool dispatch.
         Understands natural language requests and can execute AlleyBot commands.
         Falls back to DeepSeek if Grok is unavailable.
+        Includes conversation history for better context.
         """
         try:
             # Build tool-aware system prompt
             system_prompt = self._build_tool_aware_prompt()
 
-            # Build conversation context
-            user_prompt = message
+            # Build conversation context (use same logic as agentic path)
+            # Store user message first
+            user_id = self.admin_chat_id  # Only admin uses this
+            if user_id:
+                if user_id not in self.conversation_history:
+                    self.conversation_history[user_id] = []
+                
+                import datetime
+                self.conversation_history[user_id].append({
+                    'role': 'user',
+                    'content': message,
+                    'timestamp': datetime.datetime.now().isoformat()
+                })
+                
+                # Keep last 50 messages
+                if len(self.conversation_history[user_id]) > 50:
+                    self.conversation_history[user_id] = self.conversation_history[user_id][-50:]
+            
+            # Build context for AI
+            user_prompt = self._build_context_message(int(user_id), message) if user_id else message
 
             # Try Grok first (better reasoning for tool use)
             response_text = None
@@ -191,10 +245,19 @@ class ConversationalAI:
 
             # Check if the AI wants to execute a command
             executed = self._try_execute_command(response_text)
-            if executed:
-                return executed
-
-            return response_text
+            final_response = executed if executed else response_text
+            
+            # Store assistant response in conversation history
+            if user_id:
+                import datetime
+                self.conversation_history[user_id].append({
+                    'role': 'assistant',
+                    'content': final_response,
+                    'timestamp': datetime.datetime.now().isoformat()
+                })
+                self._save_conversation_memory()
+            
+            return final_response
 
         except Exception as e:
             print(f"❌ Intelligent response error: {e}")
