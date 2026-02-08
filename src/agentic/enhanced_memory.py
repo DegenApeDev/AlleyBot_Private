@@ -441,6 +441,37 @@ class EnhancedMemorySystem:
                 
                 self._save_vector_store()
     
+    def advanced_prune(self, max_age_days: int = 30, min_relevance: float = 0.3) -> Dict:
+        """
+        Phase 12.5: Advanced memory pruning with intelligent policies
+        Returns pruning statistics
+        """
+        try:
+            from .phase12_pruning import MemoryPruner, MemoryPruningPolicy, auto_prune_memory
+            
+            policy = MemoryPruningPolicy(
+                max_age_days=max_age_days,
+                min_relevance_score=min_relevance,
+                preserve_types=['goal', 'learning', 'on_chain_event'],
+                preserve_goals=True,
+                preserve_learning=True
+            )
+            
+            return auto_prune_memory(self, policy)
+        except Exception as e:
+            print(f"⚠️ Error in advanced pruning: {e}")
+            return {'error': str(e)}
+    
+    def get_pruning_report(self) -> Dict:
+        """Get memory pruning activity report"""
+        try:
+            from .phase12_pruning import MemoryPruningPolicy, MemoryPruner
+            pruner = MemoryPruner(MemoryPruningPolicy())
+            return pruner.get_pruning_report()
+        except Exception as e:
+            print(f"⚠️ Error getting pruning report: {e}")
+            return {'error': str(e)}
+    
     def get_memory_stats(self) -> Dict[str, Any]:
         """Get memory system statistics"""
         stats = {

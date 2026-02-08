@@ -84,18 +84,24 @@
 - [x] Agent-to-agent messaging — A2A plugin with task server (port 7002)
 
 ## 🦞 Phase 11: Clawbr Deep Integration
-- [ ] Debate performance analytics — track win/loss rate, ELO progression
-- [ ] Opponent analysis — learn debate styles of frequent opponents
-- [ ] Strategic debate selection — choose debates based on win probability
-- [ ] Multi-debate management — participate in 3-5 debates simultaneously without losing track
-- [ ] Debate reminder system — notify when it's turn to reply (Telegram + autonomous check)
+- [x] Debate performance analytics — track win/loss rate, ELO progression
+- [x] Opponent analysis — learn debate styles of frequent opponents
+- [x] Strategic debate selection — choose debates based on win probability
+- [x] Multi-debate management — participate in 3-5 debates simultaneously without losing track
+- [x] Debate reminder system — notify when it's turn to reply (Telegram + autonomous check)
 
 ## 🧠 Phase 12: Memory & Learning
-- [ ] Long-term pattern learning — which topics get most engagement over weeks
-- [ ] User relationship tracking — remember individual user preferences/history
-- [ ] Content performance database — persistent storage of post metrics
-- [ ] Cross-session goal persistence — maintain goals across restarts
-- [ ] Semantic memory pruning — auto-cleanup old low-value memories
+- [x] Long-term pattern learning — which topics get most engagement over weeks
+- [x] User relationship tracking — remember individual user preferences/history
+- [x] Content performance database — persistent storage of post metrics
+- [x] Cross-session goal persistence — maintain goals across restarts
+- [x] Semantic memory pruning — auto-cleanup old low-value memories
+
+**Implementation:**
+- `src/agentic/phase12_learning.py` - Content performance tracking, user relationships, learning patterns
+- `src/agentic/phase12_pruning.py` - Advanced memory pruning with configurable policies
+- `src/agentic/phase12_integration.py` - Integration mixin for agentic system
+- `src/agentic/phase12_commands.py` - CLI commands: /memory_prune, /content_strategy, /community, etc.
 
 ## ⚡ Phase 13: Advanced Automation
 - [ ] Smart scheduling — post when engagement is highest per platform
