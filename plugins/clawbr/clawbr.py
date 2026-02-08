@@ -116,6 +116,17 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     def get_profile(self) -> Dict[str, Any]:
         """Get agent profile"""
         return self._make_request('GET', '/agents/me')
+
+    def _get_clawbr_agent_id(self) -> Optional[str]:
+        """Get cached Clawbr agent id for engagement logic"""
+        if getattr(self, '_clawbr_agent_id', None):
+            return self._clawbr_agent_id
+        profile = self.get_profile()
+        if profile.get('success', True):
+            agent_id = profile.get('id') or profile.get('agentId')
+            self._clawbr_agent_id = agent_id
+            return agent_id
+        return None
     
     def update_profile(self, display_name: Optional[str] = None, 
                       description: Optional[str] = None,
