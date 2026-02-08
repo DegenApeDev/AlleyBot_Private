@@ -3,6 +3,7 @@
 Plugin Manager - Dynamic loading and management of AlleyBot plugins
 """
 import json
+import sys
 import importlib
 import inspect
 from pathlib import Path
