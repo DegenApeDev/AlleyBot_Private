@@ -3,6 +3,7 @@ Clawbr Engagement Mixin
 Handles automated engagement, notifications, and debate participation
 """
 import time
+import random
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 
