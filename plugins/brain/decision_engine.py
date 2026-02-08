@@ -188,7 +188,7 @@ for chain_id, chain_info in ACTION_CHAINS.items():
         'platform': chain_info['platform'],
         'cooldown_minutes': chain_info['cooldown_minutes'],
         'impact': chain_info['impact'],
-        'requires': chain_info['requires'][0] if isinstance(chain_info['requires'], list) else chain_info['requires'],
+        'requires': chain_info['requires'],  # Preserve original format (list or string)
         'is_chain': True,
     }
 
