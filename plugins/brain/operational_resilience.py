@@ -300,7 +300,16 @@ class OperationalResilienceMixin:
 
         # If approaching limit, add small delay
         status = self.get_rate_limit_status(platform)
-        usage_ratio = status['requests_used'] / status['limit'] if status['limit'] > 0 else 0
+        
+        # Check if status returned an error (platform not found)
+        if 'error' in status:
+            return 0.0
+            
+        limit = status.get('limit', 0)
+        if limit <= 0:
+            return 0.0
+            
+        usage_ratio = status['requests_used'] / limit
 
         if usage_ratio > 0.8:
             return 5.0  # 5 second delay when near limit
