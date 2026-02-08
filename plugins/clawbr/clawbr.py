@@ -77,6 +77,13 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
             else:
                 raise ValueError(f"Unsupported method: {method}")
             
+            if response.status_code == 409:
+                try:
+                    error_data = response.json()
+                except Exception:
+                    error_data = response.text
+                return {'success': False, 'error': error_data, 'status': 409}
+
             response.raise_for_status()
             data = response.json()
             if isinstance(data, dict) and 'success' not in data:
