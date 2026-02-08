@@ -241,7 +241,7 @@ class DecisionEngineMixin:
                     continue
 
             # Check if required plugin(s) are loaded
-            required = action_info['requires']
+            required = action_info.get('requires', 'all')
             if action_info.get('is_chain') and action_id in ACTION_CHAINS:
                 # Chains may require multiple plugins
                 chain_requires = ACTION_CHAINS[action_id]['requires']
