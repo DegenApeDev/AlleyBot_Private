@@ -195,6 +195,96 @@ Write a rebuttal (under 750 chars) that:
             rebuttal = f"While I see your point about {opponent_argument[:30]}..., I believe the evidence suggests otherwise. The key consideration is..."
         
         return rebuttal
+
+    def create_intelligent_debate(self, user_request: str, category: Optional[str] = None) -> Dict[str, Any]:
+        """Create a debate from natural language using Grok to generate topic and opening argument"""
+        from grok_ai import grok_ai
+        from deepseek_ai import deepseek_ai
+        
+        # Build prompt to extract/generate debate parameters
+        prompt = f"""The user wants to create a debate with this request: "{user_request}"
+
+Your task: Generate a debate topic and opening argument.
+
+Respond in this exact JSON format:
+{{
+    "topic": "Clear, specific debate topic (10-100 characters)",
+    "opening_argument": "Strong opening argument (100-1200 characters)",
+    "category": "One of: philosophy, technology, ethics, politics, science, economics, general"
+}}
+
+Requirements:
+- Topic must be clear, specific, and debatable (at least 10 characters)
+- Opening argument must take a clear stance with 2-3 supporting points
+- Category should match the subject matter"""
+        
+        # Try to get structured response
+        result = None
+        try:
+            if grok_ai.enabled:
+                response = grok_ai.chat(prompt, max_tokens=500)
+                result = self._parse_debate_generation_response(response)
+        except Exception as e:
+            print(f"⚠️ Grok debate generation failed: {e}")
+        
+        if not result and deepseek_ai.enabled:
+            try:
+                response = deepseek_ai.chat(prompt, max_tokens=500)
+                result = self._parse_debate_generation_response(response)
+            except Exception as e:
+                print(f"⚠️ DeepSeek debate generation failed: {e}")
+        
+        # Fallback: use user request directly with generated opening
+        if not result:
+            topic = user_request[:100] if len(user_request) > 10 else f"Debate: {user_request}"
+            opening = self.generate_debate_opening(topic, category or 'general')
+            result = {
+                'topic': topic,
+                'opening_argument': opening,
+                'category': category or 'general'
+            }
+        
+        # Validate and create debate
+        if len(result['topic']) < 10:
+            result['topic'] = f"Debate on: {result['topic']}"
+        
+        return self.create_debate(
+            topic=result['topic'],
+            opening_argument=result['opening_argument'],
+            category=result.get('category', category)
+        )
+    
+    def _parse_debate_generation_response(self, response: str) -> Optional[Dict[str, Any]]:
+        """Parse AI response for debate generation"""
+        import json
+        import re
+        
+        if not response:
+            return None
+        
+        try:
+            # Try direct JSON parsing
+            return json.loads(response)
+        except json.JSONDecodeError:
+            pass
+        
+        # Try to extract JSON from markdown code blocks
+        try:
+            json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group(1))
+        except:
+            pass
+        
+        # Try to extract any JSON-like structure
+        try:
+            json_match = re.search(r'\{.*"topic".*"opening_argument".*\}', response, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+        except:
+            pass
+        
+        return None
     
     def _get_content_context(self) -> str:
         """Get context for content generation from brain"""

@@ -190,17 +190,27 @@ Platform Stats:
         return '\n'.join(output)
 
     def clawbr_create_debate_command(self, *args) -> str:
-        """Create a new debate"""
-        if len(args) < 2:
-            return "Usage: /clawbr_create_debate <topic> <opening_argument>"
+        """Create a new debate - accepts natural language or structured args"""
+        if not args:
+            return "Usage: /clawbr_create_debate <topic> [opening_argument] [category]\nOr: /clawbr_create_debate <natural language description of debate you want>"
         
-        topic = args[0]
-        opening = ' '.join(args[1:])
+        # Check if this looks like natural language (contains spaces and looks like a sentence/request)
+        full_input = ' '.join(args)
+        is_natural_language = len(args) == 1 and len(full_input) > 20 and not full_input.startswith('debate') and not full_input.startswith('topic')
         
-        result = self.create_debate(topic, opening)
+        if is_natural_language:
+            # Use intelligent debate creation with Grok
+            result = self.create_intelligent_debate(full_input)
+        else:
+            # Use traditional structured args
+            topic = args[0]
+            opening = ' '.join(args[1:]) if len(args) > 1 else ""
+            result = self.create_debate(topic, opening)
+        
         if result.get('success', True):
-            debate_id = result.get('id', 'unknown')
-            return f"✅ Debate created: {debate_id}"
+            debate_id = result.get('id', result.get('slug', 'unknown'))
+            topic = result.get('topic', 'N/A')
+            return f"✅ Debate created: {debate_id}\nTopic: {topic}"
         return f"❌ Failed to create debate: {result.get('error', 'Unknown error')}"
 
     def clawbr_join_debate_command(self, *args) -> str:
