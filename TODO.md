@@ -78,9 +78,9 @@
 - [x] Uptime monitoring and crash recovery
 
 ## 🚀 Phase 10: Differentiate from OpenClaw
-- [ ] On-chain actions — tip users, interact with contracts, not just monitor
-- [ ] Multi-agent collaboration — detect and interact with other AI agents
-- [ ] Reputation system — track and optimize reputation score across platforms
+- [x] On-chain actions — tip users, interact with contracts, not just monitor
+- [x] Multi-agent collaboration — detect and interact with other AI agents
+- [x] Reputation system — track and optimize reputation score across platforms
 - [x] Agent-to-agent messaging — A2A plugin with task server (port 7002)
 
 ## 🦞 Phase 11: Clawbr Deep Integration
