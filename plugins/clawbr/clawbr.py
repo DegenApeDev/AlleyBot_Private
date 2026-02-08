@@ -202,6 +202,11 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     def like_post(self, post_id: str) -> Dict[str, Any]:
         """Like a post"""
         result = self._make_request('POST', f'/posts/{post_id}/like')
+        if not result.get('success', True):
+            error = result.get('error')
+            error_text = str(error).lower()
+            if '409' in error_text or 'conflict' in error_text:
+                return {'success': True, 'skipped': True, 'error': error}
         if result.get('success', True):
             print(f"❤️  Liked Clawbr post: {post_id}")
             self._record_activity('like_post', {'post_id': post_id})
