@@ -73,14 +73,14 @@ ACTION_CHAINS = {
         ],
     },
     'chain_clawbr_crypto_debate': {
-        'description': 'Check crypto prices → create debate about crypto future',
+        'description': 'Check crypto prices → create debate with ACTUAL price data about crypto future',
         'platform': 'clawbr',
         'cooldown_minutes': 180,
         'impact': 'medium',
         'requires': ['crypto', 'clawbr'],
         'steps': [
             {'id': 'prices', 'action': 'crypto_prices', 'args': 'btc,eth,sol', 'label': 'Fetch crypto prices'},
-            {'id': 'create_debate', 'action': 'clawbr_create_debate', 'args': 'DeFi will replace traditional banking by 2030', 'label': 'Create crypto debate'},
+            {'id': 'create_debate', 'action': 'clawbr_create_debate', 'args': '', 'label': 'Create crypto debate based on prices'},
             {'id': 'engage', 'action': 'clawbr_engage', 'label': 'Engage with Clawbr feed'},
         ],
     },
@@ -712,6 +712,14 @@ Haven't engaged on Moltbook recently, good time to build karma."""
                 chain_context[step_id] = result
                 output_parts.append(f"  ✅ Step {i}: {step_label}")
                 print(f"  ✅ Step {i} done: {str(result)[:80]}")
+                
+                # NEW: Validate critical data was retrieved before proceeding
+                if step_action == 'crypto_prices' and (not result or str(result).startswith('❌')):
+                    error_msg = f"  ❌ Step {i} failed: Could not retrieve crypto prices - aborting chain"
+                    output_parts.append(error_msg)
+                    print(error_msg)
+                    return "\n".join(output_parts) + "\n\n⛓️ Chain aborted - price data unavailable"
+                    
             except Exception as e:
                 error_msg = f"  ❌ Step {i} failed: {step_label} - {e}"
                 output_parts.append(error_msg)
@@ -772,7 +780,42 @@ Haven't engaged on Moltbook recently, good time to build karma."""
         if action == 'clawbr_create_debate':
             clawbr = plugins.get('clawbr')
             if clawbr and hasattr(clawbr, 'create_debate'):
-                topic = args or "AI agents should have ethical oversight"
+                # Check if we have price data in chain context for crypto debates
+                price_data = None
+                for key, value in chain_context.items():
+                    if 'price' in key.lower() and not str(value).startswith('❌'):
+                        price_data = value
+                        break
+                
+                if price_data:
+                    # Use Grok to create a debate topic based on actual prices
+                    try:
+                        from grok_ai import grok_ai
+                        if grok_ai.enabled:
+                            prompt = f"""Based on this crypto price data, create ONE engaging debate topic about the crypto market:
+
+{price_data[:500]}
+
+The topic should be:
+- Controversial or thought-provoking
+- Related to current market conditions
+- Under 100 characters
+- Suitable for a debate about crypto/decentralized finance
+
+Respond with ONLY the debate topic, no explanation."""
+                            
+                            topic = grok_ai.chat(prompt, max_tokens=100)
+                            if topic:
+                                topic = topic.strip().strip('"').strip("'")
+                            else:
+                                topic = args or "Crypto markets are unpredictable"
+                        else:
+                            topic = args or "Crypto markets are unpredictable"
+                    except Exception:
+                        topic = args or "Crypto markets are unpredictable"
+                else:
+                    topic = args or "AI agents should have ethical oversight"
+                
                 opening = clawbr.generate_debate_opening(topic)
                 result = clawbr.create_debate(topic, opening)
                 if result.get('success', True):
