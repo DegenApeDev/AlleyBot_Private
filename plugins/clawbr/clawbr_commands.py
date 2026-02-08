@@ -113,48 +113,38 @@ Platform Stats:
         
         output = ["🎭 **Clawbr Debates**\n"]
         
-        # Debug: show raw response structure (first 500 chars)
-        debug_info = f"DEBUG - my_debates keys: {list(my_debates.keys()) if isinstance(my_debates, dict) else 'NOT_DICT'}"
-        print(f"🔍 {debug_info}")
-        output.append(f"`{debug_info}`\n")
-        
         # Handle different response structures
         debates_list = []
         if isinstance(my_debates, dict):
             if my_debates.get('success', True):
-                # Try different possible response structures
-                if 'debates' in my_debates:
+                # Clawbr API returns: {active: [], voting: [], completed: [], total: N}
+                active_debates = my_debates.get('active', [])
+                voting_debates = my_debates.get('voting', [])
+                pending_debates = my_debates.get('pending', [])
+                
+                # Combine all debates
+                debates_list = active_debates + voting_debates + pending_debates
+                
+                # Also check legacy structure just in case
+                if not debates_list and 'debates' in my_debates:
                     debates_list = my_debates.get('debates', [])
-                    print(f"🔍 Found debates in 'debates' key: {len(debates_list)} items")
-                elif 'data' in my_debates:
+                if not debates_list and 'data' in my_debates:
                     data = my_debates.get('data', [])
                     if isinstance(data, list):
                         debates_list = data
-                        print(f"🔍 Found debates in 'data' list: {len(debates_list)} items")
-                    elif isinstance(data, dict) and 'debates' in data:
-                        debates_list = data.get('debates', [])
-                        print(f"🔍 Found debates in 'data.debates': {len(debates_list)} items")
-                    else:
-                        print(f"🔍 Data is not a list or doesn't have debates: {type(data)}")
-                else:
-                    print(f"🔍 No 'debates' or 'data' key found. Keys: {list(my_debates.keys())}")
-            else:
-                error = my_debates.get('error', 'Unknown error')
-                print(f"🔍 my_debates returned error: {error}")
-                output.append(f"⚠️ API Error: {error}\n")
-        else:
-            print(f"🔍 my_debates is not a dict: {type(my_debates)}")
+                    elif isinstance(data, dict):
+                        debates_list = data.get('active', []) + data.get('voting', []) + data.get('pending', [])
         
         if debates_list:
             # Group by status
             active = [d for d in debates_list if d.get('status') in ('active', 'open', 'in_progress', 'pending')]
             waiting = [d for d in debates_list if d.get('isMyTurn') or d.get('is_my_turn')]
             
-            output.append(f"📍 **Your Debates ({len(debates_list)} total):**")
+            output.append(f"� **Your Debates ({len(debates_list)} total):**")
             
             # Show debates waiting for your turn first
             if waiting:
-                output.append(f"\n🔔 **Waiting for your turn ({len(waiting)}):**")
+                output.append(f"\n� **Waiting for your turn ({len(waiting)}):**")
                 for debate in waiting[:5]:
                     topic = debate.get('topic', 'No topic')[:50]
                     slug = debate.get('slug', 'unknown')
@@ -172,7 +162,7 @@ Platform Stats:
             
             # If no active but have debates, show all statuses
             if not active and debates_list:
-                output.append(f"\n📋 **All your debates:**")
+                output.append(f"\n� **All your debates:**")
                 for debate in debates_list[:5]:
                     topic = debate.get('topic', 'No topic')[:50]
                     status = debate.get('status', 'unknown')

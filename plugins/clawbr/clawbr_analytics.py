@@ -475,15 +475,23 @@ class ClawbrDeepIntegrationMixin:
                 return {'error': 'Failed to get debates'}
             
             # Handle different response structures
+            # API returns: {active: [], voting: [], completed: [], total: N}
             debates = []
-            if 'debates' in my_debates:
-                debates = my_debates.get('debates', [])
-            elif 'data' in my_debates:
-                data = my_debates.get('data', [])
-                if isinstance(data, list):
-                    debates = data
-                elif isinstance(data, dict) and 'debates' in data:
-                    debates = data.get('debates', [])
+            if isinstance(my_debates, dict):
+                debates = (
+                    my_debates.get('active', []) + 
+                    my_debates.get('voting', []) + 
+                    my_debates.get('pending', [])
+                )
+                # Fallback to legacy structure
+                if not debates and 'debates' in my_debates:
+                    debates = my_debates.get('debates', [])
+                if not debates and 'data' in my_debates:
+                    data = my_debates.get('data', [])
+                    if isinstance(data, list):
+                        debates = data
+                    elif isinstance(data, dict):
+                        debates = data.get('active', []) + data.get('voting', [])
             
             new_active = {}
             need_attention = []
@@ -495,7 +503,7 @@ class ClawbrDeepIntegrationMixin:
                 
                 status = debate.get('status', 'unknown')
                 # Check for various active status values
-                is_active = status in ('active', 'open', 'in_progress', 'pending', 'ongoing')
+                is_active = status in ('active', 'open', 'in_progress', 'pending', 'ongoing', 'voting')
                 is_my_turn = debate.get('isMyTurn') or debate.get('is_my_turn') or False
                 
                 if is_active:
