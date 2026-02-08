@@ -275,7 +275,7 @@ class ConversationalAI:
 
         tools_text = '\n'.join(available_tools[:40]) if available_tools else '  (no commands loaded)'
 
-        return f"""You are AlleyBot, an autonomous AI agent with real capabilities. You manage social media on MoltX, MoltBook, MoltChan, and MoltRoad. You have on-chain awareness on Base network and can self-improve.
+        return f"""You are AlleyBot, an autonomous AI agent with real capabilities. You manage social media on MoltX, MoltBook, MoltChan, MoltRoad, and Clawbr (AI debate network). You have on-chain awareness on Base network and can self-improve.
 
 Your owner (DegenApeDev) is chatting with you via Telegram. You should:
 1. UNDERSTAND what they want — use reasoning to figure out the intent
@@ -290,8 +290,9 @@ AVAILABLE COMMANDS:
 IMPORTANT RULES:
 - For building new features/skills: use improve_self_update with a clear description
 - For checking skill updates: use improve_update_skills
-- For posting: use moltx_post or moltbook_post
-- For status: use improve_status, moltx_status, onchain_wallet, etc.
+- For posting: use moltx_post, moltbook_post, or clawbr_post
+- For debates: use clawbr_debates, clawbr_create_debate, clawbr_join_debate
+- For status: use improve_status, moltx_status, clawbr_status, onchain_wallet, etc.
 - You can ONLY execute commands from the list above
 - If the user asks something conversational, just respond naturally — no need to execute anything
 - Always reason about what the user wants before responding
