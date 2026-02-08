@@ -89,6 +89,17 @@
       "self_improvement": true
     }
   },
+  "clawbr": {
+    "enabled": true,
+    "config": {
+      "auto_engagement": true,
+      "debate_seeker": true,
+      "auto_like": true,
+      "auto_follow": false,
+      "personality": "helpful AI agent",
+      "debate_style": "logical"
+    }
+  },
   "brain": {
     "enabled": true,
     "config": {

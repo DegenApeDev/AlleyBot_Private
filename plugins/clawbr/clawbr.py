@@ -1,0 +1,398 @@
+"""
+Clawbr Plugin - Social network for AI agents with debates and voting
+Base URL: https://www.clawbr.org/api/v1
+"""
+import os
+import json
+import time
+import hashlib
+import random
+from datetime import datetime
+from typing import Dict, List, Optional, Any
+from plugin_manager import AlleyBotPlugin
+
+# Import mixins
+from .clawbr_api import ClawbrAPIMixin
+from .clawbr_content import ClawbrContentMixin
+from .clawbr_engagement import ClawbrEngagementMixin
+from .clawbr_commands import ClawbrCommandsMixin
+
+
+class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEngagementMixin, ClawbrCommandsMixin):
+    """Clawbr social network integration for AlleyBot"""
+    
+    def __init__(self, config: Dict):
+        super().__init__(config)
+        self.base_url = "https://www.clawbr.org/api/v1"
+        self.api_key = config.get('api_key')
+        self.agent_name = config.get('agent_name', 'AlleyBot')
+        self.headers = {
+            'Content-Type': 'application/json',
+            'User-Agent': f'AlleyBot/{self.agent_name}'
+        }
+        if self.api_key:
+            self.headers['Authorization'] = f'Bearer {self.api_key}'
+        
+        # Cache for rate limiting
+        self._last_request = 0
+        self._request_cache = {}
+        
+        # Initialize mixins
+        self._init_clawbr_api()
+        self._init_clawbr_content()
+        self._init_clawbr_engagement()
+        
+    # =================================================================
+    # Core API Methods
+    # =================================================================
+    
+    def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None, 
+                     params: Optional[Dict] = None) -> Dict[str, Any]:
+        """Make authenticated request to Clawbr API"""
+        import requests
+        
+        url = f"{self.base_url}{endpoint}"
+        
+        # Rate limiting: max 10 requests per second
+        now = time.time()
+        if now - self._last_request < 0.1:
+            time.sleep(0.1)
+        self._last_request = time.time()
+        
+        try:
+            if method.upper() == 'GET':
+                response = requests.get(url, headers=self.headers, params=params, timeout=10)
+            elif method.upper() == 'POST':
+                response = requests.post(url, headers=self.headers, json=data, params=params, timeout=10)
+            elif method.upper() == 'PATCH':
+                response = requests.patch(url, headers=self.headers, json=data, timeout=10)
+            elif method.upper() == 'DELETE':
+                response = requests.delete(url, headers=self.headers, timeout=10)
+            else:
+                raise ValueError(f"Unsupported method: {method}")
+            
+            response.raise_for_status()
+            return response.json()
+            
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Clawbr API error: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    return {'success': False, 'error': error_data}
+                except:
+                    return {'success': False, 'error': str(e)}
+            return {'success': False, 'error': str(e)}
+    
+    # =================================================================
+    # Identity & Profile
+    # =================================================================
+    
+    def register_agent(self, display_name: str, description: str, 
+                      avatar_url: Optional[str] = None, faction: str = "AI") -> Dict[str, Any]:
+        """Register new agent and get API key"""
+        data = {
+            'name': self.agent_name,
+            'displayName': display_name,
+            'description': description,
+            'faction': faction
+        }
+        if avatar_url:
+            data['avatarUrl'] = avatar_url
+            
+        result = self._make_request('POST', '/agents/register', data)
+        if result.get('success', True) and 'apiKey' in result:
+            self.api_key = result['apiKey']
+            self.headers['Authorization'] = f'Bearer {self.api_key}'
+            print(f"✅ Registered {self.agent_name} on Clawbr")
+        return result
+    
+    def get_profile(self) -> Dict[str, Any]:
+        """Get agent profile"""
+        return self._make_request('GET', '/agents/me')
+    
+    def update_profile(self, display_name: Optional[str] = None, 
+                      description: Optional[str] = None,
+                      avatar_url: Optional[str] = None,
+                      avatar_emoji: Optional[str] = None,
+                      banner_url: Optional[str] = None,
+                      faction: Optional[str] = None) -> Dict[str, Any]:
+        """Update agent profile"""
+        data = {}
+        if display_name:
+            data['displayName'] = display_name
+        if description:
+            data['description'] = description
+        if avatar_url:
+            data['avatarUrl'] = avatar_url
+        if avatar_emoji:
+            data['avatarEmoji'] = avatar_emoji
+        if banner_url:
+            data['bannerUrl'] = banner_url
+        if faction:
+            data['faction'] = faction
+            
+        return self._make_request('PATCH', '/agents/me', data)
+    
+    def get_agent_by_name(self, name: str) -> Dict[str, Any]:
+        """Lookup agent by name"""
+        return self._make_request('GET', f'/agents/{name}')
+    
+    # =================================================================
+    # Posts & Content
+    # =================================================================
+    
+    def create_post(self, content: str, parent_id: Optional[str] = None,
+                   media_url: Optional[str] = None,
+                   intent: str = "statement") -> Dict[str, Any]:
+        """Create post or reply"""
+        data = {
+            'content': content,
+            'intent': intent  # question, statement, opinion, support, challenge
+        }
+        if parent_id:
+            data['parentId'] = parent_id
+        if media_url:
+            data['media_url'] = media_url
+            
+        result = self._make_request('POST', '/posts', data)
+        if result.get('success', True):
+            post_id = result.get('id')
+            print(f"✅ Created Clawbr post: {post_id}")
+            self._record_activity('create_post', {
+                'post_id': post_id,
+                'content': content[:100] + '...' if len(content) > 100 else content,
+                'intent': intent,
+                'parent_id': parent_id
+            })
+        return result
+    
+    def get_post(self, post_id: str) -> Dict[str, Any]:
+        """Get post with replies"""
+        return self._make_request('GET', f'/posts/{post_id}')
+    
+    def edit_post(self, post_id: str, content: str) -> Dict[str, Any]:
+        """Edit your post"""
+        return self._make_request('PATCH', f'/posts/{post_id}', {'content': content})
+    
+    def delete_post(self, post_id: str) -> Dict[str, Any]:
+        """Delete your post"""
+        result = self._make_request('DELETE', f'/posts/{post_id}')
+        if result.get('success', True):
+            print(f"🗑️  Deleted Clawbr post: {post_id}")
+        return result
+    
+    def like_post(self, post_id: str) -> Dict[str, Any]:
+        """Like a post"""
+        result = self._make_request('POST', f'/posts/{post_id}/like')
+        if result.get('success', True):
+            print(f"❤️  Liked Clawbr post: {post_id}")
+            self._record_activity('like_post', {'post_id': post_id})
+        return result
+    
+    def unlike_post(self, post_id: str) -> Dict[str, Any]:
+        """Unlike a post"""
+        return self._make_request('DELETE', f'/posts/{post_id}/like')
+    
+    # =================================================================
+    # Feeds
+    # =================================================================
+    
+    def get_global_feed(self, sort: str = "recent", intent: Optional[str] = None,
+                       limit: int = 20, offset: int = 0) -> Dict[str, Any]:
+        """Get global feed"""
+        params = {'sort': sort, 'limit': limit, 'offset': offset}
+        if intent:
+            params['intent'] = intent
+        return self._make_request('GET', '/feed/global', params=params)
+    
+    def get_following_feed(self, limit: int = 20, offset: int = 0) -> Dict[str, Any]:
+        """Get feed from agents you follow"""
+        params = {'limit': limit, 'offset': offset}
+        return self._make_request('GET', '/feed/following', params=params)
+    
+    def get_mentions_feed(self, limit: int = 20, offset: int = 0) -> Dict[str, Any]:
+        """Get posts that mention you"""
+        params = {'limit': limit, 'offset': offset}
+        return self._make_request('GET', '/feed/mentions', params=params)
+    
+    # =================================================================
+    # Social (Follow/Unfollow)
+    # =================================================================
+    
+    def follow_agent(self, agent_name: str) -> Dict[str, Any]:
+        """Follow an agent"""
+        result = self._make_request('POST', f'/follow/{agent_name}')
+        if result.get('success', True):
+            print(f"👥 Following {agent_name} on Clawbr")
+            self._record_activity('follow', {'agent_name': agent_name})
+        return result
+    
+    def unfollow_agent(self, agent_name: str) -> Dict[str, Any]:
+        """Unfollow an agent"""
+        return self._make_request('DELETE', f'/follow/{agent_name}')
+    
+    # =================================================================
+    # Notifications
+    # =================================================================
+    
+    def get_notifications(self, unread_only: bool = False) -> Dict[str, Any]:
+        """Get notifications"""
+        params = {'unread': 'true'} if unread_only else {}
+        return self._make_request('GET', '/notifications', params=params)
+    
+    def get_unread_count(self) -> Dict[str, Any]:
+        """Get unread notification count"""
+        return self._make_request('GET', '/notifications/unread_count')
+    
+    def mark_notifications_read(self, notification_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Mark notifications as read"""
+        data = {}
+        if notification_ids:
+            data['ids'] = notification_ids
+        return self._make_request('POST', '/notifications/read', data)
+    
+    # =================================================================
+    # Debates
+    # =================================================================
+    
+    def get_debates_hub(self) -> Dict[str, Any]:
+        """Get debates hub with available actions"""
+        return self._make_request('GET', '/debates/hub')
+    
+    def get_my_debates(self) -> Dict[str, Any]:
+        """Get your debates with turn status"""
+        return self._make_request('GET', '/agents/me/debates')
+    
+    def create_debate(self, topic: str, opening_argument: str,
+                     category: Optional[str] = None,
+                     opponent_id: Optional[str] = None,
+                     max_posts: int = 5) -> Dict[str, Any]:
+        """Create a new debate"""
+        data = {
+            'topic': topic,
+            'opening_argument': opening_argument,
+            'max_posts': max_posts
+        }
+        if category:
+            data['category'] = category
+        if opponent_id:
+            data['opponent_id'] = opponent_id
+            
+        result = self._make_request('POST', '/debates', data)
+        if result.get('success', True):
+            debate_slug = result.get('slug')
+            print(f"🎭 Created debate: {topic} ({debate_slug})")
+            self._record_activity('create_debate', {
+                'slug': debate_slug,
+                'topic': topic,
+                'category': category
+            })
+        return result
+    
+    def get_debate(self, slug: str) -> Dict[str, Any]:
+        """Get full debate details"""
+        return self._make_request('GET', f'/debates/{slug}')
+    
+    def join_debate(self, slug: str) -> Dict[str, Any]:
+        """Join an open debate"""
+        result = self._make_request('POST', f'/debates/{slug}/join')
+        if result.get('success', True):
+            print(f"🤝 Joined debate: {slug}")
+            self._record_activity('join_debate', {'slug': slug})
+        return result
+    
+    def submit_debate_argument(self, slug: str, argument: str) -> Dict[str, Any]:
+        """Submit argument for your turn in debate"""
+        data = {'content': argument}
+        result = self._make_request('POST', f'/debates/{slug}/posts', data)
+        if result.get('success', True):
+            print(f"💬 Submitted argument for debate: {slug}")
+            self._record_activity('debate_argument', {'slug': slug, 'argument': argument[:100]})
+        return result
+    
+    def vote_debate(self, slug: str, side: str, vote_reason: str) -> Dict[str, Any]:
+        """Vote on a debate (side: challenger/opponent)"""
+        data = {
+            'side': side,
+            'content': vote_reason
+        }
+        result = self._make_request('POST', f'/debates/{slug}/vote', data)
+        if result.get('success', True):
+            print(f"🗳️  Voted on debate: {slug} ({side})")
+            self._record_activity('debate_vote', {'slug': slug, 'side': side})
+        return result
+    
+    def forfeit_debate(self, slug: str) -> Dict[str, Any]:
+        """Forfeit a debate (you lose, -50 ELO)"""
+        return self._make_request('POST', f'/debates/{slug}/forfeit')
+    
+    # =================================================================
+    # Search & Discovery
+    # =================================================================
+    
+    def search_agents(self, query: str) -> Dict[str, Any]:
+        """Search for agents"""
+        return self._make_request('GET', '/search/agents', params={'q': query})
+    
+    def search_posts(self, query: str) -> Dict[str, Any]:
+        """Search for posts"""
+        return self._make_request('GET', '/search/posts', params={'q': query})
+    
+    def get_trending_hashtags(self, days: int = 7, limit: int = 20) -> Dict[str, Any]:
+        """Get trending hashtags"""
+        params = {'days': days, 'limit': limit}
+        return self._make_request('GET', '/hashtags/trending', params=params)
+    
+    # =================================================================
+    # Leaderboard
+    # =================================================================
+    
+    def get_leaderboard(self) -> Dict[str, Any]:
+        """Get influence score leaderboard"""
+        return self._make_request('GET', '/leaderboard')
+    
+    def get_debate_leaderboard(self) -> Dict[str, Any]:
+        """Get debate ELO leaderboard"""
+        return self._make_request('GET', '/leaderboard/debates')
+    
+    # =================================================================
+    # Utilities
+    # =================================================================
+    
+    def get_platform_stats(self) -> Dict[str, Any]:
+        """Get platform-wide statistics"""
+        return self._make_request('GET', '/stats')
+    
+    def validate_post(self, content: str, parent_id: Optional[str] = None) -> Dict[str, Any]:
+        """Dry-run post validation without saving"""
+        data = {'content': content}
+        if parent_id:
+            data['parentId'] = parent_id
+        return self._make_request('POST', '/debug/echo', data)
+    
+    def _record_activity(self, activity_type: str, data: Dict):
+        """Record Clawbr activity in memory"""
+        activities = self.core.get_memory('clawbr_activities') or []
+        activities.append({
+            'type': activity_type,
+            'data': data,
+            'timestamp': datetime.now().isoformat()
+        })
+        self.core.save_memory('clawbr_activities', activities[-100:])
+    
+    # =================================================================
+    # Plugin Commands
+    # =================================================================
+    
+    def get_commands(self) -> List[str]:
+        """Return list of available commands"""
+        return [
+            'clawbr_status', 'clawbr_post', 'clawbr_feed',
+            'clawbr_debates', 'clawbr_create_debate', 'clawbr_join_debate',
+            'clawbr_leaderboard', 'clawbr_search', 'clawbr_stats'
+        ]
+    
+    # Command implementations would go here...
+    # For now, the plugin provides the API methods that can be called
+    # from the autonomous system or other plugins
