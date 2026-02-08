@@ -22,6 +22,7 @@ memory/
 *.db
 *.sqlite
 *.log
+*.pkl
 
 # Credentials and secrets
 credentials.json

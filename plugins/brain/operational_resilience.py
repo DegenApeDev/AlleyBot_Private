@@ -59,17 +59,41 @@ class OperationalResilienceMixin:
             state = self.core.get_memory('brain_resilience_state')
             if state:
                 self.health_status = state.get('health_status', self.health_status)
-                self.rate_limits = state.get('rate_limits', self.rate_limits)
                 self.crash_recovery_attempts = state.get('crash_recovery_attempts', 0)
+                
+                # Restore rate limits with proper deque reconstruction
+                saved_rate_limits = state.get('rate_limits', {})
+                for platform, limits in saved_rate_limits.items():
+                    if platform in self.rate_limits:
+                        # Convert list back to deque
+                        requests_list = limits.get('requests', [])
+                        self.rate_limits[platform]['requests'] = deque(requests_list, maxlen=100)
+                        
+                        # Restore backoff time
+                        backoff_str = limits.get('backoff_until')
+                        if backoff_str:
+                            self.rate_limits[platform]['backoff_until'] = datetime.fromisoformat(backoff_str)
+                        else:
+                            self.rate_limits[platform]['backoff_until'] = None
         except Exception:
             pass
 
     def _save_resilience_state(self):
         """Save operational resilience state"""
         try:
+            # Convert deques to lists for JSON serialization
+            serializable_rate_limits = {}
+            for platform, limits in self.rate_limits.items():
+                serializable_rate_limits[platform] = {
+                    'requests': list(limits['requests']),  # Convert deque to list
+                    'backoff_until': limits['backoff_until'].isoformat() if limits['backoff_until'] else None,
+                    'limit': limits['limit'],
+                    'window': limits['window'],
+                }
+            
             self.core.save_memory('brain_resilience_state', {
                 'health_status': dict(self.health_status),
-                'rate_limits': self.rate_limits,
+                'rate_limits': serializable_rate_limits,
                 'crash_recovery_attempts': self.crash_recovery_attempts,
                 'last_saved': datetime.now().isoformat(),
             })
