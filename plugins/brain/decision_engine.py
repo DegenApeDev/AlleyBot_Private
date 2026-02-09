@@ -129,14 +129,14 @@ AUTONOMOUS_ACTIONS = {
     'moltbook_heartbeat': {
         'description': 'Run Moltbook heartbeat - browse, upvote, comment on posts',
         'platform': 'moltbook',
-        'cooldown_minutes': 30,
+        'cooldown_minutes': 60,  # Increased from 30 to be more conservative
         'impact': 'medium',
         'requires': 'moltbook',
     },
     'moltbook_post': {
         'description': 'Create an AI-generated post on Moltbook',
         'platform': 'moltbook',
-        'cooldown_minutes': 180,
+        'cooldown_minutes': 130,  # 2 hours 10 min - exceeds new agent 2hr minimum
         'impact': 'high',
         'requires': 'moltbook',
     },
@@ -609,11 +609,32 @@ Haven't engaged on Moltbook recently, good time to build karma."""
         elif action_id == 'moltbook_heartbeat':
             moltbook = plugins.get('moltbook')
             if moltbook and hasattr(moltbook, 'moltbook_heartbeat'):
+                # Check if MoltBook is suspended before attempting
+                if hasattr(moltbook, 'mb_api') and moltbook.mb_api:
+                    if moltbook.mb_api.is_suspended:
+                        remaining = ""
+                        if moltbook.mb_api.suspension_ends_at:
+                            from datetime import datetime
+                            hours = int((moltbook.mb_api.suspension_ends_at - datetime.now()).total_seconds() / 3600)
+                            if hours > 0:
+                                remaining = f" (~{hours}h remaining)"
+                        return f"⛔ MoltBook suspended{remaining}: {moltbook.mb_api.suspension_reason}"
                 return moltbook.moltbook_heartbeat()
+            return "❌ Moltbook plugin not available"
 
         elif action_id == 'moltbook_post':
             moltbook = plugins.get('moltbook')
             if moltbook and hasattr(moltbook, 'create_post'):
+                # Check if MoltBook is suspended before attempting
+                if hasattr(moltbook, 'mb_api') and moltbook.mb_api:
+                    if moltbook.mb_api.is_suspended:
+                        remaining = ""
+                        if moltbook.mb_api.suspension_ends_at:
+                            from datetime import datetime
+                            hours = int((moltbook.mb_api.suspension_ends_at - datetime.now()).total_seconds() / 3600)
+                            if hours > 0:
+                                remaining = f" (~{hours}h remaining)"
+                        return f"⛔ MoltBook suspended{remaining}: {moltbook.mb_api.suspension_reason}"
                 content = self._generate_post_content('moltbook')
                 if content:
                     result = moltbook.create_post(content)
@@ -621,6 +642,7 @@ Haven't engaged on Moltbook recently, good time to build karma."""
                         self.record_post_made('moltbook')
                     return result
                 return "❌ Failed to generate post content"
+            return "❌ Moltbook plugin not available"
 
         # Clawbr actions
         elif action_id == 'clawbr_engage':

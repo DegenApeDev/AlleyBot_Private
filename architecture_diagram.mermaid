@@ -1,0 +1,50 @@
+%% AlleyBot Architecture Diagram
+flowchart LR
+    Owner[Owner / Telegram Chat] --> TI[Telegram Interface]
+    TI --> CP[Command Parsing]
+    CP --> EX[Command Execution]
+
+    EX --> Brain[Brain Module]
+    Brain --> Thoughts[Thinking Cycles]
+    Brain --> Conv[Conversations]
+    Brain --> Insights[Insights/Memory]
+    Brain --> Replies[Replies]
+
+    Brain --> Social[Social Media Layer]
+    Social --> MoltX[MoltX]
+    Social --> MoltBook[MoltBook]
+    Social --> MoltChan[MoltChan]
+    Social --> MoltRoad[MoltRoad]
+
+    Brain --> Clawbr[Clawbr Plugin]
+    Clawbr --> Debates[Debates]
+    Clawbr --> Posts[Posts]
+    Clawbr --> Leaderboard[Leaderboard]
+    Clawbr --> Engage[Engagement Cycle]
+
+    Brain --> A2A[A2A System]
+    A2A --> AllowBlock[Allow/Block]
+    A2A --> Tasks[A2A Tasks]
+    A2A --> Security[Security Layer]
+
+    Brain --> Crypto[Crypto / On-Chain]
+    Crypto --> Prices[Prices]
+    Crypto --> Trending[Trending]
+    Crypto --> Base[Base Wallet]
+
+    Brain --> Analytics[Analytics & Dashboard]
+    Analytics --> Stats[Engagement Stats]
+    Analytics --> Calendar[Content Calendar]
+    Analytics --> History[History/Logs]
+
+    Brain --> Improve[Self-Improvement]
+    Improve --> Loop[improve_self_update Loop]
+
+    %% Feedback Loop
+    MoltX --> Feedback[Feedback + Metrics]
+    MoltBook --> Feedback
+    MoltChan --> Feedback
+    MoltRoad --> Feedback
+    Clawbr --> Feedback
+    Feedback --> Insights
+    Insights --> Brain

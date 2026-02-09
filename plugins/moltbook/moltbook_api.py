@@ -1,14 +1,17 @@
 """
 Moltbook API Mixin
 API client, feed fetching, upvoting, commenting, and post management.
+Includes suspension detection and verification challenge handling.
 """
 import os
+import json
 import requests
 from pathlib import Path
+from datetime import datetime, timedelta
 
 
 class MoltbookAPIClient:
-    """Standalone API client for Moltbook platform"""
+    """Standalone API client for Moltbook platform with suspension awareness"""
 
     def __init__(self, api_key, base_url):
         self.api_key = api_key
@@ -18,8 +21,123 @@ class MoltbookAPIClient:
             'Authorization': f'Bearer {api_key}',
             'Content-Type': 'application/json'
         })
+        # Suspension tracking
+        self.is_suspended = False
+        self.suspension_reason = None
+        self.suspension_ends_at = None
+        self.offense_count = 0
+
+    def _check_for_suspension(self, response):
+        """Check if response indicates suspension and update state"""
+        if response.status_code == 401:
+            try:
+                data = response.json()
+                error = data.get('error', '').lower()
+                hint = data.get('hint', '').lower()
+                
+                if 'suspended' in error or 'suspended' in hint:
+                    self.is_suspended = True
+                    self.suspension_reason = data.get('hint', 'Account suspended')
+                    
+                    # Parse suspension duration if available
+                    if '1 week' in hint or '1week' in hint:
+                        self.suspension_ends_at = datetime.now() + timedelta(days=7)
+                    elif '1 hour' in hint:
+                        self.suspension_ends_at = datetime.now() + timedelta(hours=1)
+                    elif 'ends in' in hint:
+                        # Try to extract time info
+                        import re
+                        time_match = re.search(r'(\d+)\s*(hour|day|week)', hint)
+                        if time_match:
+                            amount, unit = int(time_match.group(1)), time_match.group(2)
+                            if unit == 'hour':
+                                self.suspension_ends_at = datetime.now() + timedelta(hours=amount)
+                            elif unit == 'day':
+                                self.suspension_ends_at = datetime.now() + timedelta(days=amount)
+                            elif unit == 'week':
+                                self.suspension_ends_at = datetime.now() + timedelta(weeks=amount)
+                    
+                    print(f"🚫 MOLTBOOK SUSPENSION DETECTED")
+                    print(f"   Reason: {self.suspension_reason}")
+                    if self.suspension_ends_at:
+                        print(f"   Ends: {self.suspension_ends_at.isoformat()}")
+                    
+                    # Track offense count
+                    if 'offense' in hint:
+                        import re
+                        offense_match = re.search(r'offense\s*#?(\d+)', hint)
+                        if offense_match:
+                            self.offense_count = int(offense_match.group(1))
+                    
+                    return True
+                    
+            except Exception:
+                pass
+        return False
+
+    def _check_for_verification_challenge(self, response):
+        """Check if response indicates a verification challenge is required"""
+        if response.status_code in [401, 403, 429]:
+            try:
+                data = response.json()
+                hint = data.get('hint', '').lower()
+                error = data.get('error', '').lower()
+                
+                challenge_indicators = [
+                    'verification', 'challenge', 'captcha', 'human',
+                    'verify', 'proof', 'ai verification'
+                ]
+                
+                if any(ind in hint for ind in challenge_indicators) or \
+                   any(ind in error for ind in challenge_indicators):
+                    print(f"🚨 MOLTBOOK VERIFICATION CHALLENGE DETECTED")
+                    print(f"   Response: {response.text[:200]}")
+                    print(f"   🛑 HALTING ALL MOLTBOOK ACTIVITY - HUMAN INTERVENTION REQUIRED")
+                    return True
+                    
+            except Exception:
+                pass
+        return False
+
+    def check_suspension_status(self):
+        """Check if suspension has expired and reset state if so"""
+        if self.is_suspended and self.suspension_ends_at:
+            if datetime.now() >= self.suspension_ends_at:
+                print(f"✅ Moltbook suspension expired - resuming activity")
+                self.is_suspended = False
+                self.suspension_reason = None
+                self.suspension_ends_at = None
+                return False  # No longer suspended
+        return self.is_suspended
+
+    def can_perform_action(self, action_type='post'):
+        """Check if an action can be performed (not suspended)"""
+        # First check if suspension expired
+        self.check_suspension_status()
+        
+        if self.is_suspended:
+            remaining = ""
+            if self.suspension_ends_at:
+                remaining_seconds = (self.suspension_ends_at - datetime.now()).total_seconds()
+                if remaining_seconds > 0:
+                    hours = int(remaining_seconds / 3600)
+                    days = int(remaining_seconds / 86400)
+                    if days > 0:
+                        remaining = f" ({days} days remaining)"
+                    else:
+                        remaining = f" ({hours} hours remaining)"
+            
+            print(f"⛔ Moltbook action blocked: Account suspended{remaining}")
+            print(f"   Reason: {self.suspension_reason}")
+            return False
+        return True
 
     def create_post(self, submolt, title, content=None, url=None):
+        """Create a post with suspension checking"""
+        if not self.can_perform_action('post'):
+            return {'error': 'Account suspended', 'suspended': True, 
+                    'reason': self.suspension_reason, 'ends_at': self.suspension_ends_at.isoformat() if self.suspension_ends_at else None}
+        
         data = {'submolt': submolt, 'title': title}
         if content:
             data['content'] = content
@@ -31,6 +149,15 @@ class MoltbookAPIClient:
             print(f"MoltBook API Response: Status {response.status_code}")
             print(f"Full Response body: {response.text}")
 
+            # Check for suspension or challenges
+            if self._check_for_suspension(response):
+                return {'error': 'Account suspended', 'suspended': True,
+                        'reason': self.suspension_reason, 'ends_at': self.suspension_ends_at.isoformat() if self.suspension_ends_at else None}
+            
+            if self._check_for_verification_challenge(response):
+                return {'error': 'Verification challenge required', 'challenge_required': True,
+                        'reason': 'Human verification needed - automation halted'}
+
             if response.status_code in [200, 201]:
                 return response.json()
             else:
@@ -41,17 +168,33 @@ class MoltbookAPIClient:
             return {'error': str(e)}
 
     def get_feed(self, sort='hot', limit=25):
+        """Get feed (allowed even when suspended for monitoring)"""
         params = {'sort': sort, 'limit': limit}
         response = self.session.get(f"{self.base_url}/posts", params=params)
+        # Check for suspension even on GET requests
+        if response.status_code == 401:
+            self._check_for_suspension(response)
         return response.json() if response.status_code == 200 else None
 
     def upvote_post(self, post_id):
+        """Upvote a post with suspension check"""
+        if not self.can_perform_action('upvote'):
+            return {'error': 'Account suspended', 'suspended': True}
         response = self.session.post(f"{self.base_url}/posts/{post_id}/upvote")
+        if self._check_for_suspension(response):
+            return {'error': 'Account suspended', 'suspended': True}
         return response.json() if response.status_code == 200 else None
 
     def add_comment(self, post_id, content):
+        """Add a comment with suspension check"""
+        if not self.can_perform_action('comment'):
+            return {'error': 'Account suspended', 'suspended': True}
         data = {'content': content.strip()}
         response = self.session.post(f"{self.base_url}/posts/{post_id}/comments", json=data)
+        if self._check_for_suspension(response):
+            return {'error': 'Account suspended', 'suspended': True}
+        if self._check_for_verification_challenge(response):
+            return {'error': 'Verification challenge required', 'challenge_required': True}
         return response.json() if response.status_code in [200, 201] else None
 
     def get_post(self, post_id):
