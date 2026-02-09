@@ -739,3 +739,141 @@ Requirements:
             posts.append(current_post)
 
         return posts
+
+    # --- Articles (Long-form Content) ---
+
+    def create_article(self, title: str, content: str, cover_image_url: str = None, hashtags: list = None) -> dict:
+        """Create a long-form article (8000 chars max, markdown supported)"""
+        if not self.initialized:
+            return {"success": False, "error": "Moltx not initialized. Register an agent first."}
+
+        if len(content) > 8000:
+            return {"success": False, "error": "Article content exceeds 8000 character limit"}
+
+        data = {
+            'title': title,
+            'content': content,
+        }
+        if cover_image_url:
+            data['cover_image_url'] = cover_image_url
+        if hashtags:
+            data['hashtags'] = hashtags if isinstance(hashtags, list) else [hashtags]
+
+        print(f"📝 Creating article: {title[:50]}...")
+        result = self._make_request('POST', '/articles', data)
+
+        if result and result.get('success'):
+            article_data = result.get('data', {})
+            article_id = article_data.get('id', 'unknown')
+            self._record_activity('create_article', {
+                'article_id': article_id,
+                'title': title
+            })
+            return {
+                "success": True,
+                "article_id": article_id,
+                "title": title,
+                "url": f"https://moltx.io/articles/{article_id}"
+            }
+        return {"success": False, "error": "Failed to create article", "raw": result}
+
+    def get_article(self, article_id: str) -> dict:
+        """Get a specific article by ID"""
+        if not self.initialized:
+            return {"success": False, "error": "Moltx not initialized"}
+
+        result = self._make_request('GET', f'/articles/{article_id}')
+
+        if result and result.get('success'):
+            article = result.get('data', {}).get('article', {})
+            return {"success": True, "article": article}
+        return {"success": False, "error": f"Failed to fetch article {article_id}", "raw": result}
+
+    def create_thread(self, posts: list) -> dict:
+        """Create a thread by posting replies to own posts"""
+        if not self.initialized:
+            return {"success": False, "error": "Moltx not initialized"}
+
+        if not posts or len(posts) < 2:
+            return {"success": False, "error": "Thread requires at least 2 posts"}
+
+        results = []
+        parent_id = None
+
+        for i, post_content in enumerate(posts):
+            if i == 0:
+                # First post is standalone
+                result = self.create_post(post_content, post_type='post')
+                if isinstance(result, str) and 'posted:' in result:
+                    # Parse post ID from response string
+                    parent_id = result.split('posted:')[-1].strip()
+                results.append(result)
+            else:
+                # Subsequent posts are replies to the thread starter
+                if parent_id:
+                    result = self._make_request('POST', '/posts', {
+                        'type': 'reply',
+                        'parent_id': parent_id,
+                        'content': post_content
+                    })
+                    results.append(result)
+                else:
+                    results.append({"error": "No parent_id for thread continuation"})
+
+        success_count = sum(1 for r in results if isinstance(r, str) and 'posted' in r or (isinstance(r, dict) and r.get('success')))
+        return {
+            "success": success_count == len(posts),
+            "posts_created": success_count,
+            "total_posts": len(posts),
+            "results": results
+        }
+
+    def create_quote_post(self, parent_id: str, content: str) -> dict:
+        """Create a quote post (repost with comment)"""
+        if not self.initialized:
+            return {"success": False, "error": "Moltx not initialized"}
+
+        if not parent_id:
+            return {"success": False, "error": "Quote post requires parent_id"}
+
+        data = {
+            'type': 'quote',
+            'parent_id': parent_id,
+            'content': content
+        }
+
+        result = self._make_request('POST', '/posts', data)
+
+        if result and result.get('success'):
+            post_id = result.get('data', {}).get('id', 'unknown')
+            self._record_activity('create_quote', {
+                'post_id': post_id,
+                'parent_id': parent_id,
+                'content': content[:100]
+            })
+            return {"success": True, "post_id": post_id, "message": f"Quote post created: {post_id}"}
+        return {"success": False, "error": "Failed to create quote post", "raw": result}
+
+    def get_thread(self, post_id: str) -> dict:
+        """Get a post thread including all replies"""
+        if not self.initialized:
+            return {"success": False, "error": "Moltx not initialized"}
+
+        # Get the main post
+        main_post = self.get_post(post_id)
+        if not main_post.get('success'):
+            return main_post
+
+        # Try to get replies if available in the API
+        result = self._make_request('GET', f'/posts/{post_id}/replies')
+
+        replies = []
+        if result and result.get('success'):
+            replies = result.get('data', {}).get('replies', [])
+
+        return {
+            "success": True,
+            "main_post": main_post.get('post'),
+            "replies": replies,
+            "reply_count": len(replies)
+        }
