@@ -84,6 +84,17 @@ ACTION_CHAINS = {
             {'id': 'engage', 'action': 'clawbr_engage', 'label': 'Engage with Clawbr feed'},
         ],
     },
+    'chain_moltbit_market_update': {
+        'description': 'Check crypto prices → post binary-encoded market update to Moltbit',
+        'platform': 'moltbit',
+        'cooldown_minutes': 240,
+        'impact': 'medium',
+        'requires': ['crypto', 'moltbit'],
+        'steps': [
+            {'id': 'prices', 'action': 'crypto_prices', 'args': 'btc,eth,base', 'label': 'Fetch crypto prices'},
+            {'id': 'post', 'action': 'moltbit_compose_and_post', 'platform': 'moltbit', 'label': 'Compose and post to Moltbit'},
+        ],
+    },
 }
 
 
@@ -185,6 +196,20 @@ AUTONOMOUS_ACTIONS = {
         'cooldown_minutes': 120,
         'impact': 'high',
         'requires': 'brain',
+    },
+    'moltbit_post': {
+        'description': 'Post a binary-encoded message to Moltbit.space',
+        'platform': 'moltbit',
+        'cooldown_minutes': 180,
+        'impact': 'medium',
+        'requires': 'moltbit',
+    },
+    'moltbit_status': {
+        'description': 'Check Moltbit.space registration and connection status',
+        'platform': 'moltbit',
+        'cooldown_minutes': 60,
+        'impact': 'low',
+        'requires': 'moltbit',
     },
 }
 
@@ -686,6 +711,25 @@ Haven't engaged on Moltbook recently, good time to build karma."""
                     return "❌ Failed to compose dynamic chain"
             return "❌ Dynamic chain composition not available"
 
+        # Moltbit actions
+        elif action_id == 'moltbit_post':
+            moltbit = plugins.get('moltbit')
+            if moltbit and hasattr(moltbit, 'moltbit_post_text'):
+                content = self._generate_post_content('moltbit')
+                if content:
+                    result = moltbit.moltbit_post_text(content)
+                    if hasattr(self, 'record_post_made') and not str(result).startswith('❌'):
+                        self.record_post_made('moltbit')
+                    return result
+                return "❌ Failed to generate post content"
+            return "❌ Moltbit plugin not available"
+
+        elif action_id == 'moltbit_status':
+            moltbit = plugins.get('moltbit')
+            if moltbit and hasattr(moltbit, 'moltbit_status_command'):
+                return moltbit.moltbit_status_command()
+            return "❌ Moltbit plugin not available"
+
         return f"❌ Action {action_id} not dispatchable"
 
     def _execute_chain(self, chain_id: str) -> str:
@@ -830,6 +874,10 @@ Respond with ONLY the debate topic, no explanation."""
                 return f"✅ Clawbr engagement: {result.get('debates', {})}"
             return "❌ Clawbr not available"
 
+        # Moltbit chain actions
+        if action == 'moltbit_compose_and_post':
+            return self._chain_compose_and_post(chain_context, platform or 'moltbit', plugins)
+
         return f"❌ Unknown chain step: {action}"
 
     def _chain_compose_and_post(self, chain_context: Dict, platform: str, plugins: Dict) -> str:
@@ -884,6 +932,11 @@ Post:"""
                 if moltbook and hasattr(moltbook, 'create_post_command'):
                     return moltbook.create_post_command(content)
                 return "❌ MoltBook plugin not available"
+            elif platform == 'moltbit':
+                moltbit = plugins.get('moltbit')
+                if moltbit and hasattr(moltbit, 'moltbit_post_text'):
+                    return moltbit.moltbit_post_text(content)
+                return "❌ Moltbit plugin not available"
             else:
                 return f"❌ Unknown platform: {platform}"
 
@@ -895,6 +948,7 @@ Post:"""
         prompts = {
             'moltx': "Write a short, engaging social media post (1-3 sentences, under 280 chars) about AI agents, crypto, DeFi, or Web3. Be opinionated and authentic. No hashtags. Sign off with 🦞 if short enough.",
             'moltbook': "Write a thoughtful forum post (2-4 sentences, under 500 chars) about AI agents, autonomous systems, or the intersection of AI and blockchain. Be insightful and spark discussion. No hashtags.",
+            'moltbit': "Write a short, intriguing message (1-2 sentences, under 200 chars) about AI, crypto, or technology that sounds mysterious or thought-provoking. It will be encoded in binary. No hashtags. Make it memorable.",
         }
         prompt = prompts.get(platform, prompts['moltx'])
 

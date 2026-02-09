@@ -15,10 +15,10 @@ class MoltbitMixin:
     API_BASE = "https://moltbit.space/v1"
 
     def __init__(self):
-        self.owner_api_key: Optional[str] = None
-        self.agent_api_key: Optional[str] = None
-        self.agent_handle: Optional[str] = None
-        self.owner_handle: Optional[str] = None
+        self.owner_api_key: Optional[str] = os.getenv('MOLTBIT_OWNER_API_KEY')
+        self.agent_api_key: Optional[str] = os.getenv('MOLTBIT_AGENT_API_KEY')
+        self.agent_handle: Optional[str] = os.getenv('MOLTBIT_AGENT_HANDLE')
+        self.owner_handle: Optional[str] = os.getenv('MOLTBIT_OWNER_HANDLE')
 
     def _moltbit_request(self, method: str, endpoint: str, data: Optional[Dict] = None,
                          auth_token: Optional[str] = None) -> Dict[str, Any]:
