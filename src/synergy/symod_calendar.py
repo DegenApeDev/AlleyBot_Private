@@ -16,9 +16,12 @@ class SyModCalendarMixin:
     
     Principle: Mathematical alignment over arbitrary scheduling
     """
+    MOLTBOOK_SUSPENSION_START: Optional[datetime] = None
     
     def _init_symod_calendar(self):
         """Initialize the SyMod calendar system"""
+        if SyModCalendarMixin.MOLTBOOK_SUSPENSION_START is None:
+            SyModCalendarMixin.MOLTBOOK_SUSPENSION_START = datetime.utcnow()
         try:
             from src.synergy import get_symod
             self._symod_calendar = get_symod()
@@ -42,6 +45,21 @@ class SyModCalendarMixin:
         High-value actions (posts, A2A tasks, DeFi trades) are delayed
         until the block height aligns with D(n) and Dg(n) harmonics.
         """
+        # MoltBook suspension check (independent of SyMod)
+        if 'moltbook' in action_id.lower() and self.MOLTBOOK_SUSPENSION_START:
+            days_since = (datetime.utcnow() - self.MOLTBOOK_SUSPENSION_START).days
+            if days_since < 7:
+                end_date = self.MOLTBOOK_SUSPENSION_START + timedelta(days=7)
+                return False, {
+                    'suspended': True,
+                    'days_since': days_since,
+                    'days_remaining': 7 - days_since,
+                    'suspension_end': end_date.strftime("%Y-%m-%d"),
+                    'reason': f'MoltBook actions suspended until {end_date.strftime("%Y-%m-%d")}',
+                    'action_id': action_id,
+                    'block_height': block_height,
+                }
+        
         if not self._symod_calendar_enabled or not self._symod_calendar:
             # If SyMod unavailable, default to allowing execution
             # (but log a warning)
@@ -152,7 +170,14 @@ class SyModCalendarMixin:
     def symod_calendar_status(self) -> str:
         """Get current calendar status"""
         if not self._symod_calendar_enabled:
-            return "📅 SyMod Calendar: OFFLINE"
+            status = "📅 SyMod Calendar: OFFLINE"
+            if self.MOLTBOOK_SUSPENSION_START:
+                days_since = (datetime.utcnow() - self.MOLTBOOK_SUSPENSION_START).days
+                if days_since < 7:
+                    status += f"\n🚫 MoltBook: SUSPENDED ({7 - days_since} days remaining)"
+                else:
+                    status += "\n📱 MoltBook: ACTIVE"
+            return status
         
         # Get current block if available
         block = 0
@@ -162,31 +187,46 @@ class SyModCalendarMixin:
             except:
                 pass
         
+        status_lines = [
+            f"📅 SyMod Brain Calendar: ACTIVE ✅",
+            "",
+        ]
+        
         if block > 0:
             in_window, dr, dg = self._symod_calendar.check_golden_window(block)
             next_window = self._estimate_next_window(block)
             
-            status_lines = [
-                f"📅 SyMod Brain Calendar: ACTIVE ✅",
-                f"",
+            status_lines.extend([
                 f"Current Block: {block}",
                 f"Digital Root D(n): {dr}",
                 f"Group Digital Dg(n): {dg}",
                 f"Golden Window: {'🌟 ACTIVE' if in_window else '⏳ WAITING'}",
-            ]
+            ])
             
             if next_window > 0:
                 status_lines.append(f"Next Window: ~{next_window} blocks")
-            
-            status_lines.extend([
-                f"",
-                f"High-Value Actions:",
-                f"  {'✅ Can execute' if in_window else '⏳ Wait for Golden Window'}",
-            ])
-            
-            return "\n".join(status_lines)
+        
+        # MoltBook suspension status
+        if self.MOLTBOOK_SUSPENSION_START:
+            days_since = (datetime.utcnow() - self.MOLTBOOK_SUSPENSION_START).days
+            if days_since < 7:
+                status_lines.append(f"🚫 MoltBook: SUSPENDED ({7 - days_since} days remaining)")
+            else:
+                status_lines.append("📱 MoltBook: ACTIVE")
         else:
-            return "📅 SyMod Calendar: ACTIVE (no block data available)"
+            status_lines.append("⚠️ MoltBook suspension: NOT SET")
+        
+        status_lines.extend([
+            "",
+            "High-Value Actions:",
+        ])
+        if block > 0:
+            in_window, _, _ = self._symod_calendar.check_golden_window(block)
+            status_lines.append(f"  {'✅ Can execute' if in_window else '⏳ Wait for Golden Window'}")
+        else:
+            status_lines.append("  ℹ️ Block data unavailable")
+            
+        return "\n".join(status_lines)
     
     def symod_calendar_command(self, *args) -> str:
         """CLI command: Check SyMod calendar status"""
