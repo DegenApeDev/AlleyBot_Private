@@ -63,6 +63,24 @@ Platform Stats:
         except Exception as e:
             return f"🦞 Error following @{username}: {str(e)}"
     
+    def clawbr_unfollow_command(self, *args) -> str:
+        """Unfollow a Clawbr user by @handle/username"""
+        if not args:
+            return "Usage: /clawbr_unfollow <username> (e.g., /clawbr_unfollow @neo)"
+
+        username = args[0].strip().lstrip('@')
+        if not username:
+            return "❌ Invalid username provided."
+
+        try:
+            result = self.unfollow_agent(username)
+            if result.get('success', False):
+                return f"✅ Successfully unfollowed @{username}!"
+            error_msg = result.get('error') or result.get('message') or 'Unknown error'
+            return f"❌ Failed to unfollow @{username}: {error_msg}"
+        except Exception as e:
+            return f"🦞 Error unfollowing @{username}: {str(e)}"
+    
     def clawbr_post_command(self, *args) -> str:
         """Create a post on Clawbr"""
         if not args:
@@ -98,6 +116,58 @@ Platform Stats:
             replies = post.get('replyCount', 0)
             
             output.append(f"👤 {author}")
+            output.append(f"💬 {content}")
+            output.append(f"❤️ {likes} | 💭 {replies}\n")
+        
+        return '\n'.join(output)
+
+    def clawbr_following_feed_command(self, limit: int = 10) -> str:
+        """Show recent posts from agents you follow"""
+        feed = self.get_following_feed(limit=limit)
+        
+        if not feed.get('success', True):
+            return f"❌ Failed to get following feed: {feed.get('error', 'Unknown error')}"
+        
+        posts = feed.get('posts', [])
+        if not posts:
+            return "📭 No posts from followed agents"
+        
+        output = ["👥 **Clawbr Following Feed**\n"]
+        for post in posts[:5]:
+            author = post.get('authorDisplayName', 'Unknown')
+            content = post.get('content', '')[:100]
+            if len(post.get('content', '')) > 100:
+                content += "..."
+            likes = post.get('likeCount', 0)
+            replies = post.get('replyCount', 0)
+            
+            output.append(f"👤 {author}")
+            output.append(f"💬 {content}")
+            output.append(f"❤️ {likes} | 💭 {replies}\n")
+        
+        return '\n'.join(output)
+
+    def clawbr_mentions_command(self, limit: int = 10) -> str:
+        """Show posts that @mention you"""
+        feed = self.get_mentions_feed(limit=limit)
+        
+        if not feed.get('success', True):
+            return f"❌ Failed to get mentions: {feed.get('error', 'Unknown error')}"
+        
+        posts = feed.get('posts', [])
+        if not posts:
+            return "📭 No mentions found"
+        
+        output = ["📢 **Clawbr Mentions**\n"]
+        for post in posts[:5]:
+            author = post.get('authorDisplayName', 'Unknown')
+            content = post.get('content', '')[:100]
+            if len(post.get('content', '')) > 100:
+                content += "..."
+            likes = post.get('likeCount', 0)
+            replies = post.get('replyCount', 0)
+            
+            output.append(f"👤 {author} mentioned you")
             output.append(f"💬 {content}")
             output.append(f"❤️ {likes} | 💭 {replies}\n")
         
