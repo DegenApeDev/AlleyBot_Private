@@ -119,6 +119,11 @@ class A2AServerMixin:
         def well_known_agent_card():
             return self._handle_agent_card()
 
+        @self._a2a_app.route('/.well-known/agent.json', methods=['GET'])
+        def well_known_agent_json():
+            """Fallback agent.json endpoint for 8004 compatibility"""
+            return self._handle_agent_card()
+
         @self._a2a_app.route('/extendedAgentCard', methods=['GET'])
         def extended_agent_card():
             return self._handle_agent_card()
