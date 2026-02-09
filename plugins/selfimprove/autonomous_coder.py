@@ -41,11 +41,16 @@ class AutonomousCoderMixin:
     """Mixin for AI-powered autonomous code generation and self-update"""
 
     def _init_autonomous_coder(self):
-        """Initialize autonomous coder state"""
+        """Initialize autonomous coder state with circuit breaker"""
         self.project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         self.update_log_file = os.path.join(self.project_root, 'skills', 'coder_log.json')
         self.pending_updates: List[Dict] = []
         self._coder_history: List[Dict] = []
+        # Circuit breaker for API failures
+        self._api_failure_count = 0
+        self._api_failure_threshold = 5  # Stop after 5 consecutive failures
+        self._api_last_failure = None
+        self._api_cooldown_minutes = 30  # Wait 30 min after threshold reached
         self._load_coder_state()
         print("🤖 Autonomous coder ready (Grok primary, DeepSeek fallback)")
 
@@ -66,6 +71,30 @@ class AutonomousCoderMixin:
             })
         except Exception as e:
             print(f"⚠️  Failed to save coder state: {e}")
+
+    def _check_circuit_breaker(self) -> bool:
+        """Check if API circuit breaker is open (too many failures)"""
+        if self._api_failure_count >= self._api_failure_threshold:
+            if self._api_last_failure:
+                from datetime import datetime, timedelta
+                cooldown_end = self._api_last_failure + timedelta(minutes=self._api_cooldown_minutes)
+                if datetime.now() < cooldown_end:
+                    remaining = int((cooldown_end - datetime.now()).total_seconds() / 60)
+                    print(f"⛔ API circuit breaker OPEN: {self._api_failure_count} failures. Cooldown: {remaining}min remaining")
+                    return False
+                else:
+                    # Reset after cooldown
+                    print(f"🔓 API circuit breaker reset after cooldown")
+                    self._api_failure_count = 0
+                    self._api_last_failure = None
+        return True
+
+    def _record_api_failure(self):
+        """Record an API failure for circuit breaker"""
+        from datetime import datetime
+        self._api_failure_count += 1
+        self._api_last_failure = datetime.now()
+        print(f"⚠️ API failure {self._api_failure_count}/{self._api_failure_threshold}")
 
     # ------------------------------------------------------------------
     # AI Code Generation
@@ -160,59 +189,60 @@ class AutonomousCoderMixin:
             except Exception:
                 pass
 
-    def _generate_code_with_ai(self, task: str, context: str = "",
-                                max_tokens: int = 4000) -> Optional[str]:
-        """Generate code using Grok (primary) or DeepSeek (fallback)"""
-        import_examples = self._get_import_examples()
+    def _generate_code_with_ai(self, task: str, max_tokens: int = 4000) -> Optional[str]:
+        """Generate code using AI with timeout handling and circuit breaker"""
+        # Check circuit breaker first
+        if not self._check_circuit_breaker():
+            print("⛈️ Skipping AI generation - circuit breaker open")
+            return None
 
         system_prompt = f"""You are an expert Python developer working on AlleyBot, an autonomous AI agent.
-You generate clean, production-ready Python code following these rules:
-1. Follow existing code style (mixin pattern, plugin architecture)
-2. Include proper error handling with try/except
-3. Use type hints
-4. NO eval(), exec(), os.system(), __import__(), or shell=True
-5. Only use standard library + packages already in requirements.txt
-6. Keep functions focused and under 50 lines each
-7. Return ONLY the code, no explanations or markdown fences
 
-CRITICAL — Import conventions for this project:
-- The project root is on PYTHONPATH. Imports are from the root, e.g.:
-  from plugins.brain.brain import BrainPlugin
-  from src.config.models import ModelRouter
-  from grok_ai import grok_ai
-  from deepseek_ai import deepseek_ai
-- Plugin files use mixin classes. Each plugin folder has an __init__ or main .py.
-- NEVER use relative imports like 'from . import' in generated skill files.
-- NEVER invent modules that don't exist. If unsure, wrap imports in try/except.
+CRITICAL RULES:
+1. NEVER use relative imports - always use absolute imports from project root
+2. For HTTP requests: import requests
+3. For AI: from grok_ai import grok_ai / from deepseek_ai import deepseek_ai
+4. Plugin imports: from plugins.X.Y import Z
+5. NEVER use eval(), exec(), os.system(), subprocess with shell=True
+6. All code must be valid, complete Python files
+7. Wrap optional imports in try/except blocks
+8. Follow existing code style and conventions
 
-Real import examples from the codebase:
-{import_examples}"""
+Generate clean, production-ready Python code."""
 
-        user_prompt = f"""Task: {task}
+        user_prompt = f"Task: {task}\n\nGenerate complete Python code. Return ONLY code, no markdown fences, no explanations."
 
-{f'Context (existing code/skill file):{chr(10)}{context}' if context else ''}
-
-Generate the complete Python code. Return ONLY the raw Python code, no markdown fences or explanations."""
-
-        # Try Grok first (better reasoning for code)
+        # Try Grok with timeout handling (Grok has built-in 60s timeout + retries)
         try:
             from grok_ai import grok_ai
             if grok_ai.enabled:
+                print(f"  🤖 Calling Grok API...")
                 result = grok_ai.chat(user_prompt, system_prompt=system_prompt, max_tokens=max_tokens)
                 if result:
+                    self._api_failure_count = 0  # Reset on success
                     return self._clean_generated_code(result)
+        except TimeoutError as e:
+            print(f"⏰ Grok API timeout: {e}")
+            self._record_api_failure()
         except Exception as e:
-            print(f"⚠️  Grok code generation failed: {e}")
+            print(f"⚠️ Grok code generation failed: {e}")
+            self._record_api_failure()
 
-        # Fallback to DeepSeek
+        # Fallback to DeepSeek with timeout handling
         try:
             from deepseek_ai import deepseek_ai
             if deepseek_ai.enabled:
+                print(f"  🤖 Calling DeepSeek API...")
                 result = deepseek_ai.chat(user_prompt, system_prompt=system_prompt, max_tokens=max_tokens)
                 if result:
+                    self._api_failure_count = 0  # Reset on success
                     return self._clean_generated_code(result)
+        except TimeoutError as e:
+            print(f"⏰ DeepSeek API timeout: {e}")
+            self._record_api_failure()
         except Exception as e:
-            print(f"⚠️  DeepSeek code generation failed: {e}")
+            print(f"⚠️ DeepSeek code generation failed: {e}")
+            self._record_api_failure()
 
         return None
 
