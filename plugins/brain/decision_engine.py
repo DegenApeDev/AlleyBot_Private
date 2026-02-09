@@ -2,12 +2,24 @@
 Decision Engine Mixin
 The autonomous brain that reasons about WHAT to do next.
 Uses AI to evaluate context and pick the highest-value action.
+
+SYMOD INTEGRATION: All high-value actions are validated through 
+Synergy Standard Model mathematical framework before execution.
+If the math fails, the thought is discarded.
 """
 import os
 import json
 import datetime
 import random
 from typing import Dict, Any, Optional, List, Tuple
+
+# SyMod Truth Filter - Mandatory validation layer
+try:
+    from src.synergy import SyModTruthFilterMixin, get_symod
+    SYMOD_AVAILABLE = True
+except ImportError:
+    SYMOD_AVAILABLE = False
+    print("⚠️ SyMod Truth Filter not available - high-value actions may be blocked")
 
 
 # Multi-step action chains: each chain is a sequence of steps
@@ -225,13 +237,18 @@ for chain_id, chain_info in ACTION_CHAINS.items():
     }
 
 
-class DecisionEngineMixin:
-    """Mixin for autonomous decision-making"""
+class DecisionEngineMixin(SyModTruthFilterMixin if SYMOD_AVAILABLE else object):
+    """Mixin for autonomous decision-making with SyMod truth validation"""
 
     def _init_decision_engine(self):
-        """Initialize decision engine state"""
+        """Initialize decision engine state with SyMod validation"""
         self.action_history: List[Dict] = []
         self.action_cooldowns: Dict[str, datetime.datetime] = {}
+        
+        # Initialize SyMod Truth Filter if available
+        if SYMOD_AVAILABLE:
+            self._init_symod_filter()
+        
         self._load_decision_state()
 
     def _load_decision_state(self):
@@ -467,6 +484,37 @@ Haven't engaged on Moltbook recently, good time to build karma."""
                 import time
                 print(f"  ⏱️  Rate limiting: sleeping {delay}s")
                 time.sleep(delay)
+
+        # SYMOD TRUTH FILTER: Mandatory validation for high-value actions
+        # Mathematical certainty over LLM probabilistic output
+        if SYMOD_AVAILABLE and hasattr(self, '_symod_enabled') and self._symod_enabled:
+            # Build validation context
+            validation_context = {
+                'platform': platform,
+                'impact': action.get('impact', 'low'),
+                'action_id': action_id,
+            }
+            
+            # Get block height for Golden Window check
+            if hasattr(self, 'get_latest_block'):
+                try:
+                    validation_context['block_height'] = self.get_latest_block()
+                except:
+                    validation_context['block_height'] = 0
+            
+            # Run SyMod validation
+            is_valid, validation_details = self.validate_brain_action(action_id, validation_context)
+            
+            if not is_valid:
+                result['output'] = f"🚫 BLOCKED by SyMod Truth Filter: {validation_details.get('reason', 'Mathematical validation failed')}"
+                result['symod_blocked'] = True
+                result['symod_details'] = validation_details
+                print(f"🚫 Action {action_id} BLOCKED by SyMod: {validation_details.get('reason', 'Unknown')}")
+                return result
+            
+            print(f"🔢 Action {action_id} APPROVED by SyMod Truth Filter")
+            result['symod_validated'] = True
+            result['symod_details'] = validation_details
 
         try:
             output = self._dispatch_action(action_id)
@@ -943,6 +991,124 @@ Post:"""
         except Exception as e:
             return f"❌ Compose and post failed: {e}"
 
+    def get_latest_block(self) -> int:
+        """Get latest Base block height for Golden Window calibration"""
+        try:
+            # Try onchain plugin first
+            onchain = self.core.plugin_manager.plugins.get('onchain')
+            if onchain and hasattr(onchain, 'web3_provider'):
+                block_info = onchain.web3_provider.get_block_info()
+                if block_info.get('success'):
+                    return block_info['block_number']
+            
+            # Fallback: try to get from memory if recently cached
+            cached = self.core.get_memory('latest_block_height')
+            if cached and isinstance(cached, dict):
+                return cached.get('block_number', 0)
+        except Exception:
+            pass
+        return 0
+    
+    def symod_status_command(self) -> str:
+        """CLI command: Check SyMod Truth Filter status"""
+        if not SYMOD_AVAILABLE:
+            return "🔢 SyMod Truth Filter: NOT INSTALLED ❌\nInstall with: pip install -e ."
+        
+        if not hasattr(self, '_symod_enabled') or not self._symod_enabled:
+            return "🔢 SyMod Truth Filter: OFFLINE ❌\nCheck synergy module initialization"
+        
+        # Get current block for Golden Window demo
+        block = self.get_latest_block()
+        if block > 0 and self._symod:
+            in_window, dr, dg = self._symod.check_golden_window(block)
+            window_status = "🌟 GOLDEN" if in_window else "⏳ WAITING"
+        else:
+            window_status = "❓ UNKNOWN (no block data)"
+        
+        stats = self.get_symod_stats() if hasattr(self, 'get_symod_stats') else {}
+        qa = stats.get('qa_arena', {})
+        
+        return f"""🔢 SyMod Truth Filter: ACTIVE ✅
+
+Mathematical Framework:
+  Arena ID: {qa.get('id', 'N/A'):.6e}
+  Speed (cy): {qa.get('cy', 0):.6e}
+  Mass Limit: {stats.get('mass_natural_limit', 0):.6e}
+
+Golden Window (Block {block}):
+  Status: {window_status}
+  D(n): {dr if block > 0 else '?'}
+  Dg(n): {dg if block > 0 else '?'}
+
+Validation Gates:
+  ✅ DeFi Trade (Me/Ma impedance)
+  ✅ Golden Window (D/Dg)
+  ✅ MCP Data (Qa Arena)
+  ✅ Brain Action Gate
+
+⚠️  LLM outputs are SECONDARY to mathematical certainty
+⚠️  If the math fails, the thought is DISCARDED"""
+    
+    def check_golden_window_command(self) -> str:
+        """CLI command: Check if current block is in Golden Window"""
+        if not SYMOD_AVAILABLE or not hasattr(self, '_symod_enabled') or not self._symod_enabled:
+            return "❌ SyMod Truth Filter not available"
+        
+        block = self.get_latest_block()
+        if block == 0:
+            return "❌ Cannot get latest block height. Is onchain plugin loaded?"
+        
+        in_window, dr, dg = self._symod.check_golden_window(block)
+        
+        status = "🌟 IN GOLDEN WINDOW" if in_window else "⏳ Outside Golden Window"
+        
+        return f"""{status}
+
+Block Height: {block}
+Digital Root D(n): {dr}
+Group Digital Dg(n): {dg}
+
+Recommendation:
+{'  ✅ Safe to execute high-value A2A tasks' if in_window else '  ⏳ Wait for Golden Window alignment'}
+{'  ✅ Post to social platforms' if in_window else '  ⏳ Delay high-impact posts'}
+{'  ✅ Execute DeFi trades' if in_window else '  ⏳ Avoid major trades'}
+
+Note: Golden Window = D(n) ≈ Dg(n) or harmonic difference (3 or 6)"""
+    
+    def validate_defi_command(self, amount: str, price: str, liquidity: str, slippage: str = "0.01") -> str:
+        """CLI command: Validate a DeFi trade through SyMod"""
+        if not SYMOD_AVAILABLE or not hasattr(self, '_symod_enabled') or not self._symod_enabled:
+            return "❌ SyMod Truth Filter not available"
+        
+        try:
+            amt = float(amount)
+            prc = float(price)
+            liq = float(liquidity)
+            slip = float(slippage)
+        except ValueError:
+            return "❌ Invalid numeric arguments. Usage: /symod_defi <amount> <price> <liquidity> [slippage]"
+        
+        result, details = self.validate_defi_trade_symod(amt, prc, liq, slip)
+        
+        status = "✅ APPROVED" if result else "🚫 REJECTED"
+        
+        return f"""{status}
+
+Trade Parameters:
+  Amount: {amt}
+  Price: {prc}
+  Liquidity: {liq}
+  Slippage: {slip*100:.2f}%
+
+SyMod Analysis:
+  Mass: {details.get('mass', 0):.6e}
+  Impedance: {details.get('impedance', 0):.6e}
+  Confidence: {details.get('confidence', 0):.1%}
+  Digital Root: {details.get('digital_root', 'N/A')}
+  Golden Window: {'Yes' if details.get('golden_window', False) else 'No'}
+
+{details.get('reason', 'No additional information')}"""
+    
     def _generate_post_content(self, platform: str) -> Optional[str]:
         """Generate AI post content for a platform"""
         prompts = {
