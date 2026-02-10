@@ -813,10 +813,10 @@ Generate only the title (no explanations):"""
             # Generate image
             result = await self._run_sync(
                 grok_ai.generate_image,
-                prompt=prompt,
-                aspect_ratio="16:9",
-                image_format="base64",
-                n=1
+                prompt,  # positional arg
+                "16:9",  # aspect_ratio
+                "base64",  # image_format
+                1  # n
             )
             
             if result and result.get('image_data'):
