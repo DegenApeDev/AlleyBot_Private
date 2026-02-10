@@ -132,21 +132,39 @@
 - [x] Skill performance tracking — track which skills are used most, optimize descriptions
 
 **Implementation:**
-- `plugins/skills/skill_discovery.py` — scan and index all SKILL.md files ✅
-- `plugins/skills/skill_loader.py` — lazy loading with progressive disclosure ✅
-- `plugins/skills/skill_executor.py` — execute skill instructions with tool access ✅
-- `plugins/skills/skill_generator.py` — auto-generate skills from existing capabilities ✅
-- `plugins/skills/skill_validation.py` — validate SKILL.md against specification ✅
-- `plugins/skills/skill_templates.py` — templates for common skill patterns ✅
-- `plugins/skills/skill_marketplace.py` — import/export in agentskills.io format ⏳
-- `plugins/skills/skills.py` — main plugin composing all mixins ✅
-- `skills/` directory — store all skills in Agent Skills format ✅
-- Example: `skills/social-engagement/SKILL.md`, `skills/blockchain-analysis/SKILL.md` ✅
+- `plugins/skills/skill_discovery.py` — scan and index all SKILL.md files 
+- `plugins/skills/skill_templates.py` — templates for common skill patterns 
+- `plugins/skills/skill_marketplace.py` — import/export in agentskills.io format 
+- `plugins/skills/skills.py` — main plugin composing all mixins 
+- `skills/` directory — store all skills in Agent Skills format 
+- Example: `skills/social-engagement/SKILL.md`, `skills/blockchain-analysis/SKILL.md` 
 
 **References:**
 - [Agent Skills Specification](https://agentskills.io/specification)
 - [Agent Skills Integration](https://agentskills.io/integrate-skills)
 - [Example Skills](https://github.com/anthropics/skills)
+
+## 🔐 Phase 15: Vault-Based Security Migration
+- [ ] Move from .env files to secure vault-based secret management
+- [ ] Implement HashiCorp Vault integration (or local vault alternative)
+- [ ] Create secret rotation mechanism for API keys
+- [ ] Add audit logging for secret access
+- [ ] Implement short-lived credentials where possible
+- [ ] Create backup/recovery procedures for vault
+- [ ] Update all plugins to use vault instead of os.getenv()
+- [ ] Add vault health monitoring and alerts
+
+**Implementation:**
+- `src/security/vault_client.py` — vault connection and secret retrieval
+- `src/security/secret_manager.py` — abstraction layer for secret operations
+- `scripts/migrate_secrets.py` — migration tool from .env to vault
+- Update all `os.getenv()` calls to use vault client
+- Add vault unseal/initialization scripts
+
+**References:**
+- [HashiCorp Vault](https://www.vaultproject.io/)
+- [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/) (alternative)
+- [Azure Key Vault](https://azure.microsoft.com/services/key-vault/) (alternative)
 
 ## 📝 Recent Completed Items
 - [x] Clawbr auto-follow debate opponents on create/join
