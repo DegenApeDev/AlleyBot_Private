@@ -25,11 +25,12 @@ from plugins.skills.skill_validation import SkillValidationMixin
 from plugins.skills.skill_templates import SkillTemplatesMixin
 from plugins.skills.skill_generator import SkillGeneratorMixin
 from plugins.skills.skill_oasf_bridge import OASFSkillBridgeMixin
+from plugins.skills.skill_performance import SkillPerformanceMixin
 
 
 class SkillsPlugin(SkillDiscoveryMixin, SkillLoaderMixin, SkillExecutorMixin, 
                    SkillValidationMixin, SkillTemplatesMixin, SkillGeneratorMixin, 
-                   OASFSkillBridgeMixin, AlleyBotPlugin):
+                   OASFSkillBridgeMixin, SkillPerformanceMixin, AlleyBotPlugin):
     """Agent Skills framework for AlleyBot"""
 
     def __init__(self, config):
@@ -57,6 +58,8 @@ class SkillsPlugin(SkillDiscoveryMixin, SkillLoaderMixin, SkillExecutorMixin,
             'skills_generate_all': self.generate_all_platform_skills_command,
             'skills_oasf_bridge': self.oasf_bridge_command,
             'skills_suggest': self.suggest_skills_command,
+            'skills_stats': self.skills_stats_command,
+            'skills_recommend': self.skills_recommend_command,
             'skill_exec': self.skill_exec_command,
             'skill_find': self.find_skill_command,
             'skill_activate': self.activate_skill_command,
