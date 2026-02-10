@@ -379,5 +379,79 @@ Requirements:
             print(f"❌ Grok DM reply generation failed: {e}")
             return None
 
+    def generate_image(self, prompt: str, aspect_ratio: str = "16:9", 
+                       image_format: str = "base64", n: int = 1) -> Optional[Dict]:
+        """Generate an image using Grok's grok-imagine-image model
+        
+        Args:
+            prompt: Text description of the image to generate
+            aspect_ratio: Image dimensions - "1:1", "16:9", "9:16", "4:3", "3:4", etc.
+            image_format: "base64" or "url" (base64 recommended for embedding)
+            n: Number of images to generate (default 1)
+        
+        Returns:
+            Dict with 'image_data' (base64 bytes or URL), 'moderation_passed', 'model'
+            Cost: ~$0.02 per image (2 cents)
+        """
+        if not self.enabled:
+            return None
+        
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": "grok-imagine-image",  # Correct model name per docs
+                "prompt": prompt,
+                "aspect_ratio": aspect_ratio,  # e.g., "16:9", "1:1", "9:16"
+                "n": n,
+                "image_format": image_format  # "base64" or "url"
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/images/generations",
+                headers=headers,
+                json=data,
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                
+                # Check if we got valid image data
+                if 'data' in result and len(result['data']) > 0:
+                    image_data = result['data'][0]
+                    
+                    output = {
+                        'moderation_passed': image_data.get('respect_moderation', True),
+                        'model': result.get('model', 'grok-imagine-image'),
+                    }
+                    
+                    # Return base64 bytes or URL based on format
+                    if image_format == "base64" and 'b64_json' in image_data:
+                        import base64
+                        output['image_data'] = base64.b64decode(image_data['b64_json'])
+                        output['format'] = 'base64_bytes'
+                    elif 'url' in image_data:
+                        output['image_data'] = image_data['url']
+                        output['format'] = 'url'
+                    else:
+                        print(f"⚠️ Grok image: unexpected data format, keys: {list(image_data.keys())}")
+                        return None
+                    
+                    return output
+                    
+                print(f"⚠️ Grok image: no data in response, keys: {list(result.keys())}")
+                return None
+            else:
+                print(f"❌ Grok image generation failed: {response.status_code} - {response.text[:200]}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Grok image generation error: {e}")
+            return None
+
 # Global instance
 grok_ai = GrokAI()
