@@ -125,11 +125,11 @@
 - [x] Skill context injection — inject SKILL.md into AI prompt when task matches description
 - [x] Skill execution engine — follow instructions, execute bundled scripts, load references
 - [x] Auto-skill generation — AlleyBot creates new SKILL.md for discovered capabilities
-- [ ] Skill marketplace integration — publish/import skills from agentskills.io format
+- [x] Skill marketplace integration — publish/import skills from agentskills.io format (stub)
 - [x] Skill validation and linting — validate SKILL.md against specification
 - [x] Skill templating system — templates for common skill patterns (API, analysis, content)
-- [ ] OASF skill bridge — map OASF categories to Agent Skills discovery
-- [ ] Skill performance tracking — track which skills are used most, optimize descriptions
+- [x] OASF skill bridge — map OASF categories to Agent Skills discovery
+- [x] Skill performance tracking — track which skills are used most, optimize descriptions
 
 **Implementation:**
 - `plugins/skills/skill_discovery.py` — scan and index all SKILL.md files ✅
