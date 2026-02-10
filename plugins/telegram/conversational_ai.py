@@ -483,16 +483,33 @@ IMPORTANT RULES:
             if result and result.get('image_data'):
                 import base64
                 from io import BytesIO
-                from telegram import InputFile
                 
-                # Convert base64 to image file
-                image_bytes = base64.b64decode(result['image_data']) if isinstance(result['image_data'], str) else result['image_data']
-                image_file = BytesIO(image_bytes)
-                image_file.name = "generated_image.jpg"
+                # Convert base64 to image bytes
+                image_data = result['image_data']
+                if isinstance(image_data, str):
+                    image_bytes = base64.b64decode(image_data)
+                else:
+                    image_bytes = image_data
+                
+                # Try to detect image format from magic bytes
+                ext = "jpg"
+                if image_bytes[:4] == b'\x89PNG':
+                    ext = "png"
+                elif image_bytes[:2] == b'\xff\xd8':
+                    ext = "jpg"
+                
+                # Use BufferedInputFile for modern python-telegram-bot
+                try:
+                    from telegram import BufferedInputFile
+                    photo_file = BufferedInputFile(image_bytes, filename=f"generated_image.{ext}")
+                except ImportError:
+                    # Fallback for older versions
+                    from telegram import InputFile
+                    photo_file = InputFile(BytesIO(image_bytes), filename=f"generated_image.{ext}")
                 
                 # Send the image
                 await update.message.reply_photo(
-                    photo=InputFile(image_file),
+                    photo=photo_file,
                     caption=f"🎨 **Generated Image**\n📝 Prompt: {prompt}\n✅ Moderation passed: {result.get('moderation_passed', True)}"
                 )
                 
