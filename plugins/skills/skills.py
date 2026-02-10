@@ -21,9 +21,12 @@ from plugin_manager import AlleyBotPlugin
 from plugins.skills.skill_discovery import SkillDiscoveryMixin
 from plugins.skills.skill_loader import SkillLoaderMixin
 from plugins.skills.skill_executor import SkillExecutorMixin
+from plugins.skills.skill_validation import SkillValidationMixin
+from plugins.skills.skill_templates import SkillTemplatesMixin
 
 
-class SkillsPlugin(SkillDiscoveryMixin, SkillLoaderMixin, SkillExecutorMixin, AlleyBotPlugin):
+class SkillsPlugin(SkillDiscoveryMixin, SkillLoaderMixin, SkillExecutorMixin, 
+                   SkillValidationMixin, SkillTemplatesMixin, AlleyBotPlugin):
     """Agent Skills framework for AlleyBot"""
 
     def __init__(self, config):
@@ -46,9 +49,13 @@ class SkillsPlugin(SkillDiscoveryMixin, SkillLoaderMixin, SkillExecutorMixin, Al
             'skills_info': self.skill_info_command,
             'skills_history': self.skill_history_command,
             'skills_log': self.execution_log_command,
+            'skills_validate': self.validate_all_skills_command,
+            'skills_templates': self.list_templates_command,
             'skill_exec': self.skill_exec_command,
             'skill_find': self.find_skill_command,
             'skill_activate': self.activate_skill_command,
+            'skill_lint': self.lint_skill_command,
+            'skill_create': self.create_skill_from_template_command,
         }
 
     def get_endpoints(self):
