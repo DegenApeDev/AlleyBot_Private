@@ -193,6 +193,83 @@ class ContentStrategyMixin:
         self._content_calendar[f'{platform}_last_post'] = now.isoformat()
         self._save_content_calendar()
 
+    # =========================================================================
+    # Image Post Calendar — separate tracking for image posts (max 3/day)
+    # =========================================================================
+
+    def should_post_image_now(self, platform: str) -> Dict[str, Any]:
+        """Check if we should post an image now (separate from text posts, max 3/day)"""
+        now = datetime.datetime.now()
+        hour = now.hour
+        today_key = now.strftime('%Y-%m-%d')
+        
+        # Image posts limited to 3 per day
+        image_posts_today = self._get_image_posts_today(platform, today_key)
+        max_image_posts = 3
+        
+        if image_posts_today >= max_image_posts:
+            return {'should_post': False, 'reason': f'Image daily limit reached ({image_posts_today}/{max_image_posts})'}
+        
+        # Check time window (same as regular posts)
+        schedule = self._posting_schedule.get(platform, DEFAULT_POSTING_SCHEDULE.get(platform, {}))
+        if hour in schedule.get('avoid_hours', []):
+            return {'should_post': False, 'reason': f'Avoid hour ({hour}:00 UTC) for images'}
+        
+        # Check gap since last image post (minimum 2 hours between image posts)
+        last_image_time = self._get_last_image_post_time(platform)
+        if last_image_time:
+            gap_hours = (now - last_image_time).total_seconds() / 3600
+            if gap_hours < 2:
+                return {'should_post': False, 'reason': f'Too soon for next image ({gap_hours:.1f}h < 2h gap)'}
+        
+        # Score the current time
+        if hour in schedule.get('peak_hours', []):
+            quality = 'peak'
+            score = 1.0
+        elif hour in schedule.get('good_hours', []):
+            quality = 'good'
+            score = 0.7
+        else:
+            quality = 'okay'
+            score = 0.4
+        
+        return {
+            'should_post': True,
+            'quality': quality,
+            'score': score,
+            'image_posts_today': image_posts_today,
+            'max_image_posts': max_image_posts,
+        }
+
+    def record_image_post_made(self, platform: str):
+        """Record that an image post was made"""
+        now = datetime.datetime.now()
+        today_key = now.strftime('%Y-%m-%d')
+        key = f'{platform}_image_{today_key}'
+
+        daily_counts = self._content_calendar.get('daily_counts', {})
+        daily_counts[key] = daily_counts.get(key, 0) + 1
+
+        self._content_calendar['daily_counts'] = daily_counts
+        self._content_calendar[f'{platform}_last_image_post'] = now.isoformat()
+        self._save_content_calendar()
+        print(f"📸 Image post recorded for {platform} ({daily_counts[key]}/3 today)")
+
+    def _get_image_posts_today(self, platform: str, today_key: str) -> int:
+        """Count image posts made today on a platform"""
+        daily_counts = self._content_calendar.get('daily_counts', {})
+        return daily_counts.get(f'{platform}_image_{today_key}', 0)
+
+    def _get_last_image_post_time(self, platform: str) -> Optional[datetime.datetime]:
+        """Get the last image post time for a platform"""
+        ts = self._content_calendar.get(f'{platform}_last_image_post')
+        if ts:
+            try:
+                return datetime.datetime.fromisoformat(ts)
+            except (ValueError, TypeError):
+                pass
+        return None
+
     def _get_last_post_time(self, platform: str) -> Optional[datetime.datetime]:
         """Get the last post time for a platform"""
         ts = self._content_calendar.get(f'{platform}_last_post')
@@ -433,6 +510,11 @@ class ContentStrategyMixin:
                 output += f"Posts today: {check.get('posts_today', 0)}/{check.get('max_daily', 3)}\n"
             else:
                 output += f"  {check.get('reason', 'Not available')}\n"
+
+            # Image posts status
+            image_check = self.should_post_image_now(platform)
+            img_status = '📸' if image_check['should_post'] else '⏳'
+            output += f"  {img_status} Image posts: {image_check.get('image_posts_today', 0)}/{image_check.get('max_image_posts', 3)}\n"
 
             queue = self._content_calendar.get(f'{platform}_queue', [])
             if queue:

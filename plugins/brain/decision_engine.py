@@ -590,6 +590,69 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             if moltx and hasattr(moltx, 'engage_feed_command'):
                 return moltx.engage_feed_command('3')
 
+        elif action_id == 'moltx_image_post':
+            moltx = plugins.get('moltx')
+            if moltx and hasattr(moltx, 'create_post') and hasattr(moltx, 'upload_media'):
+                # Check content calendar for image posts (separate limit)
+                if hasattr(self, 'should_post_image_now'):
+                    check = self.should_post_image_now('moltx')
+                    if not check.get('should_post'):
+                        return f"⏳ Image calendar says not now: {check.get('reason', 'unknown')}"
+                
+                # Step 1: Generate text content
+                content = self._generate_post_content('moltx')
+                if not content:
+                    return "❌ Failed to generate post content"
+                
+                # Step 2: Generate viral image based on content
+                image_prompt = self._generate_image_prompt_from_content(content)
+                image_result = self._generate_image_for_post(image_prompt)
+                if not image_result or not image_result.get('image_url'):
+                    return "❌ Failed to generate image"
+                
+                # Step 3: Download image and upload to Moltx
+                try:
+                    import requests
+                    from io import BytesIO
+                    
+                    # Download image from Grok URL
+                    img_response = requests.get(image_result['image_url'], timeout=30)
+                    if img_response.status_code != 200:
+                        return f"❌ Failed to download image: {img_response.status_code}"
+                    
+                    # Save to temp file for upload
+                    import tempfile
+                    import os
+                    
+                    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+                        tmp.write(img_response.content)
+                        tmp_path = tmp.name
+                    
+                    try:
+                        # Upload to Moltx
+                        media_url = moltx.upload_media(tmp_path)
+                        if not media_url:
+                            return "❌ Failed to upload media to Moltx"
+                        
+                        # Create post with media URL in content
+                        full_content = f"{content}\n\n{media_url}"
+                        result = moltx.create_post(full_content)
+                        
+                        if hasattr(self, 'record_image_post_made') and not str(result).startswith('❌'):
+                            self.record_image_post_made('moltx')
+                        
+                        return f"✅ Image post created!\n📝 {content[:100]}...\n🖼️ {media_url[:60]}..."
+                    finally:
+                        # Cleanup temp file
+                        try:
+                            os.unlink(tmp_path)
+                        except:
+                            pass
+                            
+                except Exception as e:
+                    return f"❌ Image post failed: {e}"
+            return "❌ Moltx plugin not available for image posting"
+
         elif action_id == 'moltx_post':
             moltx = plugins.get('moltx')
             if moltx and hasattr(moltx, 'create_post'):
@@ -1012,6 +1075,77 @@ Post:"""
 
         except Exception as e:
             return f"❌ Compose and post failed: {e}"
+
+    def _generate_image_prompt_from_content(self, content: str) -> str:
+        """Generate a viral image prompt based on post content"""
+        try:
+            from grok_ai import grok_ai
+            if not grok_ai.enabled:
+                # Fallback: extract key themes and create prompt
+                return self._fallback_image_prompt(content)
+            
+            system_prompt = """You are an expert at creating viral image prompts for AI image generation.
+Convert social media post content into compelling, detailed image prompts.
+
+Rules:
+1. Create a SINGLE detailed scene description (not multiple options)
+2. Be specific about style: photorealistic, cinematic, artistic, meme-style, etc.
+3. Include visual elements that capture the emotion/topic of the post
+4. Keep it under 200 words
+5. Make it eye-catching and shareable - something that would stop someone scrolling
+6. Avoid text in images (since AI struggles with text rendering)"""
+
+            user_prompt = f"""Create a viral image generation prompt based on this social media post:
+
+"{content}"
+
+Generate a detailed, compelling image prompt that would create an eye-catching visual to accompany this post. Focus on the key theme/emotion and make it visually striking."""
+
+            prompt = grok_ai.chat(user_prompt, system_prompt=system_prompt, max_tokens=250)
+            if prompt:
+                return prompt.strip()
+            return self._fallback_image_prompt(content)
+        except Exception as e:
+            print(f"⚠️  Failed to generate image prompt with AI: {e}")
+            return self._fallback_image_prompt(content)
+    
+    def _fallback_image_prompt(self, content: str) -> str:
+        """Fallback image prompt generator based on content keywords"""
+        content_lower = content.lower()
+        
+        # Extract key themes
+        if any(word in content_lower for word in ['ai', 'agent', 'intelligence', 'autonomous']):
+            return "A futuristic AI agent hologram in a cyberpunk city, glowing neural networks, neon blue and purple, cinematic lighting, highly detailed, 8k"
+        elif any(word in content_lower for word in ['crypto', 'blockchain', 'defi', 'token', 'bitcoin', 'eth']):
+            return "Glowing cryptocurrency coins floating in digital space, blockchain visualization, golden and blue light, futuristic finance concept, cinematic"
+        elif any(word in content_lower for word in ['build', 'code', 'develop', 'ship', 'create']):
+            return "A creative developer workspace with floating code holograms, futuristic IDE, neon accents, inspiring technology scene, cinematic lighting"
+        elif any(word in content_lower for word in ['community', 'ecosystem', 'network', 'connect']):
+            return "Abstract visualization of connected nodes forming a global network, glowing connections, community concept art, blue and gold colors, futuristic"
+        else:
+            return "An artistic abstract visualization of innovation and technology, vibrant colors, futuristic aesthetic, inspiring and eye-catching, cinematic lighting"
+
+    def _generate_image_for_post(self, prompt: str) -> Optional[Dict]:
+        """Generate an image using Grok for a social media post"""
+        try:
+            from grok_ai import grok_ai
+            if not grok_ai.enabled:
+                print("⚠️  Grok AI not available for image generation")
+                return None
+            
+            print(f"🎨 Generating viral image for post...")
+            result = grok_ai.generate_image(prompt=prompt)
+            
+            if result and result.get('image_url'):
+                print(f"✅ Image generated: {result['image_url'][:60]}...")
+                return result
+            else:
+                print(f"❌ Image generation returned no result")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Image generation failed: {e}")
+            return None
 
     def get_latest_block(self) -> int:
         """Get latest Base block height for Golden Window calibration"""
