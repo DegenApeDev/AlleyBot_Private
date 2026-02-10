@@ -657,6 +657,15 @@ class AgentCardGenerator:
             tx_hex = tx_hash.hex()
 
             print(f"📤 ERC-8004 setAgentURI tx sent: {tx_hex}")
+            
+            # Register tx hash as safe to display
+            try:
+                from tx_registry import register_tx
+                register_tx(tx_hex)
+                print(f"🔐 Tx hash registered as safe: {tx_hex[:20]}...")
+            except ImportError:
+                pass
+            
             print(f"⏳ Waiting for confirmation...")
 
             receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=300)
