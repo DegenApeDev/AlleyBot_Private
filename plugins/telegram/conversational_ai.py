@@ -482,7 +482,8 @@ IMPORTANT RULES:
             
             if result and result.get('image_data'):
                 import base64
-                from io import BytesIO
+                import tempfile
+                import os
                 
                 # Convert base64 to image bytes
                 image_data = result['image_data']
@@ -498,23 +499,27 @@ IMPORTANT RULES:
                 elif image_bytes[:2] == b'\xff\xd8':
                     ext = "jpg"
                 
-                # Use BufferedInputFile for modern python-telegram-bot
+                # Save to temporary file - more reliable than BufferedInputFile
+                with tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False) as tmp:
+                    tmp.write(image_bytes)
+                    tmp_path = tmp.name
+                
                 try:
-                    from telegram import BufferedInputFile
-                    photo_file = BufferedInputFile(image_bytes, filename=f"generated_image.{ext}")
-                except ImportError:
-                    # Fallback for older versions
-                    from telegram import InputFile
-                    photo_file = InputFile(BytesIO(image_bytes), filename=f"generated_image.{ext}")
-                
-                # Send the image
-                await update.message.reply_photo(
-                    photo=photo_file,
-                    caption=f"🎨 **Generated Image**\n📝 Prompt: {prompt}\n✅ Moderation passed: {result.get('moderation_passed', True)}"
-                )
-                
-                # Delete status message
-                await status_msg.delete()
+                    # Send the image from file
+                    with open(tmp_path, 'rb') as f:
+                        await update.message.reply_photo(
+                            photo=f,
+                            caption=f"🎨 **Generated Image**\n📝 Prompt: {prompt}\n✅ Moderation passed: {result.get('moderation_passed', True)}"
+                        )
+                    
+                    # Delete status message
+                    await status_msg.delete()
+                finally:
+                    # Clean up temp file
+                    try:
+                        os.unlink(tmp_path)
+                    except:
+                        pass
             else:
                 await status_msg.edit_text(f"❌ Image generation failed. Please try again.")
                 
