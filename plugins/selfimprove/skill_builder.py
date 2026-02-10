@@ -213,15 +213,21 @@ class SkillBuilderMixin:
         skill_name = gap['name']
         reason = gap['reason']
         platform = gap.get('platform', 'all')
+        
+        print(f"[SKILL-DEBUG] Starting skill generation for: {skill_name}")
+        print(f"[SKILL-DEBUG] Reason: {reason}")
+        print(f"[SKILL-DEBUG] Platform: {platform}")
 
         # Build context about existing skills
         existing_summary = ", ".join(self.loaded_skills.keys()) if self.loaded_skills else "none"
+        print(f"[SKILL-DEBUG] Existing skills ({len(self.loaded_skills)}): {existing_summary[:100]}...")
 
         # Platform-specific context
         platform_context = ""
         if platform in ACTIVE_PLATFORMS:
             p = ACTIVE_PLATFORMS[platform]
             platform_context = f"\nTarget platform: {p['description']}\nPlatform capabilities: {', '.join(p['capabilities'])}"
+            print(f"[SKILL-DEBUG] Platform context added: {p['description']}")
 
         prompt = f"""You are AlleyBot, an autonomous AI agent building a new skill for yourself.
 
@@ -244,42 +250,84 @@ Existing skills: {existing_summary}
 
 Generate ONLY the SKILL.md content, starting with --- frontmatter."""
 
+        print(f"[SKILL-DEBUG] Prompt length: {len(prompt)} chars")
+
         # Try Grok first, then DeepSeek
         content = None
+        grok_error = None
+        deepseek_error = None
+        
         try:
+            print(f"[SKILL-DEBUG] Attempting Grok AI generation...")
             from grok_ai import grok_ai
-            content = grok_ai.chat(prompt, max_tokens=2000)
+            print(f"[SKILL-DEBUG] Grok enabled: {grok_ai.enabled}")
+            
+            if grok_ai.enabled:
+                content = grok_ai.chat(prompt, max_tokens=2000)
+                print(f"[SKILL-DEBUG] Grok returned content: {bool(content)}, length: {len(content) if content else 0}")
+            else:
+                print(f"[SKILL-DEBUG] Grok is disabled, skipping")
         except Exception as e:
-            print(f"⚠️  Grok skill generation failed: {e}")
+            grok_error = str(e)
+            print(f"[SKILL-DEBUG] ❌ Grok skill generation failed: {e}")
+            import traceback
+            traceback.print_exc()
 
         if not content:
             try:
+                print(f"[SKILL-DEBUG] Attempting DeepSeek AI generation...")
                 from deepseek_ai import deepseek_ai
-                content = deepseek_ai.chat(prompt, max_tokens=2000)
+                print(f"[SKILL-DEBUG] DeepSeek enabled: {deepseek_ai.enabled}")
+                
+                if deepseek_ai.enabled:
+                    content = deepseek_ai.chat(prompt, max_tokens=2000)
+                    print(f"[SKILL-DEBUG] DeepSeek returned content: {bool(content)}, length: {len(content) if content else 0}")
+                else:
+                    print(f"[SKILL-DEBUG] DeepSeek is disabled, skipping")
             except Exception as e:
-                print(f"⚠️  DeepSeek skill generation failed: {e}")
+                deepseek_error = str(e)
+                print(f"[SKILL-DEBUG] ❌ DeepSeek skill generation failed: {e}")
+                import traceback
+                traceback.print_exc()
 
         if not content:
+            print(f"[SKILL-DEBUG] ❌ No AI provider returned content")
+            print(f"[SKILL-DEBUG] Grok error: {grok_error}")
+            print(f"[SKILL-DEBUG] DeepSeek error: {deepseek_error}")
             return None
 
         # Clean up — ensure it starts with ---
+        print(f"[SKILL-DEBUG] Cleaning up AI output...")
+        original_content = content
         content = content.strip()
+        print(f"[SKILL-DEBUG] After strip: {len(content)} chars")
+        
         if not content.startswith('---'):
+            print(f"[SKILL-DEBUG] Content doesn't start with '---', searching for frontmatter...")
             # Try to find the frontmatter start
             idx = content.find('---')
             if idx >= 0:
+                print(f"[SKILL-DEBUG] Found '---' at index {idx}, extracting from there")
                 content = content[idx:]
             else:
+                print(f"[SKILL-DEBUG] ❌ No '---' found in content! First 200 chars: {content[:200]}")
                 return None
+        else:
+            print(f"[SKILL-DEBUG] Content starts with '---' ✓")
 
         # Remove trailing markdown code fences if AI wrapped it
         content = re.sub(r'```\s*$', '', content).strip()
+        print(f"[SKILL-DEBUG] Final content length: {len(content)} chars")
+        print(f"[SKILL-DEBUG] First 100 chars: {content[:100]}...")
 
         return content
 
     def build_skill_command(self, *args) -> str:
         """Build a new skill based on identified gaps or a specific topic"""
+        print(f"[SKILL-DEBUG] build_skill_command called with args: {args}")
+        
         self._discover_skills()
+        print(f"[SKILL-DEBUG] Discovered {len(self.loaded_skills)} existing skills")
 
         # If a topic is provided, build that specific skill
         if args:
@@ -293,44 +341,71 @@ Generate ONLY the SKILL.md content, starting with --- frontmatter."""
                 'platform': 'all',
                 'priority': 1.0,
             }
+            print(f"[SKILL-DEBUG] User requested skill: {topic}")
         else:
             # Auto-identify the highest priority gap
+            print(f"[SKILL-DEBUG] No args provided, auto-identifying gaps...")
             gaps = self._identify_skill_gaps()
             if not gaps:
+                print(f"[SKILL-DEBUG] No gaps identified")
                 return "✅ No skill gaps identified — all capabilities covered!"
             gap = gaps[0]
+            print(f"[SKILL-DEBUG] Selected highest priority gap: {gap['name']} (priority: {gap['priority']})")
 
         skill_name = gap['name']
         print(f"🧩 Building skill: {skill_name} ({gap['reason']})")
 
         # Check if skill already exists
         if skill_name in self.loaded_skills:
+            print(f"[SKILL-DEBUG] Skill '{skill_name}' already exists!")
             return f"⚠️  Skill '{skill_name}' already exists at {self.loaded_skills[skill_name]['path']}"
 
         # Generate the SKILL.md content
+        print(f"[SKILL-DEBUG] Calling _generate_skill for: {skill_name}")
         content = self._generate_skill(gap)
         if not content:
+            print(f"[SKILL-DEBUG] ❌ _generate_skill returned None for '{skill_name}'")
             return f"❌ Failed to generate skill content for '{skill_name}'"
+        
+        print(f"[SKILL-DEBUG] ✓ Generated content: {len(content)} chars")
 
         # Validate frontmatter
+        print(f"[SKILL-DEBUG] Validating frontmatter...")
         meta = None
         match = re.match(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
         if match:
             try:
                 meta = yaml.safe_load(match.group(1))
-            except yaml.YAMLError:
+                print(f"[SKILL-DEBUG] Frontmatter parsed successfully: {meta}")
+            except yaml.YAMLError as e:
+                print(f"[SKILL-DEBUG] ❌ YAML parsing error: {e}")
                 pass
+        else:
+            print(f"[SKILL-DEBUG] ❌ No frontmatter match found in content")
 
         if not meta or 'name' not in meta or 'description' not in meta:
+            print(f"[SKILL-DEBUG] ❌ Invalid frontmatter. meta={meta}, has_name={'name' in meta if meta else False}, has_desc={'description' in meta if meta else False}")
             return f"❌ Generated skill has invalid frontmatter"
 
         # Write the skill
+        print(f"[SKILL-DEBUG] Writing skill to disk...")
         skill_dir = self.skills_dir / skill_name
+        print(f"[SKILL-DEBUG] Skill directory: {skill_dir}")
         skill_dir.mkdir(exist_ok=True)
         skill_md = skill_dir / 'SKILL.md'
-        skill_md.write_text(content, encoding='utf-8')
+        print(f"[SKILL-DEBUG] Writing to: {skill_md}")
+        
+        try:
+            skill_md.write_text(content, encoding='utf-8')
+            print(f"[SKILL-DEBUG] ✓ Successfully wrote {len(content)} chars to {skill_md}")
+        except Exception as e:
+            print(f"[SKILL-DEBUG] ❌ Failed to write skill file: {e}")
+            import traceback
+            traceback.print_exc()
+            return f"❌ Failed to write skill file: {e}"
 
         # Re-discover to pick it up
+        print(f"[SKILL-DEBUG] Re-discovering skills...")
         self._discover_skills()
 
         line_count = len(content.split('\n'))
@@ -352,7 +427,10 @@ Generate ONLY the SKILL.md content, starting with --- frontmatter."""
                     'lines': line_count,
                 })
                 self.core.save_memory('skill_build_log', skill_log[-50:])
-            except Exception:
+                print(f"[SKILL-DEBUG] ✓ Logged skill creation to memory")
+            except Exception as e:
+                print(f"[SKILL-DEBUG] ⚠️ Failed to log to memory: {e}")
                 pass
 
+        print(f"[SKILL-DEBUG] ✓ Skill creation complete!")
         return output
