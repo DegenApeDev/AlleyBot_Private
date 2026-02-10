@@ -120,13 +120,13 @@
 - `src/agentic/phase13_commands.py` - CLI commands for automation features
 
 ## 🔌 Phase 14: Agent Skills Framework Expansion
-- [ ] Agent Skills discovery engine — scan skills/ directory for SKILL.md files
-- [ ] Lazy loading system — load only name/description at startup, full skill on activation
+- [x] Agent Skills discovery engine — scan skills/ directory for SKILL.md files
+- [x] Lazy loading system — load only name/description at startup, full skill on activation
 - [ ] Skill context injection — inject SKILL.md into AI prompt when task matches description
-- [ ] Skill execution engine — follow instructions, execute bundled scripts, load references
+- [x] Skill execution engine — follow instructions, execute bundled scripts, load references
 - [ ] Auto-skill generation — AlleyBot creates new SKILL.md for discovered capabilities
 - [ ] Skill marketplace integration — publish/import skills from agentskills.io format
-- [ ] Skill validation and linting — validate SKILL.md against specification
+- [x] Skill validation and linting — validate SKILL.md against specification
 - [ ] Skill templating system — templates for common skill patterns (API, analysis, content)
 - [ ] OASF skill bridge — map OASF categories to Agent Skills discovery
 - [ ] Skill performance tracking — track which skills are used most, optimize descriptions
