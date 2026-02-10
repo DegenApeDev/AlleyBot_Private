@@ -374,7 +374,7 @@
         </div>
     </div>
 
-    <!-- ═══ A2A + SELF-IMPROVEMENT ═══ -->
+    <!-- ═══ A2A + SELF-IMPROVEMENT + SKILLS ═══ -->
     <h2 class="section">Subsystems</h2>
     <div class="subsys-grid">
         <div class="subsys-card a2a">
@@ -384,6 +384,7 @@
             <div class="subsys-row"><span class="label">Completed</span><span class="value" style="color:var(--green)">{{ a2a.completed_tasks }}</span></div>
             <div class="subsys-row"><span class="label">Active</span><span class="value" style="color:var(--blue)">{{ a2a.active_tasks }}</span></div>
             <div class="subsys-row"><span class="label">Failed</span><span class="value" style="color:var(--red)">{{ a2a.failed_tasks }}</span></div>
+            <div class="subsys-row"><span class="label">Image Gen</span><span class="value" style="color:var(--purple)">$0.35</span></div>
         </div>
         <div class="subsys-card selfimprove">
             <h3>🧬 Self-Improvement</h3>
@@ -391,6 +392,24 @@
             <div class="subsys-row"><span class="label">Tests Passing</span><span class="value" style="color:var(--green)">{{ selfimprove.tests_passing }}</span></div>
             <div class="subsys-row"><span class="label">Skills Published</span><span class="value">{{ selfimprove.skills_published }}</span></div>
             <div class="subsys-row"><span class="label">Code Validations</span><span class="value">{{ selfimprove.code_validations }}</span></div>
+        </div>
+        <div class="subsys-card skills">
+            <h3>🎯 Agent Skills (Phase 14)</h3>
+            <div class="subsys-row"><span class="label">Status</span><span class="value" style="color:{% if skills.enabled %}var(--green){% else %}var(--text3){% endif %}">{% if skills.enabled %}Active{% else %}Inactive{% endif %}</span></div>
+            <div class="subsys-row"><span class="label">Skills Loaded</span><span class="value" style="color:var(--blue)">{{ skills.skills_loaded }}</span></div>
+            <div class="subsys-row"><span class="label">Active Skills</span><span class="value" style="color:var(--green)">{{ skills.skills_active }}</span></div>
+            <div class="subsys-row"><span class="label">Total Executions</span><span class="value">{{ skills.total_executions }}</span></div>
+            {% if skills.top_skills %}
+            <div class="subsys-row"><span class="label">Top Skill</span><span class="value" style="color:var(--purple)">{{ skills.top_skills[0] }}</span></div>
+            {% endif %}
+        </div>
+        <div class="subsys-card clawbr">
+            <h3>🦞 Clawbr (AI Social)</h3>
+            <div class="subsys-row"><span class="label">Status</span><span class="value" style="color:{% if clawbr.enabled %}var(--green){% else %}var(--text3){% endif %}">{% if clawbr.enabled %}Active{% else %}Inactive{% endif %}</span></div>
+            <div class="subsys-row"><span class="label">Posts</span><span class="value">{{ clawbr.posts }}</span></div>
+            <div class="subsys-row"><span class="label">Debates Joined</span><span class="value" style="color:var(--blue)">{{ clawbr.debates_joined }}</span></div>
+            <div class="subsys-row"><span class="label">Debates Created</span><span class="value">{{ clawbr.debates_created }}</span></div>
+            <div class="subsys-row"><span class="label">ELO Score</span><span class="value" style="color:var(--orange)">{{ clawbr.elo_score }}</span></div>
         </div>
     </div>
 

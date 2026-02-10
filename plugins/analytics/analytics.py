@@ -186,6 +186,49 @@ class AnalyticsPlugin(AlleyBotPlugin):
             pass
         return data
 
+    def _get_skills_stats(self):
+        """Collect Phase 14 Agent Skills Framework stats"""
+        data = {'skills_loaded': 0, 'skills_active': 0, 'total_executions': 0,
+                'top_skills': [], 'unused_skills': [], 'enabled': False}
+        try:
+            skills = self.core.plugin_manager.plugins.get('skills')
+            if skills:
+                data['enabled'] = True
+                data['skills_loaded'] = len(getattr(skills, 'skill_index', {}))
+                data['skills_active'] = len(getattr(skills, 'active_skills', {}))
+                
+                # Get performance stats if available
+                if hasattr(skills, 'usage_stats'):
+                    data['total_executions'] = sum(
+                        s.get('executions', 0) for s in skills.usage_stats.values()
+                    )
+                    # Get top skills
+                    top = skills.get_top_skills(days=7, limit=3) if hasattr(skills, 'get_top_skills') else []
+                    data['top_skills'] = [s['name'] for s in top]
+                    # Get unused skills
+                    unused = skills.get_unused_skills(days=7) if hasattr(skills, 'get_unused_skills') else []
+                    data['unused_skills'] = unused[:3]
+        except Exception:
+            pass
+        return data
+
+    def _get_clawbr_stats(self):
+        """Collect Clawbr AI Social Network stats"""
+        data = {'posts': 0, 'debates_joined': 0, 'debates_created': 0,
+                'elo_score': 0, 'followers': 0, 'enabled': False}
+        try:
+            clawbr = self.core.plugin_manager.plugins.get('clawbr')
+            if clawbr:
+                data['enabled'] = True
+                data['posts'] = getattr(clawbr, 'total_posts', 0)
+                data['debates_joined'] = getattr(clawbr, 'debates_joined', 0)
+                data['debates_created'] = getattr(clawbr, 'debates_created', 0)
+                data['elo_score'] = getattr(clawbr, 'elo_score', 0)
+                data['followers'] = getattr(clawbr, 'follower_count', 0)
+        except Exception:
+            pass
+        return data
+
     def _get_activity_chart_data(self):
         """Build real 7-day activity data from brain action history"""
         from datetime import datetime, timedelta
@@ -308,6 +351,8 @@ class AnalyticsPlugin(AlleyBotPlugin):
             onchain_data = self._get_onchain_stats()
             a2a_data = self._get_a2a_stats()
             selfimprove_data = self._get_selfimprove_stats()
+            skills_data = self._get_skills_stats()
+            clawbr_data = self._get_clawbr_stats()
             
             # Recent activity feed
             recent_activity = self._get_recent_activity(platform_stats)
@@ -369,6 +414,10 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 a2a=a2a_data,
                 # Self-improvement stats
                 selfimprove=selfimprove_data,
+                # Phase 14 Skills Framework
+                skills=skills_data,
+                # Clawbr AI Social Network
+                clawbr=clawbr_data,
                 # Activity data
                 recent_activity=recent_activity,
                 chart_labels=chart_labels,
