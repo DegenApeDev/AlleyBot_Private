@@ -39,14 +39,33 @@ class Telegram(AlleyBotPlugin):
         # Always try to initialize if token exists
         if self.bot_token:
             try:
-                self.bot = Bot(token=self.bot_token)
-                self.application = Application.builder().token(self.bot_token).build()
+                # Configure HTTP client with longer timeouts to prevent errors during long operations
+                # Default is 5s, we increase to 60s connect / 120s read to handle agent cycles
+                from httpx import Timeout
+                
+                # Create custom timeout for HTTPX client
+                timeout = Timeout(connect=60.0, read=120.0, write=30.0, pool=5.0)
+                
+                # Build Application with custom timeout settings
+                self.application = (
+                    Application.builder()
+                    .token(self.bot_token)
+                    .get_updates_read_timeout(60)  # Long polling timeout
+                    .request_kwargs({'timeout': timeout})
+                    .build()
+                )
+                
+                # Get bot instance from application
+                self.bot = self.application.bot
+                
                 self._setup_handlers()
                 print("✅ Telegram plugin initialized - Owner: DegenApeDev")
                 # Plugin is enabled if we have a token
                 self.enabled = True
             except Exception as e:
                 print(f"❌ Failed to initialize Telegram bot: {e}")
+                import traceback
+                traceback.print_exc()
                 self.enabled = False
         else:
             if self.enabled:
