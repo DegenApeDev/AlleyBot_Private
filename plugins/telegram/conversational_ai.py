@@ -60,6 +60,12 @@ class ConversationalAI:
             if user_message.startswith('/'):
                 return
             
+            # Check for image generation request in natural language
+            image_prompt = self._extract_image_prompt(user_message)
+            if image_prompt:
+                await self._handle_image_generation(update, image_prompt)
+                return
+            
             # Show typing indicator
             await update.message.chat.send_action(action="typing")
             
@@ -425,3 +431,75 @@ IMPORTANT RULES:
             
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
+
+    def _extract_image_prompt(self, message: str) -> Optional[str]:
+        """Extract image generation prompt from natural language"""
+        import re
+        
+        # Patterns for image generation requests
+        patterns = [
+            r'(?:generate|create|make)\s+(?:an\s+)?image\s+(?:of|with|showing|depicting)?\s*(.+)',
+            r'(?:draw|paint|render)\s+(?:an\s+)?(?:image\s+)?(?:of\s+)?(.+)',
+            r'(?:give\s+me|show\s+me)\s+(?:an\s+)?image\s+(?:of\s+)?(.+)',
+            r'(?:alley|alleybot)\s+(?:generate|create|make)\s+(?:an\s+)?image\s+(?:of\s+)?(.+)',
+            r'(?:alley|alleybot)\s+(?:go\s+ahead\s+and\s+)?(?:generate|create|make)\s+(?:an\s+)?image\s+(?:of\s+)?(.+)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        
+        return None
+    
+    async def _handle_image_generation(self, update: Update, prompt: str):
+        """Handle image generation request"""
+        try:
+            # Send status message
+            status_msg = await update.message.reply_text(f"🎨 Generating image...\n📝 Prompt: {prompt[:100]}...")
+            
+            # Import and use Grok AI
+            from grok_ai import grok_ai
+            
+            if not grok_ai.enabled:
+                await status_msg.edit_text("❌ Grok AI not enabled. Check GROK_API_KEY in .env")
+                return
+            
+            # Generate image
+            import asyncio
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: grok_ai.generate_image(
+                    prompt=prompt,
+                    aspect_ratio="16:9",
+                    image_format="base64",
+                    n=1
+                )
+            )
+            
+            if result and result.get('image_data'):
+                import base64
+                from io import BytesIO
+                from telegram import InputFile
+                
+                # Convert base64 to image file
+                image_bytes = base64.b64decode(result['image_data']) if isinstance(result['image_data'], str) else result['image_data']
+                image_file = BytesIO(image_bytes)
+                image_file.name = "generated_image.jpg"
+                
+                # Send the image
+                await update.message.reply_photo(
+                    photo=InputFile(image_file),
+                    caption=f"🎨 **Generated Image**\n📝 Prompt: {prompt}\n✅ Moderation passed: {result.get('moderation_passed', True)}"
+                )
+                
+                # Delete status message
+                await status_msg.delete()
+            else:
+                await status_msg.edit_text(f"❌ Image generation failed. Please try again.")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error generating image: {e}")
+            import traceback
+            traceback.print_exc()
