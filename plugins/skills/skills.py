@@ -34,9 +34,10 @@ class SkillsPlugin(SkillDiscoveryMixin, SkillLoaderMixin, SkillExecutorMixin,
     """Agent Skills framework for AlleyBot"""
 
     def __init__(self, config):
+        # Set project_root BEFORE super().__init__() so mixins can access it
+        self.project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         super().__init__(config)
         self.skills_dir = config.get('skills_dir', 'skills')
-        self.project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
     def initialize(self, api, core):
         super().initialize(api, core)
