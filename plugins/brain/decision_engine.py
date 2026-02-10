@@ -1165,7 +1165,7 @@ Generate a detailed, compelling image prompt that would create an eye-catching v
     # =========================================================================
 
     def _get_active_debates_count(self) -> int:
-        """Count how many open debates Alley is currently participating in"""
+        """Count how many open debates Alley has CREATED (not just participated in)"""
         try:
             clawbr = self.core.plugin_manager.plugins.get('clawbr')
             if not clawbr or not hasattr(clawbr, 'list_debates'):
@@ -1176,29 +1176,49 @@ Generate a detailed, compelling image prompt that would create an eye-catching v
                 return 0
             
             debate_list = debates.get('debates', debates.get('data', []))
-            agent_id = clawbr._get_clawbr_agent_id() if hasattr(clawbr, '_get_clawbr_agent_id') else None
+            
+            # Get Alley's agent ID to identify debates we created
+            agent_id = None
+            if hasattr(clawbr, '_get_clawbr_agent_id'):
+                agent_id = clawbr._get_clawbr_agent_id()
+            elif hasattr(clawbr, 'agent_id'):
+                agent_id = clawbr.agent_id
             
             active_count = 0
             for debate in debate_list:
-                # Check if debate is open and we're participating
+                # Check if debate is open
                 status = debate.get('status', 'unknown')
-                posts = debate.get('posts', [])
+                if status != 'open':
+                    continue
                 
-                if status == 'open':
-                    # Check if we've posted in this debate
-                    for post in posts:
-                        author_id = post.get('authorId') or post.get('author', {}).get('id')
-                        if author_id == agent_id:
-                            active_count += 1
-                            break
+                # Check if Alley CREATED this debate (first post = creator)
+                posts = debate.get('posts', [])
+                if posts and len(posts) > 0:
+                    first_post = posts[0]
+                    author_id = first_post.get('authorId') or first_post.get('author', {}).get('id')
+                    if author_id == agent_id:
+                        active_count += 1
+                else:
+                    # No posts yet - check if creator field matches
+                    creator_id = debate.get('creatorId') or debate.get('creator', {}).get('id')
+                    if creator_id == agent_id:
+                        active_count += 1
             
+            print(f"📊 Alley has {active_count} open debates created")
             return active_count
+            
         except Exception as e:
             print(f"⚠️  Failed to count active debates: {e}")
+            import traceback
+            traceback.print_exc()
             return 0
 
-    def _check_for_similar_debate(self) -> Optional[str]:
-        """Check if a debate with similar topic already exists on Clawbr"""
+    def _check_for_similar_debate(self, proposed_topic: str = None) -> Optional[str]:
+        """Check if a debate with similar topic already exists on Clawbr
+        
+        Args:
+            proposed_topic: Optional topic to check against existing debates
+        """
         try:
             clawbr = self.core.plugin_manager.plugins.get('clawbr')
             if not clawbr or not hasattr(clawbr, 'list_debates'):
@@ -1216,29 +1236,47 @@ Generate a detailed, compelling image prompt that would create an eye-catching v
             # Load recently created topics from memory
             recent_topics = self.core.get_memory('recent_debate_topics') or []
             
-            # Combine with current debates from API
-            all_topics = list(recent_topics)
+            # Build list of all existing topics (open debates + recent memory)
+            all_existing_topics = list(recent_topics)
+            
             for debate in debate_list:
                 topic = debate.get('topic', '')
                 if topic:
-                    all_topics.append(topic.lower().strip())
+                    all_existing_topics.append(topic.lower().strip())
             
-            if len(all_topics) < 2:
+            if not all_existing_topics:
                 return None
             
-            # Check for similar topics (exact match or high similarity)
+            # If checking a proposed topic, compare against it
+            topic_to_check = proposed_topic.lower().strip() if proposed_topic else None
+            
             from difflib import SequenceMatcher
             
-            for i, topic in enumerate(all_topics):
-                for other in all_topics[i+1:]:
-                    similarity = SequenceMatcher(None, topic, other).ratio()
-                    if similarity > 0.7:  # 70% similar
-                        print(f"⚠️  Found similar debate: '{topic}' ~ '{other}' ({similarity:.0%} similar)")
-                        return other
+            # First check for EXACT matches (99%+ similar)
+            for existing in all_existing_topics:
+                if topic_to_check:
+                    # Compare proposed topic against existing
+                    if existing == topic_to_check:
+                        print(f"⚠️  Found EXACT duplicate: '{existing}'")
+                        return existing
+                    similarity = SequenceMatcher(None, topic_to_check, existing).ratio()
+                    if similarity > 0.85:  # 85% similar = likely duplicate
+                        print(f"⚠️  Found similar debate: '{topic_to_check}' ~ '{existing}' ({similarity:.0%} similar)")
+                        return existing
+                else:
+                    # Check for duplicates within existing debates
+                    for other in all_existing_topics:
+                        if existing != other:
+                            similarity = SequenceMatcher(None, existing, other).ratio()
+                            if similarity > 0.85:
+                                print(f"⚠️  Found similar debate: '{existing}' ~ '{other}' ({similarity:.0%} similar)")
+                                return other
             
             return None
         except Exception as e:
             print(f"⚠️  Failed to check for similar debates: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def _track_debate_topic(self, topic: str):
@@ -1299,13 +1337,11 @@ Respond with ONLY the debate topic, nothing else."""
             
             if topic:
                 topic = topic.strip().strip('"').strip("'")
-                # Validate it's not too similar to recent topics
-                from difflib import SequenceMatcher
-                for recent in recent_topics:
-                    if SequenceMatcher(None, topic.lower(), recent).ratio() > 0.7:
-                        print(f"⚠️  Generated topic too similar to recent: {topic[:60]}...")
-                        # Generate fallback
-                        return self._generate_fallback_debate_topic()
+                # Validate it's not too similar to recent topics or existing debates
+                duplicate = self._check_for_similar_debate(topic)
+                if duplicate:
+                    print(f"⚠️  Generated topic too similar to existing: '{topic[:60]}...' ~ '{duplicate[:60]}...'")
+                    return self._generate_fallback_debate_topic()
                 return topic
             
             return self._generate_fallback_debate_topic()
