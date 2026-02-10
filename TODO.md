@@ -122,23 +122,26 @@
 ## 🔌 Phase 14: Agent Skills Framework Expansion
 - [x] Agent Skills discovery engine — scan skills/ directory for SKILL.md files
 - [x] Lazy loading system — load only name/description at startup, full skill on activation
-- [ ] Skill context injection — inject SKILL.md into AI prompt when task matches description
+- [x] Skill context injection — inject SKILL.md into AI prompt when task matches description
 - [x] Skill execution engine — follow instructions, execute bundled scripts, load references
-- [ ] Auto-skill generation — AlleyBot creates new SKILL.md for discovered capabilities
+- [x] Auto-skill generation — AlleyBot creates new SKILL.md for discovered capabilities
 - [ ] Skill marketplace integration — publish/import skills from agentskills.io format
 - [x] Skill validation and linting — validate SKILL.md against specification
-- [ ] Skill templating system — templates for common skill patterns (API, analysis, content)
+- [x] Skill templating system — templates for common skill patterns (API, analysis, content)
 - [ ] OASF skill bridge — map OASF categories to Agent Skills discovery
 - [ ] Skill performance tracking — track which skills are used most, optimize descriptions
 
 **Implementation:**
-- `plugins/skills/skill_discovery.py` — scan and index all SKILL.md files
-- `plugins/skills/skill_loader.py` — lazy loading with progressive disclosure
-- `plugins/skills/skill_executor.py` — execute skill instructions with tool access
-- `plugins/skills/skill_generator.py` — auto-generate skills from existing capabilities
-- `plugins/skills/skill_marketplace.py` — import/export in agentskills.io format
-- `skills/` directory — store all skills in Agent Skills format
-- Example: `skills/pdf-processing/SKILL.md`, `skills/web-search/SKILL.md`
+- `plugins/skills/skill_discovery.py` — scan and index all SKILL.md files ✅
+- `plugins/skills/skill_loader.py` — lazy loading with progressive disclosure ✅
+- `plugins/skills/skill_executor.py` — execute skill instructions with tool access ✅
+- `plugins/skills/skill_generator.py` — auto-generate skills from existing capabilities ✅
+- `plugins/skills/skill_validation.py` — validate SKILL.md against specification ✅
+- `plugins/skills/skill_templates.py` — templates for common skill patterns ✅
+- `plugins/skills/skill_marketplace.py` — import/export in agentskills.io format ⏳
+- `plugins/skills/skills.py` — main plugin composing all mixins ✅
+- `skills/` directory — store all skills in Agent Skills format ✅
+- Example: `skills/social-engagement/SKILL.md`, `skills/blockchain-analysis/SKILL.md` ✅
 
 **References:**
 - [Agent Skills Specification](https://agentskills.io/specification)
