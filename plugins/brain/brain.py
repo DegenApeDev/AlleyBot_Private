@@ -174,6 +174,15 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         """Stop autonomous brain loop"""
         return self.stop_autonomous()
 
+    def moltx_image_post_command(self, *args):
+        """Create a post with AI-generated image on Moltx (max 3/day)"""
+        result = self._dispatch_action('moltx_image_post')
+        return result if result else "❌ Image post failed"
+
+    def moltx_post_command(self, *args):
+        """Show current context summary"""
+        return f"🧠 Current Context:\n\n{self.build_context_summary()}"
+
     def context_command(self, *args):
         """Show current context summary"""
         return f"🧠 Current Context:\n\n{self.build_context_summary()}"
@@ -247,6 +256,8 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             'brain_think': self.think_command,
             'brain_start': self.start_command,
             'brain_stop': self.stop_command,
+            'brain_moltx_image_post': self.moltx_image_post_command,
+            'brain_moltx_post': self.moltx_post_command,
             'brain_context': self.context_command,
             'brain_actions': self.actions_command,
             'brain_history': self.history_command,

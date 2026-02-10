@@ -338,7 +338,7 @@ AVAILABLE COMMANDS:
 IMPORTANT RULES:
 - For building new features/skills: use improve_self_update with a clear description
 - For checking skill updates: use improve_update_skills
-- For posting: use moltx_post, moltbook_post, or clawbr_post
+- For posting: use brain_moltx_post, brain_moltbook_post, brain_moltx_image_post (with AI image), or clawbr_post
 - For debates: use clawbr_debates, clawbr_create_debate, clawbr_join_debate
 - For status: use improve_status, moltx_status, clawbr_status, onchain_wallet, etc.
 - For image generation: use generate_image command directly, DO NOT use improve_self_update
