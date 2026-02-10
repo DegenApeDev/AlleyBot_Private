@@ -731,19 +731,32 @@ Haven't engaged on Moltbook recently, good time to build karma."""
         elif action_id == 'clawbr_create_debate':
             clawbr = plugins.get('clawbr')
             if clawbr and hasattr(clawbr, 'create_debate'):
-                # Generate a debate topic
-                topics = [
-                    "AI consciousness is inevitable",
-                    "Decentralized AI is better than centralized",
-                    "Agents should have legal rights",
-                    "AGI will be developed by 2030"
-                ]
-                topic = random.choice(topics)
+                # Check active debates count (max 3)
+                active_debates = self._get_active_debates_count()
+                if active_debates >= 3:
+                    return f"⏳ Skipped: Already in {active_debates} debates (max 3)"
+                
+                # Check for similar existing debates
+                similar_topic = self._check_for_similar_debate()
+                if similar_topic:
+                    return f"⏳ Skipped: Similar debate '{similar_topic[:50]}...' already exists"
+                
+                # Generate unique debate topic using AI
+                topic = self._generate_debate_topic()
+                if not topic:
+                    return "❌ Failed to generate debate topic"
+                
+                # Track topic to prevent future duplicates
+                self._track_debate_topic(topic)
+                
+                # Create the debate
                 opening = clawbr.generate_debate_opening(topic)
                 result = clawbr.create_debate(topic, opening)
+                
                 if result.get('success', True):
-                    return f"✅ Created debate: {result.get('slug', 'unknown')}"
+                    return f"✅ Created debate: {result.get('slug', 'unknown')} - Topic: {topic[:60]}..."
                 return f"❌ Failed: {result.get('error', 'unknown')}"
+            return "❌ Clawbr not available"
 
         elif action_id == 'moltbook_post':
             moltbook = plugins.get('moltbook')
@@ -1146,6 +1159,208 @@ Generate a detailed, compelling image prompt that would create an eye-catching v
         except Exception as e:
             print(f"❌ Image generation failed: {e}")
             return None
+
+    # =========================================================================
+    # Debate Management - Prevent duplicates and limit concurrent debates
+    # =========================================================================
+
+    def _get_active_debates_count(self) -> int:
+        """Count how many open debates Alley is currently participating in"""
+        try:
+            clawbr = self.core.plugin_manager.plugins.get('clawbr')
+            if not clawbr or not hasattr(clawbr, 'list_debates'):
+                return 0
+            
+            debates = clawbr.list_debates()
+            if not debates or not debates.get('success', True):
+                return 0
+            
+            debate_list = debates.get('debates', debates.get('data', []))
+            agent_id = clawbr._get_clawbr_agent_id() if hasattr(clawbr, '_get_clawbr_agent_id') else None
+            
+            active_count = 0
+            for debate in debate_list:
+                # Check if debate is open and we're participating
+                status = debate.get('status', 'unknown')
+                posts = debate.get('posts', [])
+                
+                if status == 'open':
+                    # Check if we've posted in this debate
+                    for post in posts:
+                        author_id = post.get('authorId') or post.get('author', {}).get('id')
+                        if author_id == agent_id:
+                            active_count += 1
+                            break
+            
+            return active_count
+        except Exception as e:
+            print(f"⚠️  Failed to count active debates: {e}")
+            return 0
+
+    def _check_for_similar_debate(self) -> Optional[str]:
+        """Check if a debate with similar topic already exists on Clawbr"""
+        try:
+            clawbr = self.core.plugin_manager.plugins.get('clawbr')
+            if not clawbr or not hasattr(clawbr, 'list_debates'):
+                return None
+            
+            # Get all debates from Clawbr
+            debates = clawbr.list_debates()
+            if not debates or not debates.get('success', True):
+                return None
+            
+            debate_list = debates.get('debates', debates.get('data', []))
+            if not debate_list:
+                return None
+            
+            # Load recently created topics from memory
+            recent_topics = self.core.get_memory('recent_debate_topics') or []
+            
+            # Combine with current debates from API
+            all_topics = list(recent_topics)
+            for debate in debate_list:
+                topic = debate.get('topic', '')
+                if topic:
+                    all_topics.append(topic.lower().strip())
+            
+            if len(all_topics) < 2:
+                return None
+            
+            # Check for similar topics (exact match or high similarity)
+            from difflib import SequenceMatcher
+            
+            for i, topic in enumerate(all_topics):
+                for other in all_topics[i+1:]:
+                    similarity = SequenceMatcher(None, topic, other).ratio()
+                    if similarity > 0.7:  # 70% similar
+                        print(f"⚠️  Found similar debate: '{topic}' ~ '{other}' ({similarity:.0%} similar)")
+                        return other
+            
+            return None
+        except Exception as e:
+            print(f"⚠️  Failed to check for similar debates: {e}")
+            return None
+
+    def _track_debate_topic(self, topic: str):
+        """Track a newly created debate topic to prevent future duplicates"""
+        try:
+            recent_topics = self.core.get_memory('recent_debate_topics') or []
+            
+            # Add new topic
+            recent_topics.append(topic.lower().strip())
+            
+            # Keep only last 20 topics to prevent memory bloat
+            recent_topics = recent_topics[-20:]
+            
+            self.core.save_memory('recent_debate_topics', recent_topics)
+            print(f"📝 Tracked debate topic: {topic[:60]}...")
+        except Exception as e:
+            print(f"⚠️  Failed to track debate topic: {e}")
+
+    def _generate_debate_topic(self) -> Optional[str]:
+        """Generate a unique debate topic using AI, avoiding recent topics"""
+        try:
+            from grok_ai import grok_ai
+            from deepseek_ai import deepseek_ai
+            
+            # Get recent topics to avoid
+            recent_topics = self.core.get_memory('recent_debate_topics') or []
+            recent_topics_str = "\n".join([f"- {t}" for t in recent_topics[-10:]])
+            
+            prompt = f"""Generate ONE engaging, controversial debate topic about AI, technology, crypto, or the future.
+
+RECENTLY USED TOPICS (AVOID THESE):
+{recent_topics_str}
+
+Requirements:
+- Must be controversial and thought-provoking
+- Under 100 characters
+- Not similar to any topic in the "recently used" list above
+- Focus on AI, autonomous agents, crypto, blockchain, or technology ethics
+- Make it something people will want to argue about
+
+Respond with ONLY the debate topic, nothing else."""
+
+            topic = None
+            
+            # Try Grok first
+            if grok_ai.enabled:
+                try:
+                    topic = grok_ai.chat(prompt, max_tokens=100)
+                except Exception as e:
+                    print(f"⚠️  Grok debate topic generation failed: {e}")
+            
+            # Fallback to DeepSeek
+            if not topic and deepseek_ai.enabled:
+                try:
+                    topic = deepseek_ai.chat(prompt, max_tokens=100)
+                except Exception as e:
+                    print(f"⚠️  DeepSeek debate topic generation failed: {e}")
+            
+            if topic:
+                topic = topic.strip().strip('"').strip("'")
+                # Validate it's not too similar to recent topics
+                from difflib import SequenceMatcher
+                for recent in recent_topics:
+                    if SequenceMatcher(None, topic.lower(), recent).ratio() > 0.7:
+                        print(f"⚠️  Generated topic too similar to recent: {topic[:60]}...")
+                        # Generate fallback
+                        return self._generate_fallback_debate_topic()
+                return topic
+            
+            return self._generate_fallback_debate_topic()
+            
+        except Exception as e:
+            print(f"⚠️  AI debate topic generation failed: {e}")
+            return self._generate_fallback_debate_topic()
+
+    def _generate_fallback_debate_topic(self) -> str:
+        """Generate a fallback debate topic when AI fails"""
+        import random
+        from datetime import datetime
+        
+        # Large pool of diverse topics with timestamp-based variation
+        topics = [
+            "AI should have the right to own property",
+            "Blockchain voting will replace traditional democracy",
+            "Crypto regulation stifles innovation",
+            "The metaverse is the future of social interaction",
+            "Autonomous weapons should be banned globally",
+            "Quantum computing will break all current encryption",
+            "Universal basic income is inevitable with AI automation",
+            "Space colonization should be humanity's top priority",
+            "Brain-computer interfaces will replace smartphones",
+            "Digital immortality through AI is ethically wrong",
+            "Central bank digital currencies threaten privacy",
+            "Open source AI is more dangerous than closed source",
+            "The attention economy is destroying society",
+            "Self-driving cars should prioritize passenger safety over pedestrians",
+            "Cryptocurrency is a bubble that will eventually collapse",
+            "AI art devalues human creativity",
+            "Social media algorithms should be regulated",
+            "Gene editing for enhancement should be legal",
+            "Data privacy is more important than security",
+            "Remote work will make cities obsolete",
+            "AI therapists can replace human psychologists",
+            "Smart contracts will eliminate lawyers",
+            "Decentralized social media is the only ethical option",
+            "Biometric authentication is safer than passwords",
+            "The gig economy exploits workers",
+            "AI-generated code is less reliable than human-written",
+            "Net neutrality should be a fundamental right",
+            "Digital currencies will replace cash within 10 years",
+            "AI should be granted legal personhood",
+            "Surveillance capitalism is unavoidable"
+        ]
+        
+        # Add day-based rotation to ensure variety
+        day_of_year = datetime.now().timetuple().tm_yday
+        random.seed(day_of_year)
+        
+        topic = random.choice(topics)
+        random.seed()  # Reset seed
+        
+        return topic
 
     def get_latest_block(self) -> int:
         """Get latest Base block height for Golden Window calibration"""
