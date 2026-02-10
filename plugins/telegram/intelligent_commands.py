@@ -811,35 +811,13 @@ Generate only the title (no explanations):"""
                 return
             
             # Generate image
-            result = await self._run_sync(
-                grok_ai.generate_image,
-                prompt,  # positional arg
-                "16:9",  # aspect_ratio
-                "base64",  # image_format
-                1  # n
-            )
+            result = await self._run_sync(grok_ai.generate_image, prompt)
             
-            if result and result.get('image_data'):
-                import base64
-                from io import BytesIO
-                
-                # Convert base64 to image bytes
-                image_data = result['image_data']
-                if isinstance(image_data, str):
-                    image_bytes = base64.b64decode(image_data)
-                else:
-                    image_bytes = image_data
-                
-                # Wrap in BytesIO with explicit name - more reliable for Telegram
-                photo_file = BytesIO(image_bytes)
-                photo_file.name = "generated_image.jpg"
-                
-                # Send the image with increased timeout
+            if result and result.get('image_url'):
+                # Send the image using URL (much simpler and reliable)
                 await update.message.reply_photo(
-                    photo=photo_file,
-                    caption=f"🎨 **Generated Image**\n📝 Prompt: {prompt}\n✅ Moderation passed: {result.get('moderation_passed', True)}",
-                    read_timeout=30,
-                    write_timeout=30
+                    photo=result['image_url'],
+                    caption=f"🎨 **Generated Image**\n📝 Prompt: {prompt}\n✅ Moderation passed: {result.get('moderation_passed', True)}"
                 )
                 
                 # Delete status message

@@ -379,18 +379,15 @@ Requirements:
             print(f"❌ Grok DM reply generation failed: {e}")
             return None
 
-    def generate_image(self, prompt: str, aspect_ratio: str = "16:9", 
-                       image_format: str = "base64", n: int = 1) -> Optional[Dict]:
-        """Generate an image using Grok's grok-imagine-image model
+    def generate_image(self, prompt: str, model: str = "grok-imagine-image") -> Optional[Dict]:
+        """Generate an image using Grok's image model
         
         Args:
             prompt: Text description of the image to generate
-            aspect_ratio: Image dimensions - "1:1", "16:9", "9:16", "4:3", "3:4", etc.
-            image_format: "base64" or "url" (base64 recommended for embedding)
-            n: Number of images to generate (default 1)
+            model: Image model to use (default "grok-imagine-image")
         
         Returns:
-            Dict with 'image_data' (base64 bytes or URL), 'moderation_passed', 'model'
+            Dict with 'image_url', 'moderation_passed', 'model'
             Cost: ~$0.02 per image (2 cents)
         """
         if not self.enabled:
@@ -402,12 +399,10 @@ Requirements:
                 "Content-Type": "application/json"
             }
             
+            # Use simpler API call matching x.ai SDK pattern
             data = {
-                "model": "grok-imagine-image",  # Correct model name per docs
+                "model": model,
                 "prompt": prompt,
-                "aspect_ratio": aspect_ratio,  # e.g., "16:9", "1:1", "9:16"
-                "n": n,
-                "image_format": image_format  # "base64" or "url"
             }
             
             response = requests.post(
@@ -429,14 +424,15 @@ Requirements:
                         'model': result.get('model', 'grok-imagine-image'),
                     }
                     
-                    # Return base64 bytes or URL based on format
-                    if image_format == "base64" and 'b64_json' in image_data:
+                    # Return URL directly (simpler, matches SDK example)
+                    if 'url' in image_data:
+                        output['image_url'] = image_data['url']
+                        output['image_data'] = image_data['url']  # Backward compat
+                        output['format'] = 'url'
+                    elif 'b64_json' in image_data:
                         import base64
                         output['image_data'] = base64.b64decode(image_data['b64_json'])
                         output['format'] = 'base64_bytes'
-                    elif 'url' in image_data:
-                        output['image_data'] = image_data['url']
-                        output['format'] = 'url'
                     else:
                         print(f"⚠️ Grok image: unexpected data format, keys: {list(image_data.keys())}")
                         return None
