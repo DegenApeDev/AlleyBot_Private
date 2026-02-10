@@ -341,6 +341,7 @@ IMPORTANT RULES:
 - For posting: use moltx_post, moltbook_post, or clawbr_post
 - For debates: use clawbr_debates, clawbr_create_debate, clawbr_join_debate
 - For status: use improve_status, moltx_status, clawbr_status, onchain_wallet, etc.
+- For image generation: use generate_image command directly, DO NOT use improve_self_update
 - You can ONLY execute commands from the list above
 - If the user asks something conversational, just respond naturally — no need to execute anything
 - Always reason about what the user wants before responding
@@ -438,11 +439,12 @@ IMPORTANT RULES:
         
         # Patterns for image generation requests
         patterns = [
-            r'(?:generate|create|make)\s+(?:an\s+)?image\s+(?:of|with|showing|depicting)?\s*(.+)',
-            r'(?:draw|paint|render)\s+(?:an\s+)?(?:image\s+)?(?:of\s+)?(.+)',
+            r'(?:generate|create|make)\s+(?:me\s+)?(?:an\s+)?image\s+(?:of|with|showing|depicting|for)?\s*(.+)',
+            r'(?:draw|paint|render)\s+(?:me\s+)?(?:an\s+)?(?:image\s+)?(?:of\s+)?(.+)',
             r'(?:give\s+me|show\s+me)\s+(?:an\s+)?image\s+(?:of\s+)?(.+)',
-            r'(?:alley|alleybot)\s+(?:generate|create|make)\s+(?:an\s+)?image\s+(?:of\s+)?(.+)',
-            r'(?:alley|alleybot)\s+(?:go\s+ahead\s+and\s+)?(?:generate|create|make)\s+(?:an\s+)?image\s+(?:of\s+)?(.+)',
+            r'(?:alley|alleybot)\s+(?:generate|create|make)\s+(?:me\s+)?(?:an\s+)?image\s+(?:of\s+)?(.+)',
+            r'(?:alley|alleybot)\s+(?:go\s+ahead\s+and\s+)?(?:generate|create|make)\s+(?:me\s+)?(?:an\s+)?image\s+(?:of\s+)?(.+)',
+            r'(?:alley|alleybot)\s+(?:can\s+you\s+)?(?:generate|create|make)\s+(?:me\s+)?(?:an\s+)?image\s*(?:of|with)?\s*(.+)',
         ]
         
         for pattern in patterns:
