@@ -99,6 +99,20 @@ TASK_REGISTRY: Dict[str, Dict[str, Any]] = {
             'required': ['tx_hash'],
         },
     },
+    'media.generate_image': {
+        'tier': 'paid',
+        'description': 'Generate AI image from text prompt using Grok (1024x768)',
+        'handler': '_task_generate_image',
+        'price_usdc': '0.35',
+        'schema': {
+            'properties': {
+                'prompt': {'type': 'string'},
+                'aspect_ratio': {'type': 'string', 'enum': ['1:1', '16:9', '9:16', '4:3', '3:4']},
+                'format': {'type': 'string', 'enum': ['base64', 'url']},
+            },
+            'required': ['prompt'],
+        },
+    },
 
     # ── Owner-only (NEVER exposed via A2A) ──────────────────────────
     'wallet.send': {
@@ -161,6 +175,11 @@ class A2ATaskHandlerMixin:
         self._task_timeout_seconds = 30
         self._tasks_executed = 0
         self._tasks_failed = 0
+        
+        # Image generation daily limits (budget control)
+        self._image_gen_daily_limit = 50  # Max 50 images per day
+        self._image_gen_daily_count = 0
+        self._image_gen_date = datetime.utcnow().date()
 
     # ── Task Execution ──────────────────────────────────────────────
 
@@ -393,6 +412,59 @@ class A2ATaskHandlerMixin:
             pass
 
         return {'tx_hash': tx_hash, 'status': 'not_found'}
+
+    def _task_generate_image(self, params: Dict, agent_id: str) -> Dict:
+        """Generate AI image using Grok (paid task with daily limits)."""
+        from datetime import date
+        
+        # Check and reset daily counter
+        today = date.utcnow().date()
+        if today != self._image_gen_date:
+            self._image_gen_date = today
+            self._image_gen_daily_count = 0
+        
+        # Enforce daily budget limit
+        if self._image_gen_daily_count >= self._image_gen_daily_limit:
+            return {
+                'error': 'Daily image generation limit reached',
+                'limit': self._image_gen_daily_limit,
+                'used': self._image_gen_daily_count,
+                'message': 'Please try again tomorrow or contact owner',
+            }
+        
+        prompt = params.get('prompt', '')
+        aspect_ratio = params.get('aspect_ratio', '16:9')
+        image_format = params.get('format', 'base64')
+        
+        if not prompt:
+            return {'error': 'Prompt is required'}
+        
+        try:
+            from grok_ai import grok_ai
+            if not grok_ai.enabled:
+                return {'error': 'Image generation service unavailable'}
+            
+            result = grok_ai.generate_image(
+                prompt=prompt,
+                aspect_ratio=aspect_ratio,
+                image_format=image_format,
+                n=1
+            )
+            
+            if result:
+                self._image_gen_daily_count += 1
+                return {
+                    'image_data': result.get('image_data'),
+                    'format': result.get('format'),
+                    'moderation_passed': result.get('moderation_passed', True),
+                    'model': result.get('model', 'grok-imagine-image'),
+                    'daily_remaining': self._image_gen_daily_limit - self._image_gen_daily_count,
+                }
+            else:
+                return {'error': 'Image generation failed'}
+                
+        except Exception as e:
+            return {'error': f'Image generation error: {str(e)}'}
 
     # ── Task Info ───────────────────────────────────────────────────
 
