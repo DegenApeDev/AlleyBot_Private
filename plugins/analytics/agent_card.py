@@ -199,7 +199,7 @@ class AgentCardGenerator:
                     "agentRegistry": f"eip155:{CHAIN_ID}:{IDENTITY_REGISTRY}",
                 }
             ],
-            "supportedTrust": ["reputation"],
+            "supportedTrust": ["reputation", "tee"],
             "platforms": platforms,
             "capabilities": capabilities,
             "contact": {
