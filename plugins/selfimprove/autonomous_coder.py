@@ -427,22 +427,22 @@ def format_number(n: float, decimals: int = 2) -> str:
         """Generate code using AI with timeout handling and circuit breaker"""
         # Check circuit breaker first
         if not self._check_circuit_breaker():
-            print("⛈️ Skipping AI generation - circuit breaker open")
+            print(" Skipping AI generation - circuit breaker open")
             return None
 
-        system_prompt = f"""You are an expert Python developer working on AlleyBot, an autonomous AI agent.
+        system_prompt = """You are an expert Python developer. Generate clean, correct Python code for AlleyBot.
 
-CRITICAL RULES - SYNTAX VALIDATION REQUIRED:
-1. NEVER use relative imports - always use absolute imports from project root
-2. For HTTP requests: import requests
-3. For AI: from grok_ai import grok_ai / from deepseek_ai import deepseek_ai
-4. Plugin imports: from plugins.X.Y import Z
+CRITICAL RULES:
+1. Check every bracket, brace, and parenthesis is balanced before finishing
+2. NEVER leave unclosed quotes, brackets, or parentheses
+3. ALL f-strings must have valid expressions inside { } - escape literal braces as {{ }}
+4. NO nested triple quotes inside the same type of quote
 5. NEVER use eval(), exec(), os.system(), subprocess with shell=True
 6. All code must be valid, complete Python files
 7. Wrap optional imports in try/except blocks
 8. Follow existing code style and conventions
 9. EVERY function must have proper closing parentheses and quotes
-10. Check all strings have matching quotes: 'text' or \"text\"
+10. Check all strings have matching quotes: 'text' or "text"
 11. Check all brackets/braces/parens are balanced: [], {}, ()
 12. Use 4 spaces for indentation, never tabs
 13. Always use trailing commas in multi-line lists/dicts
