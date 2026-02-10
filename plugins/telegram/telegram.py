@@ -42,16 +42,26 @@ class Telegram(AlleyBotPlugin):
                 # Configure HTTP client with longer timeouts to prevent errors during long operations
                 # Default is 5s, we increase to 60s connect / 120s read to handle agent cycles
                 from httpx import Timeout
+                from telegram.request import HTTPXRequest
                 
                 # Create custom timeout for HTTPX client
                 timeout = Timeout(connect=60.0, read=120.0, write=30.0, pool=5.0)
                 
-                # Build Application with custom timeout settings
+                # Build Application with custom request instance
+                request = HTTPXRequest(
+                    connection_pool_size=8,
+                    timeout=timeout,
+                    connect_timeout=60.0,
+                    read_timeout=120.0,
+                    write_timeout=30.0,
+                    pool_timeout=5.0
+                )
+                
                 self.application = (
                     Application.builder()
                     .token(self.bot_token)
+                    .request(request)
                     .get_updates_read_timeout(60)  # Long polling timeout
-                    .request_kwargs({'timeout': timeout})
                     .build()
                 )
                 
