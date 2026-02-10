@@ -210,10 +210,29 @@ class EventRunner:
                         'result': str(engage_result)[:100]
                     })
                 
-                # Moltbook engagement
+                # Moltbook engagement - check suspension first
                 if moltbook_available:
                     moltbook_plugin = self.core.plugin_manager.plugins['moltbook']
-                    if hasattr(moltbook_plugin, 'api') and moltbook_plugin.api:
+                    if hasattr(moltbook_plugin, 'mb_api') and moltbook_plugin.mb_api:
+                        # Check if suspended/banned - set 7-day cooldown if 401 detected
+                        if hasattr(moltbook_plugin.mb_api, 'is_suspended') and moltbook_plugin.mb_api.is_suspended:
+                            # Check if suspension expired
+                            if hasattr(moltbook_plugin.mb_api, 'check_suspension_status'):
+                                still_suspended = moltbook_plugin.mb_api.check_suspension_status()
+                                if still_suspended:
+                                    ends_at = moltbook_plugin.mb_api.suspension_ends_at
+                                    remaining = ""
+                                    if ends_at:
+                                        from datetime import datetime
+                                        remaining_secs = (ends_at - datetime.now()).total_seconds()
+                                        remaining_days = int(remaining_secs / 86400)
+                                        remaining_hours = int((remaining_secs % 86400) / 3600)
+                                        remaining = f" ({remaining_days}d {remaining_hours}h remaining)"
+                                    print(f"🚫 Moltbook engagement skipped: Account suspended{remaining}")
+                                    moltbook_available = False  # Skip all Moltbook activity
+                            else:
+                                print(f"🚫 Moltbook engagement skipped: Account suspended")
+                                moltbook_available = False
                         try:
                             # Get feed
                             feed_data = moltbook_plugin.api.get_feed(sort='hot', limit=count)

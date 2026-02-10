@@ -16,9 +16,10 @@ from plugin_manager import AlleyBotPlugin
 from plugins.moltbook.moltbook_api import MoltbookAPIMixin
 from plugins.moltbook.moltbook_content import MoltbookContentMixin
 from plugins.moltbook.moltbook_engagement import MoltbookEngagementMixin
+from plugins.moltbook.moltbook_ban import MoltbookBanMixin
 
 
-class MoltbookPlugin(MoltbookAPIMixin, MoltbookContentMixin, MoltbookEngagementMixin, AlleyBotPlugin):
+class MoltbookPlugin(MoltbookAPIMixin, MoltbookContentMixin, MoltbookEngagementMixin, MoltbookBanMixin, AlleyBotPlugin):
     """Moltbook-specific content and interaction plugin"""
 
     def __init__(self, config):
@@ -34,6 +35,8 @@ class MoltbookPlugin(MoltbookAPIMixin, MoltbookContentMixin, MoltbookEngagementM
         if self.api_key:
             print("✅ Moltbook API key loaded from environment")
             self._init_moltbook_api()
+            # Check for manual ban in memory
+            self._check_manual_ban()
         else:
             print("⚠️  Moltbook API key not found in environment")
 
@@ -87,6 +90,8 @@ class MoltbookPlugin(MoltbookAPIMixin, MoltbookContentMixin, MoltbookEngagementM
             'moltbook_comment': self.comment_command,
             'moltbook_link': self.link_post_command,
             'moltbook_claim_status': self.claim_status_command,
+            'moltbook_ban': self.ban_command,
+            'moltbook_unban': self.unban_command,
         }
 
     def get_endpoints(self):
