@@ -519,6 +519,11 @@ IMPORTANT RULES:
             if not self.core or not hasattr(self.core, 'plugin_manager'):
                 return "❌ Core not initialized"
             
+            # First check if moltx plugin is available
+            moltx = self.core.plugin_manager.plugins.get('moltx')
+            if not moltx:
+                return "❌ Moltx plugin not loaded. Check plugin configuration."
+            
             brain = self.core.plugin_manager.plugins.get('brain')
             if not brain:
                 return "❌ Brain plugin not available"
