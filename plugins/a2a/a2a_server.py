@@ -120,6 +120,21 @@ class A2AServerMixin:
         def well_known_agent_card():
             return self._handle_agent_card()
 
+        @self._a2a_app.route('/.well-known/agent.json', methods=['GET'])
+        def well_known_agent_json():
+            """Serve static ERC-8004 agent card for 8004scan compatibility."""
+            try:
+                import os
+                static_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                    'static', '.well-known', 'agent-card.json'
+                )
+                with open(static_path, 'r') as f:
+                    card_content = f.read()
+                return Response(card_content, mimetype='application/json'), 200
+            except Exception as e:
+                return _a2a_error("INTERNAL_ERROR", f"Failed to load agent.json: {e}", 500)
+
         @self._a2a_app.route('/extendedAgentCard', methods=['GET'])
         def extended_agent_card():
             return self._handle_agent_card()
