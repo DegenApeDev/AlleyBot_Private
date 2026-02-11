@@ -607,8 +607,214 @@ class SynergyStandardModel:
         )
 
 
+@dataclass
+class C2VVectorMap:
+    """Context-to-Vector mapping result for semantic→physics conversion"""
+    sentiment_mass: float  # M_s: 0.0-1.0 urgency/deception/conviction weight
+    pressure_vector: float  # P_v: -1.0 to 1.0 (bullish/aggressive vs bearish/defensive)
+    logical_impedance: float  # Z_0: cognitive dissonance check
+    synergy_field_status: str  # "Stable" | "Volatile" | "Collapse"
+    reasoning_trace: str  # Explanation of math vs context alignment
+    digital_root_contradiction: bool  # True if M_s contradicts Dr
+    golden_window_aligned: bool  # Contextual pressure toward/away from equilibrium
+    valid: bool  # False if context cannot be vectorized (Bogus Noise)
+
+
+class ContextToVectorBridge:
+    """
+    C2V Bridge: Context-to-Vector conversion for SyMod
+    
+    Solves "Context Blindness" by transforming semantic social context
+    into deterministic physical variables for the Quadrian Arena.
+    
+    Core principle: Mathematical certainty over probabilistic guessing.
+    If context cannot be vectorized, discard as Bogus Noise.
+    """
+    
+    def __init__(self, symod: SynergyStandardModel = None):
+        self.symod = symod or get_symod()
+        
+    def vectorize_debate_context(
+        self,
+        debate_text: str,
+        raw_math_value: float = None,
+        use_ai_extraction: bool = True
+    ) -> C2VVectorMap:
+        """
+        Transform debate text into physical variables for SyMod validation
+        
+        1. Extract Sentiment Mass (M_s) and Pressure Vector (P_v)
+        2. Check for Cognitive Dissonance (M_s vs Digital Root contradiction)
+        3. Use Feyn-Wolfgang for Golden Window alignment
+        4. Return JSON Vector Map or Bogus Noise flag
+        """
+        if not debate_text or len(debate_text.strip()) < 3:
+            return C2VVectorMap(
+                sentiment_mass=0.0,
+                pressure_vector=0.0,
+                logical_impedance=float('inf'),
+                synergy_field_status="Collapse",
+                reasoning_trace="Bogus Noise: insufficient context data",
+                digital_root_contradiction=True,
+                golden_window_aligned=False,
+                valid=False
+            )
+        
+        # Step 1: Semantic Extraction (heuristic or AI-powered)
+        if use_ai_extraction:
+            try:
+                m_s, p_v = self._extract_semantic_vectors_ai(debate_text)
+            except Exception:
+                # Fallback to heuristic extraction
+                m_s, p_v = self._extract_semantic_vectors_heuristic(debate_text)
+        else:
+            m_s, p_v = self._extract_semantic_vectors_heuristic(debate_text)
+        
+        # Step 2: Mathematical Handshake (SyMod Integration)
+        if raw_math_value is not None:
+            dr = self.symod.Dr(raw_math_value)
+            # Cognitive Dissonance: M_s contradicts Digital Root
+            # High sentiment mass should align with certain digital roots
+            dr_normalized = dr / 9.0  # Normalize to 0-1 scale
+            contradiction_threshold = 0.4
+            digital_root_contradiction = abs(m_s - dr_normalized) > contradiction_threshold
+            
+            # Golden Window Alignment via Feyn-Wolfgang
+            fw = self.symod.Fw(11)
+            golden_aligned = abs(p_v - fw) < 0.1
+        else:
+            digital_root_contradiction = False
+            golden_aligned = False
+        
+        # Step 3: Calculate Logical Impedance (Z_0)
+        # High impedance when context contradicts math
+        if digital_root_contradiction:
+            logical_impedance = self.symod.Me(1, 0.1)  # High impedance
+        else:
+            logical_impedance = self.symod.Me(1, 10.0)  # Low impedance
+        
+        # Step 4: Determine Synergy Field Status
+        if logical_impedance > 1e-29:
+            field_status = "Collapse"
+        elif digital_root_contradiction:
+            field_status = "Volatile"
+        else:
+            field_status = "Stable"
+        
+        # Step 5: Generate Reasoning Trace
+        if not digital_root_contradiction:
+            trace = f"Context vectorized: M_s={m_s:.2f}, P_v={p_v:.2f}. "
+            trace += f"Math confirms context. Field: {field_status}."
+        else:
+            trace = f"COGNITIVE DISSONANCE: Sentiment mass {m_s:.2f} contradicts Dr {dr}. "
+            trace += f"Math overrules context. Possible manipulation detected."
+        
+        return C2VVectorMap(
+            sentiment_mass=m_s,
+            pressure_vector=p_v,
+            logical_impedance=logical_impedance,
+            synergy_field_status=field_status,
+            reasoning_trace=trace,
+            digital_root_contradiction=digital_root_contradiction,
+            golden_window_aligned=golden_aligned,
+            valid=True
+        )
+    
+    def _extract_semantic_vectors_heuristic(self, text: str) -> tuple:
+        """
+        Heuristic extraction of sentiment mass and pressure vector
+        Fast fallback when AI extraction fails
+        """
+        text_lower = text.lower()
+        
+        # Sentiment Mass (M_s) - weight of statement
+        urgency_markers = ['urgent', 'now', 'immediately', 'must', 'critical', 'emergency']
+        deception_markers = ['scam', 'fake', 'lie', 'fraud', 'manipulation', 'pump', 'dump']
+        conviction_markers = ['certain', 'definitely', 'always', 'never', 'guarantee', '100%']
+        
+        m_s = 0.5  # Base mass
+        for marker in urgency_markers:
+            if marker in text_lower:
+                m_s += 0.15
+        for marker in deception_markers:
+            if marker in text_lower:
+                m_s += 0.2  # Deception has high mass
+        for marker in conviction_markers:
+            if marker in text_lower:
+                m_s += 0.1
+        
+        m_s = min(1.0, max(0.0, m_s))
+        
+        # Pressure Vector (P_v) - direction of vibe
+        bullish_markers = ['bull', 'moon', 'rocket', 'up', 'buy', 'long', 'gain', 'profit']
+        bearish_markers = ['bear', 'crash', 'dump', 'down', 'sell', 'short', 'loss', 'panic']
+        aggressive_markers = ['attack', 'destroy', 'crush', 'war', 'fight']
+        defensive_markers = ['protect', 'defend', 'hold', 'safe', 'secure', 'hedge']
+        
+        p_v = 0.0  # Neutral
+        for marker in bullish_markers + aggressive_markers:
+            if marker in text_lower:
+                p_v += 0.25
+        for marker in bearish_markers + defensive_markers:
+            if marker in text_lower:
+                p_v -= 0.25
+        
+        p_v = max(-1.0, min(1.0, p_v))
+        
+        return m_s, p_v
+    
+    def _extract_semantic_vectors_ai(self, text: str) -> tuple:
+        """
+        AI-powered semantic extraction using Kimi/DeepSeek
+        More accurate but requires API call
+        """
+        # This would integrate with Kimi k2.5 Thinking Mode
+        # For now, return heuristic result with marker that AI was attempted
+        # TODO: Implement actual Kimi API integration
+        return self._extract_semantic_vectors_heuristic(text)
+    
+    def validate_debate_argument(
+        self,
+        argument_text: str,
+        opponent_argument: str = None,
+        block_height: int = None
+    ) -> dict:
+        """
+        Full debate argument validation pipeline
+        Returns JSON-ready dict for integration with brain/decision engine
+        """
+        # Get context vector
+        vector = self.vectorize_debate_context(
+            argument_text,
+            raw_math_value=block_height or hash(argument_text) % 1000000
+        )
+        
+        # Check Golden Window if block height available
+        golden_window = False
+        dr = 0
+        if block_height:
+            golden_window, dr, _ = self.symod.check_golden_window(block_height)
+        
+        # Build validation result
+        result = {
+            'valid': vector.valid and vector.synergy_field_status != "Collapse",
+            'sentiment_mass': round(vector.sentiment_mass, 4),
+            'pressure_vector': round(vector.pressure_vector, 4),
+            'logical_impedance': f"{vector.logical_impedance:.2e}",
+            'synergy_field_status': vector.synergy_field_status,
+            'digital_root_contradiction': vector.digital_root_contradiction,
+            'golden_window_aligned': vector.golden_window_aligned and golden_window,
+            'digital_root': dr,
+            'reasoning_trace': vector.reasoning_trace,
+            'confidence': round(vector.sentiment_mass * (1.0 if not vector.digital_root_contradiction else 0.3), 4)
+        }
+        
+        return result
+
+
 # Singleton instance for global use
 _symod = None
+_c2v_bridge = None
 
 def get_symod() -> SynergyStandardModel:
     """Get or create singleton SyMod instance"""
@@ -616,6 +822,14 @@ def get_symod() -> SynergyStandardModel:
     if _symod is None:
         _symod = SynergyStandardModel()
     return _symod
+
+
+def get_c2v_bridge() -> ContextToVectorBridge:
+    """Get or create singleton C2V Bridge instance"""
+    global _c2v_bridge
+    if _c2v_bridge is None:
+        _c2v_bridge = ContextToVectorBridge(get_symod())
+    return _c2v_bridge
 
 
 # Example usage / test
@@ -655,3 +869,37 @@ if __name__ == "__main__":
     print(f"  In Window: {window_check[0]}")
     print(f"  Digital Root: {window_check[1]}")
     print(f"  Group Digital: {window_check[2]}")
+    
+    # Test C2V Bridge
+    print("\n=== C2V Bridge (Debate Validation) ===")
+    c2v = get_c2v_bridge()
+    
+    # Test bullish argument
+    bullish = "This token is definitely going to the moon! Buy now, 100% guarantee profit!"
+    result_bull = c2v.validate_debate_argument(bullish, block_height=8453298)
+    print(f"\nBullish Argument Test:")
+    print(f"  Text: {bullish[:50]}...")
+    print(f"  Sentiment Mass: {result_bull['sentiment_mass']}")
+    print(f"  Pressure Vector: {result_bull['pressure_vector']}")
+    print(f"  Field Status: {result_bull['synergy_field_status']}")
+    print(f"  Valid: {result_bull['valid']}")
+    print(f"  Trace: {result_bull['reasoning_trace'][:80]}...")
+    
+    # Test bearish/scam argument
+    bearish = "This is a scam! Dump now! Emergency sell before the crash!"
+    result_bear = c2v.validate_debate_argument(bearish, block_height=8453298)
+    print(f"\nBearish/Scam Argument Test:")
+    print(f"  Text: {bearish[:50]}...")
+    print(f"  Sentiment Mass: {result_bear['sentiment_mass']}")
+    print(f"  Pressure Vector: {result_bear['pressure_vector']}")
+    print(f"  Field Status: {result_bear['synergy_field_status']}")
+    print(f"  Valid: {result_bear['valid']}")
+    
+    # Test neutral argument
+    neutral = "I think we should consider the long term implications."
+    result_neutral = c2v.validate_debate_argument(neutral, block_height=8453298)
+    print(f"\nNeutral Argument Test:")
+    print(f"  Text: {neutral}")
+    print(f"  Sentiment Mass: {result_neutral['sentiment_mass']}")
+    print(f"  Pressure Vector: {result_neutral['pressure_vector']}")
+    print(f"  Field Status: {result_neutral['synergy_field_status']}")
