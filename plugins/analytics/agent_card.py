@@ -465,11 +465,67 @@ class AgentCardGenerator:
         return f"data:application/json;base64,{card_b64}"
 
     def save_static(self, path: str):
-        """Save the current agent card to a static JSON file"""
+        """Save the current agent card to a static JSON file with validation"""
         card = self.generate()
+        # Validate before saving
+        is_valid, errors = self.validate_card(card)
+        if not is_valid:
+            print(f"⚠️ Agent card validation warnings: {errors}")
         with open(path, 'w') as f:
             json.dump(card, f, indent=2)
         return path
+
+    def validate_card(self, card: Dict[str, Any]) -> tuple:
+        """Validate ERC-8004 compliance of agent card
+        
+        Returns:
+            (is_valid: bool, errors: list of strings)
+        """
+        errors = []
+        
+        # Required top-level fields
+        required_fields = ['type', 'name', 'description', 'image', 'endpoints', 'registrations']
+        for field in required_fields:
+            if field not in card:
+                errors.append(f"Missing required field: {field}")
+        
+        # Validate endpoints array
+        if 'endpoints' in card:
+            if not isinstance(card['endpoints'], list):
+                errors.append("'endpoints' must be an array")
+            elif len(card['endpoints']) == 0:
+                errors.append("'endpoints' array cannot be empty")
+            else:
+                for i, ep in enumerate(card['endpoints']):
+                    if 'name' not in ep:
+                        errors.append(f"Endpoint {i} missing 'name'")
+                    if 'endpoint' not in ep:
+                        errors.append(f"Endpoint {i} missing 'endpoint'")
+        
+        # Validate supportedTrust values
+        valid_trust_models = {'reputation', 'crypto-economic', 'tee-attestation'}
+        if 'supportedTrust' in card:
+            for trust in card['supportedTrust']:
+                if trust not in valid_trust_models:
+                    errors.append(f"Invalid trust model: {trust}. Use: {valid_trust_models}")
+        
+        # Validate registrations
+        if 'registrations' in card:
+            if not isinstance(card['registrations'], list):
+                errors.append("'registrations' must be an array")
+            for i, reg in enumerate(card['registrations']):
+                if 'agentId' not in reg:
+                    errors.append(f"Registration {i} missing 'agentId'")
+                if 'agentRegistry' not in reg:
+                    errors.append(f"Registration {i} missing 'agentRegistry'")
+        
+        # Validate JSON serializable
+        try:
+            json.dumps(card)
+        except (TypeError, ValueError) as e:
+            errors.append(f"JSON serialization error: {e}")
+        
+        return len(errors) == 0, errors
 
     def _upload_to_ipfs(self, card_json: str) -> str:
         """Upload agent card JSON to IPFS and return the ipfs:// URI.
