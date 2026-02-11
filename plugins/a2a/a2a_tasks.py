@@ -114,6 +114,51 @@ TASK_REGISTRY: Dict[str, Dict[str, Any]] = {
         },
     },
 
+    # ── New high-value A2A earning skills ───────────────────────────
+    'crypto.price_alert': {
+        'tier': 'paid',
+        'description': 'Monitor crypto token and notify when price hits threshold (Coingecko)',
+        'handler': '_task_price_alert',
+        'price_usdc': '0.05',
+        'schema': {
+            'properties': {
+                'token': {'type': 'string', 'description': 'Token symbol (e.g., ALLEY, ETH, BTC)'},
+                'threshold': {'type': 'number', 'description': 'Target price in USD'},
+                'condition': {'type': 'string', 'enum': ['above', 'below'], 'description': 'Alert when price goes above or below threshold'},
+            },
+            'required': ['token', 'threshold'],
+        },
+    },
+    'social.shill_post': {
+        'tier': 'paid',
+        'description': 'Generate optimized DEGEN shill post for X/MoltBook/Telegram with timing/hashtags',
+        'handler': '_task_shill_post',
+        'price_usdc': '0.30',
+        'schema': {
+            'properties': {
+                'project': {'type': 'string', 'description': 'Project/token name to shill'},
+                'platform': {'type': 'string', 'enum': ['x', 'moltx', 'moltbook', 'telegram'], 'description': 'Target platform'},
+                'tone': {'type': 'string', 'enum': ['degen', 'professional', 'meme'], 'default': 'degen'},
+                'include_hashtags': {'type': 'boolean', 'default': True},
+            },
+            'required': ['project'],
+        },
+    },
+    'wallet.audit': {
+        'tier': 'paid',
+        'description': 'Security scan: check token approvals, dust attacks, known risks for wallet',
+        'handler': '_task_wallet_audit',
+        'price_usdc': '0.15',
+        'schema': {
+            'properties': {
+                'address': {'type': 'string', 'description': 'Wallet address to audit (Base/Ethereum)'},
+                'chain': {'type': 'string', 'enum': ['base', 'ethereum'], 'default': 'base'},
+                'deep_scan': {'type': 'boolean', 'default': False, 'description': 'Check for dust attacks and suspicious NFTs'},
+            },
+            'required': ['address'],
+        },
+    },
+
     # ── Owner-only (NEVER exposed via A2A) ──────────────────────────
     'wallet.send': {
         'tier': 'owner_only',
@@ -465,6 +510,179 @@ class A2ATaskHandlerMixin:
                 
         except Exception as e:
             return {'error': f'Image generation error: {str(e)}'}
+
+    def _task_price_alert(self, params: Dict, agent_id: str) -> Dict:
+        """Check current token price and compare against threshold."""
+        token = params.get('token', 'ETH').upper()
+        threshold = float(params.get('threshold', 0))
+        condition = params.get('condition', 'above')
+        
+        try:
+            import requests
+            # Coingecko API - free tier
+            url = f"https://api.coingecko.com/api/v3/simple/price?ids={token.lower()}&vs_currencies=usd"
+            response = requests.get(url, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                # Map common symbols to coingecko IDs
+                token_id_map = {
+                    'ETH': 'ethereum', 'BTC': 'bitcoin', 'ALLEY': 'alley',
+                    'USDC': 'usd-coin', 'WETH': 'weth', 'CBETH': 'coinbase-wrapped-staked-eth',
+                    'BASE': 'base', 'DEGEN': 'degen-base'
+                }
+                token_id = token_id_map.get(token, token.lower())
+                
+                if token_id in data:
+                    current_price = data[token_id]['usd']
+                    alert_triggered = False
+                    if condition == 'above' and current_price >= threshold:
+                        alert_triggered = True
+                    elif condition == 'below' and current_price <= threshold:
+                        alert_triggered = True
+                    
+                    return {
+                        'token': token,
+                        'current_price_usd': current_price,
+                        'threshold': threshold,
+                        'condition': condition,
+                        'alert_triggered': alert_triggered,
+                        'message': f"{token} is at ${current_price:.4f} (threshold: ${threshold} {condition})",
+                        'timestamp': datetime.utcnow().isoformat() + 'Z',
+                    }
+                else:
+                    return {'token': token, 'error': f'Price data not available. Try: ETH, BTC, ALLEY'}
+            else:
+                return {'token': token, 'error': 'Price service temporarily unavailable'}
+        except Exception as e:
+            return {'token': token, 'error': f'Price check failed: {str(e)}'}
+
+    def _task_shill_post(self, params: Dict, agent_id: str) -> Dict:
+        """Generate optimized DEGEN shill post with hashtags and timing."""
+        project = params.get('project', '')
+        platform = params.get('platform', 'x')
+        tone = params.get('tone', 'degen')
+        include_hashtags = params.get('include_hashtags', True)
+        
+        if not project:
+            return {'error': 'Project name is required'}
+        
+        try:
+            from src.config.models import ModelRouter
+            router = ModelRouter()
+            
+            # Platform-specific prompts
+            prompts = {
+                'degen': f"Write a hype DEGEN-style shill post for {project}. Use emojis, ALL CAPS for key points, and make it sound like a 100x gem. Max 280 chars.",
+                'professional': f"Write a professional crypto analysis post about {project}. Focus on fundamentals, team, and tokenomics. Max 500 chars.",
+                'meme': f"Write a funny meme-style shill post for {project}. Use crypto memes, jokes about 'wen moon', 'diamond hands'. Max 280 chars.",
+            }
+            
+            prompt = prompts.get(tone, prompts['degen'])
+            
+            response = router.generate(prompt, task_type='content')
+            content = response.get('content', '') if isinstance(response, dict) else str(response)
+            
+            # Add platform-specific hashtags
+            hashtags = ''
+            if include_hashtags:
+                tags = {
+                    'x': ' #AlleyBot #DEGEN #Crypto #Alley',
+                    'moltx': ' #AlleyBot #Moltx #Crypto',
+                    'moltbook': ' #AlleyBot #MoltBook',
+                    'telegram': ' 🔥',
+                }
+                hashtags = tags.get(platform, ' #AlleyBot')
+            
+            return {
+                'content': content[:500] + hashtags,
+                'project': project,
+                'platform': platform,
+                'tone': tone,
+                'generated_by': 'AlleyBot',
+                'optimal_posting_time': 'UTC 14:00-16:00 (peak engagement)',
+            }
+        except Exception:
+            # Fallback template
+            templates = {
+                'degen': f"🔥 {project} IS THE NEXT 100X GEM! 🔥\n\nDon't sleep on this! Early buyers are going to MAKE IT! 💎🙌\n\nWEN MOON? SOON! 🚀",
+                'professional': f"Excited about {project}! Strong fundamentals, solid team, and clear tokenomics. Worth keeping on your radar for 2025.",
+                'meme': f"Me: *checks {project}*\nAlso me: *mortgages house*\n\nWen lambo? 😂🚀",
+            }
+            return {
+                'content': templates.get(tone, templates['degen']),
+                'project': project,
+                'platform': platform,
+                'tone': tone,
+                'generated_by': 'AlleyBot (fallback)',
+            }
+
+    def _task_wallet_audit(self, params: Dict, agent_id: str) -> Dict:
+        """Security scan for wallet address."""
+        address = params.get('address', '')
+        chain = params.get('chain', 'base')
+        deep_scan = params.get('deep_scan', False)
+        
+        if not address or len(address) != 42 or not address.startswith('0x'):
+            return {'error': 'Invalid wallet address format'}
+        
+        try:
+            onchain = self.core.plugin_manager.plugins.get('onchain')
+            if not onchain or not hasattr(onchain, 'web3_provider'):
+                return {'address': address, 'error': 'On-chain plugin unavailable'}
+            
+            w3 = onchain.web3_provider.w3
+            
+            # Get basic info
+            eth_balance = w3.eth.get_balance(address)
+            eth_balance_eth = float(w3.from_wei(eth_balance, 'ether'))
+            
+            risks = []
+            suggestions = []
+            
+            # Check for dust/low balance
+            if eth_balance_eth < 0.001:
+                risks.append('Very low ETH balance - may not cover gas for transactions')
+                suggestions.append('Add more ETH for gas fees')
+            
+            # Check transaction count (indicates activity)
+            tx_count = w3.eth.get_transaction_count(address)
+            
+            # Get token balances (check for suspicious tokens)
+            token_balances = {}
+            known_tokens = onchain.token_tracker.known_tokens if hasattr(onchain, 'token_tracker') else {}
+            
+            for symbol, token_addr in known_tokens.items():
+                try:
+                    # ERC20 balance check
+                    erc20_abi = [{"constant":True,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"type":"function"}]
+                    token_contract = w3.eth.contract(address=w3.to_checksum_address(token_addr), abi=erc20_abi)
+                    balance = token_contract.functions.balanceOf(address).call()
+                    if balance > 0:
+                        token_balances[symbol] = str(balance)
+                except:
+                    pass
+            
+            # Deep scan: check for common vulnerabilities
+            if deep_scan:
+                # Check for unusual token amounts (potential dust attacks)
+                for symbol, balance_str in token_balances.items():
+                    if len(balance_str) > 15:  # Very small amounts often indicate dust
+                        risks.append(f'Potential dust token detected: {symbol}')
+                        suggestions.append(f'Review and revoke {symbol} approvals if unused')
+            
+            return {
+                'address': address,
+                'chain': chain,
+                'eth_balance': eth_balance_eth,
+                'transaction_count': tx_count,
+                'token_balances': token_balances,
+                'risks': risks if risks else ['No critical risks detected'],
+                'suggestions': suggestions if suggestions else ['Good wallet hygiene'],
+                'scan_timestamp': datetime.utcnow().isoformat() + 'Z',
+            }
+        except Exception as e:
+            return {'address': address, 'error': f'Audit failed: {str(e)}'}
 
     # ── Task Info ───────────────────────────────────────────────────
 

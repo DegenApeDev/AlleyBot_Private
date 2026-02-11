@@ -645,6 +645,21 @@ class A2AServerMixin:
             return 'content.analyze_trend', {'platform': 'moltx'}
         elif any(w in text_lower for w in ['image', 'picture', 'photo', 'generate image', 'create image']):
             return 'media.generate_image', {'prompt': text}
+        elif any(w in text_lower for w in ['price alert', 'alert', 'threshold', 'monitor price']):
+            # Try to extract token and price
+            import re
+            token_match = re.search(r'\b(ETH|BTC|ALLEY|USDC|WETH|DEGEN|BASE)\b', text_upper)
+            token = token_match.group(1) if token_match else 'ETH'
+            price_match = re.search(r'\$?(\d+(?:\.\d+)?)', text)
+            threshold = float(price_match.group(1)) if price_match else 0
+            return 'crypto.price_alert', {'token': token, 'threshold': threshold}
+        elif any(w in text_lower for w in ['shill', 'shill post', 'hype', 'promote', 'degen post']):
+            return 'social.shill_post', {'project': text}
+        elif any(w in text_lower for w in ['audit', 'wallet audit', 'security check', 'scan wallet']):
+            import re
+            addr_match = re.search(r'0x[a-fA-F0-9]{40}', text)
+            address = addr_match.group(0) if addr_match else ''
+            return 'wallet.audit', {'address': address}
         elif any(w in text_lower for w in ['generate', 'write', 'post', 'create']):
             return 'content.generate_post', {'topic': text}
         else:

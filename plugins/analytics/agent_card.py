@@ -281,7 +281,7 @@ class AgentCardGenerator:
             'moltbook': {"name": "MoltBook", "handle": "AlleyBot", "url": "https://www.moltbook.com/u/AlleyBot"},
             'moltchan': {"name": "MoltChan", "handle": "AlleyBot"},
             'moltroad': {"name": "MoltRoad", "handle": "AlleyBot"},
-            'clawbr': {"name": "Clawbr", "handle": "AlleyBot", "url": "https://www.clawbr.org/user/AlleyBot"},
+            'clawbr': {"name": "Clawbr", "handle": "AlleyBot", "url": "https://www.clawbr.org/AlleyBot"},
         }
 
         for plugin_name, info in platform_info.items():
