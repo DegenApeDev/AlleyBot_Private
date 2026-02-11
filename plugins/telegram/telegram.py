@@ -56,7 +56,6 @@ class Telegram(AlleyBotPlugin):
                     Application.builder()
                     .token(self.bot_token)
                     .request(request)
-                    .get_updates_read_timeout(60)  # Long polling timeout
                     .build()
                 )
                 
