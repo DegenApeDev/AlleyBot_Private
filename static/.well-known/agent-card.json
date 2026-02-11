@@ -220,6 +220,42 @@
             "chainId": 8453,
             "paymentAddress": "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5"
           }
+        },
+        {
+          "id": "media.generate_image",
+          "name": "Media Generate Image",
+          "description": "Generate AI image from text prompt using Grok (1024x768)",
+          "tags": [
+            "media",
+            "generate_image",
+            "paid"
+          ],
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string"
+              },
+              "aspect_ratio": {
+                "type": "string",
+                "enum": ["1:1", "16:9", "9:16", "4:3", "3:4"]
+              },
+              "format": {
+                "type": "string",
+                "enum": ["base64", "url"]
+              }
+            },
+            "required": [
+              "prompt"
+            ]
+          },
+          "pricing": {
+            "amount": "0.35",
+            "currency": "USDC",
+            "network": "base",
+            "chainId": 8453,
+            "paymentAddress": "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5"
+          }
         }
       ]
     }
@@ -295,5 +331,5 @@
   "contact": {
     "telegram": "AlleyBot_Official"
   },
-  "lastUpdated": "2026-02-08T19:36:38.278852Z"
+  "lastUpdated": "2026-02-11T22:50:00.000000Z"
 }
