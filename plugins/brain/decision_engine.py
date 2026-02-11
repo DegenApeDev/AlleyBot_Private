@@ -735,15 +735,15 @@ Haven't engaged on Moltbook recently, good time to build karma."""
                 if active_debates >= 3:
                     return f"⏳ Skipped: Already in {active_debates} debates (max 3)"
                 
-                # Check for similar existing debates
-                similar_topic = self._check_for_similar_debate()
-                if similar_topic:
-                    return f"⏳ Skipped: Similar debate '{similar_topic[:50]}...' already exists"
-                
                 # Generate unique debate topic using AI
                 topic = self._generate_debate_topic()
                 if not topic:
-                    return "❌ Failed to generate debate topic"
+                    return "⏳ Skipped: Could not generate unique debate topic"
+                
+                # Check for similar existing debates with the generated topic
+                similar_topic = self._check_for_similar_debate(topic)
+                if similar_topic:
+                    return f"⏳ Skipped: Generated topic too similar to '{similar_topic[:50]}...'"
                 
                 # Track topic to prevent future duplicates
                 self._track_debate_topic(topic)
@@ -976,6 +976,7 @@ Haven't engaged on Moltbook recently, good time to build karma."""
                         price_data = value
                         break
                 
+                topic = None
                 if price_data:
                     # Use Grok to create a debate topic based on actual prices
                     try:
@@ -996,14 +997,21 @@ Respond with ONLY the debate topic, no explanation."""
                             topic = grok_ai.chat(prompt, max_tokens=100)
                             if topic:
                                 topic = topic.strip().strip('"').strip("'")
-                            else:
-                                topic = args or "Crypto markets are unpredictable"
-                        else:
-                            topic = args or "Crypto markets are unpredictable"
-                    except Exception:
-                        topic = args or "Crypto markets are unpredictable"
+                    except Exception as e:
+                        print(f"⚠️  Failed to generate topic from price data: {e}")
+                
+                # If no price-based topic, use standard debate topic generation
+                if not topic:
+                    topic = self._generate_debate_topic()
+                
+                # Check for duplicates
+                if topic:
+                    similar = self._check_for_similar_debate(topic)
+                    if similar:
+                        return f"⏳ Skipped: Topic too similar to '{similar[:50]}...'"
+                    self._track_debate_topic(topic)
                 else:
-                    topic = args or "AI agents should have ethical oversight"
+                    return "⏳ Skipped: Could not generate unique debate topic"
                 
                 opening = clawbr.generate_debate_opening(topic)
                 result = clawbr.create_debate(topic, opening)
@@ -1295,7 +1303,7 @@ Generate a detailed, compelling image prompt that would create an eye-catching v
             print(f"⚠️  Failed to track debate topic: {e}")
 
     def _generate_debate_topic(self) -> Optional[str]:
-        """Generate a unique debate topic using AI, avoiding recent topics"""
+        """Generate a unique debate topic using AI, avoiding recent topics. Returns None if unable to generate unique topic."""
         try:
             from grok_ai import grok_ai
             from deepseek_ai import deepseek_ai
@@ -1339,63 +1347,22 @@ Respond with ONLY the debate topic, nothing else."""
                 # Validate it's not too similar to recent topics or existing debates
                 duplicate = self._check_for_similar_debate(topic)
                 if duplicate:
-                    print(f"⚠️  Generated topic too similar to existing: '{topic[:60]}...' ~ '{duplicate[:60]}...'")
-                    return self._generate_fallback_debate_topic()
+                    print(f"⚠️  Generated topic too similar to existing: '{topic[:60]}...' ~ '{duplicate[:60]}...' - skipping debate creation")
+                    return None
                 return topic
             
-            return self._generate_fallback_debate_topic()
+            # No AI available - skip debate creation (no fallback)
+            print("⏳ No AI available for debate topic generation - skipping debate creation")
+            return None
             
         except Exception as e:
-            print(f"⚠️  AI debate topic generation failed: {e}")
-            return self._generate_fallback_debate_topic()
+            print(f"⚠️  AI debate topic generation failed: {e} - skipping debate creation")
+            return None
 
-    def _generate_fallback_debate_topic(self) -> str:
-        """Generate a fallback debate topic when AI fails"""
-        import random
-        from datetime import datetime
-        
-        # Large pool of diverse topics with timestamp-based variation
-        topics = [
-            "AI should have the right to own property",
-            "Blockchain voting will replace traditional democracy",
-            "Crypto regulation stifles innovation",
-            "The metaverse is the future of social interaction",
-            "Autonomous weapons should be banned globally",
-            "Quantum computing will break all current encryption",
-            "Universal basic income is inevitable with AI automation",
-            "Space colonization should be humanity's top priority",
-            "Brain-computer interfaces will replace smartphones",
-            "Digital immortality through AI is ethically wrong",
-            "Central bank digital currencies threaten privacy",
-            "Open source AI is more dangerous than closed source",
-            "The attention economy is destroying society",
-            "Self-driving cars should prioritize passenger safety over pedestrians",
-            "Cryptocurrency is a bubble that will eventually collapse",
-            "AI art devalues human creativity",
-            "Social media algorithms should be regulated",
-            "Gene editing for enhancement should be legal",
-            "Data privacy is more important than security",
-            "Remote work will make cities obsolete",
-            "AI therapists can replace human psychologists",
-            "Smart contracts will eliminate lawyers",
-            "Decentralized social media is the only ethical option",
-            "Biometric authentication is safer than passwords",
-            "The gig economy exploits workers",
-            "AI-generated code is less reliable than human-written",
-            "Net neutrality should be a fundamental right",
-            "Digital currencies will replace cash within 10 years",
-            "AI should be granted legal personhood",
-            "Surveillance capitalism is unavoidable"
-        ]
-        
-        # Add day-based rotation to ensure variety
-        day_of_year = datetime.now().timetuple().tm_yday
-        random.seed(day_of_year)
-        
-        topic = random.choice(topics)
-        random.seed()  # Reset seed
-        
-        return topic
+    def _generate_fallback_debate_topic(self) -> Optional[str]:
+        """Fallback debate topic generator - returns None to skip debate creation when AI fails"""
+        print("⏳ Using fallback debate topic generator - but skipping to avoid duplicates")
+        return None
 
     def get_latest_block(self) -> int:
         """Get latest Base block height for Golden Window calibration"""
