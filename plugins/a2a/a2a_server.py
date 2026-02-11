@@ -655,6 +655,15 @@ class A2AServerMixin:
             return 'crypto.price_alert', {'token': token, 'threshold': threshold}
         elif any(w in text_lower for w in ['shill', 'shill post', 'hype', 'promote', 'degen post']):
             return 'social.shill_post', {'project': text}
+        elif any(w in text_lower for w in ['apy', 'yield', 'farm', 'defi optimizer', 'best yield']):
+            return 'defi.apy_optimizer', {'protocols': ['aave', 'yearn', 'curve']}
+        elif any(w in text_lower for w in ['contract scan', 'slither', 'audit contract', 'security check contract']):
+            import re
+            addr_match = re.search(r'0x[a-fA-F0-9]{40}', text)
+            address = addr_match.group(0) if addr_match else ''
+            return 'contract.slither_scan', {'address': address}
+        elif any(w in text_lower for w in ['find agent', 'recommend agent', 'best agent', 'skill recommend', 'agent matcher']):
+            return 'a2a.skill_recommend', {'task': text}
         elif any(w in text_lower for w in ['audit', 'wallet audit', 'security check', 'scan wallet']):
             import re
             addr_match = re.search(r'0x[a-fA-F0-9]{40}', text)
