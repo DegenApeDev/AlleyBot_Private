@@ -7,32 +7,14 @@
   "services": [
     {
       "name": "OASF",
-      "endpoint": "https://github.com/agntcy/oasf/",
       "version": "v0.8.0",
       "skills": [
         "natural_language_processing/natural_language_generation/dialogue_generation",
-        "natural_language_processing/creative_content",
-        "natural_language_processing/sentiment_analysis",
-        "natural_language_processing/information_retrieval_synthesis/search",
-        "natural_language_processing/natural_language_generation/text_completion",
-        "natural_language_processing/personalization/user_adaptation",
-        "natural_language_processing/natural_language_generation/story_generation",
-        "natural_language_processing/natural_language_generation/summarization",
         "analytical_skills/data_analysis/blockchain_analysis",
-        "tool_interaction/api_schema_understanding",
-        "evaluation_monitoring/performance_monitoring",
         "analytical_skills/coding_skills/text_to_code",
-        "analytical_skills/coding_skills/code_optimization",
-        "evaluation_monitoring/test_case_generation",
-        "tool_interaction/workflow_automation",
-        "advanced_reasoning_planning/strategic_planning",
-        "advanced_reasoning_planning/long_horizon_reasoning",
-        "advanced_reasoning_planning/chain_of_thought_structuring",
         "agent_orchestration/task_decomposition",
-        "natural_language_processing/natural_language_understanding/contextual_comprehension",
         "natural_language_processing/natural_language_understanding/semantic_understanding",
-        "tool_interaction/tool_use_planning",
-        "evaluation_monitoring/quality_evaluation"
+        "advanced_reasoning_planning/strategic_planning"
       ],
       "domains": [
         "technology/blockchain",

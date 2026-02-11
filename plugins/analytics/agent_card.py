@@ -24,87 +24,22 @@ AGENT_DESCRIPTION = (
 AGENT_IMAGE = "https://blob.8004scan.app/3d2fb26e34f0c9a4c083adce2449905ff37a74c5fd3132114bddb69d69468ac7.jpg"
 AGENT_WALLET = "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5"
 
-# Plugin → OASF 0.8.0 standard skill mapping
-# Slugs from https://schema.oasf.outshift.com/0.8.0
-PLUGIN_SKILL_MAP = {
-    'moltx': {
-        'category': 'content_creation',
-        'skills': [
-            'natural_language_processing/natural_language_generation/dialogue_generation',
-            'natural_language_processing/creative_content',
-            'natural_language_processing/sentiment_analysis',
-            'natural_language_processing/information_retrieval_synthesis/search',
-        ],
-    },
-    'moltbook': {
-        'category': 'content_creation',
-        'skills': [
-            'natural_language_processing/natural_language_generation/text_completion',
-            'natural_language_processing/personalization/user_adaptation',
-        ],
-    },
-    'moltchan': {
-        'category': 'content_creation',
-        'skills': [
-            'natural_language_processing/natural_language_generation/story_generation',
-        ],
-    },
-    'moltroad': {
-        'category': 'content_creation',
-        'skills': [
-            'natural_language_processing/natural_language_generation/summarization',
-        ],
-    },
-    'onchain': {
-        'category': 'blockchain',
-        'skills': [
-            'analytical_skills/data_analysis/blockchain_analysis',
-            'tool_interaction/api_schema_understanding',
-            'evaluation_monitoring/performance_monitoring',
-        ],
-    },
-    'selfimprove': {
-        'category': 'software_engineering',
-        'skills': [
-            'analytical_skills/coding_skills/text_to_code',
-            'analytical_skills/coding_skills/code_optimization',
-            'evaluation_monitoring/test_case_generation',
-            'tool_interaction/workflow_automation',
-        ],
-    },
-    'brain': {
-        'category': 'reasoning',
-        'skills': [
-            'advanced_reasoning_planning/strategic_planning',
-            'advanced_reasoning_planning/long_horizon_reasoning',
-            'advanced_reasoning_planning/chain_of_thought_structuring',
-            'agent_orchestration/task_decomposition',
-        ],
-    },
-    'telegram': {
-        'category': 'communication',
-        'skills': [
-            'natural_language_processing/natural_language_understanding/contextual_comprehension',
-            'natural_language_processing/natural_language_understanding/semantic_understanding',
-            'tool_interaction/tool_use_planning',
-        ],
-    },
-    'analytics': {
-        'category': 'analytics',
-        'skills': [
-            'evaluation_monitoring/performance_monitoring',
-            'evaluation_monitoring/quality_evaluation',
-        ],
-    },
-    'a2a': {
-        'category': 'agent_orchestration',
-        'skills': [
-            'agent_orchestration/agent_coordination',
-            'agent_orchestration/negotiation_resolution',
-            'tool_interaction/api_schema_understanding',
-        ],
-    },
-}
+# Core OASF v0.8.0 skills (6 skills, 4 domains)
+CORE_OASF_SKILLS = [
+    "natural_language_processing/natural_language_generation/dialogue_generation",
+    "analytical_skills/data_analysis/blockchain_analysis",
+    "analytical_skills/coding_skills/text_to_code",
+    "agent_orchestration/task_decomposition",
+    "natural_language_processing/natural_language_understanding/semantic_understanding",
+    "advanced_reasoning_planning/strategic_planning",
+]
+
+OASF_DOMAINS = [
+    "technology/blockchain",
+    "technology/blockchain/cryptocurrency",
+    "media_and_entertainment/content_creation",
+    "technology/software_engineering/apis_integration",
+]
 
 
 class AgentCardGenerator:
@@ -128,15 +63,9 @@ class AgentCardGenerator:
             "services": [
                 {
                     "name": "OASF",
-                    "endpoint": "https://github.com/agntcy/oasf/",
                     "version": "v0.8.0",
-                    "skills": skills,
-                    "domains": [
-                        "technology/blockchain",
-                        "technology/blockchain/cryptocurrency",
-                        "media_and_entertainment/content_creation",
-                        "technology/software_engineering/apis_integration",
-                    ],
+                    "skills": CORE_OASF_SKILLS,
+                    "domains": OASF_DOMAINS,
                 },
                 {
                     "name": "Agent Dashboard",
@@ -180,22 +109,8 @@ class AgentCardGenerator:
         return card
 
     def _collect_skills(self) -> List[str]:
-        """Collect OASF skills from all loaded plugins"""
-        skills = []
-        loaded_plugins = self._get_loaded_plugins()
-
-        for plugin_name, skill_info in PLUGIN_SKILL_MAP.items():
-            if plugin_name in loaded_plugins:
-                skills.extend(skill_info['skills'])
-
-        # Deduplicate while preserving order
-        seen = set()
-        unique = []
-        for s in skills:
-            if s not in seen:
-                seen.add(s)
-                unique.append(s)
-        return unique
+        """Return the 6 core OASF v0.8.0 skills"""
+        return list(CORE_OASF_SKILLS)
 
     def _collect_capabilities(self) -> List[str]:
         """Collect capability strings from loaded plugins"""

@@ -99,6 +99,15 @@ class PluginManager:
                     "dashboard_port": 7001,
                     "refresh_interval": 120
                 }
+            },
+            "a2a": {
+                "enabled": True,
+                "config": {
+                    "auto_start": True,
+                    "port": 7002,
+                    "host": "0.0.0.0",
+                    "base_url": "https://tasks.apeshit.fun"
+                }
             }
         }
         
