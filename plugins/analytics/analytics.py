@@ -230,7 +230,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
         return data
 
     def _get_activity_chart_data(self):
-        """Build real 7-day activity data from brain action history"""
+        """Build real 7-day activity data from posts across all platforms"""
         from datetime import datetime, timedelta
         days = []
         counts = []
@@ -241,7 +241,29 @@ class AnalyticsPlugin(AlleyBotPlugin):
             day_map[d.isoformat()] = 0
             days.append(d.strftime('%a'))
 
-        # Source 1: brain action history
+        # Source 1: Platform-specific post memories (most accurate)
+        post_memories = [
+            'moltbook_recent_posts',
+            'moltx_recent_posts', 
+            'moltchan_recent_posts',
+            'moltroad_recent_posts',
+            'clawbr_recent_debates',
+            'clawbr_recent_posts'
+        ]
+        
+        for memory_key in post_memories:
+            try:
+                posts = self.core.get_memory(memory_key) or []
+                for p in posts:
+                    ts = p.get('timestamp', '') or p.get('created_at', '')
+                    if ts:
+                        d = ts[:10]  # YYYY-MM-DD
+                        if d in day_map:
+                            day_map[d] += 1
+            except Exception as e:
+                print(f"[DASHBOARD-DEBUG] Error reading {memory_key}: {e}")
+
+        # Source 2: brain action history (as backup for actions taken)
         try:
             brain = self.core.plugin_manager.plugins.get('brain')
             history = []
@@ -249,19 +271,22 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 history = brain.action_history
             if not history:
                 history = self.core.get_memory('brain_action_history') or []
+            
             for entry in history:
                 ts = entry.get('timestamp', '')
                 if ts:
-                    try:
-                        d = ts[:10]  # YYYY-MM-DD
-                        if d in day_map:
+                    d = ts[:10]  # YYYY-MM-DD
+                    if d in day_map:
+                        # Only count successful post actions, not all actions
+                        action = entry.get('action', '')
+                        success = entry.get('success', False)
+                        if success and ('post' in action or 'engage' in action):
                             day_map[d] += 1
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[DASHBOARD-DEBUG] Error reading brain action history: {e}")
 
         counts = list(day_map.values())
+        print(f"[DASHBOARD-DEBUG] 7-day activity: {days} -> {counts}")
         return days, counts
 
     def _get_posts_today(self):
