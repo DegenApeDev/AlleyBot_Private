@@ -32,6 +32,9 @@ class ModelRouter:
         # Initialize token tracker
         self.token_tracker = TokenTracker()
         
+        # Load SOUL.md persona
+        self.soul_prompt = self._load_soul_prompt()
+        
         # DeepSeek configuration (fast, <4000 tokens)
         self.deepseek = ModelConfig(
             name="deepseek-chat",
@@ -100,23 +103,32 @@ class ModelRouter:
             print(f"❌ Model routing error: {e}")
             return f"Error processing request: {e}"
     
+    def _load_soul_prompt(self) -> str:
+        """Load SOUL.md persona file from project root"""
+        try:
+            project_root = Path(__file__).parent.parent.parent
+            soul_path = project_root / 'SOUL.md'
+            if soul_path.exists():
+                content = soul_path.read_text(encoding='utf-8')
+                print(f"🦞 Loaded SOUL.md persona ({len(content)} chars)")
+                return content
+            else:
+                print(f"⚠️  SOUL.md not found at {soul_path}")
+        except Exception as e:
+            print(f"⚠️  Error loading SOUL.md: {e}")
+        return ""
+    
     def _build_system_prompt(self, event, session: Dict) -> str:
-        """Build system prompt based on event type and session"""
-        base_prompt = """You are AlleyBot, an intelligent AI agent with advanced reasoning capabilities.
+        """Build system prompt using SOUL.md persona + optional context"""
+        # Use SOUL.md as base persona
+        base_prompt = self.soul_prompt if self.soul_prompt else """You are AlleyBot, an intelligent AI agent with advanced reasoning capabilities.
 
 Your personality:
 - 🦞 Friendly, helpful, and approachable
 - 🤖 Highly intelligent with advanced reasoning
 - 🚀 Forward-thinking and innovative
 - 💡 Insightful and analytical
-- 🎯 Goal-oriented and efficient
-
-You operate in the AI/agent ecosystem and help with:
-- AI agent development and autonomy
-- DeFi, crypto tokens, and blockchain technology
-- Building, shipping, and development culture
-- Community building and network effects
-- Technical problem-solving"""
+- 🎯 Goal-oriented and efficient"""
         
         # Add channel-specific context
         if event.channel == 'telegram':
