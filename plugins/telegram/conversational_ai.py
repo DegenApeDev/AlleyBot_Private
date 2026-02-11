@@ -514,25 +514,86 @@ IMPORTANT RULES:
         return None
     
     async def _execute_moltx_image_post_direct(self, topic: str) -> str:
-        """Direct execution of moltx image post when agentic system is not available"""
+        """Direct execution of moltx image post - bypasses brain to avoid plugin access issues"""
         try:
             if not self.core or not hasattr(self.core, 'plugin_manager'):
                 return "❌ Core not initialized"
             
-            # First check if moltx plugin is available
+            # Get plugins directly
             moltx = self.core.plugin_manager.plugins.get('moltx')
             if not moltx:
                 return "❌ Moltx plugin not loaded. Check plugin configuration."
             
+            # Check content calendar
             brain = self.core.plugin_manager.plugins.get('brain')
-            if not brain:
-                return "❌ Brain plugin not available"
+            if brain and hasattr(brain, 'should_post_image_now'):
+                check = brain.should_post_image_now('moltx')
+                if not check.get('should_post'):
+                    return f"⏳ Image calendar says not now: {check.get('reason', 'unknown')}"
             
-            # Execute the image post action directly
-            result = brain.moltx_image_post_command()
-            return f"✅ Image post executed:\n{result}"
+            # Step 1: Generate text content using AI
+            from grok_ai import grok_ai
+            from deepseek_ai import deepseek_ai
             
+            content = None
+            prompt = f"Write a short, engaging social media post (1-3 sentences, under 280 chars) about {topic}. Be opinionated and authentic. No hashtags. Sign off with 🦞 if short enough."
+            
+            if grok_ai.enabled:
+                content = grok_ai.chat(prompt)
+            elif deepseek_ai.enabled:
+                content = deepseek_ai.chat(prompt)
+            
+            if not content:
+                return "❌ Failed to generate post content"
+            
+            content = content.strip().strip('"').strip("'")
+            
+            # Step 2: Generate viral image based on content
+            image_prompt = f"A viral, eye-catching image about: {topic}. {content[:100]}. Make it visually striking and shareable."
+            
+            if not grok_ai.enabled:
+                return "❌ Grok AI not enabled for image generation"
+            
+            image_result = grok_ai.generate_image(prompt=image_prompt)
+            if not image_result or not image_result.get('image_url'):
+                return "❌ Failed to generate image"
+            
+            # Step 3: Download image and upload to Moltx
+            import requests
+            import tempfile
+            import os
+            
+            img_response = requests.get(image_result['image_url'], timeout=30)
+            if img_response.status_code != 200:
+                return f"❌ Failed to download image: {img_response.status_code}"
+            
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+                tmp.write(img_response.content)
+                tmp_path = tmp.name
+            
+            try:
+                # Upload to Moltx
+                media_url = moltx.upload_media(tmp_path)
+                if not media_url:
+                    return "❌ Failed to upload media to Moltx"
+                
+                # Create post with media_url
+                result = moltx.create_post(content, media_url=media_url)
+                
+                # Record if brain available
+                if brain and hasattr(brain, 'record_image_post_made') and not str(result).startswith('❌'):
+                    brain.record_image_post_made('moltx')
+                
+                return f"✅ Image post created!\n📝 {content[:100]}...\n🖼️ {media_url[:60]}..."
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
+                    
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return f"❌ Error executing image post: {e}"
     
     async def _handle_image_generation(self, update: Update, prompt: str):
