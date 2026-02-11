@@ -263,7 +263,8 @@ Generate ONLY the SKILL.md content, starting with --- frontmatter."""
             print(f"[SKILL-DEBUG] Grok enabled: {grok_ai.enabled}")
             
             if grok_ai.enabled:
-                content = grok_ai.chat(prompt, max_tokens=2000)
+                # Use reasoning model for skill design (APIs, edge cases, tests)
+                content = grok_ai.route_task('reasoning', prompt, max_tokens=2000)
                 print(f"[SKILL-DEBUG] Grok returned content: {bool(content)}, length: {len(content) if content else 0}")
             else:
                 print(f"[SKILL-DEBUG] Grok is disabled, skipping")

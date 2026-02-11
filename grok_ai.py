@@ -15,10 +15,18 @@ load_dotenv()
 class GrokAI:
     """Grok AI client for intelligent reasoning and content generation"""
     
+    # Model routing per engineer's recommendation
+    MODELS = {
+        'reasoning': 'grok-4.1-fast-reasoning',      # Design, specs, APIs, edge cases
+        'code': 'grok-code-fast-1',                   # Large code, scaffolding, files
+        'quick': 'grok-4.1-fast-non-reasoning',      # Small edits, glue, cheap tasks
+        'default': 'grok-4-1-fast-reasoning',
+    }
+    
     def __init__(self):
         self.api_key = os.getenv('XAI_API_KEY')
         self.base_url = "https://api.x.ai/v1"
-        self.model = "grok-4-1-fast-reasoning"
+        self.model = self.MODELS['default']
         
         if not self.api_key:
             print("⚠️  XAI_API_KEY not found in environment")
@@ -26,6 +34,21 @@ class GrokAI:
         else:
             self.enabled = True
             print("✅ Grok AI initialized")
+    
+    def route_task(self, task_type: str, prompt: str, max_tokens: int = 500, **kwargs) -> Optional[str]:
+        """Route task to appropriate model based on task type
+        
+        Args:
+            task_type: 'reasoning' (design/specs), 'code' (scaffolding), 'quick' (edits)
+            prompt: The prompt to send
+            max_tokens: Max response length
+            **kwargs: Additional params (temperature, system_prompt, etc.)
+        
+        Returns:
+            Generated text or None on failure
+        """
+        model = self.MODELS.get(task_type, self.MODELS['default'])
+        return self.chat(prompt, max_tokens=max_tokens, model=model, **kwargs)
     
     def _make_api_request(self, data):
         """Make API request with retry logic and exponential backoff"""
@@ -142,8 +165,15 @@ class GrokAI:
         
         return text
     
-    def chat(self, prompt: str, system_prompt: str = None, max_tokens: int = 500) -> Optional[str]:
-        """General-purpose chat method for simple prompts"""
+    def chat(self, prompt: str, system_prompt: str = None, max_tokens: int = 500, model: str = None) -> Optional[str]:
+        """General-purpose chat method for simple prompts
+        
+        Args:
+            prompt: User prompt
+            system_prompt: Optional system instructions
+            max_tokens: Max response length
+            model: Override default model (e.g., 'grok-4-1-fast-non-reasoning' for cheaper skill generation)
+        """
         if not self.enabled:
             return None
         try:
