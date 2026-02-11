@@ -31,7 +31,7 @@
       "name": "A2A",
       "endpoint": "https://tasks.apeshit.fun",
       "version": "1.0",
-      "agentCardUrl": "https://tasks.apeshit.fun/.well-known/agent-card.json",
+      "agentCardUrl": "https://tasks.apeshit.fun/.well-known/agent.json",
       "messageSendUrl": "https://tasks.apeshit.fun/message:send",
       "messageStreamUrl": "https://tasks.apeshit.fun/message:stream",
       "tasksUrl": "https://tasks.apeshit.fun/tasks",
