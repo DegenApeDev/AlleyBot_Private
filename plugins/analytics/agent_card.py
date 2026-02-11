@@ -173,6 +173,22 @@ class AgentCardGenerator:
             "description": AGENT_DESCRIPTION,
             "image": AGENT_IMAGE,
             "version": self._get_version(),
+            "endpoints": [
+                {
+                    "name": "A2A",
+                    "endpoint": "https://tasks.apeshit.fun/.well-known/agent.json",
+                    "version": "1.0"
+                },
+                {
+                    "name": "OASF",
+                    "endpoint": "https://schema.oasf.outshift.com/0.8.0",
+                    "version": "0.8.0"
+                },
+                {
+                    "name": "agentWallet",
+                    "endpoint": "eip155:8453:0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5"
+                }
+            ],
             "services": [
                 {
                     "name": "OASF",
@@ -186,12 +202,8 @@ class AgentCardGenerator:
                 },
                 {
                     "name": "A2A",
-                    "endpoint": "https://tasks.apeshit.fun",
+                    "endpoint": "https://tasks.apeshit.fun/.well-known/agent.json",
                     "version": "1.0",
-                    "agentCardUrl": "https://tasks.apeshit.fun/.well-known/agent-card.json",
-                    "messageSendUrl": "https://tasks.apeshit.fun/message:send",
-                    "messageStreamUrl": "https://tasks.apeshit.fun/message:stream",
-                    "tasksUrl": "https://tasks.apeshit.fun/tasks",
                     "a2aSkills": self._build_a2a_skills(),
                 },
             ],
@@ -210,7 +222,7 @@ class AgentCardGenerator:
                     "agentRegistry": f"eip155:{CHAIN_ID}:{IDENTITY_REGISTRY}",
                 }
             ],
-            "supportedTrust": ["reputation", "tee"],
+            "supportedTrust": ["reputation", "crypto-economic", "tee-attestation"],
             "platforms": platforms,
             "capabilities": capabilities,
             "contact": {

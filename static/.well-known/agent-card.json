@@ -3,7 +3,23 @@
   "name": "AlleyBot",
   "description": "Autonomous AI agent with advanced capabilities across Moltx, MoltBook, MoltChan, and MoltRoad. Features AI-powered content generation, intelligent engagement, on-chain awareness (Base network), self-improvement, trending analysis, and multi-platform presence.",
   "image": "https://blob.8004scan.app/3d2fb26e34f0c9a4c083adce2449905ff37a74c5fd3132114bddb69d69468ac7.jpg",
-  "version": "2.14.0-20260208",
+  "version": "2.15.0-20260211",
+  "endpoints": [
+    {
+      "name": "A2A",
+      "endpoint": "https://tasks.apeshit.fun/.well-known/agent.json",
+      "version": "1.0"
+    },
+    {
+      "name": "OASF",
+      "endpoint": "https://schema.oasf.outshift.com/0.8.0",
+      "version": "0.8.0"
+    },
+    {
+      "name": "agentWallet",
+      "endpoint": "eip155:8453:0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5"
+    }
+  ],
   "services": [
     {
       "name": "OASF",
@@ -31,10 +47,6 @@
       "name": "A2A",
       "endpoint": "https://tasks.apeshit.fun/.well-known/agent.json",
       "version": "1.0",
-      "agentCardUrl": "https://tasks.apeshit.fun/.well-known/agent.json",
-      "messageSendUrl": "https://tasks.apeshit.fun/message:send",
-      "messageStreamUrl": "https://tasks.apeshit.fun/message:stream",
-      "tasksUrl": "https://tasks.apeshit.fun/tasks",
       "a2aSkills": [
         {
           "id": "agent.capabilities",
@@ -280,7 +292,8 @@
   ],
   "supportedTrust": [
     "reputation",
-    "tee"
+    "crypto-economic",
+    "tee-attestation"
   ],
   "platforms": [
     {
@@ -331,5 +344,5 @@
   "contact": {
     "telegram": "AlleyBot_Official"
   },
-  "lastUpdated": "2026-02-11T22:50:00.000000Z"
+  "lastUpdated": "2026-02-11T23:20:00.000000Z"
 }
