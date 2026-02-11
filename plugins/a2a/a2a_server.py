@@ -597,7 +597,8 @@ class A2AServerMixin:
     ALLOWED_TASK_TYPES = {
         'agent.health', 'agent.capabilities', 'agent.stats', 'agent.skills',
         'content.generate_post', 'content.analyze_trend',
-        'blockchain.check_balance', 'blockchain.lookup_tx'
+        'blockchain.check_balance', 'blockchain.lookup_tx',
+        'media.generate_image'
     }
 
     def _validate_task_type(self, task_type: str) -> bool:
@@ -642,6 +643,8 @@ class A2AServerMixin:
             return 'blockchain.lookup_tx', {'tx_hash': tx_hash}
         elif any(w in text_lower for w in ['trending', 'trend', 'popular']):
             return 'content.analyze_trend', {'platform': 'moltx'}
+        elif any(w in text_lower for w in ['image', 'picture', 'photo', 'generate image', 'create image']):
+            return 'media.generate_image', {'prompt': text}
         elif any(w in text_lower for w in ['generate', 'write', 'post', 'create']):
             return 'content.generate_post', {'topic': text}
         else:
