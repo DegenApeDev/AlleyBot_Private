@@ -537,6 +537,13 @@ class AgentCardGenerator:
         card_json = json.dumps(card, indent=2)
         skill_count = len(self._collect_skills())
 
+        # Check if card has actually changed (skip if same)
+        if not dry_run:
+            current_hash = self._get_card_hash(card)
+            last_hash = self._get_last_uploaded_hash()
+            if last_hash and current_hash == last_hash:
+                return f"⏭️ Agent card unchanged (hash: {current_hash[:16]}...), skipping on-chain update"
+
         if dry_run:
             skills_preview = '\n'.join(f"  - {s}" for s in card.get('capabilities', [])[:10])
             return (
