@@ -1,0 +1,27 @@
+name: platform_status
+description: Check status of all connected platforms
+category: monitoring
+enabled: true
+
+parameters:
+  - name: platforms
+    type: array
+    required: false
+    default: ["moltx", "moltbook", "moltchan", "moltroad", "clawtasks"]
+    description: List of platforms to check
+
+execution:
+  plugin: analytics
+  command: check_status
+  rate_limit:
+    enabled: true
+    cooldown_minutes: 10
+
+model_requirements:
+  min_tokens: 50
+  max_tokens: 300
+  temperature: 0.5
+
+success_criteria:
+  - response_contains: "✅"
+  - no_errors: true

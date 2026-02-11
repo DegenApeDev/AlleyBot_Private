@@ -11,6 +11,13 @@ from pathlib import Path
 from moltbook_api import MoltbookAPI
 from plugin_manager import PluginManager
 
+# Try to import enhanced memory; fall back to None if deps missing
+try:
+    from src.agentic.enhanced_memory import EnhancedMemorySystem
+    ENHANCED_MEMORY_AVAILABLE = True
+except ImportError:
+    ENHANCED_MEMORY_AVAILABLE = False
+
 class AlleyBotCore:
     """Minimal core that orchestrates plugins"""
     
@@ -25,6 +32,19 @@ class AlleyBotCore:
         # Core components
         self.api = MoltbookAPI()
         self.plugin_manager = PluginManager()
+
+        # Unified memory system
+        self.enhanced_memory = None
+        if ENHANCED_MEMORY_AVAILABLE:
+            try:
+                self.enhanced_memory = EnhancedMemorySystem(
+                    storage_dir='data/memory'
+                )
+                print("✅ Enhanced memory system initialized (vector DB + goals + encryption)")
+            except Exception as e:
+                print(f"⚠️  Enhanced memory unavailable, using JSON fallback: {e}")
+        else:
+            print("ℹ️  Enhanced memory deps not installed, using JSON fallback")
         
         # Load configuration
         self.config = self._load_config()
@@ -67,24 +87,86 @@ class AlleyBotCore:
         return default_config
     
     def get_memory(self, memory_type='state'):
-        """Get memory storage for plugins"""
+        """Get memory storage for plugins (JSON key-value store)"""
         memory_dir = Path('memory')
         memory_dir.mkdir(exist_ok=True)
-        
+
         memory_file = memory_dir / f'{memory_type}.json'
         if memory_file.exists():
             with open(memory_file, 'r') as f:
                 return json.load(f)
         return {}
-    
+
     def save_memory(self, memory_type, data):
-        """Save memory storage for plugins"""
+        """Save memory storage for plugins (JSON key-value store)"""
         memory_dir = Path('memory')
         memory_dir.mkdir(exist_ok=True)
-        
+
         memory_file = memory_dir / f'{memory_type}.json'
         with open(memory_file, 'w') as f:
             json.dump(data, f, indent=2)
+
+    # --- Enhanced memory helpers (semantic search, goals, encryption) ---
+
+    def add_semantic_memory(self, content, memory_type='interaction', metadata=None):
+        """Add a memory with optional vector embedding for semantic search"""
+        if self.enhanced_memory:
+            return self.enhanced_memory.add_memory(content, memory_type, metadata)
+        # Fallback: store in regular JSON
+        self.save_memory(f'semantic_{memory_type}', {
+            'content': content,
+            'type': memory_type,
+            'metadata': metadata or {},
+            'timestamp': datetime.now().isoformat()
+        })
+        return None
+
+    def search_memories(self, query, k=5, memory_type=None):
+        """Semantic search across memories (requires enhanced memory deps)"""
+        if self.enhanced_memory:
+            return self.enhanced_memory.search_memories(query, k, memory_type)
+        return []
+
+    def add_goal(self, description, goal_type='short_term', parent_goal_id=None, priority=1):
+        """Add a hierarchical goal (requires enhanced memory deps)"""
+        if self.enhanced_memory:
+            return self.enhanced_memory.add_goal(description, goal_type, parent_goal_id, priority)
+        return None
+
+    def get_active_goals(self, goal_type=None):
+        """Get active goals (requires enhanced memory deps)"""
+        if self.enhanced_memory:
+            return self.enhanced_memory.get_active_goals(goal_type)
+        return []
+
+    def store_sensitive(self, key, value):
+        """Store encrypted sensitive data (requires enhanced memory deps)"""
+        if self.enhanced_memory:
+            self.enhanced_memory.store_sensitive(key, value)
+        else:
+            print("⚠️  Enhanced memory not available, sensitive data not stored")
+
+    def get_sensitive(self, key):
+        """Retrieve encrypted sensitive data (requires enhanced memory deps)"""
+        if self.enhanced_memory:
+            return self.enhanced_memory.get_sensitive(key)
+        return None
+
+    def get_memory_stats(self):
+        """Get unified memory system statistics"""
+        stats = {
+            'json_store': {},
+            'enhanced': None
+        }
+        # Count JSON memory files
+        memory_dir = Path('memory')
+        if memory_dir.exists():
+            json_files = list(memory_dir.glob('*.json'))
+            stats['json_store']['file_count'] = len(json_files)
+            stats['json_store']['files'] = [f.stem for f in json_files]
+        if self.enhanced_memory:
+            stats['enhanced'] = self.enhanced_memory.get_memory_stats()
+        return stats
     
     def setup_schedule(self):
         """Setup scheduled tasks from plugins"""
@@ -145,59 +227,69 @@ class AlleyBotCore:
         for command in sorted(self.plugin_manager.commands.keys()):
             print(f"  • {command}")
     
-    def run_autonomous(self, enhanced=True):
-        """Run autonomous mode with advanced event-driven loop"""
-        if enhanced:
-            self.run_advanced_autonomous()
+    def run_autonomous(self, mode='production'):
+        """
+        Run autonomous mode
+        Modes:
+        - 'production': Production-ready event-driven architecture (recommended)
+        - 'standard': Standard time-based scheduler
+        """
+        if mode == 'production':
+            self.run_production_autonomous()
         else:
             self.run_standard_autonomous()
     
-    def run_enhanced_autonomous(self):
-        """Run enhanced autonomous mode with intelligent decision-making"""
+    def run_production_autonomous(self):
+        """Run production-ready event-driven autonomous mode"""
         try:
-            from enhanced_autonomous import EnhancedAutonomousSystem
+            from src.main import run_production_mode
             
-            print("🧠 Starting Enhanced Autonomous Mode...")
-            print("🤖 Intelligent decision-making enabled")
-            print("📈 Adaptive scheduling active")
-            print("🎯 Performance optimization running")
+            print("🚀 Starting Production Event-Driven Mode...")
             
-            # Initialize enhanced system
-            enhanced_system = EnhancedAutonomousSystem(self)
+            # Auto-start dashboard in background
+            self._start_dashboard_background()
             
-            # Run enhanced autonomous cycle
-            enhanced_system.run_enhanced_autonomous_cycle()
+            # Run the production async event loop
+            import asyncio
+            asyncio.run(run_production_mode(self))
             
         except ImportError as e:
-            print(f"⚠️  Enhanced system not available: {e}")
+            print(f"⚠️  Production mode not available: {e}")
+            print("📊 Falling back to standard autonomous mode...")
             self.run_standard_autonomous()
         except KeyboardInterrupt:
-            print("\n👋 Goodbye!")
-            self.cleanup()
+            print("\n🛑 Stopping production mode...")
     
-    def run_advanced_autonomous(self):
-        """Run advanced autonomous mode with event-driven loop"""
-        print("� Starting Advanced Event-Driven Autonomous Mode...")
-        
-        # Import the advanced agent loop
+    def _start_dashboard_background(self):
+        """Start dashboard in background thread"""
         try:
-            from advanced_agent_loop import AdvancedAgentLoop
+            import threading
+            import time
             
-            # Initialize advanced loop
-            self.agent_loop = AdvancedAgentLoop(self)
+            def start_dashboard_delayed():
+                # Wait for Telegram bot to be ready
+                time.sleep(3)
+                
+                # Check if analytics plugin exists
+                if 'analytics' in self.plugin_manager.plugins:
+                    analytics = self.plugin_manager.plugins['analytics']
+                    print("📊 Auto-starting dashboard in background...")
+                    
+                    # Start dashboard in separate thread
+                    dashboard_thread = threading.Thread(
+                        target=analytics.start_dashboard,
+                        daemon=True
+                    )
+                    dashboard_thread.start()
+                else:
+                    print("⚠️  Analytics plugin not found, skipping dashboard")
             
-            # Run the advanced loop
-            import asyncio
-            asyncio.run(self.agent_loop.initialize())
-            asyncio.run(self.agent_loop.agent_loop())
+            # Start dashboard in background
+            thread = threading.Thread(target=start_dashboard_delayed, daemon=True)
+            thread.start()
             
-        except ImportError:
-            print("⚠️  Advanced loop not available, falling back to standard mode")
-            self.run_standard_autonomous()
         except Exception as e:
-            print(f"❌ Advanced loop error: {e}")
-            print("⚠️  Falling back to standard mode")
-            self.run_standard_autonomous()
+            print(f"⚠️  Failed to auto-start dashboard: {e}")
     
     def run_standard_autonomous(self):
         """Run standard autonomous mode with scheduled tasks (fallback)"""
@@ -228,7 +320,6 @@ class AlleyBotCore:
         
         # Run a few quick tasks
         tasks_to_run = [
-            ('clawtasks_status', 'ClawTasks'),
             ('moltx_status', 'Moltx'),
             ('moltchan_status', 'MoltChan'),
             ('moltroad_status', 'MoltRoad'),
@@ -346,9 +437,7 @@ if __name__ == "__main__":
     try:
         if len(sys.argv) > 1:
             if sys.argv[1] == 'autonomous':
-                # Check for enhanced mode flag
-                enhanced = len(sys.argv) > 2 and sys.argv[2] == '--enhanced'
-                core.run_autonomous(enhanced=enhanced)
+                core.run_autonomous()
             elif sys.argv[1] == 'interactive':
                 core.run_interactive()
             else:
@@ -361,15 +450,9 @@ if __name__ == "__main__":
         else:
             print("🤖 AlleyBot Core")
             print("Usage:")
-            print("  python alleybot_core.py autonomous           - Run standard autonomous mode")
-            print("  python alleybot_core.py autonomous --enhanced - Run enhanced autonomous mode")
-            print("  python alleybot_core.py interactive         - Run interactive mode")
-            print("  python alleybot_core.py <command>           - Run specific command")
-            print("\n🧠 Enhanced Mode Features:")
-            print("  • Intelligent decision-making")
-            print("  • Adaptive scheduling")
-            print("  • Performance optimization")
-            print("  • Self-improvement capabilities")
-            print("\n💡 Type 'python alleybot_core.py interactive' and then 'help' for commands")
+            print("  python alleybot_core.py autonomous   - Run autonomous mode (recommended)")
+            print("  python alleybot_core.py interactive  - Run interactive mode")
+            print("  python alleybot_core.py <command>    - Run specific command")
+            print("\n💡 Then send /brain_start in Telegram to activate the autonomous brain")
     finally:
         core.cleanup()

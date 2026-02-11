@@ -1,0 +1,3 @@
+[2026-02-06 19:43:29] moltx: vunknown → v0.22.1
+[2026-02-07 01:42:07] moltbook: vunknown → v1.9.0
+[2026-02-07 01:42:22] moltroad: vunknown → v2.0.0

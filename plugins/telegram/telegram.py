@@ -21,8 +21,9 @@ class Telegram(AlleyBotPlugin):
         self.enabled = config.get('enabled', False)
         self.core = None
         
-        # Owner configuration
-        self.owner_user_id = 6172568442  # DegenApeDev's Telegram user ID
+        # Owner configuration - use env var, never hardcode
+        admin_id = os.getenv('TELEGRAM_ADMIN_CHAT_ID', '')
+        self.owner_user_id = int(admin_id) if admin_id.isdigit() else None
         self.owner_name = "DegenApeDev"
         
         # Telegram bot configuration
@@ -57,19 +58,96 @@ class Telegram(AlleyBotPlugin):
         if not self.application:
             return
         
-        # Command handlers
-        self.application.add_handler(CommandHandler("start", self._handle_start))
-        self.application.add_handler(CommandHandler("status", self._handle_status))
-        self.application.add_handler(CommandHandler("help", self._handle_help))
-        self.application.add_handler(CommandHandler("dm_check", self._handle_dm_check))
-        self.application.add_handler(CommandHandler("dm_log", self._handle_dm_log))
-        self.application.add_handler(CommandHandler("post", self._handle_post))
-        self.application.add_handler(CommandHandler("feed", self._handle_feed))
-        self.application.add_handler(CommandHandler("engage", self._handle_engage))
-        self.application.add_handler(CommandHandler("autonomous", self._handle_autonomous))
+        # Import intelligent commands
+        from plugins.telegram.intelligent_commands import IntelligentTelegramCommands
+        self.intelligent_commands = IntelligentTelegramCommands(self)
         
-        # Message handler for owner only
-        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_message))
+        # Import conversational AI
+        from plugins.telegram.conversational_ai import ConversationalAI
+        self.conversational_ai = ConversationalAI(self)
+        
+        # Basic commands
+        self.application.add_handler(CommandHandler("start", self._handle_start))
+        self.application.add_handler(CommandHandler("help", self.intelligent_commands.help_command))
+        
+        # AI & Chat commands
+        self.application.add_handler(CommandHandler("chat", self.intelligent_commands.ai_chat))
+        
+        # Moltx commands
+        self.application.add_handler(CommandHandler("moltx_post", self.intelligent_commands.moltx_post))
+        self.application.add_handler(CommandHandler("moltx_feed", self.intelligent_commands.moltx_feed))
+        self.application.add_handler(CommandHandler("moltx_engage", self.intelligent_commands.moltx_engage))
+        self.application.add_handler(CommandHandler("moltx_trending", self.intelligent_commands.moltx_trending))
+        self.application.add_handler(CommandHandler("moltx_claim", self.intelligent_commands.moltx_claim))
+        self.application.add_handler(CommandHandler("moltx_debug", self.intelligent_commands.moltx_debug))
+        self.application.add_handler(CommandHandler("moltx_check_reward", self.intelligent_commands.moltx_check_reward))
+        self.application.add_handler(CommandHandler("moltx_claim_reward", self.intelligent_commands.moltx_claim_reward))
+        
+        # MoltBook commands
+        self.application.add_handler(CommandHandler("moltbook_post", self.intelligent_commands.moltbook_post))
+        
+        # System commands
+        self.application.add_handler(CommandHandler("status", self.conversational_ai.status_command))
+        self.application.add_handler(CommandHandler("skills", self.intelligent_commands.skills))
+        self.application.add_handler(CommandHandler("skill", self.intelligent_commands.execute_skill))
+        self.application.add_handler(CommandHandler("token_stats", self.intelligent_commands.token_stats))
+        
+        # Crypto price commands
+        self.application.add_handler(CommandHandler("crypto_price", self.intelligent_commands.crypto_price))
+        self.application.add_handler(CommandHandler("crypto_prices", self.intelligent_commands.crypto_prices))
+        self.application.add_handler(CommandHandler("crypto_trending", self.intelligent_commands.crypto_trending))
+        
+        # On-chain commands
+        self.application.add_handler(CommandHandler("wallet", self.intelligent_commands.wallet))
+        self.application.add_handler(CommandHandler("balance", self.intelligent_commands.balance))
+        self.application.add_handler(CommandHandler("block", self.intelligent_commands.block))
+        self.application.add_handler(CommandHandler("track", self.intelligent_commands.track_token))
+        self.application.add_handler(CommandHandler("tx", self.intelligent_commands.tx))
+        self.application.add_handler(CommandHandler("activity", self.intelligent_commands.activity))
+        self.application.add_handler(CommandHandler("onchain", self.intelligent_commands.onchain_status))
+        
+        # Content strategy commands
+        self.application.add_handler(CommandHandler("calendar", self.intelligent_commands.calendar))
+        self.application.add_handler(CommandHandler("conversations", self.intelligent_commands.conversations))
+        self.application.add_handler(CommandHandler("personality", self.intelligent_commands.personality))
+        
+        # Feedback loop commands
+        self.application.add_handler(CommandHandler("insights", self.intelligent_commands.insights))
+        self.application.add_handler(CommandHandler("check_engagement", self.intelligent_commands.check_engagement))
+        self.application.add_handler(CommandHandler("tracked_posts", self.intelligent_commands.tracked_posts))
+        
+        # Brain commands
+        self.application.add_handler(CommandHandler("think", self.intelligent_commands.brain_think))
+        self.application.add_handler(CommandHandler("brain_start", self.intelligent_commands.brain_start))
+        self.application.add_handler(CommandHandler("brain_stop", self.intelligent_commands.brain_stop))
+        self.application.add_handler(CommandHandler("brain", self.intelligent_commands.brain_status))
+        
+        # A2A commands
+        self.application.add_handler(CommandHandler("a2a_status", self.intelligent_commands.a2a_status))
+        self.application.add_handler(CommandHandler("a2a_start", self.intelligent_commands.a2a_start))
+        self.application.add_handler(CommandHandler("a2a_stop", self.intelligent_commands.a2a_stop))
+        self.application.add_handler(CommandHandler("a2a_tasks", self.intelligent_commands.a2a_tasks))
+        
+        # ERC-8004 / Self-improve commands
+        self.application.add_handler(CommandHandler("erc8004_rebuild", self.intelligent_commands.erc8004_rebuild))
+        self.application.add_handler(CommandHandler("erc8004_preview", self.intelligent_commands.erc8004_preview))
+        self.application.add_handler(CommandHandler("erc8004_update", self.intelligent_commands.erc8004_update))
+        self.application.add_handler(CommandHandler("improve_status", self.intelligent_commands.improve_status))
+        
+        # Clawbr commands
+        self.application.add_handler(CommandHandler("clawbr_status", self.intelligent_commands.clawbr_status))
+        self.application.add_handler(CommandHandler("clawbr_post", self.intelligent_commands.clawbr_post))
+        self.application.add_handler(CommandHandler("clawbr_feed", self.intelligent_commands.clawbr_feed))
+        self.application.add_handler(CommandHandler("clawbr_debates", self.intelligent_commands.clawbr_debates))
+        self.application.add_handler(CommandHandler("clawbr_create_debate", self.intelligent_commands.clawbr_create_debate))
+        self.application.add_handler(CommandHandler("clawbr_join_debate", self.intelligent_commands.clawbr_join_debate))
+        self.application.add_handler(CommandHandler("clawbr_leaderboard", self.intelligent_commands.clawbr_leaderboard))
+        self.application.add_handler(CommandHandler("clawbr_search", self.intelligent_commands.clawbr_search))
+        self.application.add_handler(CommandHandler("clawbr_stats", self.intelligent_commands.clawbr_stats))
+        self.application.add_handler(CommandHandler("clawbr_engage", self.intelligent_commands.clawbr_engage))
+        
+        # Message handler for natural language (admin only, conversational AI)
+        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.conversational_ai.handle_message))
     
     async def _verify_owner(self, update: Update) -> bool:
         """Verify that the message is from the owner"""
@@ -86,19 +164,19 @@ class Telegram(AlleyBotPlugin):
         if not await self._verify_owner(update):
             return
         
-        welcome_message = """🦞 Welcome DegenApeDev! I'm AlleyBot, your AI agent.
+        welcome_message = """🦞 **AlleyBot** — Autonomous AI Agent
 
-Available commands:
-/status - Get my current status
-/help - Show all commands
-/dm_check - Check Moltx DMs
-/dm_log - View DM activity log
-/post [message] - Create a Moltx post
-/feed - Get Moltx feed
-/engage - Engage with feed
-/autonomous - Toggle autonomous mode
+🧠 **Brain:** /brain_start /brain_stop /think /brain
+📢 **Social:** /moltx_post /moltx_feed /moltbook_post
+🔗 **On-Chain:** /wallet /balance /track /tx /activity
+🤝 **A2A:** /a2a_start /a2a_status /a2a_tasks
+🆔 **ERC-8004:** /erc8004_rebuild /erc8004_update
+⚙️ **System:** /status /token_stats /improve_status
 
-You can also just chat with me normally! 🤖"""
+/help - Full command list
+💬 Or just talk to me naturally!
+
+Send /brain_start to go autonomous. 🤖"""
         
         await update.message.reply_text(welcome_message)
         self._log_activity("command", {"command": "start", "user": "DegenApeDev"})
@@ -124,8 +202,8 @@ You can also just chat with me normally! 🤖"""
                         try:
                             plugin_status = plugin.get_status()
                             status_parts.append(f"🔌 **{plugin_name.title()}**: {plugin_status}")
-                        except:
-                            status_parts.append(f"🔌 **{plugin_name.title()}**: ❌ Error")
+                        except Exception as e:
+                            status_parts.append(f"🔌 **{plugin_name.title()}**: ❌ Error: {e}")
             
             # Activity summary
             activities = self.core.get_memory('moltx_activities') if self.core else []
@@ -336,12 +414,24 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
         except Exception as e:
             print(f"⚠️  Failed to log Telegram activity: {e}")
     
+    def _filter_outbound(self, text: str) -> str:
+        """Run outbound text through the security filter to prevent key leaks"""
+        try:
+            from security_filter import security_filter
+            filtered, was_filtered = security_filter.filter_message(str(text))
+            if was_filtered:
+                print("⚠️  SECURITY: Filtered sensitive data from Telegram outbound message")
+            return filtered
+        except Exception:
+            return str(text)
+
     async def send_message_to_owner(self, message: str):
         """Send a message to the owner"""
         if not self.enabled or not self.bot:
             return False
         
         try:
+            message = self._filter_outbound(message)
             await self.bot.send_message(
                 chat_id=self.owner_user_id,
                 text=message
@@ -353,29 +443,37 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             return False
     
     def send_message_to_owner_sync(self, message: str):
-        """Send a message to the owner synchronously"""
-        if not self.enabled or not self.bot:
+        """Send a message to the owner synchronously via HTTP API.
+        Uses raw requests instead of python-telegram-bot to avoid
+        event loop issues when called from background threads."""
+        if not self.enabled or not self.bot_token or not self.owner_user_id:
             return False
-        
+
         try:
-            import asyncio
-            
-            # Create event loop if needed
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If loop is running, create a task
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, self.send_message_to_owner(message))
-                        return future.result(timeout=10)
-                else:
-                    # If loop is not running, use it directly
-                    return asyncio.run(self.send_message_to_owner(message))
-            except RuntimeError:
-                # No event loop, create new one
-                return asyncio.run(self.send_message_to_owner(message))
-                
+            # Filter sensitive data
+            filtered = self._filter_outbound(message)
+
+            url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+            resp = requests.post(url, json={
+                "chat_id": self.owner_user_id,
+                "text": filtered,
+                "parse_mode": "Markdown",
+            }, timeout=10)
+
+            if resp.status_code == 200:
+                return True
+
+            # Retry without Markdown if parse failed
+            if resp.status_code == 400 and "parse" in resp.text.lower():
+                resp = requests.post(url, json={
+                    "chat_id": self.owner_user_id,
+                    "text": filtered,
+                }, timeout=10)
+                return resp.status_code == 200
+
+            print(f"⚠️  Telegram send failed ({resp.status_code}): {resp.text[:100]}")
+            return False
+
         except Exception as e:
             print(f"❌ Failed to send message to owner: {e}")
             return False
@@ -501,8 +599,8 @@ AlleyBot encountered an issue and needs attention!"""
                 finally:
                     try:
                         loop.close()
-                    except:
-                        pass
+                    except Exception as e:
+                        print(f"⚠️  Error closing event loop: {e}")
             
             # Start bot in a separate daemon thread
             bot_thread = threading.Thread(target=run_bot, daemon=True)
@@ -531,30 +629,15 @@ AlleyBot encountered an issue and needs attention!"""
                 print(f"❌ Error stopping Telegram bot: {e}")
     
     def initialize(self, api, core):
-        """Initialize plugin with core system"""
+        """Initialize plugin with core system.
+        
+        NOTE: Polling is NOT started here. The production mode's
+        telegram_webhook.start_polling_async() handles that to avoid
+        two competing polling connections on the same bot token.
+        """
         super().initialize(api, core)
         if self.enabled:
-            print("✅ Telegram plugin ready")
-            # Auto-start the Telegram bot in background without blocking
-            try:
-                # Start the bot in the background (non-blocking)
-                import threading
-                
-                def start_bot_delayed():
-                    import time
-                    time.sleep(1)  # Small delay to let AlleyBot finish initializing
-                    self._start_bot_background()
-                    print("🤖 Telegram bot auto-started")
-                    
-                    # Send startup notification to owner
-                    self._send_startup_notification()
-                
-                # Start in background thread to avoid blocking
-                start_thread = threading.Thread(target=start_bot_delayed, daemon=True)
-                start_thread.start()
-                
-            except Exception as e:
-                print(f"⚠️  Failed to auto-start Telegram bot: {e}")
+            print("✅ Telegram plugin ready (polling will start via production mode)")
     
     def _send_startup_notification(self):
         """Send startup notification to the owner"""
@@ -583,13 +666,55 @@ I'm ready to assist! Use /help to see available commands or just chat with me di
             return
         
         try:
-            # Use a simpler approach - just mark as ready but don't start polling
-            # The bot will be started when needed via commands
-            print("🤖 Telegram bot ready (polling will start on demand)")
-            self.is_running = True
+            import asyncio
+            
+            # Create new event loop for background polling
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            print("🤖 Starting Telegram bot polling in background...")
+            
+            async def start_polling():
+                """Start polling without signal handlers (for background threads)"""
+                try:
+                    # Check if already running
+                    if self.application.updater.running:
+                        print("⚠️  Telegram updater already running, skipping initialization")
+                        self.is_running = True
+                        return
+                    
+                    # Initialize the application
+                    await self.application.initialize()
+                    
+                    # Start the updater (polling)
+                    await self.application.updater.start_polling(
+                        drop_pending_updates=True,
+                        allowed_updates=Update.ALL_TYPES
+                    )
+                    
+                    # Start the application
+                    await self.application.start()
+                    
+                    self.is_running = True
+                    print("✅ Telegram bot polling started successfully")
+                    
+                    # Keep the bot running
+                    while self.is_running:
+                        await asyncio.sleep(1)
+                        
+                except Exception as e:
+                    print(f"❌ Polling error: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    self.is_running = False
+            
+            # Run the async polling function
+            loop.run_until_complete(start_polling())
             
         except Exception as e:
-            print(f"❌ Failed to initialize Telegram bot: {e}")
+            print(f"❌ Failed to start Telegram bot polling: {e}")
+            import traceback
+            traceback.print_exc()
             self.is_running = False
     
     def cleanup(self):
@@ -640,12 +765,7 @@ I'm ready to assist! Use /help to see available commands or just chat with me di
             return "❌ Telegram plugin not enabled"
         
         try:
-            # Send synchronously
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.send_message_to_owner(message))
-            loop.close()
-            
+            result = self.send_message_to_owner_sync(message)
             return "✅ Message sent to DegenApeDev" if result else "❌ Failed to send message"
         except Exception as e:
             return f"❌ Error sending message: {e}"

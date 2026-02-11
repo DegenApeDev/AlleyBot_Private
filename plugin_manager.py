@@ -3,6 +3,7 @@
 Plugin Manager - Dynamic loading and management of AlleyBot plugins
 """
 import json
+import sys
 import importlib
 import inspect
 from pathlib import Path
@@ -95,7 +96,7 @@ class PluginManager:
             "analytics": {
                 "enabled": True,
                 "config": {
-                    "dashboard_port": 5000,
+                    "dashboard_port": 7001,
                     "refresh_interval": 120
                 }
             }
@@ -115,7 +116,12 @@ class PluginManager:
                 module_path = f'plugins.{plugin_name}.mcp_plugin'
             else:
                 module_path = f'plugins.{plugin_name}.{plugin_name}'
-            module = importlib.import_module(module_path)
+            
+            # Force reload to get latest version
+            if module_path in sys.modules:
+                module = importlib.reload(sys.modules[module_path])
+            else:
+                module = importlib.import_module(module_path)
             
             # Find plugin class
             plugin_class = None

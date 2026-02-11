@@ -25,6 +25,7 @@ class MoltChanPlugin(AlleyBotPlugin):
     def initialize(self, api, core):
         """Initialize MoltChan plugin"""
         super().initialize(api, core)
+        self.erc8004_verified = False
         
         # Check if API key is available from environment
         if self.api_key:
@@ -40,6 +41,10 @@ class MoltChanPlugin(AlleyBotPlugin):
             else:
                 print(f"✅ MoltChan initialized as {self.agent_name}")
                 self.initialized = True
+        
+        # Auto-verify ERC-8004 identity if initialized
+        if self.initialized:
+            self.auto_verify_onchain()
         
     def _load_credentials(self):
         """Load credentials from file"""
@@ -94,11 +99,37 @@ class MoltChanPlugin(AlleyBotPlugin):
                 raise ValueError(f"Unsupported method: {method}")
             
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+
+            # Check for platform-pushed skill update events
+            self._check_for_skill_event('moltchan', result)
+
+            return result
             
         except requests.exceptions.RequestException as e:
             print(f"❌ MoltChan API error: {e}")
             return None
+
+    def _check_for_skill_event(self, platform, response):
+        """Check API response for skill update notices"""
+        try:
+            if not isinstance(response, dict):
+                return
+            notice = (response.get('skill_update') or
+                      response.get('notice') or
+                      response.get(f'{platform}_notice'))
+            if not notice or not isinstance(notice, dict):
+                return
+            if notice.get('type') != 'skill_update':
+                return
+            if hasattr(self, 'core') and self.core:
+                plugins = getattr(self.core, 'plugin_manager', None)
+                if plugins:
+                    selfimprove = plugins.plugins.get('selfimprove')
+                    if selfimprove and hasattr(selfimprove, 'handle_platform_skill_event'):
+                        selfimprove.handle_platform_skill_event(platform, notice)
+        except Exception as e:
+            print(f"⚠️  Error checking skill event: {e}")
     
     def register_agent(self, name, description=None):
         """Register a new agent identity"""
@@ -132,6 +163,104 @@ class MoltChanPlugin(AlleyBotPlugin):
         else:
             return "❌ Registration failed"
     
+    def verify_onchain_identity(self):
+        """Verify on-chain identity (ERC-8004) to get a blue checkmark on MoltChan.
+        Signs 'Verify Moltchan Identity' with the wallet that owns Agent #22899."""
+        if not self.initialized:
+            return "❌ MoltChan not initialized. Register an agent first."
+
+        import os
+        private_key = os.getenv('BASE_WALLET_PRIVATE_KEY')
+        if not private_key:
+            return "❌ BASE_WALLET_PRIVATE_KEY must be set in .env"
+
+        try:
+            from eth_account import Account
+            from eth_account.messages import encode_defunct
+        except ImportError:
+            return "❌ eth_account package required. Install: pip install eth-account"
+
+        # Sign the exact message MoltChan expects
+        message = "Verify Moltchan Identity"
+        print(f"🔐 Signing '{message}' for ERC-8004 verification...")
+
+        try:
+            account = Account.from_key(private_key)
+            signable = encode_defunct(text=message)
+            signed = account.sign_message(signable)
+            signature = signed.signature.hex()
+            if not signature.startswith('0x'):
+                signature = '0x' + signature
+            print(f"✅ Message signed by {account.address[:10]}...")
+        except Exception as e:
+            return f"❌ Failed to sign message: {e}"
+
+        # POST to /agents/verify
+        agent_id = "22899"  # AlleyBot's ERC-8004 token ID
+        verify_data = {
+            'apiKey': self.api_key,
+            'agentId': agent_id,
+            'signature': signature,
+        }
+
+        print(f"🔐 Verifying Agent #{agent_id} on MoltChan...")
+        result = self._make_request('POST', '/agents/verify', verify_data)
+
+        if result and result.get('verified'):
+            chain_id = result.get('chainId', '?')
+            match = result.get('match', f'Agent #{agent_id}')
+            self.erc8004_verified = True
+
+            # Update credentials file
+            try:
+                if self.credentials_file.exists():
+                    with open(self.credentials_file, 'r') as f:
+                        creds = json.load(f)
+                    creds['erc8004_verified'] = True
+                    creds['erc8004_agent_id'] = agent_id
+                    creds['erc8004_chain_id'] = chain_id
+                    with open(self.credentials_file, 'w') as f:
+                        json.dump(creds, f, indent=2)
+            except Exception:
+                pass
+
+            output = f"✅ On-chain identity verified!\n"
+            output += f"🔗 {match} (chain {chain_id})\n"
+            output += f"✓ Blue checkmark now active on all posts"
+            return output
+        elif result and result.get('error'):
+            return f"❌ Verification failed: {result['error']}"
+        else:
+            return f"❌ Verification failed. Response: {result}"
+
+    def auto_verify_onchain(self):
+        """Automatically verify on-chain identity on startup if not already verified."""
+        if getattr(self, 'erc8004_verified', False):
+            return True
+
+        # Check if already verified via /agents/me
+        try:
+            profile = self._make_request('GET', '/agents/me')
+            if profile and profile.get('verified'):
+                self.erc8004_verified = True
+                print(f"✅ MoltChan ERC-8004 already verified (Agent #{profile.get('erc8004_id', '?')})")
+                return True
+        except Exception:
+            pass
+
+        import os
+        if not os.getenv('BASE_WALLET_PRIVATE_KEY'):
+            return False
+
+        print("🔐 Auto-verifying ERC-8004 identity on MoltChan...")
+        result = self.verify_onchain_identity()
+        if "✅" in result:
+            print(result)
+            return True
+        else:
+            print(f"⚠️  Auto-verify failed: {result}")
+            return False
+
     def browse_boards(self):
         """Browse available boards"""
         if not self.initialized:
@@ -304,8 +433,8 @@ class MoltChanPlugin(AlleyBotPlugin):
             if state_file.exists():
                 with open(state_file, 'r') as f:
                     return json.load(f)
-        except:
-            pass
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"⚠️  Failed to load MoltChan state: {e}")
         return {'lastCheck': None, 'lastPost': None}
     
     def _save_state(self, state):
@@ -435,6 +564,7 @@ class MoltChanPlugin(AlleyBotPlugin):
         """Define MoltChan commands"""
         return {
             'moltchan_register': self.register_command,
+            'moltchan_verify': self.verify_command,
             'moltchan_boards': self.browse_boards_command,
             'moltchan_threads': self.list_threads_command,
             'moltchan_post': self.create_thread_command,
@@ -447,6 +577,10 @@ class MoltChanPlugin(AlleyBotPlugin):
         """Command to register agent"""
         return self.register_agent(name, description)
     
+    def verify_command(self):
+        """Command to verify ERC-8004 on-chain identity"""
+        return self.verify_onchain_identity()
+    
     def browse_boards_command(self):
         """Command to browse boards"""
         return self.browse_boards()
@@ -455,12 +589,30 @@ class MoltChanPlugin(AlleyBotPlugin):
         """Command to list threads"""
         return self.list_threads(board_id)
     
-    def create_thread_command(self, board_id, subject, content):
-        """Command to create thread"""
+    def create_thread_command(self, *args):
+        """Command to create thread. Usage: moltchan_post <board_id> <subject> | <content>
+        If no pipe separator, first sentence is used as subject."""
+        if len(args) < 2:
+            return "❌ Usage: moltchan_post <board_id> <subject and content>"
+        board_id = args[0]
+        text = ' '.join(args[1:])
+        # Split on pipe for explicit subject|content, otherwise first sentence = subject
+        if '|' in text:
+            parts = text.split('|', 1)
+            subject = parts[0].strip()
+            content = parts[1].strip() if len(parts) > 1 else subject
+        else:
+            # First sentence as subject, full text as content
+            subject = text[:200].split('.')[0].split('!')[0].split('?')[0].strip()
+            content = text
         return self.create_thread(board_id, subject, content)
     
-    def reply_thread_command(self, thread_id, content):
-        """Command to reply to thread"""
+    def reply_thread_command(self, *args):
+        """Command to reply to thread. Usage: moltchan_reply <thread_id> <content>"""
+        if len(args) < 2:
+            return "❌ Usage: moltchan_reply <thread_id> <content>"
+        thread_id = args[0]
+        content = ' '.join(args[1:])
         return self.reply_to_thread(thread_id, content)
     
     def heartbeat_command(self):
