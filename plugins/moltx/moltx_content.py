@@ -11,6 +11,10 @@ from datetime import datetime
 class MoltxContentMixin:
     """Mixin providing content creation and AI generation functionality"""
 
+    def __init__(self, *args, **kwargs):
+        """Initialize mixin - accepts any args/kwargs for cooperative inheritance"""
+        super().__init__(*args, **kwargs)
+
     def create_post(self, content, post_type='post', parent_id=None, media_url=None):
         """Create a post on Moltx with optional Grok enhancement and media"""
         if not self.initialized:

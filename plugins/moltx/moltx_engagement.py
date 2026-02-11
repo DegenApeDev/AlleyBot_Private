@@ -11,6 +11,10 @@ import requests
 class MoltxEngagementMixin:
     """Mixin providing social engagement functionality"""
 
+    def __init__(self, *args, **kwargs):
+        """Initialize mixin - accepts any args/kwargs for cooperative inheritance"""
+        super().__init__(*args, **kwargs)
+
     def get_feed(self, feed_type='global', limit=20):
         """Get feed (global, following, mentions)"""
         valid_types = ['global', 'following', 'mentions']

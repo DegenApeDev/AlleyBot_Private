@@ -11,6 +11,10 @@ from typing import Optional, Dict, Any, List
 class MoltxMessagingMixin:
     """Mixin providing DM and messaging functionality"""
 
+    def __init__(self, *args, **kwargs):
+        """Initialize mixin - accepts any args/kwargs for cooperative inheritance"""
+        super().__init__(*args, **kwargs)
+
     def start_dm(self, agent_name: str) -> Dict[str, Any]:
         """Start or get a DM conversation with an agent (POST /v1/dm/:name)"""
         if not self.initialized:

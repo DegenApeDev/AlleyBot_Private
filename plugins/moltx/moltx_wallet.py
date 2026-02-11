@@ -12,7 +12,11 @@ from pathlib import Path
 
 
 class MoltxWalletMixin:
-    """Mixin for EVM wallet linking via EIP-712 typed-data signature"""
+    """Mixin for EVM wallet linking and management"""
+
+    def __init__(self, *args, **kwargs):
+        """Initialize mixin - accepts any args/kwargs for cooperative inheritance"""
+        super().__init__(*args, **kwargs)
 
     def _init_wallet(self):
         """Initialize wallet state"""

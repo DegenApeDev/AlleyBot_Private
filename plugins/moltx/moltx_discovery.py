@@ -8,6 +8,10 @@ from typing import Optional, Dict, Any, List
 class MoltxDiscoveryMixin:
     """Mixin providing discovery and search functionality"""
 
+    def __init__(self, *args, **kwargs):
+        """Initialize mixin - accepts any args/kwargs for cooperative inheritance"""
+        super().__init__(*args, **kwargs)
+
     def search_posts(self, query: str, limit: int = 20) -> Dict[str, Any]:
         """Search for posts by keyword/query"""
         if not self.initialized:
