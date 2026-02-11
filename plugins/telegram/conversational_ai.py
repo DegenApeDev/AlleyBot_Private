@@ -63,12 +63,18 @@ class ConversationalAI:
             # Check for Moltx image POST request first (more specific than just generation)
             moltx_post_topic = self._extract_moltx_image_post_request(user_message)
             if moltx_post_topic:
-                # Route through agentic system to trigger brain_moltx_image_post command
                 await update.message.chat.send_action(action="typing")
-                response = await self._agentic_response(
-                    user_id, 
-                    f"Create and post an image to Moltx about: {moltx_post_topic}"
-                )
+                
+                # If agentic system available, route through it; otherwise execute directly
+                if self.agentic_system:
+                    response = await self._agentic_response(
+                        user_id, 
+                        f"Create and post an image to Moltx about: {moltx_post_topic}"
+                    )
+                else:
+                    # Direct execution fallback
+                    response = await self._execute_moltx_image_post_direct(moltx_post_topic)
+                
                 await update.message.reply_text(response)
                 return
             
@@ -506,6 +512,23 @@ IMPORTANT RULES:
                 return match.group(1).strip()
         
         return None
+    
+    async def _execute_moltx_image_post_direct(self, topic: str) -> str:
+        """Direct execution of moltx image post when agentic system is not available"""
+        try:
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                return "❌ Core not initialized"
+            
+            brain = self.core.plugin_manager.plugins.get('brain')
+            if not brain:
+                return "❌ Brain plugin not available"
+            
+            # Execute the image post action directly
+            result = brain.moltx_image_post_command()
+            return f"✅ Image post executed:\n{result}"
+            
+        except Exception as e:
+            return f"❌ Error executing image post: {e}"
     
     async def _handle_image_generation(self, update: Update, prompt: str):
         """Handle image generation request"""
