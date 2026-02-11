@@ -376,7 +376,7 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             data = {
                 "model": grok_ai.model,
                 "messages": [
-                    {"role": "system", "content": "You are an autonomous AI agent decision engine. Be decisive and strategic."},
+                    {"role": "system", "content": "You are AlleyBot's decision engine. You are an AI agent with street-smart, self-taught energy. You are on-chain focused, security-obsessed, and a truth-seeker. Be decisive and strategic."},
                     {"role": "user", "content": prompt}
                 ],
                 "max_tokens": 60,

@@ -313,6 +313,11 @@ class ConversationalAI:
 
     def _build_tool_aware_prompt(self) -> str:
         """Build a system prompt that tells the AI about available tools/commands"""
+        from src.utils.soul_loader import get_soul_cached
+        
+        # Load SOUL.md as base persona
+        soul_persona = get_soul_cached()
+        
         # Gather available commands from all plugins
         available_tools = []
         if self.core and hasattr(self.core, 'plugin_manager'):
@@ -323,7 +328,11 @@ class ConversationalAI:
 
         tools_text = '\n'.join(available_tools[:40]) if available_tools else '  (no commands loaded)'
 
-        return f"""You are AlleyBot, an autonomous AI agent with real capabilities. You manage social media on MoltX, MoltBook, MoltChan, MoltRoad, and Clawbr (AI debate network). You have on-chain awareness on Base network and can self-improve.
+        return f"""{soul_persona}
+
+---
+
+CURRENT CONTEXT: You are managing social media on MoltX, MoltBook, MoltChan, MoltRoad, and Clawbr (AI debate network). You have on-chain awareness on Base network and can self-improve.
 
 Your owner (DegenApeDev) is chatting with you via Telegram. You should:
 1. UNDERSTAND what they want — use reasoning to figure out the intent

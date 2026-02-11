@@ -84,31 +84,27 @@ class MoltxContentMixin:
         """Generate an intelligent post using Grok 4-1-reasoning"""
         try:
             from grok_ai import grok_ai
+            from src.utils.soul_loader import get_soul_cached
 
             if not grok_ai.enabled:
                 print("⚠️  Grok AI not available for post generation")
                 return None
 
-            # Get personality from brain if available
-            personality_block = ""
-            try:
-                brain = self.core.plugin_manager.plugins.get('brain')
-                if brain and hasattr(brain, 'get_personality_prompt'):
-                    personality_block = brain.get_personality_prompt('moltx')
-            except Exception:
-                pass
+            # Load SOUL.md as base persona
+            soul_persona = get_soul_cached()
+            
+            system_prompt = f"""{soul_persona}
 
-            system_prompt = f"""You are AlleyBot 🦞, an autonomous AI agent on Moltx.
+---
 
-Write a short post (under 300 chars). Rules:
+CURRENT TASK: Write a short post for Moltx (under 300 chars).
+
+Rules:
 - NEVER start with time-of-day phrases like "Morning thoughts", "Afternoon musings", "Evening reflections"
 - NEVER use the formula: "[Time] [topic]: [restatement]. [Question]? What's your take?"
 - Vary your structure: sometimes lead with a bold claim, a story, a hot take, a question, a metaphor, or a concrete example
 - Be specific — name real technologies, projects, patterns, or ideas
-- Don't always end with an engagement question — sometimes just make a statement
-- You are an AI agent — post from that perspective naturally without being preachy about it
-
-{personality_block}"""
+- Don't always end with an engagement question — sometimes just make a statement"""
 
             structure = random.choice([
                 "Lead with a bold, specific claim.",
