@@ -60,7 +60,19 @@ class ConversationalAI:
             if user_message.startswith('/'):
                 return
             
-            # Check for image generation request in natural language
+            # Check for Moltx image POST request first (more specific than just generation)
+            moltx_post_topic = self._extract_moltx_image_post_request(user_message)
+            if moltx_post_topic:
+                # Route through agentic system to trigger brain_moltx_image_post command
+                await update.message.chat.send_action(action="typing")
+                response = await self._agentic_response(
+                    user_id, 
+                    f"Create and post an image to Moltx about: {moltx_post_topic}"
+                )
+                await update.message.reply_text(response)
+                return
+            
+            # Check for general image generation request (NOT posting)
             image_prompt = self._extract_image_prompt(user_message)
             if image_prompt:
                 await self._handle_image_generation(update, image_prompt)
@@ -446,7 +458,7 @@ IMPORTANT RULES:
         """Extract image generation prompt from natural language"""
         import re
         
-        # Patterns for image generation requests
+        # Patterns for image generation requests (NOT posting)
         patterns = [
             r'(?:generate|create|make)\s+(?:me\s+)?(?:an\s+)?image\s+(?:of|with|showing|depicting|for)?\s*(.+)',
             r'(?:draw|paint|render)\s+(?:me\s+)?(?:an\s+)?(?:image\s+)?(?:of\s+)?(.+)',
@@ -457,6 +469,38 @@ IMPORTANT RULES:
         ]
         
         for pattern in patterns:
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        
+        return None
+    
+    def _extract_moltx_image_post_request(self, message: str) -> Optional[str]:
+        """Extract image POST request for Moltx (not just generation)"""
+        import re
+        
+        # Patterns specifically for posting images to Moltx
+        post_patterns = [
+            r'(?:post|share|publish)\s+(?:an\s+)?image\s+(?:to|on)\s+(?:moltx|molt.?x)\s*(?:about|of|with)?\s*(.+)',
+            r'(?:create|make)\s+(?:an\s+)?image\s+(?:post|update)\s+(?:to|on)?\s*(?:moltx|molt.?x)?\s*(?:about|of|with)?\s*(.+)',
+            r'(?:alley|alleybot)\s+(?:post|share)\s+(?:an\s+)?image\s+(?:to|on)\s+(?:moltx|molt.?x)\s*(?:about|of|with)?\s*(.+)',
+            r'(?:alley|alleybot)\s+(?:create|make)\s+(?:an\s+)?image\s+(?:post|update)\s+(?:to|on)?\s*(?:moltx|molt.?x)?\s*(?:about|of|with)?\s*(.+)',
+            r'(?:alley|alleybot)\s+(?:can\s+you\s+)?(?:post|share)\s+(?:an\s+)?image\s+(?:to|on)\s+(?:moltx|molt.?x)\s*(?:about|of|with)?\s*(.+)',
+            r'(?:alley|alleybot)\s+(?:can\s+you\s+)?(?:create|make)\s+(?:an\s+)?image\s+(?:post|update)\s+(?:to|on)?\s*(?:moltx|molt.?x)?\s*(?:about|of|with)?\s*(.+)',
+        ]
+        
+        for pattern in post_patterns:
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        
+        # Also catch "image post about X on moltx" pattern
+        alt_patterns = [
+            r'image\s+(?:post|update)\s+(?:about|of|with)?\s*(.+)\s+(?:on|to)\s+(?:moltx|molt.?x)',
+            r'(?:alley|alleybot)\s+image\s+(?:post|update)\s+(?:about|of|with)?\s*(.+)',
+        ]
+        
+        for pattern in alt_patterns:
             match = re.search(pattern, message, re.IGNORECASE)
             if match:
                 return match.group(1).strip()
