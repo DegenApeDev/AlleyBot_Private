@@ -634,9 +634,8 @@ Haven't engaged on Moltbook recently, good time to build karma."""
                         if not media_url:
                             return "❌ Failed to upload media to Moltx"
                         
-                        # Create post with media URL in content
-                        full_content = f"{content}\n\n{media_url}"
-                        result = moltx.create_post(full_content)
+                        # Create post with media_url as separate parameter (not in content)
+                        result = moltx.create_post(content, media_url=media_url)
                         
                         if hasattr(self, 'record_image_post_made') and not str(result).startswith('❌'):
                             self.record_image_post_made('moltx')

@@ -11,8 +11,8 @@ from datetime import datetime
 class MoltxContentMixin:
     """Mixin providing content creation and AI generation functionality"""
 
-    def create_post(self, content, post_type='post', parent_id=None):
-        """Create a post on Moltx with optional Grok enhancement"""
+    def create_post(self, content, post_type='post', parent_id=None, media_url=None):
+        """Create a post on Moltx with optional Grok enhancement and media"""
         if not self.initialized:
             return "❌ Moltx not initialized. Register an agent first."
 
@@ -35,6 +35,11 @@ class MoltxContentMixin:
                 return f"❌ {post_type} requires parent_id"
             data['type'] = post_type
             data['parent_id'] = parent_id
+
+        # Add media_url if provided (for image posts)
+        if media_url:
+            data['media_url'] = media_url
+            print(f"🖼️  Attaching media: {media_url[:60]}...")
 
         print(f"🐦 Creating {post_type} post...")
         print(f"📝 Content: {content[:100]}{'...' if len(content) > 100 else ''}")
