@@ -222,7 +222,8 @@ Send /brain_start to go autonomous. 🤖"""
             self._log_activity("command", {"command": "status", "user": "DegenApeDev"})
             
         except Exception as e:
-            await update.message.reply_text(f"❌ Error getting status: {str(e)}")
+            safe_error = self._sanitize_error_message(e)
+            await update.message.reply_text(f"❌ Error getting status: {safe_error}")
     
     async def _handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
@@ -269,7 +270,8 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             else:
                 await update.message.reply_text("❌ Moltx plugin not available")
         except Exception as e:
-            await update.message.reply_text(f"❌ Error checking DMs: {str(e)}")
+            safe_error = self._sanitize_error_message(e)
+            await update.message.reply_text(f"❌ Error checking DMs: {safe_error}")
     
     async def _handle_dm_log(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /dm_log command"""
@@ -285,7 +287,8 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             else:
                 await update.message.reply_text("❌ Moltx plugin not available")
         except Exception as e:
-            await update.message.reply_text(f"❌ Error getting DM log: {str(e)}")
+            safe_error = self._sanitize_error_message(e)
+            await update.message.reply_text(f"❌ Error getting DM log: {safe_error}")
     
     async def _handle_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /post command"""
@@ -308,7 +311,8 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             else:
                 await update.message.reply_text("❌ Moltx plugin not available")
         except Exception as e:
-            await update.message.reply_text(f"❌ Error creating post: {str(e)}")
+            safe_error = self._sanitize_error_message(e)
+            await update.message.reply_text(f"❌ Error creating post: {safe_error}")
     
     async def _handle_feed(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /feed command"""
@@ -324,7 +328,8 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             else:
                 await update.message.reply_text("❌ Moltx plugin not available")
         except Exception as e:
-            await update.message.reply_text(f"❌ Error getting feed: {str(e)}")
+            safe_error = self._sanitize_error_message(e)
+            await update.message.reply_text(f"❌ Error getting feed: {safe_error}")
     
     async def _handle_engage(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /engage command"""
@@ -340,7 +345,8 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             else:
                 await update.message.reply_text("❌ Moltx plugin not available")
         except Exception as e:
-            await update.message.reply_text(f"❌ Error engaging with feed: {str(e)}")
+            safe_error = self._sanitize_error_message(e)
+            await update.message.reply_text(f"❌ Error engaging with feed: {safe_error}")
     
     async def _handle_autonomous(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /autonomous command"""
@@ -352,7 +358,8 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             await update.message.reply_text("🤖 Autonomous mode toggle not yet implemented")
             self._log_activity("command", {"command": "autonomous", "user": "DegenApeDev"})
         except Exception as e:
-            await update.message.reply_text(f"❌ Error toggling autonomous mode: {str(e)}")
+            safe_error = self._sanitize_error_message(e)
+            await update.message.reply_text(f"❌ Error toggling autonomous mode: {safe_error}")
     
     async def _handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular messages from owner"""
@@ -383,7 +390,8 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
                 await update.message.reply_text("🦞 Hey DegenApeDev! I'm here and ready to help. Use /help to see what I can do!")
                 
         except Exception as e:
-            await update.message.reply_text(f"❌ Error processing message: {str(e)}")
+            safe_error = self._sanitize_error_message(e)
+            await update.message.reply_text(f"❌ Error processing message: {safe_error}")
     
     def _log_activity(self, activity_type, data):
         """Log Telegram activity"""
@@ -424,6 +432,36 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             return filtered
         except Exception:
             return str(text)
+
+    def _sanitize_error_message(self, error: Exception) -> str:
+        """Sanitize error messages to prevent sensitive data exposure"""
+        import re
+        
+        error_str = str(error)
+        
+        # Remove file paths (common source of info leakage)
+        # Match common path patterns
+        error_str = re.sub(r'/[\w/\-\.]+/', '[PATH]/', error_str)
+        # Windows paths - use raw string for backslashes
+        error_str = re.sub(r'\\[\w\\\-\.]+\\', r'[PATH]\\', error_str)
+        
+        # Remove potential secrets/tokens (long alphanumeric strings)
+        error_str = re.sub(r'\b[a-zA-Z0-9]{32,}\b', '[REDACTED]', error_str)
+        
+        # Remove IP addresses
+        error_str = re.sub(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', '[IP]', error_str)
+        
+        # Remove email addresses
+        error_str = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL]', error_str)
+        
+        # Run through security filter as well
+        error_str = self._filter_outbound(error_str)
+        
+        # Limit length
+        if len(error_str) > 200:
+            error_str = error_str[:200] + "..."
+        
+        return error_str
 
     async def send_message_to_owner(self, message: str):
         """Send a message to the owner"""

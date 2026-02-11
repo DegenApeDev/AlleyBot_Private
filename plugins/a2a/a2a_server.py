@@ -11,6 +11,7 @@ Implements the A2A specification:
 
 Spec: https://github.com/a2aproject/A2A/blob/main/docs/specification.md
 """
+import os
 import json
 import uuid
 import time
@@ -155,11 +156,29 @@ class A2AServerMixin:
 
         # ── CORS headers for browser-based agents ───────────────────
 
+        # Configure allowed origins from environment or use secure defaults
+        allowed_origins_env = os.getenv('A2A_ALLOWED_ORIGINS', '')
+        self._a2a_allowed_origins = [o.strip() for o in allowed_origins_env.split(',') if o.strip()] or [
+            'https://tasks.apeshit.fun',
+            'https://apeshit.fun',
+        ]
+
         @self._a2a_app.after_request
         def add_cors(response):
-            response.headers['Access-Control-Allow-Origin'] = '*'
+            origin = request.headers.get('Origin')
+            
+            # Only allow configured origins
+            if origin in self._a2a_allowed_origins:
+                response.headers['Access-Control-Allow-Origin'] = origin
+                response.headers['Vary'] = 'Origin'  # Important for caching
+            
             response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, A2A-Version, A2A-Extensions'
             response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+            
+            # Add security headers
+            response.headers['X-Content-Type-Options'] = 'nosniff'
+            response.headers['X-Frame-Options'] = 'DENY'
+            
             return response
 
         print(f"🌐 A2A server configured on port {self._a2a_port} (A2A RC v1.0)")
@@ -559,6 +578,17 @@ class A2AServerMixin:
 
     # ── Message Routing ─────────────────────────────────────────────
 
+    # Allowed task types for security - only these tasks can be executed
+    ALLOWED_TASK_TYPES = {
+        'agent.health', 'agent.capabilities', 'agent.stats', 'agent.skills',
+        'content.generate_post', 'content.analyze_trend',
+        'blockchain.check_balance', 'blockchain.lookup_tx'
+    }
+
+    def _validate_task_type(self, task_type: str) -> bool:
+        """Validate that a task type is in the allowlist."""
+        return task_type in self.ALLOWED_TASK_TYPES
+
     def _route_message(self, text: str, body: Dict) -> tuple:
         """Route a natural language message to the appropriate task handler.
 
@@ -569,10 +599,13 @@ class A2AServerMixin:
         # Direct task invocation via metadata
         if body.get('metadata', {}).get('taskType'):
             task_type = body['metadata']['taskType']
+            # SECURITY: Validate task type is in allowlist
+            if not self._validate_task_type(task_type):
+                raise ValueError(f"Task type '{task_type}' is not in allowed task types")
             params = body.get('metadata', {}).get('taskParams', {})
             return task_type, params
 
-        # Simple keyword routing
+        # Simple keyword routing - all results are validated against allowlist
         if any(w in text_lower for w in ['health', 'status', 'ping', 'alive']):
             return 'agent.health', {}
         elif any(w in text_lower for w in ['capabilities', 'what can you do', 'help']):

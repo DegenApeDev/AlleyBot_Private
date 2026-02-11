@@ -40,6 +40,37 @@ BLOCKED_FILES = ['.env', 'alleybot_core.py', 'plugin_manager.py', 'run_alleybot.
 class AutonomousCoderMixin:
     """Mixin for AI-powered autonomous code generation and self-update"""
 
+    @staticmethod
+    def _sanitize_path(path: str, project_root: str) -> str:
+        """
+        Sanitize a path to prevent path traversal attacks.
+        Ensures the resolved path stays within the project root.
+        """
+        import re
+        
+        # Block dangerous characters
+        dangerous_chars = [';', '&', '|', '$', '`', '\x00', '\n']
+        for char in dangerous_chars:
+            if char in path:
+                raise ValueError(f"Path contains dangerous character: {repr(char)}")
+        
+        # Normalize and resolve the path
+        full_path = os.path.join(project_root, path)
+        resolved_path = os.path.normpath(os.path.abspath(full_path))
+        resolved_root = os.path.normpath(os.path.abspath(project_root))
+        
+        # Ensure path is within project root
+        if not resolved_path.startswith(resolved_root + os.sep) and resolved_path != resolved_root:
+            raise ValueError(f"Path '{path}' escapes project root (resolved to: {resolved_path})")
+        
+        # Check against allowed directories
+        rel_path = os.path.relpath(resolved_path, project_root)
+        allowed = any(rel_path.startswith(d) for d in ALLOWED_DIRS)
+        if not allowed:
+            raise ValueError(f"Path '{path}' not in allowed directories: {ALLOWED_DIRS}")
+        
+        return resolved_path
+
     def _init_autonomous_coder(self):
         """Initialize autonomous coder state"""
         self.project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -720,18 +751,25 @@ Return ONLY the complete fixed Python file. No explanations, no markdown fences.
     def _revert_changes(self, generated_files: List[Dict]):
         """Revert applied changes using git checkout"""
         for gf in generated_files:
-            full_path = os.path.join(self.project_root, gf['path'])
             try:
+                # Sanitize path before using in subprocess
+                safe_path = self._sanitize_path(gf['path'], self.project_root)
+                full_path = os.path.join(self.project_root, gf['path'])
+                
                 if gf['action'] == 'create' and os.path.exists(full_path):
                     os.remove(full_path)
                     print(f"  🗑️  Removed: {gf['path']}")
                 elif gf['action'] == 'modify':
+                    # Use sanitized path for git command
+                    rel_path = os.path.relpath(safe_path, self.project_root)
                     subprocess.run(
-                        ['git', 'checkout', '--', gf['path']],
+                        ['git', 'checkout', '--', rel_path],
                         cwd=self.project_root,
                         capture_output=True, timeout=10,
                     )
                     print(f"  ↩️  Reverted: {gf['path']}")
+            except ValueError as ve:
+                print(f"  🚫 Security blocked revert for {gf['path']}: {ve}")
             except Exception as e:
                 print(f"  ⚠️  Failed to revert {gf['path']}: {e}")
 
@@ -750,10 +788,15 @@ Return ONLY the complete fixed Python file. No explanations, no markdown fences.
     def _commit_and_push(self, summary: str, files: List[str]) -> Dict[str, Any]:
         """Commit changes and push to remote"""
         try:
-            # Stage files
+            # Stage files with path sanitization
             for f in files:
-                subprocess.run(['git', 'add', f], cwd=self.project_root,
-                               capture_output=True, timeout=10)
+                try:
+                    safe_path = self._sanitize_path(f, self.project_root)
+                    rel_path = os.path.relpath(safe_path, self.project_root)
+                    subprocess.run(['git', 'add', rel_path], cwd=self.project_root,
+                                   capture_output=True, timeout=10)
+                except ValueError as ve:
+                    return {'success': False, 'error': f"Security blocked staging for {f}: {ve}"}
 
             # Commit
             msg = f"[auto-coder] {summary}"

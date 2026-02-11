@@ -5,12 +5,19 @@ Semantic search, hierarchical goals, and secure storage
 import os
 import json
 import pickle
+import warnings
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from cryptography.fernet import Fernet
 import numpy as np
+
+
+# Custom security warning for insecure operations
+class SecurityWarning(UserWarning):
+    """Warning for security-related issues"""
+    pass
 
 # Vector DB imports
 try:
@@ -197,27 +204,65 @@ class VectorMemoryStore:
         return results
     
     def save(self, filepath: str):
-        """Save vector store to disk"""
+        """Save vector store to disk using JSON instead of pickle for security"""
         # Save FAISS index
         faiss.write_index(self.index, f"{filepath}.index")
         
-        # Save memories
-        with open(f"{filepath}.pkl", 'wb') as f:
-            pickle.dump({
-                'memories': self.memories,
-                'id_to_index': self.id_to_index
-            }, f)
+        # Save memories as JSON (safer than pickle)
+        import json
+        serializable_data = {
+            'memories': [m.to_dict() for m in self.memories],
+            'id_to_index': self.id_to_index
+        }
+        with open(f"{filepath}.json", 'w') as f:
+            json.dump(serializable_data, f, indent=2)
+        
+        # Remove old pickle file if it exists (migration cleanup)
+        old_pkl = f"{filepath}.pkl"
+        if os.path.exists(old_pkl):
+            try:
+                os.remove(old_pkl)
+                print(f"🧹 Migrated from pickle to JSON: removed {old_pkl}")
+            except OSError:
+                pass
     
     def load(self, filepath: str):
-        """Load vector store from disk"""
+        """Load vector store from disk using JSON instead of pickle for security"""
+        import json
+        
         # Load FAISS index
         self.index = faiss.read_index(f"{filepath}.index")
         
-        # Load memories
-        with open(f"{filepath}.pkl", 'rb') as f:
-            data = pickle.load(f)
-            self.memories = data['memories']
-            self.id_to_index = data['id_to_index']
+        # Try JSON first (new secure format)
+        json_path = f"{filepath}.json"
+        pkl_path = f"{filepath}.pkl"
+        
+        if os.path.exists(json_path):
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+                # Reconstruct Memory objects with validation
+                self.memories = []
+                for m_data in data.get('memories', []):
+                    # Validate required fields
+                    required = ['id', 'content', 'memory_type', 'timestamp']
+                    if not all(k in m_data for k in required):
+                        raise ValueError(f"Invalid memory data structure: missing required fields")
+                    self.memories.append(Memory(**m_data))
+                self.id_to_index = data.get('id_to_index', {})
+        elif os.path.exists(pkl_path):
+            # Legacy pickle format - load but warn
+            import warnings
+            warnings.warn(
+                f"Loading vector store from legacy pickle format at {pkl_path}. "
+                f"This is insecure and should be migrated to JSON format.",
+                SecurityWarning
+            )
+            with open(pkl_path, 'rb') as f:
+                data = pickle.load(f)
+                self.memories = data['memories']
+                self.id_to_index = data['id_to_index']
+        else:
+            raise FileNotFoundError(f"No vector store data found at {filepath}.json or {filepath}.pkl")
 
 
 class EnhancedMemorySystem:
