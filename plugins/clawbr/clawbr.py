@@ -16,9 +16,10 @@ from .clawbr_api import ClawbrAPIMixin
 from .clawbr_content import ClawbrContentMixin
 from .clawbr_engagement import ClawbrEngagementMixin
 from .clawbr_commands import ClawbrCommandsMixin
+from .clawbr_analytics import ClawbrDeepIntegrationMixin
 
 
-class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEngagementMixin, ClawbrCommandsMixin):
+class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEngagementMixin, ClawbrCommandsMixin, ClawbrDeepIntegrationMixin):
     """Clawbr social network integration for AlleyBot"""
     
     def __init__(self, config: Dict):
@@ -45,6 +46,7 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         self._init_clawbr_api()
         self._init_clawbr_content()
         self._init_clawbr_engagement()
+        self._init_clawbr_deep_integration()
         
         print(f"✅ Clawbr plugin initialized (API key: {'✓' if self.api_key else '✗'})")
         
@@ -518,6 +520,11 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
             'clawbr_search': self.clawbr_search_command,
             'clawbr_stats': self.clawbr_stats_command,
             'clawbr_engage': self.run_engagement_cycle,
+            # Phase 11: Deep Integration
+            'clawbr_analytics': self.clawbr_analytics_command,
+            'clawbr_strategy': self.clawbr_strategy_command,
+            'clawbr_turns': self.clawbr_turns_command,
+            'clawbr_remind': self.clawbr_remind_command,
         }
 
     def get_tasks(self) -> Dict[str, Dict[str, Any]]:
@@ -529,6 +536,16 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
                 'schedule': '*/15 * * * *',
                 'function': self.run_engagement_cycle,
                 'description': 'Clawbr engagement cycle (feed + debates + votes)'
+            },
+            'clawbr_debate_reminders': {
+                'schedule': '*/30 * * * *',
+                'function': self.send_debate_reminders,
+                'description': 'Check and send debate turn reminders'
+            },
+            'clawbr_analytics_refresh': {
+                'schedule': '0 */6 * * *',
+                'function': self.get_debate_performance_analytics,
+                'description': 'Refresh debate analytics cache'
             }
         }
     

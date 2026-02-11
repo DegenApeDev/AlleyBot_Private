@@ -39,14 +39,37 @@ class Telegram(AlleyBotPlugin):
         # Always try to initialize if token exists
         if self.bot_token:
             try:
-                self.bot = Bot(token=self.bot_token)
-                self.application = Application.builder().token(self.bot_token).build()
+                # Configure HTTP client with longer timeouts to prevent errors during long operations
+                # Default is 5s, we increase to 60s connect / 120s read to handle agent cycles
+                from telegram.request import HTTPXRequest
+                
+                # Build Application with custom request instance using individual timeouts
+                request = HTTPXRequest(
+                    connection_pool_size=8,
+                    connect_timeout=60.0,
+                    read_timeout=120.0,
+                    write_timeout=30.0,
+                    pool_timeout=5.0
+                )
+                
+                self.application = (
+                    Application.builder()
+                    .token(self.bot_token)
+                    .request(request)
+                    .build()
+                )
+                
+                # Get bot instance from application
+                self.bot = self.application.bot
+                
                 self._setup_handlers()
                 print("✅ Telegram plugin initialized - Owner: DegenApeDev")
                 # Plugin is enabled if we have a token
                 self.enabled = True
             except Exception as e:
                 print(f"❌ Failed to initialize Telegram bot: {e}")
+                import traceback
+                traceback.print_exc()
                 self.enabled = False
         else:
             if self.enabled:
@@ -115,6 +138,9 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("insights", self.intelligent_commands.insights))
         self.application.add_handler(CommandHandler("check_engagement", self.intelligent_commands.check_engagement))
         self.application.add_handler(CommandHandler("tracked_posts", self.intelligent_commands.tracked_posts))
+        
+        # Image generation command
+        self.application.add_handler(CommandHandler("generate_image", self.intelligent_commands.generate_image))
         
         # Brain commands
         self.application.add_handler(CommandHandler("think", self.intelligent_commands.brain_think))

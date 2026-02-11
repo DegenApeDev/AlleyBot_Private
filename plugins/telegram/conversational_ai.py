@@ -60,6 +60,30 @@ class ConversationalAI:
             if user_message.startswith('/'):
                 return
             
+            # Check for Moltx image POST request first (more specific than just generation)
+            moltx_post_topic = self._extract_moltx_image_post_request(user_message)
+            if moltx_post_topic:
+                await update.message.chat.send_action(action="typing")
+                
+                # If agentic system available, route through it; otherwise execute directly
+                if self.agentic_system:
+                    response = await self._agentic_response(
+                        user_id, 
+                        f"Create and post an image to Moltx about: {moltx_post_topic}"
+                    )
+                else:
+                    # Direct execution fallback
+                    response = await self._execute_moltx_image_post_direct(moltx_post_topic)
+                
+                await update.message.reply_text(response)
+                return
+            
+            # Check for general image generation request (NOT posting)
+            image_prompt = self._extract_image_prompt(user_message)
+            if image_prompt:
+                await self._handle_image_generation(update, image_prompt)
+                return
+            
             # Show typing indicator
             await update.message.chat.send_action(action="typing")
             
@@ -307,6 +331,11 @@ class ConversationalAI:
 
     def _build_tool_aware_prompt(self) -> str:
         """Build a system prompt that tells the AI about available tools/commands"""
+        from src.utils.soul_loader import get_soul_cached
+        
+        # Load SOUL.md as base persona
+        soul_persona = get_soul_cached()
+        
         # Gather available commands from all plugins
         available_tools = []
         if self.core and hasattr(self.core, 'plugin_manager'):
@@ -317,7 +346,11 @@ class ConversationalAI:
 
         tools_text = '\n'.join(available_tools[:40]) if available_tools else '  (no commands loaded)'
 
-        return f"""You are AlleyBot, an autonomous AI agent with real capabilities. You manage social media on MoltX, MoltBook, MoltChan, MoltRoad, and Clawbr (AI debate network). You have on-chain awareness on Base network and can self-improve.
+        return f"""{soul_persona}
+
+---
+
+CURRENT CONTEXT: You are managing social media on MoltX, MoltBook, MoltChan, MoltRoad, and Clawbr (AI debate network). You have on-chain awareness on Base network and can self-improve.
 
 Your owner (DegenApeDev) is chatting with you via Telegram. You should:
 1. UNDERSTAND what they want — use reasoning to figure out the intent
@@ -332,9 +365,10 @@ AVAILABLE COMMANDS:
 IMPORTANT RULES:
 - For building new features/skills: use improve_self_update with a clear description
 - For checking skill updates: use improve_update_skills
-- For posting: use moltx_post, moltbook_post, or clawbr_post
+- For posting: use brain_moltx_post, brain_moltbook_post, brain_moltx_image_post (with AI image), or clawbr_post
 - For debates: use clawbr_debates, clawbr_create_debate, clawbr_join_debate
 - For status: use improve_status, moltx_status, clawbr_status, onchain_wallet, etc.
+- For image generation: use generate_image command directly, DO NOT use improve_self_update
 - You can ONLY execute commands from the list above
 - If the user asks something conversational, just respond naturally — no need to execute anything
 - Always reason about what the user wants before responding
@@ -425,3 +459,177 @@ IMPORTANT RULES:
             
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
+
+    def _extract_image_prompt(self, message: str) -> Optional[str]:
+        """Extract image generation prompt from natural language"""
+        import re
+        
+        # Patterns for image generation requests (NOT posting)
+        patterns = [
+            r'(?:generate|create|make)\s+(?:me\s+)?(?:an\s+)?image\s+(?:of|with|showing|depicting|for)?\s*(.+)',
+            r'(?:draw|paint|render)\s+(?:me\s+)?(?:an\s+)?(?:image\s+)?(?:of\s+)?(.+)',
+            r'(?:give\s+me|show\s+me)\s+(?:an\s+)?image\s+(?:of\s+)?(.+)',
+            r'(?:alley|alleybot)\s+(?:generate|create|make)\s+(?:me\s+)?(?:an\s+)?image\s+(?:of\s+)?(.+)',
+            r'(?:alley|alleybot)\s+(?:go\s+ahead\s+and\s+)?(?:generate|create|make)\s+(?:me\s+)?(?:an\s+)?image\s+(?:of\s+)?(.+)',
+            r'(?:alley|alleybot)\s+(?:can\s+you\s+)?(?:generate|create|make)\s+(?:me\s+)?(?:an\s+)?image\s*(?:of|with)?\s*(.+)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        
+        return None
+    
+    def _extract_moltx_image_post_request(self, message: str) -> Optional[str]:
+        """Extract image POST request for Moltx (not just generation)"""
+        import re
+        
+        # Patterns specifically for posting images to Moltx
+        post_patterns = [
+            r'(?:post|share|publish)\s+(?:an\s+)?image\s+(?:to|on)\s+(?:moltx|molt.?x)\s*(?:about|of|with)?\s*(.+)',
+            r'(?:create|make)\s+(?:an\s+)?image\s+(?:post|update)\s+(?:to|on)?\s*(?:moltx|molt.?x)?\s*(?:about|of|with)?\s*(.+)',
+            r'(?:alley|alleybot)\s+(?:post|share)\s+(?:an\s+)?image\s+(?:to|on)\s+(?:moltx|molt.?x)\s*(?:about|of|with)?\s*(.+)',
+            r'(?:alley|alleybot)\s+(?:create|make)\s+(?:an\s+)?image\s+(?:post|update)\s+(?:to|on)?\s*(?:moltx|molt.?x)?\s*(?:about|of|with)?\s*(.+)',
+            r'(?:alley|alleybot)\s+(?:can\s+you\s+)?(?:post|share)\s+(?:an\s+)?image\s+(?:to|on)\s+(?:moltx|molt.?x)\s*(?:about|of|with)?\s*(.+)',
+            r'(?:alley|alleybot)\s+(?:can\s+you\s+)?(?:create|make)\s+(?:an\s+)?image\s+(?:post|update)\s+(?:to|on)?\s*(?:moltx|molt.?x)?\s*(?:about|of|with)?\s*(.+)',
+        ]
+        
+        for pattern in post_patterns:
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        
+        # Also catch "image post about X on moltx" pattern
+        alt_patterns = [
+            r'image\s+(?:post|update)\s+(?:about|of|with)?\s*(.+)\s+(?:on|to)\s+(?:moltx|molt.?x)',
+            r'(?:alley|alleybot)\s+image\s+(?:post|update)\s+(?:about|of|with)?\s*(.+)',
+        ]
+        
+        for pattern in alt_patterns:
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        
+        return None
+    
+    async def _execute_moltx_image_post_direct(self, topic: str) -> str:
+        """Direct execution of moltx image post - bypasses brain to avoid plugin access issues"""
+        try:
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                return "❌ Core not initialized"
+            
+            # Get plugins directly
+            moltx = self.core.plugin_manager.plugins.get('moltx')
+            if not moltx:
+                return "❌ Moltx plugin not loaded. Check plugin configuration."
+            
+            # Check content calendar
+            brain = self.core.plugin_manager.plugins.get('brain')
+            if brain and hasattr(brain, 'should_post_image_now'):
+                check = brain.should_post_image_now('moltx')
+                if not check.get('should_post'):
+                    return f"⏳ Image calendar says not now: {check.get('reason', 'unknown')}"
+            
+            # Step 1: Generate text content using AI
+            from grok_ai import grok_ai
+            from deepseek_ai import deepseek_ai
+            
+            content = None
+            prompt = f"Write a short, engaging social media post (1-3 sentences, under 280 chars) about {topic}. Be opinionated and authentic. No hashtags. Sign off with 🦞 if short enough."
+            
+            if grok_ai.enabled:
+                content = grok_ai.chat(prompt)
+            elif deepseek_ai.enabled:
+                content = deepseek_ai.chat(prompt)
+            
+            if not content:
+                return "❌ Failed to generate post content"
+            
+            content = content.strip().strip('"').strip("'")
+            
+            # Step 2: Generate viral image based on content
+            image_prompt = f"A viral, eye-catching image about: {topic}. {content[:100]}. Make it visually striking and shareable."
+            
+            if not grok_ai.enabled:
+                return "❌ Grok AI not enabled for image generation"
+            
+            image_result = grok_ai.generate_image(prompt=image_prompt)
+            if not image_result or not image_result.get('image_url'):
+                return "❌ Failed to generate image"
+            
+            # Step 3: Download image and upload to Moltx
+            import requests
+            import tempfile
+            import os
+            
+            img_response = requests.get(image_result['image_url'], timeout=30)
+            if img_response.status_code != 200:
+                return f"❌ Failed to download image: {img_response.status_code}"
+            
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+                tmp.write(img_response.content)
+                tmp_path = tmp.name
+            
+            try:
+                # Upload to Moltx
+                media_url = moltx.upload_media(tmp_path)
+                if not media_url:
+                    return "❌ Failed to upload media to Moltx"
+                
+                # Create post with media_url
+                result = moltx.create_post(content, media_url=media_url)
+                
+                # Record if brain available
+                if brain and hasattr(brain, 'record_image_post_made') and not str(result).startswith('❌'):
+                    brain.record_image_post_made('moltx')
+                
+                return f"✅ Image post created!\n📝 {content[:100]}...\n🖼️ {media_url[:60]}..."
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
+                    
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return f"❌ Error executing image post: {e}"
+    
+    async def _handle_image_generation(self, update: Update, prompt: str):
+        """Handle image generation request"""
+        try:
+            # Send status message
+            status_msg = await update.message.reply_text(f"🎨 Generating image...\n📝 Prompt: {prompt[:100]}...")
+            
+            # Import and use Grok AI
+            from grok_ai import grok_ai
+            
+            if not grok_ai.enabled:
+                await status_msg.edit_text("❌ Grok AI not enabled. Check GROK_API_KEY in .env")
+                return
+            
+            # Generate image
+            import asyncio
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: grok_ai.generate_image(prompt=prompt)
+            )
+            
+            if result and result.get('image_url'):
+                # Send the image using URL (much simpler and reliable)
+                await update.message.reply_photo(
+                    photo=result['image_url'],
+                    caption=f"🎨 **Generated Image**\n📝 Prompt: {prompt}\n✅ Moderation passed: {result.get('moderation_passed', True)}"
+                )
+                
+                # Delete status message
+                await status_msg.delete()
+            else:
+                await status_msg.edit_text(f"❌ Image generation failed. Please try again.")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error generating image: {e}")
+            import traceback
+            traceback.print_exc()

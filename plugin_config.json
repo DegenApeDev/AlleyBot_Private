@@ -125,5 +125,12 @@
       "blocklist": [],
       "allowlist": []
     }
+  },
+  "skills": {
+    "enabled": true,
+    "config": {
+      "skills_dir": "skills",
+      "max_script_runtime": 30
+    }
   }
 }

@@ -16,6 +16,9 @@ class AlleyBotPlugin:
         self.config = config
         self.name = self.__class__.__name__
         self.initialized = False
+        self.api = None
+        self.core = None
+        super().__init__()  # Enable cooperative multiple inheritance
     
     def initialize(self, api, core):
         """Initialize plugin with API and core access"""

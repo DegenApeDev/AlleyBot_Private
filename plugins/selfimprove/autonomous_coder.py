@@ -72,11 +72,16 @@ class AutonomousCoderMixin:
         return resolved_path
 
     def _init_autonomous_coder(self):
-        """Initialize autonomous coder state"""
+        """Initialize autonomous coder state with circuit breaker"""
         self.project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         self.update_log_file = os.path.join(self.project_root, 'skills', 'coder_log.json')
         self.pending_updates: List[Dict] = []
         self._coder_history: List[Dict] = []
+        # Circuit breaker for API failures
+        self._api_failure_count = 0
+        self._api_failure_threshold = 5  # Stop after 5 consecutive failures
+        self._api_last_failure = None
+        self._api_cooldown_minutes = 30  # Wait 30 min after threshold reached
         self._load_coder_state()
         print("🤖 Autonomous coder ready (Grok primary, DeepSeek fallback)")
 
@@ -97,6 +102,30 @@ class AutonomousCoderMixin:
             })
         except Exception as e:
             print(f"⚠️  Failed to save coder state: {e}")
+
+    def _check_circuit_breaker(self) -> bool:
+        """Check if API circuit breaker is open (too many failures)"""
+        if self._api_failure_count >= self._api_failure_threshold:
+            if self._api_last_failure:
+                from datetime import datetime, timedelta
+                cooldown_end = self._api_last_failure + timedelta(minutes=self._api_cooldown_minutes)
+                if datetime.now() < cooldown_end:
+                    remaining = int((cooldown_end - datetime.now()).total_seconds() / 60)
+                    print(f"⛔ API circuit breaker OPEN: {self._api_failure_count} failures. Cooldown: {remaining}min remaining")
+                    return False
+                else:
+                    # Reset after cooldown
+                    print(f"🔓 API circuit breaker reset after cooldown")
+                    self._api_failure_count = 0
+                    self._api_last_failure = None
+        return True
+
+    def _record_api_failure(self):
+        """Record an API failure for circuit breaker"""
+        from datetime import datetime
+        self._api_failure_count += 1
+        self._api_last_failure = datetime.now()
+        print(f"⚠️ API failure {self._api_failure_count}/{self._api_failure_threshold}")
 
     # ------------------------------------------------------------------
     # AI Code Generation
@@ -191,59 +220,300 @@ class AutonomousCoderMixin:
             except Exception:
                 pass
 
-    def _generate_code_with_ai(self, task: str, context: str = "",
-                                max_tokens: int = 4000) -> Optional[str]:
-        """Generate code using Grok (primary) or DeepSeek (fallback)"""
-        import_examples = self._get_import_examples()
+    def _try_template_generation(self, task: str, path: str) -> Optional[str]:
+        """Try to generate code using templates for common simple tasks.
+        
+        This bypasses AI generation for predictable patterns like:
+        - Utility functions (palindrome, string processing)
+        - Simple text analysis
+        - Basic helper functions
+        
+        Returns generated code or None if not a recognized pattern.
+        """
+        task_lower = task.lower()
+        
+        # Pattern: Palindrome detection
+        if 'palindrome' in task_lower:
+            return self._generate_palindrome_utility(path)
+        
+        # Pattern: String/ text utility
+        if any(word in task_lower for word in ['string utility', 'text utility', 'text processing']):
+            return self._generate_text_utility_template(path)
+        
+        # Pattern: Simple math utility
+        if any(word in task_lower for word in ['math utility', 'number utility', 'calculation']):
+            return self._generate_math_utility_template(path)
+        
+        return None
+    
+    def _generate_palindrome_utility(self, path: str) -> str:
+        """Generate a robust palindrome detection utility."""
+        return """\"\"\"
+Text utility functions for palindrome detection and generation.
+\"\"\"
+import re
 
-        system_prompt = f"""You are an expert Python developer working on AlleyBot, an autonomous AI agent.
-You generate clean, production-ready Python code following these rules:
-1. Follow existing code style (mixin pattern, plugin architecture)
-2. Include proper error handling with try/except
-3. Use type hints
-4. NO eval(), exec(), os.system(), __import__(), or shell=True
-5. Only use standard library + packages already in requirements.txt
-6. Keep functions focused and under 50 lines each
-7. Return ONLY the code, no explanations or markdown fences
 
-CRITICAL — Import conventions for this project:
-- The project root is on PYTHONPATH. Imports are from the root, e.g.:
-  from plugins.brain.brain import BrainPlugin
-  from src.config.models import ModelRouter
-  from grok_ai import grok_ai
-  from deepseek_ai import deepseek_ai
-- Plugin files use mixin classes. Each plugin folder has an __init__ or main .py.
-- NEVER use relative imports like 'from . import' in generated skill files.
-- NEVER invent modules that don't exist. If unsure, wrap imports in try/except.
+def is_palindrome(text: str) -> bool:
+    \"\"\"Check if text is a palindrome, ignoring case and punctuation.
+    
+    Args:
+        text: The text to check
+        
+    Returns:
+        True if the text is a palindrome, False otherwise
+    \"\"\"
+    if not text:
+        return True
+    
+    # Remove non-alphanumeric characters and convert to lowercase
+    cleaned = re.sub(r'[^a-zA-Z0-9]', '', text).lower()
+    
+    # Empty or single character is a palindrome
+    if len(cleaned) <= 1:
+        return True
+    
+    # Check if string equals its reverse
+    return cleaned == cleaned[::-1]
 
-Real import examples from the codebase:
-{import_examples}"""
 
-        user_prompt = f"""Task: {task}
+def find_palindromes(text: str, min_length: int = 3) -> list:
+    \"\"\"Find all palindromic substrings in text.
+    
+    Args:
+        text: The text to search
+        min_length: Minimum length of palindromes to find
+        
+    Returns:
+        List of palindromic substrings found
+    \"\"\"
+    if not text or len(text) < min_length:
+        return []
+    
+    palindromes = []
+    cleaned = re.sub(r'[^a-zA-Z0-9]', '', text).lower()
+    
+    # Check all substrings
+    for i in range(len(cleaned)):
+        for j in range(i + min_length, len(cleaned) + 1):
+            substring = cleaned[i:j]
+            if substring == substring[::-1] and len(substring) >= min_length:
+                palindromes.append(substring)
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique = []
+    for p in palindromes:
+        if p not in seen:
+            seen.add(p)
+            unique.append(p)
+    
+    return unique
 
-{f'Context (existing code/skill file):{chr(10)}{context}' if context else ''}
 
-Generate the complete Python code. Return ONLY the raw Python code, no markdown fences or explanations."""
+def generate_palindromic_response(text: str) -> str:
+    \"\"\"Generate a palindromic response for engagement.
+    
+    Creates a fun palindrome-based reply to use in comments/raids.
+    
+    Args:
+        text: The original text to respond to
+        
+    Returns:
+        A palindromic response string
+    \"\"\"
+    if not text:
+        return "A man, a plan, a canal: Panama!"
+    
+    # Check if the text itself is a palindrome
+    if is_palindrome(text):
+        return "Nice palindrome! '" + text + "' reads the same forwards and backwards."
+    
+    # Generate a context-aware palindrome
+    palindromes = [
+        "A man, a plan, a canal: Panama!",
+        "Was it a car or a cat I saw?",
+        "No 'x' in Nixon.",
+        "Madam, I'm Adam.",
+        "A Santa at NASA.",
+        "Mr. Owl ate my metal worm.",
+        "Do geese see God?",
+        "Never odd or even.",
+    ]
+    
+    import random
+    return random.choice(palindromes)
 
-        # Try Grok first (better reasoning for code)
+
+def make_palindrome(text: str) -> str:
+    \"\"\"Create a palindrome by mirroring the text.
+    
+    Args:
+        text: Base text to mirror
+        
+    Returns:
+        A palindrome created from the text
+    \"\"\"
+    if not text:
+        return ""
+    
+    cleaned = re.sub(r'[^a-zA-Z0-9]', '', text).lower()
+    # Mirror the text (excluding last char to avoid double middle letter)
+    mirrored = cleaned + cleaned[-2::-1] if len(cleaned) > 1 else cleaned
+    return mirrored
+"""
+    
+    def _generate_text_utility_template(self, path: str) -> str:
+        """Generate a basic text utility module template."""
+        return """\"\"\"
+Text utility functions for AlleyBot.
+\"\"\"
+import re
+from typing import List, Optional
+
+
+def clean_text(text: str) -> str:
+    \"\"\"Clean text by removing extra whitespace and normalizing.\"\"\"
+    if not text:
+        return ""
+    # Remove extra whitespace
+    cleaned = re.sub(r'\\s+', ' ', text)
+    # Strip leading/trailing
+    return cleaned.strip()
+
+
+def extract_hashtags(text: str) -> List[str]:
+    \"\"\"Extract hashtags from text.\"\"\"
+    if not text:
+        return []
+    return re.findall(r'#\\w+', text)
+
+
+def extract_mentions(text: str) -> List[str]:
+    \"\"\"Extract @mentions from text.\"\"\"
+    if not text:
+        return []
+    return re.findall(r'@\\w+', text)
+
+
+def truncate_text(text: str, max_length: int = 280, suffix: str = "...") -> str:
+    \"\"\"Truncate text to max_length with suffix.\"\"\"
+    if not text or len(text) <= max_length:
+        return text
+    return text[:max_length - len(suffix)] + suffix
+
+
+def count_words(text: str) -> int:
+    \"\"\"Count words in text.\"\"\"
+    if not text:
+        return 0
+    return len(text.split())
+"""
+    
+    def _generate_math_utility_template(self, path: str) -> str:
+        """Generate a basic math utility module template."""
+        return """\"\"\"
+Math utility functions for AlleyBot.
+\"\"\"
+import math
+from typing import List, Optional
+
+
+def clamp(value: float, min_val: float, max_val: float) -> float:
+    \"\"\"Clamp value between min and max.\"\"\"
+    return max(min_val, min(max_val, value))
+
+
+def lerp(start: float, end: float, t: float) -> float:
+    \"\"\"Linear interpolation between start and end.\"\"\"
+    return start + (end - start) * clamp(t, 0.0, 1.0)
+
+
+def average(values: List[float]) -> float:
+    \"\"\"Calculate average of list.\"\"\"
+    if not values:
+        return 0.0
+    return sum(values) / len(values)
+
+
+def percentage(part: float, whole: float) -> float:
+    \"\"\"Calculate percentage.\"\"\"
+    if whole == 0:
+        return 0.0
+    return (part / whole) * 100
+
+
+def format_number(n: float, decimals: int = 2) -> str:
+    \"\"\"Format number with K/M/B suffix.\"\"\"
+    if n >= 1_000_000_000:
+        return "{n/1_000_000_000:." + str(decimals) + "f}B".format(n=n, decimals=decimals)
+    if n >= 1_000_000:
+        return "{n/1_000_000:." + str(decimals) + "f}M".format(n=n, decimals=decimals)
+    if n >= 1_000:
+        return "{n/1_000:." + str(decimals) + "f}K".format(n=n, decimals=decimals)
+    return "{n:." + str(decimals) + "f}".format(n=n, decimals=decimals)
+"""
+
+    def _generate_code_with_ai(self, task: str, max_tokens: int = 4000) -> Optional[str]:
+        """Generate code using AI with timeout handling and circuit breaker"""
+        # Check circuit breaker first
+        if not self._check_circuit_breaker():
+            print(" Skipping AI generation - circuit breaker open")
+            return None
+
+        system_prompt = """You are an expert Python developer. Generate clean, correct Python code for AlleyBot.
+
+CRITICAL RULES:
+1. Check every bracket, brace, and parenthesis is balanced before finishing
+2. NEVER leave unclosed quotes, brackets, or parentheses
+3. ALL f-strings must have valid expressions inside { } - escape literal braces as {{ }}
+4. NO nested triple quotes inside the same type of quote
+5. NEVER use eval(), exec(), os.system(), subprocess with shell=True
+6. All code must be valid, complete Python files
+7. Wrap optional imports in try/except blocks
+8. Follow existing code style and conventions
+9. EVERY function must have proper closing parentheses and quotes
+10. Check all strings have matching quotes: 'text' or "text"
+11. Check all brackets/braces/parens are balanced: [], {}, ()
+12. Use 4 spaces for indentation, never tabs
+13. Always use trailing commas in multi-line lists/dicts
+14. Test your code mentally: would 'python -m py_compile' accept it?
+
+Generate clean, production-ready Python code that passes syntax validation on first try."""
+
+        user_prompt = f"Task: {task}\n\nGenerate complete Python code. Return ONLY code, no markdown fences, no explanations."
+
+        # Try Grok with timeout handling (Grok has built-in 60s timeout + retries)
         try:
             from grok_ai import grok_ai
             if grok_ai.enabled:
+                print(f"  🤖 Calling Grok API...")
                 result = grok_ai.chat(user_prompt, system_prompt=system_prompt, max_tokens=max_tokens)
                 if result:
+                    self._api_failure_count = 0  # Reset on success
                     return self._clean_generated_code(result)
+        except TimeoutError as e:
+            print(f"⏰ Grok API timeout: {e}")
+            self._record_api_failure()
         except Exception as e:
-            print(f"⚠️  Grok code generation failed: {e}")
+            print(f"⚠️ Grok code generation failed: {e}")
+            self._record_api_failure()
 
-        # Fallback to DeepSeek
+        # Fallback to DeepSeek with timeout handling
         try:
             from deepseek_ai import deepseek_ai
             if deepseek_ai.enabled:
+                print(f"  🤖 Calling DeepSeek API...")
                 result = deepseek_ai.chat(user_prompt, system_prompt=system_prompt, max_tokens=max_tokens)
                 if result:
+                    self._api_failure_count = 0  # Reset on success
                     return self._clean_generated_code(result)
+        except TimeoutError as e:
+            print(f"⏰ DeepSeek API timeout: {e}")
+            self._record_api_failure()
         except Exception as e:
-            print(f"⚠️  DeepSeek code generation failed: {e}")
+            print(f"⚠️ DeepSeek code generation failed: {e}")
+            self._record_api_failure()
 
         return None
 
@@ -477,7 +747,13 @@ Return ONLY valid JSON, no markdown or explanation."""
                 task = f"Create new file: {path}\nPurpose: {description}\nPlan summary: {plan.get('summary', '')}"
 
             print(f"🔧 Generating code for {path} ({action})...")
-            code = self._generate_code_with_ai(task)
+            
+            # Try template-based generation first for common patterns
+            code = self._try_template_generation(task, path)
+            if code:
+                print(f"  📋 Used template generation for {path}")
+            else:
+                code = self._generate_code_with_ai(task)
 
             if not code:
                 results['error'] = f"Failed to generate code for {path}"

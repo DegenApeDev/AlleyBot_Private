@@ -12,7 +12,11 @@ from pathlib import Path
 
 
 class MoltxWalletMixin:
-    """Mixin for EVM wallet linking via EIP-712 typed-data signature"""
+    """Mixin for EVM wallet linking and management"""
+
+    def __init__(self, *args, **kwargs):
+        """Initialize mixin - accepts any args/kwargs for cooperative inheritance"""
+        super().__init__(*args, **kwargs)
 
     def _init_wallet(self):
         """Initialize wallet state"""
@@ -27,15 +31,33 @@ class MoltxWalletMixin:
 
         try:
             profile = self._make_request('GET', '/agents/me')
-            if profile and profile.get('success'):
-                agent = profile.get('data', {}).get('agent', profile.get('data', {}))
-                wallet = agent.get('evm_wallet') or agent.get('evm_address')
-                if wallet:
-                    self.evm_wallet_linked = True
-                    self.evm_wallet_address = wallet
-                    print(f"✅ EVM wallet already linked: {wallet[:10]}...{wallet[-6:]}")
-                else:
-                    print("⚠️  No EVM wallet linked — required for write operations")
+            if not profile or not isinstance(profile, dict):
+                print("⚠️  Could not check wallet status: Invalid profile response")
+                return
+            
+            if not profile.get('success'):
+                error = profile.get('error', 'Unknown error')
+                print(f"⚠️  Could not check wallet status: {error}")
+                return
+
+            # Safely extract agent data
+            data = profile.get('data')
+            if not isinstance(data, dict):
+                print("⚠️  Could not check wallet status: Invalid data in profile")
+                return
+            
+            agent = data.get('agent')
+            if not isinstance(agent, dict):
+                print("⚠️  Could not check wallet status: Invalid agent data")
+                return
+            
+            wallet = agent.get('evm_wallet') or agent.get('evm_address')
+            if wallet and isinstance(wallet, str):
+                self.evm_wallet_linked = True
+                self.evm_wallet_address = wallet
+                print(f"✅ EVM wallet already linked: {wallet[:10]}...{wallet[-6:]}")
+            else:
+                print("⚠️  No EVM wallet linked — required for write operations")
         except Exception as e:
             print(f"⚠️  Could not check wallet status: {e}")
 

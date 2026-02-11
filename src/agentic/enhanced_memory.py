@@ -4,7 +4,7 @@ Semantic search, hierarchical goals, and secure storage
 """
 import os
 import json
-import pickle
+import pickle  # Kept for legacy migration only
 import warnings
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
@@ -208,61 +208,68 @@ class VectorMemoryStore:
         # Save FAISS index
         faiss.write_index(self.index, f"{filepath}.index")
         
-        # Save memories as JSON (safer than pickle)
-        import json
-        serializable_data = {
-            'memories': [m.to_dict() for m in self.memories],
-            'id_to_index': self.id_to_index
-        }
-        with open(f"{filepath}.json", 'w') as f:
-            json.dump(serializable_data, f, indent=2)
+        # Save memories as JSON (secure alternative to pickle)
+        memories_data = []
+        for mem in self.memories:
+            memories_data.append({
+                'id': mem.id,
+                'content': mem.content,
+                'memory_type': mem.memory_type,
+                'timestamp': mem.timestamp.isoformat(),
+                'metadata': mem.metadata,
+                'relevance_score': mem.relevance_score,
+                'embedding': mem.embedding
+            })
         
-        # Remove old pickle file if it exists (migration cleanup)
-        old_pkl = f"{filepath}.pkl"
-        if os.path.exists(old_pkl):
-            try:
-                os.remove(old_pkl)
-                print(f"🧹 Migrated from pickle to JSON: removed {old_pkl}")
-            except OSError:
-                pass
+        with open(f"{filepath}.json", 'w') as f:
+            json.dump({
+                'memories': memories_data,
+                'id_to_index': self.id_to_index
+            }, f, indent=2)
     
     def load(self, filepath: str):
         """Load vector store from disk using JSON instead of pickle for security"""
-        import json
-        
         # Load FAISS index
         self.index = faiss.read_index(f"{filepath}.index")
         
-        # Try JSON first (new secure format)
+        # Load memories from JSON (secure alternative to pickle)
         json_path = f"{filepath}.json"
         pkl_path = f"{filepath}.pkl"
         
-        if os.path.exists(json_path):
+        # Try JSON first, fall back to pickle for migration
+        if Path(json_path).exists():
             with open(json_path, 'r') as f:
                 data = json.load(f)
-                # Reconstruct Memory objects with validation
-                self.memories = []
-                for m_data in data.get('memories', []):
-                    # Validate required fields
-                    required = ['id', 'content', 'memory_type', 'timestamp']
-                    if not all(k in m_data for k in required):
-                        raise ValueError(f"Invalid memory data structure: missing required fields")
-                    self.memories.append(Memory(**m_data))
-                self.id_to_index = data.get('id_to_index', {})
-        elif os.path.exists(pkl_path):
-            # Legacy pickle format - load but warn
-            import warnings
+            
+            self.memories = []
+            for mem_data in data.get('memories', []):
+                self.memories.append(Memory(
+                    id=mem_data['id'],
+                    content=mem_data['content'],
+                    memory_type=mem_data['memory_type'],
+                    timestamp=datetime.fromisoformat(mem_data['timestamp']),
+                    metadata=mem_data.get('metadata', {}),
+                    relevance_score=mem_data.get('relevance_score', 1.0),
+                    embedding=mem_data.get('embedding')
+                ))
+            self.id_to_index = data.get('id_to_index', {})
+            
+        elif Path(pkl_path).exists():
+            # Legacy pickle fallback - migrate to JSON
             warnings.warn(
                 f"Loading vector store from legacy pickle format at {pkl_path}. "
                 f"This is insecure and should be migrated to JSON format.",
                 SecurityWarning
             )
-            with open(pkl_path, 'rb') as f:
-                data = pickle.load(f)
-                self.memories = data['memories']
-                self.id_to_index = data['id_to_index']
-        else:
-            raise FileNotFoundError(f"No vector store data found at {filepath}.json or {filepath}.pkl")
+            try:
+                with open(pkl_path, 'rb') as f:
+                    data = pickle.load(f)
+                self.memories = data.get('memories', [])
+                self.id_to_index = data.get('id_to_index', {})
+                # Save as JSON for next time
+                self.save(filepath)
+            except Exception as e:
+                print(f"⚠️  Failed to load legacy pickle: {e}")
 
 
 class EnhancedMemorySystem:
@@ -485,6 +492,37 @@ class EnhancedMemorySystem:
                     self.vector_store.add_memory(memory)
                 
                 self._save_vector_store()
+    
+    def advanced_prune(self, max_age_days: int = 30, min_relevance: float = 0.3) -> Dict:
+        """
+        Phase 12.5: Advanced memory pruning with intelligent policies
+        Returns pruning statistics
+        """
+        try:
+            from .phase12_pruning import MemoryPruner, MemoryPruningPolicy, auto_prune_memory
+            
+            policy = MemoryPruningPolicy(
+                max_age_days=max_age_days,
+                min_relevance_score=min_relevance,
+                preserve_types=['goal', 'learning', 'on_chain_event'],
+                preserve_goals=True,
+                preserve_learning=True
+            )
+            
+            return auto_prune_memory(self, policy)
+        except Exception as e:
+            print(f"⚠️ Error in advanced pruning: {e}")
+            return {'error': str(e)}
+    
+    def get_pruning_report(self) -> Dict:
+        """Get memory pruning activity report"""
+        try:
+            from .phase12_pruning import MemoryPruningPolicy, MemoryPruner
+            pruner = MemoryPruner(MemoryPruningPolicy())
+            return pruner.get_pruning_report()
+        except Exception as e:
+            print(f"⚠️ Error getting pruning report: {e}")
+            return {'error': str(e)}
     
     def get_memory_stats(self) -> Dict[str, Any]:
         """Get memory system statistics"""

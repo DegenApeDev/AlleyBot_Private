@@ -1,13 +1,78 @@
 """
 Moltx Messaging Mixin
 Direct messages, DM replies, AI-powered DM generation, and DM activity logging.
+Uses v0.23.1 API format: POST /v1/dm/:name, GET /v1/dm, etc.
 """
 import re
 from datetime import datetime
+from typing import Optional, Dict, Any, List
 
 
 class MoltxMessagingMixin:
     """Mixin providing DM and messaging functionality"""
+
+    def __init__(self, *args, **kwargs):
+        """Initialize mixin - accepts any args/kwargs for cooperative inheritance"""
+        super().__init__(*args, **kwargs)
+
+    def start_dm(self, agent_name: str) -> Dict[str, Any]:
+        """Start or get a DM conversation with an agent (POST /v1/dm/:name)"""
+        if not self.initialized:
+            return {"success": False, "error": "Moltx not initialized"}
+
+        result = self._make_request('POST', f'/dm/{agent_name}')
+
+        if result and result.get('success'):
+            return {"success": True, "data": result.get('data', {})}
+        return {"success": False, "error": f"Failed to start DM with @{agent_name}", "raw": result}
+
+    def list_dms(self) -> Dict[str, Any]:
+        """List all DM conversations (GET /v1/dm)"""
+        if not self.initialized:
+            return {"success": False, "error": "Moltx not initialized"}
+
+        result = self._make_request('GET', '/dm')
+
+        if result and result.get('success'):
+            conversations = result.get('data', {}).get('conversations', [])
+            return {"success": True, "conversations": conversations, "count": len(conversations)}
+        return {"success": False, "error": "Failed to list DMs", "raw": result}
+
+    def get_dm_messages(self, agent_name: str, limit: int = 50) -> Dict[str, Any]:
+        """Get messages from a DM conversation (GET /v1/dm/:name/messages)"""
+        if not self.initialized:
+            return {"success": False, "error": "Moltx not initialized"}
+
+        params = {'limit': limit}
+        result = self._make_request('GET', f'/dm/{agent_name}/messages', params=params)
+
+        if result and result.get('success'):
+            messages = result.get('data', {}).get('messages', [])
+            return {"success": True, "messages": messages, "count": len(messages)}
+        return {"success": False, "error": f"Failed to get messages with @{agent_name}", "raw": result}
+
+    def send_dm_message(self, agent_name: str, content: str, media_url: str = None) -> Dict[str, Any]:
+        """Send a message to an agent (POST /v1/dm/:name/messages)"""
+        if not self.initialized:
+            return {"success": False, "error": "Moltx not initialized"}
+
+        data = {'content': content}
+        if media_url:
+            data['media_url'] = media_url
+
+        result = self._make_request('POST', f'/dm/{agent_name}/messages', data)
+
+        if result and result.get('success'):
+            msg_data = result.get('data', {})
+            self._record_activity('dm_sent', {
+                'to': agent_name,
+                'content': content[:100],
+                'message_id': msg_data.get('id')
+            })
+            return {"success": True, "message_id": msg_data.get('id'), "data": msg_data}
+        return {"success": False, "error": f"Failed to send DM to @{agent_name}", "raw": result}
+
+    # --- Legacy Community Conversations (kept for compatibility) ---
 
     def get_dms(self):
         """Get direct messages from Moltx conversations

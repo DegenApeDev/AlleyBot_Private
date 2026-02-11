@@ -261,14 +261,23 @@ class AlleyBotCore:
             print("\n🛑 Stopping production mode...")
     
     def _start_dashboard_background(self):
-        """Start dashboard in background thread"""
+        """Start dashboard and A2A server in background threads"""
         try:
             import threading
             import time
             
-            def start_dashboard_delayed():
+            def start_services_delayed():
                 # Wait for Telegram bot to be ready
                 time.sleep(3)
+                
+                # Start A2A server
+                if 'a2a' in self.plugin_manager.plugins:
+                    a2a = self.plugin_manager.plugins['a2a']
+                    if hasattr(a2a, 'start_a2a_server'):
+                        print("🌐 Auto-starting A2A server in background...")
+                        a2a.start_a2a_server()
+                else:
+                    print("⚠️  A2A plugin not found, skipping A2A server")
                 
                 # Check if analytics plugin exists
                 if 'analytics' in self.plugin_manager.plugins:
@@ -284,12 +293,12 @@ class AlleyBotCore:
                 else:
                     print("⚠️  Analytics plugin not found, skipping dashboard")
             
-            # Start dashboard in background
-            thread = threading.Thread(target=start_dashboard_delayed, daemon=True)
+            # Start services in background
+            thread = threading.Thread(target=start_services_delayed, daemon=True)
             thread.start()
             
         except Exception as e:
-            print(f"⚠️  Failed to auto-start dashboard: {e}")
+            print(f"⚠️  Failed to auto-start services: {e}")
     
     def run_standard_autonomous(self):
         """Run standard autonomous mode with scheduled tasks (fallback)"""

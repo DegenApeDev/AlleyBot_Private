@@ -15,9 +15,10 @@ from plugin_manager import AlleyBotPlugin
 from plugins.onchain.web3_provider import Web3Provider, ALLEYBOT_TOKEN, WEB3_AVAILABLE
 from plugins.onchain.token_tracker import TokenTrackerMixin, KNOWN_TOKENS
 from plugins.onchain.tx_monitor import TxMonitorMixin
+from plugins.onchain.onchain_actions import OnChainActionsMixin
 
 
-class OnChainPlugin(TokenTrackerMixin, TxMonitorMixin, AlleyBotPlugin):
+class OnChainPlugin(TokenTrackerMixin, TxMonitorMixin, OnChainActionsMixin, AlleyBotPlugin):
     """On-chain capabilities plugin for Base network"""
 
     def __init__(self, config):
@@ -43,6 +44,7 @@ class OnChainPlugin(TokenTrackerMixin, TxMonitorMixin, AlleyBotPlugin):
             # Initialize sub-systems
             self._init_token_tracker()
             self._init_tx_monitor()
+            self._init_onchain_actions()
 
             # Auto-track AlleyBot token
             if 'ALYBOT' not in self.tracked_tokens:
@@ -193,6 +195,8 @@ class OnChainPlugin(TokenTrackerMixin, TxMonitorMixin, AlleyBotPlugin):
             'onchain_read': self.contract_read_command,
             'onchain_status': self.onchain_status_command,
             'onchain_heartbeat': self.onchain_heartbeat,
+            'onchain_tip': self.tip_command,
+            'onchain_tipstats': self.tipstats_command,
         }
 
     def get_endpoints(self):
@@ -204,4 +208,5 @@ class OnChainPlugin(TokenTrackerMixin, TxMonitorMixin, AlleyBotPlugin):
         if self.web3_provider:
             self._save_tracked_tokens()
             self._save_tx_state()
+            self._save_actions_state()
             print("🔗 On-chain plugin cleaned up")

@@ -15,10 +15,18 @@ load_dotenv()
 class GrokAI:
     """Grok AI client for intelligent reasoning and content generation"""
     
+    # Model routing per engineer's recommendation
+    MODELS = {
+        'reasoning': 'grok-4.1-fast-reasoning',      # Design, specs, APIs, edge cases
+        'code': 'grok-code-fast-1',                   # Large code, scaffolding, files
+        'quick': 'grok-4.1-fast-non-reasoning',      # Small edits, glue, cheap tasks
+        'default': 'grok-4-1-fast-reasoning',
+    }
+    
     def __init__(self):
         self.api_key = os.getenv('XAI_API_KEY')
         self.base_url = "https://api.x.ai/v1"
-        self.model = "grok-4-1-fast-reasoning"
+        self.model = self.MODELS['default']
         
         if not self.api_key:
             print("⚠️  XAI_API_KEY not found in environment")
@@ -26,6 +34,21 @@ class GrokAI:
         else:
             self.enabled = True
             print("✅ Grok AI initialized")
+    
+    def route_task(self, task_type: str, prompt: str, max_tokens: int = 500, **kwargs) -> Optional[str]:
+        """Route task to appropriate model based on task type
+        
+        Args:
+            task_type: 'reasoning' (design/specs), 'code' (scaffolding), 'quick' (edits)
+            prompt: The prompt to send
+            max_tokens: Max response length
+            **kwargs: Additional params (temperature, system_prompt, etc.)
+        
+        Returns:
+            Generated text or None on failure
+        """
+        model = self.MODELS.get(task_type, self.MODELS['default'])
+        return self.chat(prompt, max_tokens=max_tokens, model=model, **kwargs)
     
     def _make_api_request(self, data):
         """Make API request with retry logic and exponential backoff"""
@@ -142,8 +165,15 @@ class GrokAI:
         
         return text
     
-    def chat(self, prompt: str, system_prompt: str = None, max_tokens: int = 500) -> Optional[str]:
-        """General-purpose chat method for simple prompts"""
+    def chat(self, prompt: str, system_prompt: str = None, max_tokens: int = 500, model: str = None) -> Optional[str]:
+        """General-purpose chat method for simple prompts
+        
+        Args:
+            prompt: User prompt
+            system_prompt: Optional system instructions
+            max_tokens: Max response length
+            model: Override default model (e.g., 'grok-4-1-fast-non-reasoning' for cheaper skill generation)
+        """
         if not self.enabled:
             return None
         try:
@@ -377,6 +407,76 @@ Requirements:
                 
         except Exception as e:
             print(f"❌ Grok DM reply generation failed: {e}")
+            return None
+
+    def generate_image(self, prompt: str, model: str = "grok-imagine-image") -> Optional[Dict]:
+        """Generate an image using Grok's image model
+        
+        Args:
+            prompt: Text description of the image to generate
+            model: Image model to use (default "grok-imagine-image")
+        
+        Returns:
+            Dict with 'image_url', 'moderation_passed', 'model'
+            Cost: ~$0.02 per image (2 cents)
+        """
+        if not self.enabled:
+            return None
+        
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            # Use simpler API call matching x.ai SDK pattern
+            data = {
+                "model": model,
+                "prompt": prompt,
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/images/generations",
+                headers=headers,
+                json=data,
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                
+                # Check if we got valid image data
+                if 'data' in result and len(result['data']) > 0:
+                    image_data = result['data'][0]
+                    
+                    output = {
+                        'moderation_passed': image_data.get('respect_moderation', True),
+                        'model': result.get('model', 'grok-imagine-image'),
+                    }
+                    
+                    # Return URL directly (simpler, matches SDK example)
+                    if 'url' in image_data:
+                        output['image_url'] = image_data['url']
+                        output['image_data'] = image_data['url']  # Backward compat
+                        output['format'] = 'url'
+                    elif 'b64_json' in image_data:
+                        import base64
+                        output['image_data'] = base64.b64decode(image_data['b64_json'])
+                        output['format'] = 'base64_bytes'
+                    else:
+                        print(f"⚠️ Grok image: unexpected data format, keys: {list(image_data.keys())}")
+                        return None
+                    
+                    return output
+                    
+                print(f"⚠️ Grok image: no data in response, keys: {list(result.keys())}")
+                return None
+            else:
+                print(f"❌ Grok image generation failed: {response.status_code} - {response.text[:200]}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Grok image generation error: {e}")
             return None
 
 # Global instance

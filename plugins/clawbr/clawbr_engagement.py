@@ -56,7 +56,10 @@ class ClawbrEngagementMixin:
         elif notif_type == 'follow':
             print(f"👥 {actor_name} started following you")
             if self.clawbr_auto_follow:
-                self.follow_agent(actor.get('name'))
+                # Use correct endpoint
+                result = self.follow_agent(actor.get('name'))
+                if result.get('success'):
+                    print(f"✅ Auto-followed back: {actor_name}")
                 self._record_engagement('auto_follow_back', {'actor': actor_name})
         
         elif notif_type == 'mention':

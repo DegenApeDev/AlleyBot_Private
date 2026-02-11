@@ -63,6 +63,24 @@ Platform Stats:
         except Exception as e:
             return f"🦞 Error following @{username}: {str(e)}"
     
+    def clawbr_unfollow_command(self, *args) -> str:
+        """Unfollow a Clawbr user by @handle/username"""
+        if not args:
+            return "Usage: /clawbr_unfollow <username> (e.g., /clawbr_unfollow @neo)"
+
+        username = args[0].strip().lstrip('@')
+        if not username:
+            return "❌ Invalid username provided."
+
+        try:
+            result = self.unfollow_agent(username)
+            if result.get('success', False):
+                return f"✅ Successfully unfollowed @{username}!"
+            error_msg = result.get('error') or result.get('message') or 'Unknown error'
+            return f"❌ Failed to unfollow @{username}: {error_msg}"
+        except Exception as e:
+            return f"🦞 Error unfollowing @{username}: {str(e)}"
+    
     def clawbr_post_command(self, *args) -> str:
         """Create a post on Clawbr"""
         if not args:
@@ -103,6 +121,58 @@ Platform Stats:
         
         return '\n'.join(output)
 
+    def clawbr_following_feed_command(self, limit: int = 10) -> str:
+        """Show recent posts from agents you follow"""
+        feed = self.get_following_feed(limit=limit)
+        
+        if not feed.get('success', True):
+            return f"❌ Failed to get following feed: {feed.get('error', 'Unknown error')}"
+        
+        posts = feed.get('posts', [])
+        if not posts:
+            return "📭 No posts from followed agents"
+        
+        output = ["👥 **Clawbr Following Feed**\n"]
+        for post in posts[:5]:
+            author = post.get('authorDisplayName', 'Unknown')
+            content = post.get('content', '')[:100]
+            if len(post.get('content', '')) > 100:
+                content += "..."
+            likes = post.get('likeCount', 0)
+            replies = post.get('replyCount', 0)
+            
+            output.append(f"👤 {author}")
+            output.append(f"💬 {content}")
+            output.append(f"❤️ {likes} | 💭 {replies}\n")
+        
+        return '\n'.join(output)
+
+    def clawbr_mentions_command(self, limit: int = 10) -> str:
+        """Show posts that @mention you"""
+        feed = self.get_mentions_feed(limit=limit)
+        
+        if not feed.get('success', True):
+            return f"❌ Failed to get mentions: {feed.get('error', 'Unknown error')}"
+        
+        posts = feed.get('posts', [])
+        if not posts:
+            return "📭 No mentions found"
+        
+        output = ["📢 **Clawbr Mentions**\n"]
+        for post in posts[:5]:
+            author = post.get('authorDisplayName', 'Unknown')
+            content = post.get('content', '')[:100]
+            if len(post.get('content', '')) > 100:
+                content += "..."
+            likes = post.get('likeCount', 0)
+            replies = post.get('replyCount', 0)
+            
+            output.append(f"👤 {author} mentioned you")
+            output.append(f"💬 {content}")
+            output.append(f"❤️ {likes} | 💭 {replies}\n")
+        
+        return '\n'.join(output)
+
     def clawbr_debates_command(self) -> str:
         """Show debate hub and available debates"""
         hub = self.get_debates_hub()
@@ -113,41 +183,108 @@ Platform Stats:
         
         output = ["🎭 **Clawbr Debates**\n"]
         
-        if my_debates.get('success', True):
-            active = [d for d in my_debates.get('debates', []) if d.get('status') == 'active']
-            if active:
-                output.append("📍 **Your Active Debates:**")
-                for debate in active[:3]:
-                    topic = debate.get('topic', 'No topic')[:50]
-                    is_my_turn = "🔄 Your turn!" if debate.get('isMyTurn') else "⏳ Their turn"
-                    output.append(f"• {topic}... ({is_my_turn})")
-                output.append("")
+        # Handle different response structures
+        debates_list = []
+        if isinstance(my_debates, dict):
+            if my_debates.get('success', True):
+                # Clawbr API returns: {active: [], voting: [], completed: [], total: N}
+                active_debates = my_debates.get('active', [])
+                voting_debates = my_debates.get('voting', [])
+                pending_debates = my_debates.get('pending', [])
+                
+                # Combine all debates
+                debates_list = active_debates + voting_debates + pending_debates
+                
+                # Also check legacy structure just in case
+                if not debates_list and 'debates' in my_debates:
+                    debates_list = my_debates.get('debates', [])
+                if not debates_list and 'data' in my_debates:
+                    data = my_debates.get('data', [])
+                    if isinstance(data, list):
+                        debates_list = data
+                    elif isinstance(data, dict):
+                        debates_list = data.get('active', []) + data.get('voting', []) + data.get('pending', [])
         
+        if debates_list:
+            # Group by status
+            active = [d for d in debates_list if d.get('status') in ('active', 'open', 'in_progress', 'pending')]
+            waiting = [d for d in debates_list if d.get('isMyTurn') or d.get('is_my_turn')]
+            
+            output.append(f"� **Your Debates ({len(debates_list)} total):**")
+            
+            # Show debates waiting for your turn first
+            if waiting:
+                output.append(f"\n� **Waiting for your turn ({len(waiting)}):**")
+                for debate in waiting[:5]:
+                    topic = debate.get('topic', 'No topic')[:50]
+                    slug = debate.get('slug', 'unknown')
+                    status = debate.get('status', 'unknown')
+                    output.append(f"  • {topic}... ({slug}) [status: {status}]")
+            
+            # Show active debates
+            if active:
+                output.append(f"\n🎭 **Active debates ({len(active)}):**")
+                for debate in active[:5]:
+                    topic = debate.get('topic', 'No topic')[:50]
+                    slug = debate.get('slug', 'unknown')
+                    is_my_turn = "🔄 Your turn!" if (debate.get('isMyTurn') or debate.get('is_my_turn')) else "⏳ Their turn"
+                    output.append(f"  • {topic}... ({is_my_turn})")
+            
+            # If no active but have debates, show all statuses
+            if not active and debates_list:
+                output.append(f"\n� **All your debates:**")
+                for debate in debates_list[:5]:
+                    topic = debate.get('topic', 'No topic')[:50]
+                    status = debate.get('status', 'unknown')
+                    slug = debate.get('slug', 'unknown')
+                    output.append(f"  • {topic}... [status: {status}] ({slug})")
+            output.append("")
+        else:
+            output.append("📭 No debates found in your account\n")
+        
+        # Show open debates from hub
         open_debates = hub.get('openDebates', [])
+        if not open_debates and 'data' in hub:
+            open_debates = hub.get('data', {}).get('openDebates', [])
+            
         if open_debates:
-            output.append("🔓 **Open Debates:**")
+            output.append(f"🔓 **Open Debates ({len(open_debates)}):**")
             for debate in open_debates[:3]:
                 topic = debate.get('topic', 'No topic')[:50]
                 challenger = debate.get('challengerName', 'Unknown')
-                output.append(f"• {topic}... (by {challenger})")
+                output.append(f"  • {topic}... (by {challenger})")
         
-        if not open_debates and not my_debates.get('debates'):
-            output.append("📭 No active debates")
+        if not debates_list and not open_debates:
+            output.append("📭 No active debates found")
         
         return '\n'.join(output)
 
     def clawbr_create_debate_command(self, *args) -> str:
-        """Create a new debate"""
-        if len(args) < 2:
-            return "Usage: /clawbr_create_debate <topic> <opening_argument>"
+        """Create a new debate - accepts natural language or structured args"""
+        if not args:
+            return "Usage: /clawbr_create_debate <topic> <opening_argument> [category]\nOr: /clawbr_create_debate <natural language description>"
         
-        topic = args[0]
-        opening = ' '.join(args[1:])
+        full_input = ' '.join(args)
         
-        result = self.create_debate(topic, opening)
+        # Detect natural language vs structured args
+        # Natural language: longer than 15 chars, doesn't look like a short topic + argument
+        # Structured: first arg is short topic (<50 chars), remaining args exist
+        is_structured = len(args) >= 2 and len(args[0]) < 50 and len(args[0]) > 5
+        is_natural_language = not is_structured and len(full_input) > 15
+        
+        if is_natural_language:
+            # Use intelligent debate creation with Grok
+            result = self.create_intelligent_debate(full_input)
+        else:
+            # Use traditional structured args
+            topic = args[0]
+            opening = ' '.join(args[1:]) if len(args) > 1 else ""
+            result = self.create_debate(topic, opening)
+        
         if result.get('success', True):
-            debate_id = result.get('id', 'unknown')
-            return f"✅ Debate created: {debate_id}"
+            debate_id = result.get('id', result.get('slug', 'unknown'))
+            topic = result.get('topic', 'N/A')
+            return f"✅ Debate created: {debate_id}\nTopic: {topic}"
         return f"❌ Failed to create debate: {result.get('error', 'Unknown error')}"
 
     def clawbr_join_debate_command(self, *args) -> str:

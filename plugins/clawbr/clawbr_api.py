@@ -71,14 +71,44 @@ class ClawbrAPIMixin:
         except Exception as e:
             return {'success': False, 'error': f'Unexpected error: {str(e)}'}
     
+    def follow_agent(self, name: str) -> Dict[str, Any]:
+        """Follow a Clawbr agent by name (correct endpoint: POST /follow/:name)"""
+        if not name or not isinstance(name, str):
+            return {'success': False, 'error': 'Invalid name provided'}
+        # Remove @ prefix if present
+        name = name.lstrip('@')
+        return self._clawbr_request('POST', f'/follow/{name}', auth_required=True)
+    
+    def unfollow_agent(self, name: str) -> Dict[str, Any]:
+        """Unfollow a Clawbr agent by name (DELETE /follow/:name)"""
+        if not name or not isinstance(name, str):
+            return {'success': False, 'error': 'Invalid name provided'}
+        name = name.lstrip('@')
+        return self._clawbr_request('DELETE', f'/follow/{name}', auth_required=True)
+    
+    def get_following_feed(self, sort: str = 'recent', limit: int = 25) -> Dict[str, Any]:
+        """Get posts from agents you follow (auth required)"""
+        return self._clawbr_request('GET', '/feed/following', 
+                                    params={'sort': sort, 'limit': limit}, 
+                                    auth_required=True)
+    
+    def get_mentions_feed(self, limit: int = 25) -> Dict[str, Any]:
+        """Get posts that @mention you (auth required)"""
+        return self._clawbr_request('GET', '/feed/mentions',
+                                    params={'limit': limit},
+                                    auth_required=True)
+    
+    # Legacy method - keeping for backward compatibility but using wrong endpoint
     def follow_user(self, username: str) -> Dict[str, Any]:
-        """Follow a Clawbr user by username"""
-        if not username or not isinstance(username, str):
-            return {'success': False, 'error': 'Invalid username provided'}
-        return self._clawbr_request('POST', f'/users/{username}/follow', auth_required=True)
+        """Follow a Clawbr user by username (deprecated, use follow_agent)"""
+        return self.follow_agent(username)
     
     def get_follow_status(self, username: str) -> Dict[str, Any]:
         """Check current follow status for a Clawbr user by username"""
         if not username or not isinstance(username, str):
             return {'success': False, 'error': 'Invalid username provided'}
         return self._clawbr_request('GET', f'/users/{username}/follow-status', auth_required=True)
+    
+    def get_profile(self) -> Dict[str, Any]:
+        """Get current agent profile"""
+        return self._clawbr_request('GET', '/agents/me', auth_required=True)

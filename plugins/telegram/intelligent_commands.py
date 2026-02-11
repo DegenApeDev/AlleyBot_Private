@@ -759,6 +759,78 @@ Generate only the title (no explanations):"""
             await update.message.reply_text(f"❌ Error: {e}")
 
     # =================================================================
+    # Image Generation Commands
+    # =================================================================
+
+    async def generate_image(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Generate AI image using Grok. Usage: /generate_image [prompt] or natural language"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            # Get prompt from command args or message text
+            if context.args:
+                prompt = ' '.join(context.args)
+            else:
+                # Try to extract from natural language
+                text = update.message.text
+                # Look for patterns like "generate an image of", "create an image", "make an image"
+                import re
+                patterns = [
+                    r'(?:generate|create|make)\s+(?:an\s+)?image\s+(?:of|with|showing)?\s*(.+)',
+                    r'(?:draw|paint|render)\s+(?:an\s+)?(?:image\s+)?(?:of\s+)?(.+)',
+                    r'(?:give\s+me|show\s+me)\s+(?:an\s+)?image\s+(?:of\s+)?(.+)',
+                ]
+                prompt = None
+                for pattern in patterns:
+                    match = re.search(pattern, text, re.IGNORECASE)
+                    if match:
+                        prompt = match.group(1).strip()
+                        break
+                
+                if not prompt:
+                    await update.message.reply_text(
+                        "🎨 **Image Generation**\n\n"
+                        "Usage: `/generate_image [description]`\n\n"
+                        "Examples:\n"
+                        "• `/generate_image a cyberpunk AI agent coding`\n"
+                        "• `/generate_image a futuristic lobster in space`\n\n"
+                        "Or say naturally:\n"
+                        "• \"Generate an image of a cyberpunk city\"\n"
+                        "• \"Create an image showing a robot at sunset\""
+                    )
+                    return
+            
+            # Send status message
+            status_msg = await update.message.reply_text(f"🎨 Generating image...\n📝 Prompt: {prompt[:100]}...")
+            
+            # Import and use Grok AI
+            from grok_ai import grok_ai
+            
+            if not grok_ai.enabled:
+                await status_msg.edit_text("❌ Grok AI not enabled. Check GROK_API_KEY in .env")
+                return
+            
+            # Generate image
+            result = await self._run_sync(grok_ai.generate_image, prompt)
+            
+            if result and result.get('image_url'):
+                # Send the image using URL (much simpler and reliable)
+                await update.message.reply_photo(
+                    photo=result['image_url'],
+                    caption=f"🎨 **Generated Image**\n📝 Prompt: {prompt}\n✅ Moderation passed: {result.get('moderation_passed', True)}"
+                )
+                
+                # Delete status message
+                await status_msg.delete()
+            else:
+                await status_msg.edit_text(f"❌ Image generation failed. Result: {result}")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error generating image: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # =================================================================
     # Feedback Loop Commands
     # =================================================================
 
@@ -1401,6 +1473,9 @@ Or just send any message naturally!
 /calendar - Content calendar status
 /conversations - Active conversation threads
 /personality [platform] - Show/set personality
+
+**🎨 Image Generation:**
+/generate_image [prompt] - Generate AI image with Grok
 
 **📊 Feedback Loop:**
 /insights - Content performance insights

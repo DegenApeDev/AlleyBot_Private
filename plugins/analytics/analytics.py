@@ -29,6 +29,8 @@ class AnalyticsPlugin(AlleyBotPlugin):
         self.aggregator = PlatformStatsAggregator(core)
         self.agent_card = AgentCardGenerator(core)
         self._setup_dashboard()
+        # Start agent card auto-updater (updates every 24 hours)
+        self.agent_card.schedule_auto_update(interval_hours=24)
         print("📊 Analytics system initialized")
     
     def get_tasks(self):
@@ -48,7 +50,10 @@ class AnalyticsPlugin(AlleyBotPlugin):
             'stats': self.show_stats,
             'metrics': self.show_metrics,
             'analytics': self.analytics_status,
-            'wallets': self.show_wallets
+            'wallets': self.show_wallets,
+            'agentcard': self.agentcard_status_command,
+            'agentcard_update': self.agentcard_update_command,
+            'agentcard_dryrun': self.agentcard_dryrun_command,
         }
     
     def get_endpoints(self):
@@ -181,8 +186,51 @@ class AnalyticsPlugin(AlleyBotPlugin):
             pass
         return data
 
+    def _get_skills_stats(self):
+        """Collect Phase 14 Agent Skills Framework stats"""
+        data = {'skills_loaded': 0, 'skills_active': 0, 'total_executions': 0,
+                'top_skills': [], 'unused_skills': [], 'enabled': False}
+        try:
+            skills = self.core.plugin_manager.plugins.get('skills')
+            if skills:
+                data['enabled'] = True
+                data['skills_loaded'] = len(getattr(skills, 'skill_index', {}))
+                data['skills_active'] = len(getattr(skills, 'active_skills', {}))
+                
+                # Get performance stats if available
+                if hasattr(skills, 'usage_stats'):
+                    data['total_executions'] = sum(
+                        s.get('executions', 0) for s in skills.usage_stats.values()
+                    )
+                    # Get top skills
+                    top = skills.get_top_skills(days=7, limit=3) if hasattr(skills, 'get_top_skills') else []
+                    data['top_skills'] = [s['name'] for s in top]
+                    # Get unused skills
+                    unused = skills.get_unused_skills(days=7) if hasattr(skills, 'get_unused_skills') else []
+                    data['unused_skills'] = unused[:3]
+        except Exception:
+            pass
+        return data
+
+    def _get_clawbr_stats(self):
+        """Collect Clawbr AI Social Network stats"""
+        data = {'posts': 0, 'debates_joined': 0, 'debates_created': 0,
+                'elo_score': 0, 'followers': 0, 'enabled': False}
+        try:
+            clawbr = self.core.plugin_manager.plugins.get('clawbr')
+            if clawbr:
+                data['enabled'] = True
+                data['posts'] = getattr(clawbr, 'total_posts', 0)
+                data['debates_joined'] = getattr(clawbr, 'debates_joined', 0)
+                data['debates_created'] = getattr(clawbr, 'debates_created', 0)
+                data['elo_score'] = getattr(clawbr, 'elo_score', 0)
+                data['followers'] = getattr(clawbr, 'follower_count', 0)
+        except Exception:
+            pass
+        return data
+
     def _get_activity_chart_data(self):
-        """Build real 7-day activity data from brain action history"""
+        """Build real 7-day activity data from posts across all platforms"""
         from datetime import datetime, timedelta
         days = []
         counts = []
@@ -193,7 +241,29 @@ class AnalyticsPlugin(AlleyBotPlugin):
             day_map[d.isoformat()] = 0
             days.append(d.strftime('%a'))
 
-        # Source 1: brain action history
+        # Source 1: Platform-specific post memories (most accurate)
+        post_memories = [
+            'moltbook_recent_posts',
+            'moltx_recent_posts', 
+            'moltchan_recent_posts',
+            'moltroad_recent_posts',
+            'clawbr_recent_debates',
+            'clawbr_recent_posts'
+        ]
+        
+        for memory_key in post_memories:
+            try:
+                posts = self.core.get_memory(memory_key) or []
+                for p in posts:
+                    ts = p.get('timestamp', '') or p.get('created_at', '')
+                    if ts:
+                        d = ts[:10]  # YYYY-MM-DD
+                        if d in day_map:
+                            day_map[d] += 1
+            except Exception as e:
+                print(f"[DASHBOARD-DEBUG] Error reading {memory_key}: {e}")
+
+        # Source 2: brain action history (as backup for actions taken)
         try:
             brain = self.core.plugin_manager.plugins.get('brain')
             history = []
@@ -201,19 +271,22 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 history = brain.action_history
             if not history:
                 history = self.core.get_memory('brain_action_history') or []
+            
             for entry in history:
                 ts = entry.get('timestamp', '')
                 if ts:
-                    try:
-                        d = ts[:10]  # YYYY-MM-DD
-                        if d in day_map:
+                    d = ts[:10]  # YYYY-MM-DD
+                    if d in day_map:
+                        # Only count successful post actions, not all actions
+                        action = entry.get('action', '')
+                        success = entry.get('success', False)
+                        if success and ('post' in action or 'engage' in action):
                             day_map[d] += 1
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[DASHBOARD-DEBUG] Error reading brain action history: {e}")
 
         counts = list(day_map.values())
+        print(f"[DASHBOARD-DEBUG] 7-day activity: {days} -> {counts}")
         return days, counts
 
     def _get_posts_today(self):
@@ -303,6 +376,8 @@ class AnalyticsPlugin(AlleyBotPlugin):
             onchain_data = self._get_onchain_stats()
             a2a_data = self._get_a2a_stats()
             selfimprove_data = self._get_selfimprove_stats()
+            skills_data = self._get_skills_stats()
+            clawbr_data = self._get_clawbr_stats()
             
             # Recent activity feed
             recent_activity = self._get_recent_activity(platform_stats)
@@ -364,6 +439,10 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 a2a=a2a_data,
                 # Self-improvement stats
                 selfimprove=selfimprove_data,
+                # Phase 14 Skills Framework
+                skills=skills_data,
+                # Clawbr AI Social Network
+                clawbr=clawbr_data,
                 # Activity data
                 recent_activity=recent_activity,
                 chart_labels=chart_labels,
@@ -726,4 +805,44 @@ class AnalyticsPlugin(AlleyBotPlugin):
     def cleanup(self):
         """Cleanup analytics systems"""
         pass
+
+    # Agent Card Commands
+    def agentcard_status_command(self, *args) -> str:
+        """Show current agent card status"""
+        try:
+            status = self.agent_card.get_agent_card_status()
+            
+            output = f"🆔 ERC-8004 Agent Card Status\n\n"
+            output += f"Agent ID: {status['agent_id']}\n"
+            output += f"Name: {status['name']}\n"
+            output += f"Version: {status['version']}\n"
+            output += f"Skills (OASF): {status['skills_count']}\n"
+            output += f"Capabilities: {status['capabilities_count']}\n"
+            output += f"Plugins Loaded: {status['plugins_loaded']}\n"
+            output += f"Platforms: {', '.join(status['platforms'])}\n"
+            output += f"Wallet: {status['wallet'][:20]}...\n"
+            output += f"Last Updated: {status['last_updated'][:19] if status['last_updated'] else 'Never'}\n\n"
+            output += f"🔗 8004scan.io: {status['registry_url']}\n"
+            output += f"🔗 Agent Card JSON: http://localhost:{self.dashboard_port}/.well-known/agent-card.json\n"
+            
+            return output
+        except Exception as e:
+            return f"❌ Failed to get agent card status: {e}"
+
+    def agentcard_update_command(self, *args) -> str:
+        """Update agent card on-chain at 8004scan.io"""
+        try:
+            print("🔄 Starting on-chain agent card update...")
+            result = self.agent_card.update_onchain(dry_run=False)
+            return result
+        except Exception as e:
+            return f"❌ Failed to update agent card: {e}"
+
+    def agentcard_dryrun_command(self, *args) -> str:
+        """Preview agent card update without sending to chain"""
+        try:
+            result = self.agent_card.update_onchain(dry_run=True)
+            return result
+        except Exception as e:
+            return f"❌ Dry run failed: {e}"
 

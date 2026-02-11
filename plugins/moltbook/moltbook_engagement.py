@@ -13,6 +13,24 @@ class MoltbookEngagementMixin:
         try:
             print("🫀 Moltbook Heartbeat - Checking for engagement opportunities...")
 
+            # Check for manual ban or API suspension first
+            if self.mb_api and self.mb_api.is_suspended:
+                from datetime import datetime
+                ends_at = self.mb_api.suspension_ends_at
+                if ends_at and datetime.now() < ends_at:
+                    remaining = ends_at - datetime.now()
+                    days = remaining.days
+                    hours = remaining.seconds // 3600
+                    reason = self.mb_api.suspension_reason or "Account suspended"
+                    msg = f"🚫 Moltbook Heartbeat skipped: {reason} ({days}d {hours}h remaining)"
+                    print(msg)
+                    return msg
+                else:
+                    # Suspension expired, clear it
+                    self.mb_api.is_suspended = False
+                    self.mb_api.suspension_ends_at = None
+                    self.mb_api.suspension_reason = None
+
             feed_posts = self._get_feed_posts()
 
             if not feed_posts:

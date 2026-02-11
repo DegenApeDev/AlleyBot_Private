@@ -78,39 +78,93 @@
 - [x] Uptime monitoring and crash recovery
 
 ## 🚀 Phase 10: Differentiate from OpenClaw
-- [ ] On-chain actions — tip users, interact with contracts, not just monitor
-- [ ] Multi-agent collaboration — detect and interact with other AI agents
-- [ ] Reputation system — track and optimize reputation score across platforms
+- [x] On-chain actions — tip users, interact with contracts, not just monitor
+- [x] Multi-agent collaboration — detect and interact with other AI agents
+- [x] Reputation system — track and optimize reputation score across platforms
 - [x] Agent-to-agent messaging — A2A plugin with task server (port 7002)
 
 ## 🦞 Phase 11: Clawbr Deep Integration
-- [ ] Debate performance analytics — track win/loss rate, ELO progression
-- [ ] Opponent analysis — learn debate styles of frequent opponents
-- [ ] Strategic debate selection — choose debates based on win probability
-- [ ] Multi-debate management — participate in 3-5 debates simultaneously without losing track
-- [ ] Debate reminder system — notify when it's turn to reply (Telegram + autonomous check)
+- [x] Debate performance analytics — track win/loss rate, ELO progression
+- [x] Opponent analysis — learn debate styles of frequent opponents
+- [x] Strategic debate selection — choose debates based on win probability
+- [x] Multi-debate management — participate in 3-5 debates simultaneously without losing track
+- [x] Debate reminder system — notify when it's turn to reply (Telegram + autonomous check)
 
 ## 🧠 Phase 12: Memory & Learning
-- [ ] Long-term pattern learning — which topics get most engagement over weeks
-- [ ] User relationship tracking — remember individual user preferences/history
-- [ ] Content performance database — persistent storage of post metrics
-- [ ] Cross-session goal persistence — maintain goals across restarts
-- [ ] Semantic memory pruning — auto-cleanup old low-value memories
+- [x] Long-term pattern learning — which topics get most engagement over weeks
+- [x] User relationship tracking — remember individual user preferences/history
+- [x] Content performance database — persistent storage of post metrics
+- [x] Cross-session goal persistence — maintain goals across restarts
+- [x] Semantic memory pruning — auto-cleanup old low-value memories
+
+**Implementation:**
+- `src/agentic/phase12_learning.py` - Content performance tracking, user relationships, learning patterns
+- `src/agentic/phase12_pruning.py` - Advanced memory pruning with configurable policies
+- `src/agentic/phase12_integration.py` - Integration mixin for agentic system
+- `src/agentic/phase12_commands.py` - CLI commands: /memory_prune, /content_strategy, /community, etc.
 
 ## ⚡ Phase 13: Advanced Automation
-- [ ] Smart scheduling — post when engagement is highest per platform
-- [ ] Trend prediction — anticipate trending topics before they peak
-- [ ] Automated A/B testing — try different content styles and measure
-- [ ] Competitor monitoring — track what similar agents post
-- [ ] Crisis detection — pause posting if platform issues or controversies detected
+- [x] Smart scheduling — post when engagement is highest per platform
+- [x] Trend prediction — anticipate trending topics before they peak
+- [x] Automated A/B testing — try different content styles and measure
+- [x] Competitor monitoring — track what similar agents post
+- [x] Crisis detection — pause posting if platform issues or controversies detected
 
-## 🔌 Phase 14: Platform Expansion
-- [ ] Systemd service for auto-restart on VPS
-- [ ] Discord bot integration
-- [ ] Slack bot for team coordination
-- [ ] Email/newsletter automation
-- [ ] RSS feed monitoring and response
-- [ ] Webhook API for external triggers
+**Implementation:**
+- `src/agentic/phase13_scheduling.py` - Smart scheduling with optimal time prediction
+- `src/agentic/phase13_trends.py` - Trend prediction with multi-signal analysis
+- `src/agentic/phase13_ab_testing.py` - A/B testing with variant performance tracking
+- `src/agentic/phase13_competitors.py` - Competitor tracking and benchmarking
+- `src/agentic/phase13_crisis.py` - Crisis detection with auto-pause capability
+- `src/agentic/phase13_integration.py` - Integration mixin for all systems
+- `src/agentic/phase13_commands.py` - CLI commands for automation features
+
+## 🔌 Phase 14: Agent Skills Framework Expansion
+- [x] Agent Skills discovery engine — scan skills/ directory for SKILL.md files
+- [x] Lazy loading system — load only name/description at startup, full skill on activation
+- [x] Skill context injection — inject SKILL.md into AI prompt when task matches description
+- [x] Skill execution engine — follow instructions, execute bundled scripts, load references
+- [x] Auto-skill generation — AlleyBot creates new SKILL.md for discovered capabilities
+- [x] Skill marketplace integration — publish/import skills from agentskills.io format (stub)
+- [x] Skill validation and linting — validate SKILL.md against specification
+- [x] Skill templating system — templates for common skill patterns (API, analysis, content)
+- [x] OASF skill bridge — map OASF categories to Agent Skills discovery
+- [x] Skill performance tracking — track which skills are used most, optimize descriptions
+
+**Implementation:**
+- `plugins/skills/skill_discovery.py` — scan and index all SKILL.md files 
+- `plugins/skills/skill_templates.py` — templates for common skill patterns 
+- `plugins/skills/skill_marketplace.py` — import/export in agentskills.io format 
+- `plugins/skills/skills.py` — main plugin composing all mixins 
+- `skills/` directory — store all skills in Agent Skills format 
+- Example: `skills/social-engagement/SKILL.md`, `skills/blockchain-analysis/SKILL.md` 
+
+**References:**
+- [Agent Skills Specification](https://agentskills.io/specification)
+- [Agent Skills Integration](https://agentskills.io/integrate-skills)
+- [Example Skills](https://github.com/anthropics/skills)
+
+## 🔐 Phase 15: Vault-Based Security Migration
+- [ ] Move from .env files to secure vault-based secret management
+- [ ] Implement HashiCorp Vault integration (or local vault alternative)
+- [ ] Create secret rotation mechanism for API keys
+- [ ] Add audit logging for secret access
+- [ ] Implement short-lived credentials where possible
+- [ ] Create backup/recovery procedures for vault
+- [ ] Update all plugins to use vault instead of os.getenv()
+- [ ] Add vault health monitoring and alerts
+
+**Implementation:**
+- `src/security/vault_client.py` — vault connection and secret retrieval
+- `src/security/secret_manager.py` — abstraction layer for secret operations
+- `scripts/migrate_secrets.py` — migration tool from .env to vault
+- Update all `os.getenv()` calls to use vault client
+- Add vault unseal/initialization scripts
+
+**References:**
+- [HashiCorp Vault](https://www.vaultproject.io/)
+- [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/) (alternative)
+- [Azure Key Vault](https://azure.microsoft.com/services/key-vault/) (alternative)
 
 ## 📝 Recent Completed Items
 - [x] Clawbr auto-follow debate opponents on create/join

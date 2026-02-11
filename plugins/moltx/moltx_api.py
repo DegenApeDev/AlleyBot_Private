@@ -12,6 +12,10 @@ from pathlib import Path
 class MoltxAPIMixin:
     """Mixin providing core Moltx API client functionality"""
 
+    def __init__(self, *args, **kwargs):
+        """Initialize mixin - accepts any args/kwargs for cooperative inheritance"""
+        super().__init__(*args, **kwargs)
+
     def _init_api(self, api_key):
         """Initialize API-related attributes"""
         self.base_url = "https://moltx.io/v1"

@@ -15,6 +15,13 @@ class SecurityFilter:
         self.sensitive_values = set()
         self.sensitive_env_names = set()
         
+        # Import tx_registry
+        try:
+            from tx_registry import tx_registry
+            self.tx_registry = tx_registry
+        except ImportError:
+            self.tx_registry = None
+        
         # Auto-detect ALL secret env vars from known key names
         secret_env_keys = [
             'MOLTBOOK_API_KEY', 'MOLTCHAN_API_KEY', 'MOLTROAD_API_KEY',
@@ -42,7 +49,7 @@ class SecurityFilter:
         
         # Patterns to detect and block
         self.sensitive_patterns = [
-            # API key patterns
+            # API key patterns (specific prefixes)
             r'sk-[a-zA-Z0-9]{20,}',  # OpenAI/DeepSeek style keys
             r'xai-[a-zA-Z0-9]{20,}',  # XAI keys
             r'moltbook_sk_[a-zA-Z0-9_]+',  # Moltbook keys
@@ -52,11 +59,13 @@ class SecurityFilter:
             r'bk_[A-Z0-9]{20,}',  # Bankr keys
             r'clawchan_[a-f0-9]{20,}',  # 4claw keys
             r'8004_[a-zA-Z0-9_]{20,}',  # 8004scan keys
-            r'[a-f0-9]{64}',  # Generic 64-char hex (API keys, private keys)
+            # NOTE: Removed generic r'[a-f0-9]{64}' - too broad, catches tx hashes
             
-            # Private key patterns
-            r'0x[a-fA-F0-9]{64}',  # Ethereum private keys
-            r'-----BEGIN.*PRIVATE KEY-----',  # PEM private keys
+            # Private key patterns (distinguish from tx hashes by context)
+            r'0x[a-fA-F0-9]{64}(?![a-fA-F0-9])',  # Ethereum private keys, not followed by more hex
+            
+            # PEM private keys
+            r'-----BEGIN.*PRIVATE KEY-----',
             
             # Telegram bot token pattern
             r'\d{9,10}:[A-Za-z0-9_-]{35}',  # Telegram bot tokens
@@ -74,6 +83,31 @@ class SecurityFilter:
         
         # Compile patterns
         self.compiled_patterns = [re.compile(p, re.IGNORECASE) for p in self.sensitive_patterns]
+    
+    def _is_likely_tx_hash(self, match_str: str) -> bool:
+        """Check if a string is likely a transaction hash (safe) vs private key (secret)"""
+        # If it's in our registry, it's definitely safe
+        if self.tx_registry and self.tx_registry.is_known(match_str):
+            return True
+        
+        # Transaction hashes are typically:
+        # - 64 hex chars (with or without 0x prefix)
+        # - Not starting with patterns that indicate API keys
+        
+        # If it has a known API key prefix, it's NOT a tx hash
+        api_key_prefixes = ['sk-', 'xai-', 'moltbook_sk_', 'moltchan_sk_', 'moltx_sk_', 
+                           'moltroad_sk_', 'bk_', 'clawchan_', '8004_']
+        for prefix in api_key_prefixes:
+            if match_str.lower().startswith(prefix):
+                return False
+        
+        # If it's 64 hex chars, check if it could be a tx hash
+        hex_pattern = re.compile(r'^(0x)?[a-fA-F0-9]{64}$')
+        if hex_pattern.match(match_str):
+            # Additional check: if surrounded by tx-related words, it's likely a tx hash
+            return True
+        
+        return False
     
     def filter_message(self, message):
         """
@@ -94,8 +128,15 @@ class SecurityFilter:
         
         # Check for pattern matches
         for pattern in self.compiled_patterns:
-            if pattern.search(message):
-                message = pattern.sub('[REDACTED]', message)
+            for match in pattern.finditer(message):
+                match_str = match.group()
+                
+                # Check if this is actually a known transaction hash
+                if self._is_likely_tx_hash(match_str):
+                    continue  # Skip redaction for known/safe tx hashes
+                
+                # Otherwise redact it
+                message = message.replace(match_str, '[REDACTED]', 1)
                 was_filtered = True
         
         # If message was filtered, log it (but don't expose what was filtered)
