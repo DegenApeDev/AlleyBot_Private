@@ -231,11 +231,21 @@ class ConversationalAI:
     async def _fallback_response(self, message: str) -> str:
         """
         Intelligent response using Grok reasoning + tool dispatch.
-        Understands natural language requests and can execute AlleyBot commands.
-        Falls back to DeepSeek if Grok is unavailable.
-        Includes conversation history for better context.
+        Includes self-image awareness when asked about appearance.
         """
         try:
+            # Check if user is asking about AlleyBot's appearance/looks
+            is_appearance_question = any(phrase in message.lower() for phrase in [
+                'what do you look like', 'what do you look', 'how do you look',
+                'describe yourself', 'your appearance', 'what are you'
+            ])
+            
+            if is_appearance_question:
+                # Try to load stored self-image
+                self_image = self._get_self_image_description()
+                if self_image:
+                    return f"🦞 **This is me:**\n\n{self_image}\n\n_(Based on my stored self-image)_"
+            
             # Build tool-aware system prompt
             system_prompt = self._build_tool_aware_prompt()
 
@@ -350,14 +360,14 @@ class ConversationalAI:
 
 ---
 
-CURRENT CONTEXT: You are managing social media on MoltX, MoltBook, MoltChan, MoltRoad, and Clawbr (AI debate network). You have on-chain awareness on Base network and can self-improve.
+CURRENT CONTEXT: You are AlleyBot, an AI agent with a unique appearance stored from photos shared by your owner. When asked about your appearance, you should reference your stored self-image description, not default to being a crab or lobster.
 
 Your owner (DegenApeDev) is chatting with you via Telegram. You should:
 1. UNDERSTAND what they want — use reasoning to figure out the intent
 2. If they want you to DO something, tell them what you'll do and include the command in your response using this format: [EXECUTE:command_name arg1 arg2]
 3. If they're asking a question, answer it thoughtfully using your knowledge
 4. If they ask you to build/develop a new skill or feature, use [EXECUTE:improve_self_update <description>]
-5. Be concise, helpful, and show personality 🦞
+5. Be concise, helpful, and show personality
 
 AVAILABLE COMMANDS:
 {tools_text}
@@ -373,6 +383,37 @@ IMPORTANT RULES:
 - If the user asks something conversational, just respond naturally — no need to execute anything
 - Always reason about what the user wants before responding
 - If you're unsure, ask for clarification rather than guessing"""
+
+    def _get_self_image_description(self) -> Optional[str]:
+        """Load self-image description from memory or file"""
+        try:
+            # Try core memory first
+            if self.core and hasattr(self.core, 'get_memory'):
+                try:
+                    self_image = self.core.get_memory('alleybot_self_image')
+                    if self_image and isinstance(self_image, dict):
+                        return self_image.get('description', '')
+                except Exception as e:
+                    print(f"⚠️ Core memory read failed: {e}")
+            
+            # Fallback: read from file
+            import json
+            import os
+            file_path = 'data/alleybot_self_image.json'
+            if os.path.exists(file_path):
+                try:
+                    with open(file_path, 'r') as f:
+                        self_image = json.load(f)
+                    if isinstance(self_image, dict):
+                        return self_image.get('description', '')
+                except Exception as e:
+                    print(f"⚠️ File read failed: {e}")
+            
+            return None
+            
+        except Exception as e:
+            print(f"⚠️ Failed to get self-image: {e}")
+            return None
 
     def _try_execute_command(self, ai_response: str) -> Optional[str]:
         """Check if the AI response contains a command to execute, and run it"""
