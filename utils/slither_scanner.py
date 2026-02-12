@@ -197,9 +197,10 @@ class SlitherScanner:
                 }
     
     def _bytecode_fallback_scan(self, address: str, chain: str) -> Dict:
-        """Fallback scan when source code not available"""
+        """Fallback scan when source code not available - improved opcode detection"""
         try:
             from web3 import Web3
+            import re
             
             # Connect to appropriate RPC
             if chain.lower() == 'base':
@@ -219,29 +220,103 @@ class SlitherScanner:
                     'scan_type': 'bytecode_fallback',
                 }
             
-            # Basic bytecode analysis
+            # Basic bytecode analysis with proper opcode detection
             findings = []
             severity_counts = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
             
             code_hex = code.hex()
             
-            # Check for selfdestruct
-            if 'ff' in code_hex:  # SELFDESTRUCT opcode
+            # Convert to bytes for proper analysis
+            code_bytes = bytes.fromhex(code_hex)
+            
+            # Look for SELFDESTRUCT opcode (0xff) - check it's actually an opcode, not data
+            # Pattern: 0xff preceded by valid push or standalone (not in PUSH data)
+            selfdestruct_positions = []
+            i = 0
+            while i < len(code_bytes):
+                byte = code_bytes[i]
+                if byte == 0xff:
+                    # Check if preceded by valid opcode that could lead to SELFDESTRUCT
+                    # This is a heuristic - proper disassembly would be better
+                    selfdestruct_positions.append(i)
+                    i += 1
+                elif 0x60 <= byte <= 0x7f:  # PUSH1-PUSH32
+                    # Skip PUSH data
+                    push_size = byte - 0x60 + 1
+                    i += push_size + 1
+                else:
+                    i += 1
+            
+            # Check for DELEGATECALL opcode (0xf4) with same logic
+            delegatecall_positions = []
+            i = 0
+            while i < len(code_bytes):
+                byte = code_bytes[i]
+                if byte == 0xf4:
+                    delegatecall_positions.append(i)
+                    i += 1
+                elif 0x60 <= byte <= 0x7f:  # PUSH1-PUSH32
+                    push_size = byte - 0x60 + 1
+                    i += push_size + 1
+                else:
+                    i += 1
+            
+            # Additional checks - look for proxy patterns
+            # EIP-1167 minimal proxy: 363d3d373d3d3d363d73...5af43d82803e903d91602b57fd5bf3
+            eip1167_pattern = b'\x36\x3d\x3d\x37\x3d\x3d\x3d\x36\x3d\x73'
+            is_eip1167_proxy = eip1167_pattern in code_bytes
+            
+            # OpenZeppelin proxy pattern detection
+            oz_proxy_pattern = b'\x36\x82\x80\x37\x90\x3d\x91\x60'
+            is_oz_proxy = oz_proxy_pattern in code_bytes
+            
+            # Report findings with more context
+            if is_eip1167_proxy:
+                findings.append({
+                    'severity': 'low',
+                    'title': 'EIP-1167 Minimal Proxy detected',
+                    'description': 'Contract is a minimal proxy (clone) pattern - delegates calls to implementation'
+                })
+                severity_counts['low'] += 1
+            elif is_oz_proxy:
+                findings.append({
+                    'severity': 'low',
+                    'title': 'OpenZeppelin proxy pattern detected',
+                    'description': 'Contract uses OpenZeppelin upgradeable proxy pattern'
+                })
+                severity_counts['low'] += 1
+            
+            # Only report SELFDESTRUCT if it appears in execution flow (not in push data)
+            # Heuristic: if SELFDESTRUCT appears multiple times, likely real
+            if len(selfdestruct_positions) >= 2:
                 findings.append({
                     'severity': 'medium',
                     'title': 'Self-destruct capability detected',
-                    'description': 'Contract contains SELFDESTRUCT opcode - can be destroyed'
+                    'description': f'Contract contains SELFDESTRUCT opcode ({len(selfdestruct_positions)} occurrences) - can be destroyed by authorized party'
                 })
                 severity_counts['medium'] += 1
             
-            # Check for delegatecall
-            if 'f4' in code_hex:  # DELEGATECALL opcode
+            # Only report DELEGATECALL if it appears multiple times (proxy pattern)
+            if len(delegatecall_positions) >= 2:
                 findings.append({
-                    'severity': 'high',
-                    'title': 'Delegatecall detected',
-                    'description': 'Contract uses DELEGATECALL - potential proxy pattern or vulnerability'
+                    'severity': 'high' if not (is_eip1167_proxy or is_oz_proxy) else 'medium',
+                    'title': 'DELEGATECALL detected',
+                    'description': f'Contract uses DELEGATECALL ({len(delegatecall_positions)} occurrences) - could be proxy pattern or potential vulnerability'
                 })
-                severity_counts['high'] += 1
+                if not (is_eip1167_proxy or is_oz_proxy):
+                    severity_counts['high'] += 1
+                else:
+                    severity_counts['medium'] += 1
+            
+            # Contract size check
+            contract_size_kb = len(code_bytes) / 1024
+            if contract_size_kb > 24:  # Close to 24KB limit
+                findings.append({
+                    'severity': 'low',
+                    'title': 'Large contract size',
+                    'description': f'Contract is {contract_size_kb:.1f}KB - approaching 24KB limit'
+                })
+                severity_counts['low'] += 1
             
             # Risk scoring
             risk_score = 'low'
@@ -259,7 +334,8 @@ class SlitherScanner:
                 'risk_score': risk_score,
                 'total_findings': len(findings),
                 'scan_type': 'bytecode_fallback',
-                'note': 'Contract source code not verified on explorer - limited analysis',
+                'contract_size_kb': round(contract_size_kb, 2),
+                'note': 'Contract source code not verified on explorer - limited analysis. For full Slither analysis, verify contract on block explorer.',
                 'slither_available': True,
             }
             
