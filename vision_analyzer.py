@@ -15,9 +15,9 @@ class CheapVisionAnalyzer:
     
     # Free HuggingFace vision models (via inference API)
     HF_MODELS = {
-        'caption': 'Salesforce/blip-image-captioning-base',  # Good for descriptions
-        'detailed': 'nlpconnect/vit-gpt2-image-captioning',   # More detailed captions
-        'fast': 'Salesforce/blip-image-captioning-base',     # Fastest
+        'caption': 'nlpconnect/vit-gpt2-image-captioning',  # Working free model
+        'detailed': 'nlpconnect/vit-gpt2-image-captioning',
+        'fast': 'nlpconnect/vit-gpt2-image-captioning',
     }
     
     def __init__(self):
