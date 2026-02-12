@@ -158,11 +158,15 @@ class CheapVisionAnalyzer:
             ext = os.path.splitext(image_path)[1].lower()
             mime_type = 'image/jpeg' if ext in ['.jpg', '.jpeg'] else 'image/png' if ext == '.png' else 'image/webp'
             
-            # Gemini API endpoint
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.gemini_key}"
+            # Gemini API endpoint (correct format for gemini-1.5-flash)
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+            
+            # Add API key as query param
+            params = {"key": self.gemini_key}
             
             payload = {
                 "contents": [{
+                    "role": "user",
                     "parts": [
                         {"text": prompt},
                         {
@@ -179,7 +183,7 @@ class CheapVisionAnalyzer:
                 }
             }
             
-            response = requests.post(url, json=payload, timeout=30)
+            response = requests.post(url, params=params, json=payload, timeout=30)
             
             if response.status_code == 200:
                 data = response.json()
