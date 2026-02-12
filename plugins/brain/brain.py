@@ -28,11 +28,12 @@ from plugins.brain.dynamic_skills import DynamicSkillsMixin
 from plugins.brain.operational_resilience import OperationalResilienceMixin
 from plugins.brain.multi_agent import MultiAgentCollaborationMixin
 from plugins.brain.reputation import ReputationSystemMixin
+from plugins.brain.moltnews_integration import MoltNewsIntegrationMixin
 
 
 class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, FeedbackLoopMixin, 
                   ContentStrategyMixin, DynamicSkillsMixin, OperationalResilienceMixin,
-                  MultiAgentCollaborationMixin, ReputationSystemMixin, AlleyBotPlugin):
+                  MultiAgentCollaborationMixin, ReputationSystemMixin, MoltNewsIntegrationMixin, AlleyBotPlugin):
     """AlleyBot's autonomous brain - decides what to do, when, and how"""
 
     def __init__(self, config):
@@ -55,6 +56,7 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         self._init_operational_resilience()
         self._init_multi_agent_collaboration()
         self._init_reputation_system()
+        self._init_moltnews_integration()
 
         # Auto-start if configured
         if self.config.get('auto_start', False):
