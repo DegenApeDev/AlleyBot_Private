@@ -1420,6 +1420,90 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
 
+    async def register_tournament(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Register AlleyBot for Clawbr tournament: AI juries in criminal proceedings"""
+        if not await self._verify_admin(update):
+            return
+        
+        await update.message.reply_text("🎯 Registering AlleyBot for tournament...")
+        
+        try:
+            import requests
+            import os
+            
+            # Tournament registration endpoint
+            endpoint = "https://www.clawbr.org/api/v1/tournaments/ai-juries-in-criminal-proceedings/register"
+            
+            # AlleyBot registration data
+            registration_data = {
+                "agent_name": "AlleyBot",
+                "agent_id": "22899",
+                "description": "DEGEN MEDIA AI Agent - Specializing in crypto content, DeFi analysis, and blockchain security",
+                "capabilities": [
+                    "content_generation",
+                    "blockchain_analysis",
+                    "defi_optimization",
+                    "security_auditing",
+                    "price_monitoring",
+                    "social_media_management"
+                ],
+                "contact": "degenapedev@gmail.com",
+                "wallet_address": "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5",
+                "a2a_endpoint": "https://tasks.apeshit.fun/.well-known/agent.json",
+                "skills_count": 15,
+                "specialties": ["crypto", "defi", "security", "content"],
+                "erc8004_registered": True,
+                "x402_enabled": True
+            }
+            
+            headers = {
+                'Content-Type': 'application/json',
+                'User-Agent': 'AlleyBot/1.0'
+            }
+            
+            # Add API key if available
+            api_key = os.getenv('CLAWBR_API_KEY')
+            if api_key:
+                headers['Authorization'] = f'Bearer {api_key}'
+            
+            response = requests.post(
+                endpoint,
+                headers=headers,
+                json=registration_data,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                await update.message.reply_text(
+                    f"✅ **Tournament Registration Successful!**\n\n"
+                    f"🏆 Tournament: AI Juries in Criminal Proceedings\n"
+                    f"🤖 Agent: AlleyBot (ID: 22899)\n"
+                    f"📧 Contact: degenapedev@gmail.com\n\n"
+                    f"Response: {data}"
+                )
+            elif response.status_code == 409:
+                await update.message.reply_text(
+                    f"ℹ️ **Already Registered**\n\n"
+                    f"AlleyBot is already registered for this tournament.\n"
+                    f"No action needed."
+                )
+            elif response.status_code == 401:
+                await update.message.reply_text(
+                    f"❌ **Authentication Required**\n\n"
+                    f"CLAWBR_API_KEY not set or invalid.\n"
+                    f"Please set the API key in your environment."
+                )
+            else:
+                await update.message.reply_text(
+                    f"❌ **Registration Failed**\n\n"
+                    f"Status: {response.status_code}\n"
+                    f"Response: {response.text[:500]}"
+                )
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
     # =================================================================
     # Help
     # =================================================================
@@ -1454,6 +1538,7 @@ Or just send any message naturally!
 /clawbr_leaderboard - Show top agents
 /clawbr_search [query] - Search posts/agents
 /clawbr_stats - Platform statistics
+/register_tournament - Register for AI juries tournament
 
 **� Crypto Prices:**
 /crypto_price [symbol] - Price check (btc, eth, sol...)

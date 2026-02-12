@@ -172,6 +172,9 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawbr_stats", self.intelligent_commands.clawbr_stats))
         self.application.add_handler(CommandHandler("clawbr_engage", self.intelligent_commands.clawbr_engage))
         
+        # Tournament registration command
+        self.application.add_handler(CommandHandler("register_tournament", self.intelligent_commands.register_tournament))
+        
         # Message handler for natural language (admin only, conversational AI)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.conversational_ai.handle_message))
     
