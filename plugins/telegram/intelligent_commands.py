@@ -1012,6 +1012,119 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
 
+    async def slither_scan(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Run Slither security scan on a contract. Usage: /slither_scan <address> [chain]"""
+        if not await self._verify_admin(update):
+            return
+        
+        if not context.args:
+            await update.message.reply_text(
+                "🔍 **Slither Security Scan**\n\n"
+                "Usage: `/slither_scan <contract_address> [base|ethereum]`\n\n"
+                "Examples:\n"
+                "• `/slither_scan 0x123...abc base`\n"
+                "• `/slither_scan 0x456...def ethereum`\n\n"
+                "💰 This is a paid service (0.45 USDC for external agents)"
+            )
+            return
+        
+        address = context.args[0]
+        chain = context.args[1] if len(context.args) > 1 else 'base'
+        
+        if not address.startswith('0x') or len(address) != 42:
+            await update.message.reply_text("❌ Invalid contract address format. Must be 0x... (42 chars)")
+            return
+        
+        status_msg = await update.message.reply_text(f"🔍 Running Slither scan on {address[:10]}... on {chain}...")
+        
+        try:
+            from utils.slither_scanner import get_slither_scanner
+            
+            scanner = get_slither_scanner()
+            
+            # Check if Slither is available
+            if not scanner.is_available():
+                await status_msg.edit_text(
+                    "❌ **Slither not installed**\n\n"
+                    "Run: `pip install slither-analyzer`\n\n"
+                    "Requires Python 3.8+ and solc (Solidity compiler)"
+                )
+                return
+            
+            # Run the scan
+            result = scanner.scan_contract(address, chain, deep_scan=False)
+            
+            if 'error' in result:
+                await status_msg.edit_text(f"❌ Scan failed: {result['error']}")
+                return
+            
+            # Format results
+            contract_name = result.get('contract_name', 'Unknown')
+            risk_score = result.get('risk_score', 'unknown')
+            total_findings = result.get('total_findings', 0)
+            verified = result.get('verified', False)
+            scan_type = result.get('scan_type', 'unknown')
+            
+            # Risk emoji
+            risk_emoji = {'low': '🟢', 'medium': '🟡', 'high': '🔴', 'critical': '🔴'}.get(risk_score, '⚪')
+            
+            msg = f"🔍 **Slither Security Scan Results**\n\n"
+            msg += f"📄 Contract: `{address[:20]}...`\n"
+            msg += f"🔗 Chain: {chain.upper()}\n"
+            msg += f"📛 Name: {contract_name}\n"
+            msg += f"✅ Verified: {'Yes' if verified else 'No'}\n"
+            msg += f"🔧 Scan Type: {scan_type}\n\n"
+            
+            msg += f"{risk_emoji} **Risk Score: {risk_score.upper()}**\n"
+            msg += f"📝 Total Findings: {total_findings}\n\n"
+            
+            # Severity breakdown
+            if 'severity_counts' in result:
+                counts = result['severity_counts']
+                msg += "**Severity Breakdown:**\n"
+                if counts.get('critical', 0) > 0:
+                    msg += f"  🔴 Critical: {counts['critical']}\n"
+                if counts.get('high', 0) > 0:
+                    msg += f"  🟠 High: {counts['high']}\n"
+                if counts.get('medium', 0) > 0:
+                    msg += f"  🟡 Medium: {counts['medium']}\n"
+                if counts.get('low', 0) > 0:
+                    msg += f"  🔵 Low: {counts['low']}\n"
+                if counts.get('info', 0) > 0:
+                    msg += f"  ℹ️ Info: {counts['info']}\n"
+                msg += "\n"
+            
+            # Top findings
+            findings = result.get('findings', [])
+            if findings:
+                msg += "**Top Findings:**\n"
+                for i, finding in enumerate(findings[:5], 1):
+                    severity = finding.get('severity', 'unknown').upper()
+                    title = finding.get('title', 'Unknown issue')
+                    desc = finding.get('description', '')[:100]
+                    msg += f"{i}. **[{severity}]** {title}\n"
+                    if desc:
+                        msg += f"   {desc}...\n"
+                
+                if len(findings) > 5:
+                    msg += f"\n... and {len(findings) - 5} more findings\n"
+            else:
+                msg += "✅ No issues detected!\n"
+            
+            # Note if bytecode fallback
+            if not verified:
+                msg += "\n⚠️ **Note:** Contract source not verified. Limited analysis only.\n"
+                msg += "   For full Slither analysis, verify contract on block explorer."
+            
+            msg += "\n💰 Service: 0.45 USDC (paid via A2A for external agents)"
+            
+            await status_msg.edit_text(msg)
+            
+        except Exception as e:
+            await status_msg.edit_text(f"❌ Error running Slither scan: {e}")
+            import traceback
+            traceback.print_exc()
+
     # =================================================================
     # Brain Commands
     # =================================================================

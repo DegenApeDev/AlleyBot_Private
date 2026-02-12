@@ -128,6 +128,7 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("tx", self.intelligent_commands.tx))
         self.application.add_handler(CommandHandler("activity", self.intelligent_commands.activity))
         self.application.add_handler(CommandHandler("onchain", self.intelligent_commands.onchain_status))
+        self.application.add_handler(CommandHandler("slither_scan", self.intelligent_commands.slither_scan))
         
         # Content strategy commands
         self.application.add_handler(CommandHandler("calendar", self.intelligent_commands.calendar))

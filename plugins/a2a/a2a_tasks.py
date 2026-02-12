@@ -795,7 +795,7 @@ class A2ATaskHandlerMixin:
             return {'error': f'APY optimization failed: {str(e)}'}
 
     def _task_slither_scan(self, params: Dict, agent_id: str) -> Dict:
-        """Smart contract security scan via static analysis simulation."""
+        """Smart contract security scan using Trail of Bits Slither analyzer."""
         address = params.get('address', '')
         chain = params.get('chain', 'base')
         deep_scan = params.get('deep_scan', False)
@@ -804,68 +804,30 @@ class A2ATaskHandlerMixin:
             return {'error': 'Invalid contract address format'}
         
         try:
-            # Get contract bytecode to analyze
-            onchain = self.core.plugin_manager.plugins.get('onchain')
-            if not onchain or not hasattr(onchain, 'web3_provider'):
-                return {'address': address, 'error': 'On-chain plugin unavailable'}
+            from utils.slither_scanner import get_slither_scanner
             
-            w3 = onchain.web3_provider.w3
+            scanner = get_slither_scanner()
             
-            # Get contract code
-            code = w3.eth.get_code(address)
-            if code == b'':
-                return {'address': address, 'error': 'No contract found at this address (EOA or wrong chain)'}
-            
-            # Simulate Slither-style analysis
-            findings = []
-            severity_counts = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-            
-            # Check contract metadata
-            try:
-                # Try to detect common patterns in bytecode
-                code_hex = code.hex()
-                
-                # Check for common vulnerable patterns (simplified detection)
-                if 'selfdestruct' in code_hex or 'ff' in code_hex:
-                    findings.append({'severity': 'medium', 'title': 'Self-destruct capability detected', 'description': 'Contract can be destroyed'})
-                    severity_counts['medium'] += 1
-                
-                if deep_scan:
-                    # Additional heuristics for deep scan
-                    if code.hex().count('call') > 5:
-                        findings.append({'severity': 'low', 'title': 'Multiple external calls', 'description': 'Review for reentrancy risks'})
-                        severity_counts['low'] += 1
-                    
-                    # Check if verified on Etherscan/BaseScan
-                    findings.append({'severity': 'info', 'title': 'Contract verification status unknown', 'description': 'Recommend verifying source code on block explorer'})
-                    severity_counts['info'] += 1
-                
-                # Risk scoring
-                risk_score = 'low'
-                if severity_counts['critical'] > 0 or severity_counts['high'] > 0:
-                    risk_score = 'high'
-                elif severity_counts['medium'] > 0:
-                    risk_score = 'medium'
-                
+            # Check if Slither is available
+            if not scanner.is_available():
                 return {
                     'address': address,
-                    'chain': chain,
-                    'contract_size_bytes': len(code),
-                    'risk_score': risk_score,
-                    'findings': findings,
-                    'severity_summary': severity_counts,
-                    'recommendations': [
-                        'Verify contract source code on block explorer',
-                        'Review external call patterns for reentrancy',
-                        'Check for proper access control mechanisms',
-                    ],
-                    'note': 'This is a heuristic scan. For production use, run full Slither analysis.',
-                    'scan_timestamp': datetime.utcnow().isoformat() + 'Z',
+                    'error': 'Slither not installed. Run: pip install slither-analyzer',
+                    'note': 'This is a paid service - 0.45 USDC for full Slither analysis',
+                    'install_command': 'pip install slither-analyzer',
                 }
-            except Exception as e:
-                return {'address': address, 'error': f'Contract analysis failed: {str(e)}'}
+            
+            # Run the scan
+            result = scanner.scan_contract(address, chain, deep_scan)
+            
+            # Add payment info for paid service
+            result['service_price_usdc'] = '0.45'
+            result['service_tier'] = 'paid' if agent_id != 'owner' else 'owner_free'
+            
+            return result
+            
         except Exception as e:
-            return {'address': address, 'error': f'Scan failed: {str(e)}'}
+            return {'address': address, 'error': f'Slither scan failed: {str(e)}'}
 
     def _task_skill_recommend(self, params: Dict, agent_id: str) -> Dict:
         """Recommend best A2A agents for a given task."""
