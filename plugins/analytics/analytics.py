@@ -691,9 +691,14 @@ class AnalyticsPlugin(AlleyBotPlugin):
     def start_dashboard(self):
         """Start the dashboard server"""
         try:
-            print(f"� Starting analytics dashboard on port {self.dashboard_port}...")
+            print(f"🌐 Starting analytics dashboard on port {self.dashboard_port}...")
             print(f"📊 Dashboard available at: http://localhost:{self.dashboard_port}")
             print(f"📊 Dashboard available at: http://0.0.0.0:{self.dashboard_port}")
+            
+            # Suppress Flask development server warning
+            import logging
+            log = logging.getLogger('werkzeug')
+            log.setLevel(logging.ERROR)
             
             self.app.run(
                 debug=False,

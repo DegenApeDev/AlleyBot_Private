@@ -204,6 +204,11 @@ class A2AServerMixin:
             self._setup_a2a_server()
 
         def _run():
+            # Suppress Flask development server warning
+            import logging
+            log = logging.getLogger('werkzeug')
+            log.setLevel(logging.ERROR)
+            
             self._a2a_app.run(
                 host=self._a2a_host,
                 port=self._a2a_port,
