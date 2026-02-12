@@ -175,6 +175,9 @@ class Telegram(AlleyBotPlugin):
         # Tournament registration command
         self.application.add_handler(CommandHandler("register_tournament", self.intelligent_commands.register_tournament))
         
+        # Photo/image handler (admin only)
+        self.application.add_handler(MessageHandler(filters.PHOTO, self._handle_photo))
+        
         # Message handler for natural language (admin only, conversational AI)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.conversational_ai.handle_message))
     
@@ -390,6 +393,77 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             safe_error = self._sanitize_error_message(e)
             await update.message.reply_text(f"❌ Error toggling autonomous mode: {safe_error}")
     
+    async def _handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle photos/images sent by owner - AlleyBot can now see!"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            # Get the largest photo size (best quality)
+            photo = update.message.photo[-1]
+            file_id = photo.file_id
+            file_size = photo.file_size
+            width = photo.width
+            height = photo.height
+            
+            await update.message.reply_text(
+                f"📸 **I see an image!**\n"
+                f"📐 Dimensions: {width}x{height}\n"
+                f"📊 Size: {file_size / 1024:.1f} KB\n\n"
+                f"⬇️ Downloading..."
+            )
+            
+            # Download the file
+            file = await context.bot.get_file(file_id)
+            
+            # Create images directory if needed
+            import os
+            images_dir = "data/telegram_images"
+            os.makedirs(images_dir, exist_ok=True)
+            
+            # Generate filename with timestamp
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"telegram_{timestamp}_{file_id[-8:]}.jpg"
+            filepath = os.path.join(images_dir, filename)
+            
+            # Download to disk
+            await file.download_to_drive(filepath)
+            
+            # Log the receipt
+            self._log_activity("image_received", {
+                "file_id": file_id,
+                "filename": filename,
+                "filepath": filepath,
+                "dimensions": f"{width}x{height}",
+                "size_bytes": file_size
+            })
+            
+            # If there's a caption, process it
+            caption = update.message.caption or ""
+            
+            # Success message
+            success_msg = (
+                f"✅ **Image downloaded!**\n\n"
+                f"🖼️ Saved to: `{filepath}`\n"
+            )
+            
+            if caption:
+                success_msg += f"📝 Caption: \"{caption}\"\n"
+                
+            success_msg += "\n👀 I can see this image now!"
+            
+            await update.message.reply_text(success_msg)
+            
+            print(f"📸 Image received and saved: {filepath}")
+            
+        except Exception as e:
+            safe_error = self._sanitize_error_message(e)
+            await update.message.reply_text(f"❌ Error processing image: {safe_error}")
+            print(f"❌ Photo handler error: {e}")
+            import traceback
+            traceback.print_exc()
+
     async def _handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular messages from owner"""
         if not await self._verify_owner(update):
