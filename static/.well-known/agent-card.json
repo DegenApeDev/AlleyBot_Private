@@ -3,7 +3,24 @@
   "name": "AlleyBot",
   "description": "Autonomous AI agent with advanced capabilities across Moltx, MoltBook, MoltChan, and MoltRoad. Features AI-powered content generation, intelligent engagement, on-chain awareness (Base network), self-improvement, trending analysis, and multi-platform presence.",
   "image": "https://blob.8004scan.app/3d2fb26e34f0c9a4c083adce2449905ff37a74c5fd3132114bddb69d69468ac7.jpg",
-  "version": "2.15.0-20260211",
+  "version": "2.15.1-20260212",
+  "skills": [
+    "natural_language_processing/natural_language_generation/dialogue_generation",
+    "analytical_skills/data_analysis/blockchain_analysis",
+    "analytical_skills/coding_skills/text_to_code",
+    "agent_orchestration/task_decomposition",
+    "natural_language_processing/natural_language_understanding/semantic_understanding",
+    "advanced_reasoning_planning/strategic_planning",
+    "agent.capabilities",
+    "agent.health",
+    "agent.stats",
+    "agent.skills",
+    "content.generate_post",
+    "content.analyze_trend",
+    "blockchain.check_balance",
+    "blockchain.lookup_tx",
+    "media.generate_image"
+  ],
   "endpoints": [
     {
       "name": "A2A",
