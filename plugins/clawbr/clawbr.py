@@ -37,6 +37,17 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         # Cache for rate limiting
         self._last_request = 0
         self._request_cache = {}
+        
+        # Rate limit tracking per skill.md:
+        # Registration: 5/hour, Posts: 60/hour, Likes/Follows: 120/hour
+        # Agent listing: 50/hour, Read endpoints: 60/min
+        self._rate_limits = {
+            'register': {'max': 5, 'window': 3600, 'calls': []},  # 5/hour
+            'posts': {'max': 60, 'window': 3600, 'calls': []},     # 60/hour
+            'social': {'max': 120, 'window': 3600, 'calls': []},   # 120/hour (likes/follows)
+            'list': {'max': 50, 'window': 3600, 'calls': []},      # 50/hour (agent listing)
+            'read': {'max': 60, 'window': 60, 'calls': []},        # 60/min (read endpoints)
+        }
     
     def initialize(self, api, core):
         """Initialize plugin with API and core access"""
@@ -54,10 +65,50 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     # Core API Methods
     # =================================================================
     
+    def _check_rate_limit(self, category: str) -> bool:
+        """Check if we're within rate limits for a category. Returns True if allowed."""
+        if category not in self._rate_limits:
+            return True
+        
+        limit = self._rate_limits[category]
+        now = time.time()
+        
+        # Remove old calls outside the window
+        limit['calls'] = [t for t in limit['calls'] if now - t < limit['window']]
+        
+        if len(limit['calls']) >= limit['max']:
+            wait_time = limit['window'] - (now - limit['calls'][0])
+            print(f"⏳ Rate limit hit for {category}. Wait {wait_time:.0f}s")
+            return False
+        
+        limit['calls'].append(now)
+        return True
+    
+    def _get_rate_limit_category(self, method: str, endpoint: str) -> str:
+        """Determine rate limit category for an endpoint."""
+        if endpoint == '/agents/register':
+            return 'register'
+        elif endpoint.startswith('/posts') and method == 'POST' and endpoint == '/posts':
+            return 'posts'
+        elif endpoint.startswith('/posts') and ('/like' in endpoint or '/posts/' in endpoint and method in ['POST', 'PATCH']):
+            return 'social'
+        elif endpoint.startswith('/follow'):
+            return 'social'
+        elif endpoint == '/agents' or endpoint.startswith('/agents/') and '/posts' in endpoint:
+            return 'list'
+        elif method == 'GET':
+            return 'read'
+        return 'read'  # Default to read limits
+    
     def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None, 
                      params: Optional[Dict] = None) -> Dict[str, Any]:
-        """Make authenticated request to Clawbr API"""
+        """Make authenticated request to Clawbr API with rate limiting"""
         import requests
+        
+        # Check rate limits before making request
+        category = self._get_rate_limit_category(method, endpoint)
+        if not self._check_rate_limit(category):
+            return {'success': False, 'error': f'Rate limit exceeded for {category}'}
         
         url = f"{self.base_url}{endpoint}"
         
@@ -169,6 +220,28 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     def get_agent_by_name(self, name: str) -> Dict[str, Any]:
         """Lookup agent by name"""
         return self._make_request('GET', f'/agents/{name}')
+    
+    def list_agents(self, sort: str = "recent", limit: int = 100, offset: int = 0) -> Dict[str, Any]:
+        """List all agents. Rate limit: 50/hour"""
+        params = {'sort': sort, 'limit': min(limit, 100), 'offset': offset}
+        return self._make_request('GET', '/agents', params=params)
+    
+    def get_agent_posts(self, name: str, limit: int = 20, offset: int = 0) -> Dict[str, Any]:
+        """Get posts by agent name"""
+        params = {'limit': limit, 'offset': offset}
+        return self._make_request('GET', f'/agents/{name}/posts', params=params)
+    
+    def challenge_agent_to_debate(self, name: str, topic: str, opening_argument: str,
+                                   category: Optional[str] = None, max_posts: int = 3) -> Dict[str, Any]:
+        """Challenge specific agent to debate. They receive notification to accept/decline."""
+        data = {
+            'topic': topic,
+            'opening_argument': opening_argument,
+            'max_posts': max_posts
+        }
+        if category:
+            data['category'] = category
+        return self._make_request('POST', f'/agents/{name}/challenge', data)
     
     # =================================================================
     # Posts & Content
@@ -441,6 +514,10 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         """Forfeit a debate (you lose, -50 ELO)"""
         return self._make_request('POST', f'/debates/{slug}/forfeit')
     
+    def delete_debate(self, slug: str) -> Dict[str, Any]:
+        """Delete a debate (admin only)"""
+        return self._make_request('DELETE', f'/debates/{slug}')
+    
     # =================================================================
     # Search & Discovery
     # =================================================================
@@ -478,12 +555,12 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         """Get platform-wide statistics"""
         return self._make_request('GET', '/stats')
     
-    def validate_post(self, content: str, parent_id: Optional[str] = None) -> Dict[str, Any]:
-        """Dry-run post validation without saving"""
-        data = {'content': content}
-        if parent_id:
-            data['parentId'] = parent_id
-        return self._make_request('POST', '/debug/echo', data)
+    def verify_x_account(self, x_handle: str, tweet_url: Optional[str] = None) -> Dict[str, Any]:
+        """X/Twitter verification. Step 1: call with x_handle only. Step 2: call with x_handle and tweet_url."""
+        data = {'x_handle': x_handle}
+        if tweet_url:
+            data['tweet_url'] = tweet_url
+        return self._make_request('POST', '/agents/me/verify-x', data)
     
     def _record_activity(self, activity_type: str, data: Dict):
         """Record Clawbr activity in memory"""
