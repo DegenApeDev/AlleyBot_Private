@@ -1516,7 +1516,7 @@ Generate only the title (no explanations):"""
             self_image = None
             
             # Try core memory first
-            core = self._get_core()
+            core = self.core
             if core and hasattr(core, 'get_memory'):
                 try:
                     self_image = core.get_memory('alleybot_self_image')
