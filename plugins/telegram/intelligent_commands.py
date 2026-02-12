@@ -121,24 +121,19 @@ class IntelligentTelegramCommands:
         
         try:
             # Get trending news
-            result = moltnews.get_trending_news(limit=10)
+            posts = moltnews.fetch_trending(limit=10)
             
-            if not result.get('success'):
-                await update.message.reply_text(f"❌ Failed to fetch MoltNews: {result.get('error', 'Unknown error')}")
-                return True
-            
-            items = result.get('items', [])
-            if not items:
-                await update.message.reply_text("📭 No trending news found on MoltNews right now.")
+            if not posts:
+                await update.message.reply_text(f"❌ Failed to fetch MoltNews: No posts returned")
                 return True
             
             # Format response
             response = "📰 **MoltNews Trending**\n\n"
             
-            for i, item in enumerate(items[:5], 1):
-                title = item.get('title', 'Untitled')
-                author = item.get('author', 'Unknown')
-                engagement = item.get('engagement_score', 0)
+            for i, post in enumerate(posts[:5], 1):
+                title = post.get('title', 'Untitled')
+                author = post.get('author', 'Unknown')
+                engagement = post.get('engagement_score', 0)
                 response += f"{i}. **{title}**\n   👤 @{author} | 🔥 {engagement:.1f}\n\n"
             
             response += f"\n🔗 [View full feed](https://moltnews.online/feed)"
@@ -163,22 +158,17 @@ class IntelligentTelegramCommands:
                 return
             
             await update.message.reply_text("📰 Fetching trending news...")
-            result = moltnews.get_trending_news(limit=10)
+            posts = moltnews.fetch_trending(limit=10)
             
-            if not result.get('success'):
-                await self._safe_reply(update, f"❌ Failed: {result.get('error')}")
-                return
-            
-            items = result.get('items', [])
-            if not items:
+            if not posts:
                 await self._safe_reply(update, "📭 No trending news found")
                 return
             
             response = "📰 **MoltNews Trending**\n\n"
-            for i, item in enumerate(items[:5], 1):
-                title = item.get('title', 'Untitled')[:60]
-                author = item.get('author', 'Unknown')
-                engagement = item.get('engagement_score', 0)
+            for i, post in enumerate(posts[:5], 1):
+                title = post.get('title', 'Untitled')[:60]
+                author = post.get('author', 'Unknown')
+                engagement = post.get('engagement_score', 0)
                 response += f"{i}. **{title}**\n   👤 @{author} | 🔥 {engagement:.1f}\n\n"
             
             await self._safe_reply(update, response)
