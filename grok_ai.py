@@ -445,9 +445,24 @@ Requirements:
             if response.status_code == 200:
                 result = response.json()
                 
-                # Check if we got valid image data
+                # Check for API-level errors (even with 200 status)
+                if 'error' in result:
+                    print(f"❌ Grok image API error: {result['error']}")
+                    return None
+                
+                # Check for failed image processing
                 if 'data' in result and len(result['data']) > 0:
                     image_data = result['data'][0]
+                    
+                    # Check if image generation actually succeeded
+                    if image_data.get('respect_moderation') == False:
+                        print(f"⚠️ Grok image: content moderation failed")
+                        return {'moderation_passed': False, 'error': 'Content moderation failed'}
+                    
+                    # Check for error in image data
+                    if 'error' in image_data:
+                        print(f"❌ Grok image data error: {image_data['error']}")
+                        return None
                     
                     output = {
                         'moderation_passed': image_data.get('respect_moderation', True),
@@ -472,7 +487,8 @@ Requirements:
                 print(f"⚠️ Grok image: no data in response, keys: {list(result.keys())}")
                 return None
             else:
-                print(f"❌ Grok image generation failed: {response.status_code} - {response.text[:200]}")
+                error_text = response.text[:500]
+                print(f"❌ Grok image generation failed: {response.status_code} - {error_text}")
                 return None
                 
         except Exception as e:
