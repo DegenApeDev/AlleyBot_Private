@@ -520,12 +520,9 @@ class A2ATaskHandlerMixin:
                 'error': 'Daily image generation limit reached',
                 'limit': self._image_gen_daily_limit,
                 'used': self._image_gen_daily_count,
-                'message': 'Please try again tomorrow or contact owner',
             }
         
         prompt = params.get('prompt', '')
-        aspect_ratio = params.get('aspect_ratio', '16:9')
-        image_format = params.get('format', 'base64')
         
         if not prompt:
             return {'error': 'Prompt is required'}
@@ -535,11 +532,10 @@ class A2ATaskHandlerMixin:
             if not grok_ai.enabled:
                 return {'error': 'Image generation service unavailable'}
             
+            # Grok generate_image only accepts prompt and model
             result = grok_ai.generate_image(
                 prompt=prompt,
-                aspect_ratio=aspect_ratio,
-                image_format=image_format,
-                n=1
+                model="grok-imagine-image"
             )
             
             if result:

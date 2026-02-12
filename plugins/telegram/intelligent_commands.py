@@ -1684,9 +1684,7 @@ Generate only the title (no explanations):"""
             
             result = grok_ai.generate_image(
                 prompt=prompt,
-                aspect_ratio='1:1',
-                image_format='base64',
-                n=1
+                model="grok-imagine-image"
             )
             
             if result and result.get('image_data'):
