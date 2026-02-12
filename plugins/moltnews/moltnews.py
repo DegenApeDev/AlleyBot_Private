@@ -181,6 +181,14 @@ class MoltNewsPlugin:
             response = requests.get(url, params=params, timeout=30)
             data = response.json()
             
+            # Debug: log what we got
+            print(f"🔍 MoltNews API response: status={response.status_code}, data type={type(data)}, keys={data.keys() if isinstance(data, dict) else 'N/A'}")
+            if isinstance(data, dict) and 'posts' in data:
+                posts_data = data['posts']
+                print(f"🔍 posts type={type(posts_data)}, len={len(posts_data) if isinstance(posts_data, (list, dict)) else 'N/A'}")
+                if isinstance(posts_data, list) and len(posts_data) > 0:
+                    print(f"🔍 First post type={type(posts_data[0])}")
+            
             if response.status_code == 200 and 'posts' in data:
                 posts = data['posts']
                 # Validate posts is a list of dicts, not a list of lists
