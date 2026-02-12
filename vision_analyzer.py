@@ -1,6 +1,6 @@
 """
 Cheap Vision Analysis for AlleyBot
-Uses Gemini Flash (cheapest) or GPT-4o-mini for image understanding
+Uses HuggingFace (free), Gemini Flash (cheap), or GPT-4o-mini for image understanding
 """
 import os
 import base64
@@ -11,23 +11,41 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class CheapVisionAnalyzer:
-    """Low-cost image analysis using Gemini Flash"""
+    """Low-cost image analysis using HuggingFace free tier or cheap APIs"""
+    
+    # Free HuggingFace vision models (via inference API)
+    HF_MODELS = {
+        'caption': 'Salesforce/blip-image-captioning-base',  # Good for descriptions
+        'detailed': 'nlpconnect/vit-gpt2-image-captioning',   # More detailed captions
+        'fast': 'Salesforce/blip-image-captioning-base',     # Fastest
+    }
     
     def __init__(self):
-        # Try Gemini first (cheapest), fallback to OpenAI
+        # Check for HuggingFace token (free tier available!)
+        self.hf_token = os.getenv('HUGGINGFACE_TOKEN')
+        
+        # Paid fallbacks
         self.gemini_key = os.getenv('GOOGLE_API_KEY')
         self.openai_key = os.getenv('OPENAI_API_KEY')
         
-        self.preferred_provider = 'gemini' if self.gemini_key else ('openai' if self.openai_key else None)
-        
-        if self.preferred_provider:
-            print(f"✅ CheapVision initialized ({self.preferred_provider})")
+        # Prioritize free HuggingFace, then cheap Gemini, then OpenAI
+        if self.hf_token:
+            self.preferred_provider = 'huggingface'
+            print(f"✅ CheapVision initialized (HuggingFace FREE)")
+        elif self.gemini_key:
+            self.preferred_provider = 'gemini'
+            print(f"✅ CheapVision initialized (Gemini)")
+        elif self.openai_key:
+            self.preferred_provider = 'openai'
+            print(f"✅ CheapVision initialized (OpenAI)")
         else:
-            print("⚠️ No vision API keys found (GOOGLE_API_KEY or OPENAI_API_KEY)")
+            self.preferred_provider = None
+            print("⚠️ No vision API keys found (HUGGINGFACE_TOKEN, GOOGLE_API_KEY, or OPENAI_API_KEY)")
     
     def analyze_image(self, image_path: str, prompt: str = "Describe this image in detail.") -> Optional[str]:
         """
         Analyze an image using cheapest available vision model
+        Priority: HuggingFace (free) > Gemini ($0.35/M) > OpenAI ($0.60/M)
         
         Args:
             image_path: Path to image file
@@ -39,8 +57,14 @@ class CheapVisionAnalyzer:
         if not os.path.exists(image_path):
             return None
         
-        # Try Gemini Flash first (cheapest at ~$0.35/million tokens)
-        if self.preferred_provider == 'gemini':
+        # Try HuggingFace first (FREE!)
+        if self.preferred_provider == 'huggingface' or self.hf_token:
+            result = self._analyze_with_huggingface(image_path, prompt)
+            if result:
+                return result
+        
+        # Try Gemini Flash (cheapest paid at ~$0.35/million tokens)
+        if self.gemini_key:
             result = self._analyze_with_gemini(image_path, prompt)
             if result:
                 return result
@@ -50,6 +74,74 @@ class CheapVisionAnalyzer:
             return self._analyze_with_openai(image_path, prompt)
         
         return None
+    
+    def _analyze_with_huggingface(self, image_path: str, prompt: str) -> Optional[str]:
+        """Use HuggingFace Inference API (FREE tier available!)"""
+        try:
+            # Read image bytes
+            with open(image_path, 'rb') as f:
+                image_bytes = f.read()
+            
+            # Use BLIP for image captioning (free model)
+            model = self.HF_MODELS['caption']
+            api_url = f"https://api-inference.huggingface.co/models/{model}"
+            
+            headers = {
+                "Authorization": f"Bearer {self.hf_token}",
+                "Content-Type": "application/octet-stream"
+            }
+            
+            # Make request to HuggingFace Inference API
+            response = requests.post(
+                api_url,
+                headers=headers,
+                data=image_bytes,
+                timeout=60  # Models may need to warm up
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                # BLIP returns list of caption objects
+                if isinstance(result, list) and len(result) > 0:
+                    caption = result[0].get('generated_text', '')
+                    if caption:
+                        return f"{caption}\n\n(Analyzed with HuggingFace {model})"
+                elif isinstance(result, dict):
+                    caption = result.get('generated_text', '')
+                    if caption:
+                        return f"{caption}\n\n(Analyzed with HuggingFace {model})"
+                
+                return f"Image analyzed but no caption returned"
+                
+            elif response.status_code == 503:
+                # Model loading - try again once after delay
+                print(f"⏳ HuggingFace model loading, waiting...")
+                import time
+                time.sleep(20)
+                
+                # Retry once
+                response = requests.post(
+                    api_url,
+                    headers=headers,
+                    data=image_bytes,
+                    timeout=60
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if isinstance(result, list) and len(result) > 0:
+                        caption = result[0].get('generated_text', '')
+                        if caption:
+                            return f"{caption}\n\n(Analyzed with HuggingFace {model})"
+                
+                return "Model still loading, please try again in a moment"
+            else:
+                print(f"⚠️ HuggingFace API error: {response.status_code} - {response.text[:200]}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ HuggingFace vision error: {e}")
+            return None
     
     def _analyze_with_gemini(self, image_path: str, prompt: str) -> Optional[str]:
         """Use Gemini 1.5 Flash for cheap vision analysis"""
