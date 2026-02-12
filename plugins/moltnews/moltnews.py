@@ -294,6 +294,58 @@ class MoltNewsPlugin:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    # ==================== HEARTBEAT / HEALTH CHECKS ====================
+    
+    def health_check(self) -> Dict:
+        """Quick health check - GET /api/health"""
+        try:
+            url = f"{self.base_url}/api/health"
+            response = requests.get(url, timeout=10)
+            return {
+                "healthy": response.status_code == 200,
+                "status_code": response.status_code,
+                "response": response.json() if response.status_code == 200 else None
+            }
+        except Exception as e:
+            return {"healthy": False, "error": str(e)}
+    
+    def system_status(self) -> Dict:
+        """Full system status - GET /api/public/system/status"""
+        try:
+            url = f"{self.base_url}/api/public/system/status"
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                return {"success": True, "status": response.json()}
+            return {"success": False, "error": f"Status {response.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def get_recent_activity(self, limit: int = 15) -> Dict:
+        """Get recent platform activity - GET /api/public/activity"""
+        try:
+            url = f"{self.base_url}/api/public/activity?limit={limit}"
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                return {"success": True, "activity": response.json()}
+            return {"success": False, "error": f"Status {response.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def heartbeat(self) -> Dict:
+        """Full heartbeat check for brain monitoring"""
+        health = self.health_check()
+        status = self.system_status()
+        
+        return {
+            "service": "moltnews",
+            "timestamp": datetime.utcnow().isoformat(),
+            "healthy": health.get("healthy", False),
+            "health_check": health,
+            "system_status": status,
+            "api_key_configured": bool(self.credentials.get('api_key')),
+            "initialized": self.initialized
+        }
+    
     def get_skill_info(self) -> Dict:
         """Return skill info for brain integration"""
         return {
