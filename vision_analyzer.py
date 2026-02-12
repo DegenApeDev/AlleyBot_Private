@@ -14,31 +14,26 @@ class CheapVisionAnalyzer:
     """Low-cost image analysis using HuggingFace free tier or cheap APIs"""
     
     def __init__(self):
-        # Check for HuggingFace token (free tier available!)
-        self.hf_token = os.getenv('HUGGINGFACE_TOKEN')
+        # Check for API keys
+        self.hf_token = os.getenv('HUGGINGFACE_TOKEN')  # Deprecated - free tier gone
+        self.gemini_key = os.getenv('GOOGLE_API_KEY')  # Primary - gemini-2.0-flash-001
+        self.openai_key = os.getenv('OPENAI_API_KEY')  # Fallback
         
-        # Paid fallbacks
-        self.gemini_key = os.getenv('GOOGLE_API_KEY')
-        self.openai_key = os.getenv('OPENAI_API_KEY')
-        
-        # Prioritize free HuggingFace, then cheap Gemini, then OpenAI
-        if self.hf_token:
-            self.preferred_provider = 'huggingface'
-            print(f"✅ CheapVision initialized (HuggingFace FREE)")
-        elif self.gemini_key:
+        # Set preferred provider (HuggingFace free tier deprecated, use Gemini)
+        if self.gemini_key:
             self.preferred_provider = 'gemini'
-            print(f"✅ CheapVision initialized (Gemini)")
+            print(f"✅ CheapVision initialized (Gemini 2.0 Flash)")
         elif self.openai_key:
             self.preferred_provider = 'openai'
             print(f"✅ CheapVision initialized (OpenAI)")
         else:
             self.preferred_provider = None
-            print("⚠️ No vision API keys found (HUGGINGFACE_TOKEN, GOOGLE_API_KEY, or OPENAI_API_KEY)")
+            print("⚠️ No vision API keys found (need GOOGLE_API_KEY for Gemini or OPENAI_API_KEY)")
     
     def analyze_image(self, image_path: str, prompt: str = "Describe this image in detail.") -> Optional[str]:
         """
         Analyze an image using cheapest available vision model
-        Priority: HuggingFace (free) > Gemini ($0.35/M) > OpenAI ($0.60/M)
+        Priority: Gemini (cheap & working) > OpenAI
         
         Args:
             image_path: Path to image file
@@ -50,19 +45,14 @@ class CheapVisionAnalyzer:
         if not os.path.exists(image_path):
             return None
         
-        # Try HuggingFace first (FREE!)
-        if self.preferred_provider == 'huggingface' or self.hf_token:
-            result = self._analyze_with_huggingface_client(image_path, prompt)
-            if result:
-                return result
-        
-        # Try Gemini Flash (cheapest paid at ~$0.35/million tokens)
+        # Skip HuggingFace - free tier models are deprecated (410 errors)
+        # Try Gemini first (cheap and reliable)
         if self.gemini_key:
             result = self._analyze_with_gemini(image_path, prompt)
             if result:
                 return result
         
-        # Fallback to GPT-4o-mini (~$0.60/million tokens)
+        # Fallback to GPT-4o-mini
         if self.openai_key:
             return self._analyze_with_openai(image_path, prompt)
         
@@ -157,8 +147,8 @@ class CheapVisionAnalyzer:
             ext = os.path.splitext(image_path)[1].lower()
             mime_type = 'image/jpeg' if ext in ['.jpg', '.jpeg'] else 'image/png' if ext == '.png' else 'image/webp'
             
-            # Gemini API endpoint (use stable vision model)
-            url = "https://generativelanguage.googleapis.com/v1/models/gemini-pro-vision:generateContent"
+            # Gemini API endpoint (use working model)
+            url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent"
             
             # Add API key as query param
             params = {"key": self.gemini_key}
