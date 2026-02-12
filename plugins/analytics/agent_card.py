@@ -166,6 +166,7 @@ class AgentCardGenerator:
         skills = self._collect_skills()
         capabilities = self._collect_capabilities()
         platforms = self._collect_platforms()
+        a2a_skills = self._build_a2a_skill_ids()
 
         card = {
             "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
@@ -173,6 +174,7 @@ class AgentCardGenerator:
             "description": AGENT_DESCRIPTION,
             "image": AGENT_IMAGE,
             "version": self._get_version(),
+            "skills": skills + a2a_skills,  # Top-level skills for 8004scan.io
             "endpoints": [
                 {
                     "name": "A2A",
@@ -441,6 +443,19 @@ class AgentCardGenerator:
         except ImportError:
             pass
         return a2a_skills
+
+    def _build_a2a_skill_ids(self) -> list:
+        """Build simple A2A skill ID list for top-level skills field"""
+        skill_ids = []
+        try:
+            from plugins.a2a.a2a_tasks import TASK_REGISTRY
+            for task_name, task_def in TASK_REGISTRY.items():
+                if task_def.get('tier') == 'owner_only':
+                    continue
+                skill_ids.append(task_name)
+        except ImportError:
+            pass
+        return skill_ids
 
     def _get_loaded_plugins(self) -> set:
         """Get set of currently loaded plugin names"""
