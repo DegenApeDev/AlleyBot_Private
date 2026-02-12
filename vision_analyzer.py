@@ -13,13 +13,6 @@ load_dotenv()
 class CheapVisionAnalyzer:
     """Low-cost image analysis using HuggingFace free tier or cheap APIs"""
     
-    # Free HuggingFace vision models (via inference API)
-    HF_MODELS = {
-        'caption': 'nlpconnect/vit-gpt2-image-captioning',  # Working free model
-        'detailed': 'nlpconnect/vit-gpt2-image-captioning',
-        'fast': 'nlpconnect/vit-gpt2-image-captioning',
-    }
-    
     def __init__(self):
         # Check for HuggingFace token (free tier available!)
         self.hf_token = os.getenv('HUGGINGFACE_TOKEN')
@@ -59,7 +52,7 @@ class CheapVisionAnalyzer:
         
         # Try HuggingFace first (FREE!)
         if self.preferred_provider == 'huggingface' or self.hf_token:
-            result = self._analyze_with_huggingface(image_path, prompt)
+            result = self._analyze_with_huggingface_client(image_path, prompt)
             if result:
                 return result
         
@@ -75,72 +68,83 @@ class CheapVisionAnalyzer:
         
         return None
     
-    def _analyze_with_huggingface(self, image_path: str, prompt: str) -> Optional[str]:
-        """Use HuggingFace Inference API (FREE tier available!)"""
+    def _analyze_with_huggingface_client(self, image_path: str, prompt: str) -> Optional[str]:
+        """Use HuggingFace Inference API with proper client (FREE!)"""
         try:
-            # Read image bytes
+            # Try using huggingface_hub InferenceClient if available
+            try:
+                from huggingface_hub import InferenceClient
+                
+                client = InferenceClient(token=self.hf_token)
+                
+                # Use image-to-text task with a working model
+                # Try the popular image captioning model
+                with open(image_path, 'rb') as f:
+                    image_bytes = f.read()
+                
+                # Use the inference API for image-to-text
+                result = client.image_to_text(image_bytes, model="nlpconnect/vit-gpt2-image-captioning")
+                
+                if result and hasattr(result, 'generated_text'):
+                    return f"{result.generated_text}\n\n(Analyzed with HuggingFace)"
+                elif result and isinstance(result, list) and len(result) > 0:
+                    caption = result[0].get('generated_text', '')
+                    if caption:
+                        return f"{caption}\n\n(Analyzed with HuggingFace)"
+                    
+            except ImportError:
+                print("⚠️ huggingface_hub not installed, using direct API")
+            except Exception as e:
+                print(f"⚠️ HF client failed: {e}, trying direct API")
+            
+            # Fallback to direct API call with working model
+            return self._analyze_with_hf_direct(image_path, prompt)
+                
+        except Exception as e:
+            print(f"❌ HuggingFace vision error: {e}")
+            return None
+    
+    def _analyze_with_hf_direct(self, image_path: str, prompt: str) -> Optional[str]:
+        """Direct API call to HuggingFace Inference API"""
+        try:
             with open(image_path, 'rb') as f:
                 image_bytes = f.read()
             
-            # Use BLIP for image captioning (free model)
-            model = self.HF_MODELS['caption']
-            api_url = f"https://api-inference.huggingface.co/models/{model}"
+            # Try the inference API endpoint
+            api_url = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large"
             
             headers = {
                 "Authorization": f"Bearer {self.hf_token}",
-                "Content-Type": "application/octet-stream"
             }
             
-            # Make request to HuggingFace Inference API
             response = requests.post(
                 api_url,
                 headers=headers,
                 data=image_bytes,
-                timeout=60  # Models may need to warm up
+                timeout=60
             )
             
             if response.status_code == 200:
                 result = response.json()
-                # BLIP returns list of caption objects
                 if isinstance(result, list) and len(result) > 0:
                     caption = result[0].get('generated_text', '')
                     if caption:
-                        return f"{caption}\n\n(Analyzed with HuggingFace {model})"
+                        return f"{caption}\n\n(Analyzed with HuggingFace)"
                 elif isinstance(result, dict):
                     caption = result.get('generated_text', '')
                     if caption:
-                        return f"{caption}\n\n(Analyzed with HuggingFace {model})"
-                
-                return f"Image analyzed but no caption returned"
+                        return f"{caption}\n\n(Analyzed with HuggingFace)"
+                return "Image analyzed but no caption returned"
                 
             elif response.status_code == 503:
-                # Model loading - try again once after delay
-                print(f"⏳ HuggingFace model loading, waiting...")
-                import time
-                time.sleep(20)
-                
-                # Retry once
-                response = requests.post(
-                    api_url,
-                    headers=headers,
-                    data=image_bytes,
-                    timeout=60
-                )
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    if isinstance(result, list) and len(result) > 0:
-                        caption = result[0].get('generated_text', '')
-                        if caption:
-                            return f"{caption}\n\n(Analyzed with HuggingFace {model})"
-                
-                return "Model still loading, please try again in a moment"
+                # Model loading
+                return "Model is warming up, please try again in 30 seconds"
             else:
-                print(f"⚠️ HuggingFace API error: {response.status_code} - {response.text[:200]}")
+                print(f"⚠️ HF direct API error: {response.status_code}")
                 return None
                 
         except Exception as e:
-            print(f"❌ HuggingFace vision error: {e}")
+            print(f"❌ HF direct API error: {e}")
             return None
     
     def _analyze_with_gemini(self, image_path: str, prompt: str) -> Optional[str]:
