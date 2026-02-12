@@ -49,18 +49,35 @@ Platform Stats:
             return "❌ Invalid username provided."
 
         try:
+            # Check follow status first
             status = self.get_follow_status(username)
+            print(f"🔍 Follow status for @{username}: {status}")
+            
             status_data = status.get('data') if isinstance(status, dict) else None
             if status.get('success', False) and isinstance(status_data, dict):
                 if status_data.get('isFollowing') is True:
                     return f"✅ Already following @{username}."
-
-            result = self.follow_user(username)
+            
+            # Try to follow - use follow_agent directly to avoid mixin conflicts
+            result = self.follow_agent(username)
+            print(f"📤 Follow result for @{username}: {result}")
+            
             if result.get('success', False):
                 return f"✅ Successfully followed @{username}!"
-            error_msg = result.get('error') or result.get('message') or 'Unknown error'
+            
+            # Handle error response
+            error_msg = result.get('error')
+            if isinstance(error_msg, dict):
+                error_msg = error_msg.get('message') or error_msg.get('error') or str(error_msg)
+            elif not error_msg:
+                error_msg = result.get('message') or 'Unknown error'
+            
             return f"❌ Failed to follow @{username}: {error_msg}"
+            
         except Exception as e:
+            import traceback
+            print(f"🦞 Exception in clawbr_follow_command: {e}")
+            traceback.print_exc()
             return f"🦞 Error following @{username}: {str(e)}"
     
     def clawbr_unfollow_command(self, *args) -> str:
