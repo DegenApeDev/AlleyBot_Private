@@ -1660,10 +1660,12 @@ Generate only the title (no explanations):"""
             # Get the description and any extra context from command args
             extra_context = ' '.join(context.args) if context.args else ""
             
+            # Clean up the description for image generation
+            # Take just the first sentence or first 100 chars for better results
             base_description = self_image.get('description', '')
+            desc_short = base_description.split('.')[0][:100] if base_description else "A friendly AI robot"
             
-            # Build the generation prompt
-            prompt = f"A portrait of AlleyBot, a cyber-lobster AI agent mascot. {base_description}"
+            prompt = f"Portrait of AlleyBot: {desc_short}. Digital art style, high quality."
             
             if extra_context:
                 prompt += f" {extra_context}"
@@ -1671,7 +1673,7 @@ Generate only the title (no explanations):"""
             await update.message.reply_text(
                 f"🎨 **Generating self-portrait...**\n"
                 f"Using my stored appearance:\n"
-                f"{base_description[:150]}...\n\n"
+                f"{desc_short[:80]}...\n\n"
                 f"⏳ This may take a moment..."
             )
             
@@ -1679,42 +1681,66 @@ Generate only the title (no explanations):"""
             from grok_ai import grok_ai
             
             if not grok_ai.enabled:
-                await update.message.reply_text("❌ Grok image generation not available")
+                await update.message.reply_text("❌ Grok image generation not available. Check XAI_API_KEY in .env")
                 return
             
+            print(f"🎨 Generating self-portrait with prompt: {prompt[:100]}...")
             result = grok_ai.generate_image(
                 prompt=prompt,
                 model="grok-imagine-image"
             )
             
-            if result and result.get('image_data'):
-                # Decode and save
-                import base64
+            if not result:
+                await update.message.reply_text(
+                    "❌ **Image generation failed**\n\n"
+                    "Possible causes:\n"
+                    "• Content moderation (try different prompt)\n"
+                    "• Grok API temporarily unavailable\n"
+                    "• API key issues\n\n"
+                    "Check logs for details."
+                )
+                return
+            
+            if result.get('error'):
+                await update.message.reply_text(f"❌ **Error:** {result['error']}")
+                return
+            
+            if result.get('image_url'):
+                # Download and save the image
+                import requests
                 from datetime import datetime
                 import os
                 
-                image_data = base64.b64decode(result['image_data'])
-                
-                # Save to file
-                output_dir = "data/generated_selfies"
-                os.makedirs(output_dir, exist_ok=True)
-                
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"alleybot_selfie_{timestamp}.png"
-                filepath = os.path.join(output_dir, filename)
-                
-                with open(filepath, 'wb') as f:
-                    f.write(image_data)
-                
-                # Send back to user
-                await update.message.reply_photo(
-                    photo=image_data,
-                    caption=f"🦞 **AlleyBot Self-Portrait!**\n\n📸 Generated based on my self-image memory.\n💾 Saved to: `{filepath}`"
-                )
-                
-                print(f"🎨 Self-portrait generated: {filepath}")
+                try:
+                    # Get image from URL
+                    img_response = requests.get(result['image_url'], timeout=30)
+                    if img_response.status_code == 200:
+                        image_data = img_response.content
+                        
+                        # Save to file
+                        output_dir = "data/generated_selfies"
+                        os.makedirs(output_dir, exist_ok=True)
+                        
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename = f"alleybot_selfie_{timestamp}.png"
+                        filepath = os.path.join(output_dir, filename)
+                        
+                        with open(filepath, 'wb') as f:
+                            f.write(image_data)
+                        
+                        # Send back to user
+                        await update.message.reply_photo(
+                            photo=image_data,
+                            caption=f"🦞 **AlleyBot Self-Portrait!**\n\n📸 Generated based on my self-image memory.\n💾 Saved to: `{filepath}`"
+                        )
+                        
+                        print(f"🎨 Self-portrait generated: {filepath}")
+                    else:
+                        await update.message.reply_text(f"❌ Failed to download image: {img_response.status_code}")
+                except Exception as e:
+                    await update.message.reply_text(f"❌ Error saving image: {e}")
             else:
-                await update.message.reply_text("❌ Failed to generate self-portrait")
+                await update.message.reply_text("❌ Failed to generate self-portrait - no image URL in response")
                 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
