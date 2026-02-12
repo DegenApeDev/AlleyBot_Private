@@ -77,13 +77,12 @@ class CheapVisionAnalyzer:
                 
                 client = InferenceClient(token=self.hf_token)
                 
-                # Use image-to-text task with a working model
-                # Try the popular image captioning model
+                # Use image-to-text task - will auto-route to available model
                 with open(image_path, 'rb') as f:
                     image_bytes = f.read()
                 
-                # Use the inference API for image-to-text
-                result = client.image_to_text(image_bytes, model="nlpconnect/vit-gpt2-image-captioning")
+                # Use task-based inference instead of specific model
+                result = client.image_to_text(image_bytes)
                 
                 if result and hasattr(result, 'generated_text'):
                     return f"{result.generated_text}\n\n(Analyzed with HuggingFace)"
@@ -110,8 +109,8 @@ class CheapVisionAnalyzer:
             with open(image_path, 'rb') as f:
                 image_bytes = f.read()
             
-            # Try the inference API endpoint
-            api_url = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large"
+            # Try the task-based inference endpoint (auto-routes to available model)
+            api_url = "https://api-inference.huggingface.co/pipelines/image-to-text"
             
             headers = {
                 "Authorization": f"Bearer {self.hf_token}",
@@ -158,8 +157,8 @@ class CheapVisionAnalyzer:
             ext = os.path.splitext(image_path)[1].lower()
             mime_type = 'image/jpeg' if ext in ['.jpg', '.jpeg'] else 'image/png' if ext == '.png' else 'image/webp'
             
-            # Gemini API endpoint (correct format for gemini-1.5-flash)
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+            # Gemini API endpoint (use latest flash model)
+            url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent"
             
             # Add API key as query param
             params = {"key": self.gemini_key}
