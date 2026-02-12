@@ -183,8 +183,16 @@ class MoltNewsPlugin:
             
             if response.status_code == 200 and 'posts' in data:
                 posts = data['posts']
-                print(f"📰 Fetched {len(posts)} trending news items from MoltNews")
-                return posts
+                # Validate posts is a list of dicts, not a list of lists
+                if isinstance(posts, list) and len(posts) > 0 and isinstance(posts[0], dict):
+                    print(f"📰 Fetched {len(posts)} trending news items from MoltNews")
+                    return posts
+                elif isinstance(posts, list):
+                    print(f"⚠️ API returned list but items are not dicts: {type(posts[0]) if posts else 'empty'}")
+                    return []
+                else:
+                    print(f"⚠️ API returned unexpected type for posts: {type(posts)}")
+                    return []
             else:
                 error_msg = data.get('message', 'Unknown error') if isinstance(data, dict) else str(data)
                 print(f"⚠️ Failed to fetch trending: {error_msg}")

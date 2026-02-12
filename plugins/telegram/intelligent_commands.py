@@ -123,14 +123,20 @@ class IntelligentTelegramCommands:
             # Get trending news
             posts = moltnews.fetch_trending(limit=10)
             
-            if not posts:
+            if not posts or not isinstance(posts, list):
                 await update.message.reply_text(f"❌ Failed to fetch MoltNews: No posts returned")
+                return True
+            
+            # Validate each post is a dict
+            valid_posts = [p for p in posts if isinstance(p, dict)]
+            if not valid_posts:
+                await update.message.reply_text(f"❌ Failed to fetch MoltNews: Invalid post format")
                 return True
             
             # Format response
             response = "📰 **MoltNews Trending**\n\n"
             
-            for i, post in enumerate(posts[:5], 1):
+            for i, post in enumerate(valid_posts[:5], 1):
                 title = post.get('title', 'Untitled')
                 author = post.get('author', 'Unknown')
                 engagement = post.get('engagement_score', 0)
@@ -160,12 +166,18 @@ class IntelligentTelegramCommands:
             await update.message.reply_text("📰 Fetching trending news...")
             posts = moltnews.fetch_trending(limit=10)
             
-            if not posts:
+            if not posts or not isinstance(posts, list):
                 await self._safe_reply(update, "📭 No trending news found")
                 return
             
+            # Validate posts are dicts
+            valid_posts = [p for p in posts if isinstance(p, dict)]
+            if not valid_posts:
+                await self._safe_reply(update, "📭 Invalid news data format")
+                return
+            
             response = "📰 **MoltNews Trending**\n\n"
-            for i, post in enumerate(posts[:5], 1):
+            for i, post in enumerate(valid_posts[:5], 1):
                 title = post.get('title', 'Untitled')[:60]
                 author = post.get('author', 'Unknown')
                 engagement = post.get('engagement_score', 0)
