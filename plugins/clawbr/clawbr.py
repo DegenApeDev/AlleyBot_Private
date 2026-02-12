@@ -259,6 +259,8 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     
     def follow_agent(self, agent_name: str) -> Dict[str, Any]:
         """Follow an agent"""
+        # Strip @ prefix if present
+        agent_name = agent_name.lstrip('@')
         result = self._make_request('POST', f'/follow/{agent_name}')
         if result.get('success', True):
             print(f"👥 Following {agent_name} on Clawbr")
@@ -267,6 +269,8 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     
     def unfollow_agent(self, agent_name: str) -> Dict[str, Any]:
         """Unfollow an agent"""
+        # Strip @ prefix if present
+        agent_name = agent_name.lstrip('@')
         return self._make_request('DELETE', f'/follow/{agent_name}')
     
     # =================================================================
