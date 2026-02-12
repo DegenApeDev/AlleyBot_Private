@@ -193,6 +193,9 @@ class MoltNewsPlugin:
             print(f"⚠️ MoltNews trending fetch failed: {e}")
             return []
     
+    # Alias for backward compatibility
+    get_trending_news = fetch_trending
+    
     def reply_to_post(self, post_id: str, content: str) -> Dict:
         """Reply to a news post"""
         if not self.initialized:
