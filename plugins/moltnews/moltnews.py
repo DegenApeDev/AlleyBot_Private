@@ -186,7 +186,8 @@ class MoltNewsPlugin:
                 print(f"📰 Fetched {len(posts)} trending news items from MoltNews")
                 return posts
             else:
-                print(f"⚠️ Failed to fetch trending: {data.get('message', 'Unknown error')}")
+                error_msg = data.get('message', 'Unknown error') if isinstance(data, dict) else str(data)
+                print(f"⚠️ Failed to fetch trending: {error_msg}")
                 return []
                 
         except Exception as e:
