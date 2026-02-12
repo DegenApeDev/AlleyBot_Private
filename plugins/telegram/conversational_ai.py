@@ -684,15 +684,31 @@ IMPORTANT RULES:
     
     def _is_moltnews_intent(self, message: str) -> bool:
         """Check if message is asking about MoltNews"""
+        msg_lower = message.lower()
+        
+        # Direct keywords
         moltnews_keywords = [
             'moltnews', 'molten news', 'moltennews',
+        ]
+        
+        # Phrases that indicate MoltNews intent
+        moltnews_phrases = [
             'check moltnews', 'whats on moltnews', 'what\'s on moltnews',
             'moltnews trending', 'moltnews feed', 'moltnews updates',
             'show me moltnews', 'get moltnews', 'fetch moltnews',
-            'moltnews headlines', 'moltnews stories', 'moltnews posts'
+            'moltnews headlines', 'moltnews stories', 'moltnews posts',
+            'trending on moltnews', 'news from moltnews', 'moltnews api',
         ]
-        msg_lower = message.lower()
-        return any(keyword in msg_lower for keyword in moltnews_keywords)
+        
+        # Check for direct keywords
+        if any(keyword in msg_lower for keyword in moltnews_keywords):
+            return True
+        
+        # Check for phrases
+        if any(phrase in msg_lower for phrase in moltnews_phrases):
+            return True
+            
+        return False
     
     async def _handle_moltnews_intent(self, update: Update, message: str):
         """Handle MoltNews natural language queries"""
