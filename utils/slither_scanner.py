@@ -14,8 +14,11 @@ class SlitherScanner:
     """Wrapper for Slither static analysis tool"""
     
     def __init__(self):
+        # Etherscan API v2 uses single key for all chains
         self.etherscan_api_key = os.getenv('ETHERSCAN_API_KEY', '')
-        self.basescan_api_key = os.getenv('BASESCAN_API_KEY', '')
+        # Fallback for old env var names
+        if not self.etherscan_api_key:
+            self.etherscan_api_key = os.getenv('BASESCAN_API_KEY', '')
         
     def is_available(self) -> bool:
         """Check if slither is installed and available"""
@@ -31,21 +34,22 @@ class SlitherScanner:
             return False
     
     def fetch_contract_source(self, address: str, chain: str = 'base') -> Optional[Dict]:
-        """Fetch contract source code from block explorer"""
+        """Fetch contract source code from Etherscan API v2 (unified endpoint)"""
         import requests
         
-        if chain.lower() == 'base':
-            api_key = self.basescan_api_key
-            base_url = 'https://api.basescan.org/api'
-        else:
-            api_key = self.etherscan_api_key
-            base_url = 'https://api.etherscan.io/api'
+        # Etherscan API v2: unified endpoint with chainid parameter
+        # Chain IDs: 1 = Ethereum, 8453 = Base
+        chain_id = 8453 if chain.lower() == 'base' else 1
         
-        if not api_key:
+        if not self.etherscan_api_key:
+            print("⚠️ No ETHERSCAN_API_KEY set - cannot fetch contract source")
             return None
         
         try:
-            url = f"{base_url}?module=contract&action=getsourcecode&address={address}&apikey={api_key}"
+            # Etherscan API v2 endpoint
+            url = f"https://api.etherscan.io/v2/api?chainid={chain_id}&module=contract&action=getsourcecode&address={address}&apikey={self.etherscan_api_key}"
+            print(f"🔍 Fetching contract from Etherscan API v2 (chainid={chain_id})...")
+            
             response = requests.get(url, timeout=30)
             data = response.json()
             
@@ -61,6 +65,11 @@ class SlitherScanner:
                         'runs': result.get('Runs', ''),
                         'verified': True
                     }
+            
+            # Check for API v2 error messages
+            if data.get('result') and 'deprecated' in str(data.get('result', '')).lower():
+                print(f"⚠️ API error: {data.get('result')}")
+            
             return None
         except Exception as e:
             print(f"⚠️ Failed to fetch contract source: {e}")
