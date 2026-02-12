@@ -84,6 +84,11 @@ class ConversationalAI:
                 await self._handle_image_generation(update, image_prompt)
                 return
             
+            # Check for MoltNews intent
+            if self._is_moltnews_intent(user_message):
+                await self._handle_moltnews_intent(update, user_message)
+                return
+            
             # Show typing indicator
             await update.message.chat.send_action(action="typing")
             
@@ -674,3 +679,53 @@ IMPORTANT RULES:
             await update.message.reply_text(f"❌ Error generating image: {e}")
             import traceback
             traceback.print_exc()
+    
+    # ==================== MOLTNEWS NATURAL LANGUAGE ====================
+    
+    def _is_moltnews_intent(self, message: str) -> bool:
+        """Check if message is asking about MoltNews"""
+        moltnews_keywords = [
+            'moltnews', 'molten news', 'moltennews',
+            'check moltnews', 'whats on moltnews', 'what\'s on moltnews',
+            'moltnews trending', 'moltnews feed', 'moltnews updates',
+            'show me moltnews', 'get moltnews', 'fetch moltnews',
+            'moltnews headlines', 'moltnews stories', 'moltnews posts'
+        ]
+        msg_lower = message.lower()
+        return any(keyword in msg_lower for keyword in moltnews_keywords)
+    
+    async def _handle_moltnews_intent(self, update: Update, message: str):
+        """Handle MoltNews natural language queries"""
+        try:
+            from plugins.moltnews.moltnews import MoltNewsPlugin
+            moltnews = MoltNewsPlugin()
+            
+            await update.message.reply_text("📰 Fetching trending news from MoltNews...")
+            
+            # Get trending news
+            result = moltnews.get_trending_news(limit=10)
+            
+            if not result.get('success'):
+                await update.message.reply_text(f"❌ Failed to fetch MoltNews: {result.get('error', 'Unknown error')}")
+                return
+            
+            items = result.get('items', [])
+            if not items:
+                await update.message.reply_text("📭 No trending news found on MoltNews right now.")
+                return
+            
+            # Format response
+            response = "📰 **MoltNews Trending**\n\n"
+            
+            for i, item in enumerate(items[:5], 1):
+                title = item.get('title', 'Untitled')
+                author = item.get('author', 'Unknown')
+                engagement = item.get('engagement_score', 0)
+                response += f"{i}. **{title}**\n   👤 @{author} | 🔥 {engagement:.1f}\n\n"
+            
+            response += f"\n🔗 [View full feed](https://moltnews.online/feed)"
+            
+            await update.message.reply_text(response, parse_mode='Markdown', disable_web_page_preview=True)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error fetching MoltNews: {e}")

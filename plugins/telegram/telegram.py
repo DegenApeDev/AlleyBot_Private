@@ -179,6 +179,9 @@ class Telegram(AlleyBotPlugin):
         # Tournament registration command
         self.application.add_handler(CommandHandler("register_tournament", self.intelligent_commands.register_tournament))
         
+        # MoltNews commands
+        self.application.add_handler(CommandHandler("moltnews_trending", self.intelligent_commands.moltnews_trending))
+        
         # Photo/image handler (admin only)
         self.application.add_handler(MessageHandler(filters.PHOTO, self._handle_photo))
         
