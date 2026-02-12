@@ -1504,6 +1504,94 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
 
+    async def generate_self_portrait(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Generate a self-portrait image based on stored self-image reference"""
+        if not await self._verify_admin(update):
+            return
+        
+        await update.message.reply_text("🎨 Checking my self-image memory...")
+        
+        try:
+            # Get self-image from memory
+            core = self._get_core()
+            if not core:
+                await update.message.reply_text("❌ Core system not available")
+                return
+            
+            self_image = core.get_memory('alleybot_self_image')
+            
+            if not self_image:
+                await update.message.reply_text(
+                    "🦞 **No self-image stored!**\n\n"
+                    "Send me a photo with caption \"this is me\" or \"this is you\"\n"
+                    "and I'll learn what I look like!"
+                )
+                return
+            
+            # Get the description and any extra context from command args
+            extra_context = ' '.join(context.args) if context.args else ""
+            
+            base_description = self_image.get('description', '')
+            
+            # Build the generation prompt
+            prompt = f"A portrait of AlleyBot, a cyber-lobster AI agent mascot. {base_description}"
+            
+            if extra_context:
+                prompt += f" {extra_context}"
+            
+            await update.message.reply_text(
+                f"🎨 **Generating self-portrait...**\n"
+                f"Using my stored appearance:\n"
+                f"{base_description[:150]}...\n\n"
+                f"⏳ This may take a moment..."
+            )
+            
+            # Generate image using Grok
+            from grok_ai import grok_ai
+            
+            if not grok_ai.enabled:
+                await update.message.reply_text("❌ Grok image generation not available")
+                return
+            
+            result = grok_ai.generate_image(
+                prompt=prompt,
+                aspect_ratio='1:1',
+                image_format='base64',
+                n=1
+            )
+            
+            if result and result.get('image_data'):
+                # Decode and save
+                import base64
+                from datetime import datetime
+                import os
+                
+                image_data = base64.b64decode(result['image_data'])
+                
+                # Save to file
+                output_dir = "data/generated_selfies"
+                os.makedirs(output_dir, exist_ok=True)
+                
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"alleybot_selfie_{timestamp}.png"
+                filepath = os.path.join(output_dir, filename)
+                
+                with open(filepath, 'wb') as f:
+                    f.write(image_data)
+                
+                # Send back to user
+                await update.message.reply_photo(
+                    photo=image_data,
+                    caption=f"🦞 **AlleyBot Self-Portrait!**\n\n📸 Generated based on my self-image memory.\n💾 Saved to: `{filepath}`"
+                )
+                
+                print(f"🎨 Self-portrait generated: {filepath}")
+            else:
+                await update.message.reply_text("❌ Failed to generate self-portrait")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
     # =================================================================
     # Help
     # =================================================================
@@ -1540,12 +1628,18 @@ Or just send any message naturally!
 /clawbr_stats - Platform statistics
 /register_tournament - Register for AI juries tournament
 
-**� Crypto Prices:**
+**🎨 Images & Vision:**
+📸 Send me any photo - I'll analyze it (cheap vision model!)
+📸 Send photo + "this is me" - I learn my appearance
+/generate_self_portrait [style] - Create self-portrait
+/generate_image [prompt] - Generate any image with Grok
+
+**💰 Crypto Prices:**
 /crypto_price [symbol] - Price check (btc, eth, sol...)
 /crypto_prices [list] - Multiple prices (btc,eth,sol)
 /crypto_trending - Trending coins
 
-**�🔗 On-Chain (Base):**
+**🔗 On-Chain (Base):**
 /wallet - Wallet info & balances
 /balance - Token balances
 /block - Current block info
@@ -1558,9 +1652,6 @@ Or just send any message naturally!
 /calendar - Content calendar status
 /conversations - Active conversation threads
 /personality [platform] - Show/set personality
-
-**🎨 Image Generation:**
-/generate_image [prompt] - Generate AI image with Grok
 
 **📊 Feedback Loop:**
 /insights - Content performance insights

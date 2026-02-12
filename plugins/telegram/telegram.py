@@ -142,6 +142,9 @@ class Telegram(AlleyBotPlugin):
         # Image generation command
         self.application.add_handler(CommandHandler("generate_image", self.intelligent_commands.generate_image))
         
+        # Self-portrait generation command
+        self.application.add_handler(CommandHandler("generate_self_portrait", self.intelligent_commands.generate_self_portrait))
+        
         # Brain commands
         self.application.add_handler(CommandHandler("think", self.intelligent_commands.brain_think))
         self.application.add_handler(CommandHandler("brain_start", self.intelligent_commands.brain_start))
@@ -394,7 +397,7 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             await update.message.reply_text(f"❌ Error toggling autonomous mode: {safe_error}")
     
     async def _handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle photos/images sent by owner - AlleyBot can now see!"""
+        """Handle photos/images sent by owner - AlleyBot can now see and understand!"""
         if not await self._verify_owner(update):
             return
         
@@ -406,11 +409,16 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             width = photo.width
             height = photo.height
             
+            # Check for caption indicating this is self-image
+            caption = update.message.caption or ""
+            is_self_image = any(phrase in caption.lower() for phrase in ['this is me', 'this is you', 'self portrait', 'my image', 'alleybot'])
+            
             await update.message.reply_text(
                 f"📸 **I see an image!**\n"
                 f"📐 Dimensions: {width}x{height}\n"
-                f"📊 Size: {file_size / 1024:.1f} KB\n\n"
-                f"⬇️ Downloading..."
+                f"📊 Size: {file_size / 1024:.1f} KB\n"
+                f"{'🦞 This looks like ME! ' if is_self_image else ''}\n"
+                f"⬇️ Downloading and analyzing..."
             )
             
             # Download the file
@@ -430,32 +438,56 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             # Download to disk
             await file.download_to_drive(filepath)
             
+            # Analyze image with cheap vision model
+            from vision_analyzer import vision_analyzer
+            
+            analysis_prompt = "Describe this image in detail, focusing on visual elements, style, colors, and composition."
+            if is_self_image:
+                analysis_prompt = """This is an image of AlleyBot, an AI agent represented as a cool cyber-lobster mascot. 
+Describe in detail for image recreation:
+- Appearance: colors, features, style
+- Character design elements
+- Background/scene
+- Overall aesthetic vibe
+Format as a prompt for image generation."""
+            
+            description = vision_analyzer.analyze_image(filepath, analysis_prompt)
+            
             # Log the receipt
             self._log_activity("image_received", {
                 "file_id": file_id,
                 "filename": filename,
                 "filepath": filepath,
                 "dimensions": f"{width}x{height}",
-                "size_bytes": file_size
+                "size_bytes": file_size,
+                "is_self_image": is_self_image,
+                "has_description": bool(description)
             })
             
-            # If there's a caption, process it
-            caption = update.message.caption or ""
+            # Build response
+            success_msg = f"✅ **Image processed!**\n\n"
             
-            # Success message
-            success_msg = (
-                f"✅ **Image downloaded!**\n\n"
-                f"🖼️ Saved to: `{filepath}`\n"
-            )
-            
-            if caption:
-                success_msg += f"📝 Caption: \"{caption}\"\n"
+            if description:
+                success_msg += f"👁️ **Vision Analysis:**\n{description[:300]}{'...' if len(description) > 300 else ''}\n\n"
                 
-            success_msg += "\n👀 I can see this image now!"
+                # If this is marked as self-image, store it
+                if is_self_image:
+                    self._store_self_image(description, filepath)
+                    success_msg += f"🦞 **Stored as my self-image!**\nI can now recreate images of myself.\n\n"
+            else:
+                success_msg += f"⚠️ Couldn't analyze image (vision API not available)\n\n"
+            
+            success_msg += f"🖼️ Saved to: `{filepath}`\n"
+            
+            if caption and not is_self_image:
+                success_msg += f"📝 Caption: \"{caption}\"\n"
+            
+            if is_self_image:
+                success_msg += f"\n� Use `/generate_self_portrait` to create new images of me!"
             
             await update.message.reply_text(success_msg)
             
-            print(f"📸 Image received and saved: {filepath}")
+            print(f"📸 Image analyzed and saved: {filepath}")
             
         except Exception as e:
             safe_error = self._sanitize_error_message(e)
@@ -463,6 +495,23 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             print(f"❌ Photo handler error: {e}")
             import traceback
             traceback.print_exc()
+    
+    def _store_self_image(self, description: str, image_path: str):
+        """Store self-image description in memory for recreation"""
+        try:
+            self_image_data = {
+                "description": description,
+                "image_path": image_path,
+                "stored_at": __import__('datetime').datetime.now().isoformat(),
+                "version": 1
+            }
+            
+            if self.core:
+                self.core.save_memory('alleybot_self_image', self_image_data)
+                print(f"🦞 Self-image stored: {image_path}")
+            
+        except Exception as e:
+            print(f"⚠️ Failed to store self-image: {e}")
 
     async def _handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular messages from owner"""
