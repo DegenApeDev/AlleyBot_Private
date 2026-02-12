@@ -188,7 +188,7 @@ class SlitherScanner:
                     'deep_scan': deep_scan,
                     'compiler_version': contract_info.get('compiler_version', ''),
                     'slither_available': True,
-                    'scan_timestamp': str(datetime.utcnow().isoformat()) + 'Z',
+                    'scan_timestamp': str(datetime.datetime.utcnow().isoformat()) + 'Z',
                 }
                 
             except subprocess.TimeoutExpired:
