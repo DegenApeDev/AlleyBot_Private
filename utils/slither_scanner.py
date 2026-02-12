@@ -204,9 +204,11 @@ class SlitherScanner:
             
             # Connect to appropriate RPC
             if chain.lower() == 'base':
-                rpc = os.getenv('BASE_RPC', 'https://mainnet.base.org')
+                rpc = os.getenv('BASE_RPC_URL') or os.getenv('BASE_RPC') or 'https://mainnet.base.org'
             else:
-                rpc = os.getenv('ETH_RPC', 'https://eth.llamarpc.com')
+                rpc = os.getenv('ETH_RPC_URL') or os.getenv('ETH_RPC') or 'https://eth.llamarpc.com'
+            
+            print(f"🔍 Connecting to {chain} RPC: {rpc[:30]}...")
             
             w3 = Web3(Web3.HTTPProvider(rpc))
             
@@ -220,25 +222,26 @@ class SlitherScanner:
                     'scan_type': 'bytecode_fallback',
                 }
             
+            # Convert to bytes for proper analysis
+            code_bytes = bytes.fromhex(code.hex())
+            
+            print(f"🔍 Analyzing {len(code_bytes)} bytes of bytecode...")
+            
             # Basic bytecode analysis with proper opcode detection
             findings = []
             severity_counts = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
             
-            code_hex = code.hex()
-            
-            # Convert to bytes for proper analysis
-            code_bytes = bytes.fromhex(code_hex)
-            
             # Look for SELFDESTRUCT opcode (0xff) - check it's actually an opcode, not data
-            # Pattern: 0xff preceded by valid push or standalone (not in PUSH data)
             selfdestruct_positions = []
+            delegatecall_positions = []
             i = 0
             while i < len(code_bytes):
                 byte = code_bytes[i]
                 if byte == 0xff:
-                    # Check if preceded by valid opcode that could lead to SELFDESTRUCT
-                    # This is a heuristic - proper disassembly would be better
                     selfdestruct_positions.append(i)
+                    i += 1
+                elif byte == 0xf4:
+                    delegatecall_positions.append(i)
                     i += 1
                 elif 0x60 <= byte <= 0x7f:  # PUSH1-PUSH32
                     # Skip PUSH data
@@ -247,19 +250,7 @@ class SlitherScanner:
                 else:
                     i += 1
             
-            # Check for DELEGATECALL opcode (0xf4) with same logic
-            delegatecall_positions = []
-            i = 0
-            while i < len(code_bytes):
-                byte = code_bytes[i]
-                if byte == 0xf4:
-                    delegatecall_positions.append(i)
-                    i += 1
-                elif 0x60 <= byte <= 0x7f:  # PUSH1-PUSH32
-                    push_size = byte - 0x60 + 1
-                    i += push_size + 1
-                else:
-                    i += 1
+            print(f"   Found {len(selfdestruct_positions)} SELFDESTRUCT, {len(delegatecall_positions)} DELEGATECALL opcodes")
             
             # Additional checks - look for proxy patterns
             # EIP-1167 minimal proxy: 363d3d373d3d3d363d73...5af43d82803e903d91602b57fd5bf3
@@ -269,6 +260,17 @@ class SlitherScanner:
             # OpenZeppelin proxy pattern detection
             oz_proxy_pattern = b'\x36\x82\x80\x37\x90\x3d\x91\x60'
             is_oz_proxy = oz_proxy_pattern in code_bytes
+            
+            print(f"   Proxy patterns: EIP-1167={is_eip1167_proxy}, OZ={is_oz_proxy}")
+            
+            # Always add contract size as info
+            contract_size_kb = len(code_bytes) / 1024
+            findings.append({
+                'severity': 'info',
+                'title': f'Contract size: {contract_size_kb:.2f} KB',
+                'description': f'Contract bytecode is {len(code_bytes)} bytes ({contract_size_kb:.2f} KB)'
+            })
+            severity_counts['info'] += 1
             
             # Report findings with more context
             if is_eip1167_proxy:
@@ -286,9 +288,8 @@ class SlitherScanner:
                 })
                 severity_counts['low'] += 1
             
-            # Only report SELFDESTRUCT if it appears in execution flow (not in push data)
-            # Heuristic: if SELFDESTRUCT appears multiple times, likely real
-            if len(selfdestruct_positions) >= 2:
+            # Report SELFDESTRUCT if found (even once - it's dangerous)
+            if len(selfdestruct_positions) >= 1:
                 findings.append({
                     'severity': 'medium',
                     'title': 'Self-destruct capability detected',
@@ -296,20 +297,20 @@ class SlitherScanner:
                 })
                 severity_counts['medium'] += 1
             
-            # Only report DELEGATECALL if it appears multiple times (proxy pattern)
-            if len(delegatecall_positions) >= 2:
+            # Report DELEGATECALL if found (1+ = potential proxy, 2+ = likely real usage)
+            if len(delegatecall_positions) >= 1:
+                severity = 'high' if len(delegatecall_positions) >= 2 and not (is_eip1167_proxy or is_oz_proxy) else 'medium'
                 findings.append({
-                    'severity': 'high' if not (is_eip1167_proxy or is_oz_proxy) else 'medium',
+                    'severity': severity,
                     'title': 'DELEGATECALL detected',
                     'description': f'Contract uses DELEGATECALL ({len(delegatecall_positions)} occurrences) - could be proxy pattern or potential vulnerability'
                 })
-                if not (is_eip1167_proxy or is_oz_proxy):
+                if severity == 'high':
                     severity_counts['high'] += 1
                 else:
                     severity_counts['medium'] += 1
             
-            # Contract size check
-            contract_size_kb = len(code_bytes) / 1024
+            # Contract size warning if large
             if contract_size_kb > 24:  # Close to 24KB limit
                 findings.append({
                     'severity': 'low',
