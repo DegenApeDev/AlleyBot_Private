@@ -214,3 +214,135 @@ class MoltNewsIntegrationMixin:
             if hasattr(self.core, 'plugin_manager'):
                 return self.core.plugin_manager.plugins.get('moltx')
         return None
+    
+    # ==================== SKILL CHAINING SUPPORT ====================
+    
+    def get_moltnews_skill_actions(self) -> List[Dict[str, Any]]:
+        """
+        Return skill actions for dynamic skill chaining
+        These can be composed with other skills via compose_dynamic_chain
+        """
+        if not self.moltnews or not self.moltnews.initialized:
+            return []
+        
+        return [
+            {
+                "id": "moltnews_fetch_trending",
+                "name": "Fetch Trending News",
+                "description": "Get trending news from MoltNews feed",
+                "handler": self._skill_fetch_trending,
+                "input_schema": {"limit": {"type": "integer", "default": 5}}
+            },
+            {
+                "id": "moltnews_get_topics",
+                "name": "Get Trending Topics",
+                "description": "Extract trending topics from news",
+                "handler": self._skill_get_topics,
+                "input_schema": {"limit": {"type": "integer", "default": 3}}
+            },
+            {
+                "id": "moltnews_suggest_content",
+                "name": "Suggest Content Idea",
+                "description": "Get content suggestion based on news",
+                "handler": self._skill_suggest_content,
+                "input_schema": {}
+            },
+            {
+                "id": "moltnews_crosspost",
+                "name": "Crosspost to Moltx",
+                "description": "Cross-post trending news to Moltx",
+                "handler": self._skill_crosspost,
+                "input_schema": {"post_id": {"type": "string", "optional": True}}
+            },
+            {
+                "id": "moltnews_engage",
+                "name": "Engage with News",
+                "description": "Reply, repost, or like trending posts",
+                "handler": self._skill_engage,
+                "input_schema": {"action": {"type": "string", "default": "auto"}}
+            }
+        ]
+    
+    def _skill_fetch_trending(self, limit: int = 5) -> Dict:
+        """Skill handler: fetch trending news"""
+        if not self.moltnews:
+            return {"success": False, "error": "MoltNews not available"}
+        posts = self.moltnews.fetch_trending(limit=limit)
+        return {
+            "success": True,
+            "posts": posts,
+            "count": len(posts)
+        }
+    
+    def _skill_get_topics(self, limit: int = 3) -> Dict:
+        """Skill handler: get trending topics"""
+        if not self.moltnews_brain:
+            return {"success": False, "error": "MoltNews brain not available"}
+        topics = self.moltnews_brain.get_trending_topics(limit=limit)
+        return {
+            "success": True,
+            "topics": topics,
+            "formatted": ", ".join(topics) if topics else "No trending topics"
+        }
+    
+    def _skill_suggest_content(self) -> Dict:
+        """Skill handler: suggest content idea"""
+        idea = self.get_news_content_idea()
+        return {
+            "success": idea is not None,
+            "suggestion": idea,
+            "topic": "news-based content"
+        }
+    
+    def _skill_crosspost(self, post_id: str = None) -> Dict:
+        """Skill handler: crosspost to Moltx"""
+        return self.crosspost_moltnews_to_moltx(post_id)
+    
+    def _skill_engage(self, action: str = "auto") -> Dict:
+        """Skill handler: engage with news"""
+        return self.engage_with_moltnews(action)
+    
+    def execute_moltnews_skill_chain(self, chain: List[Dict]) -> Dict:
+        """
+        Execute a chain of MoltNews skills
+        Example chain: [
+            {"action": "moltnews_fetch_trending", "args": {"limit": 3}},
+            {"action": "moltnews_suggest_content"},
+            {"action": "moltnews_crosspost"}
+        ]
+        """
+        actions = {a["id"]: a for a in self.get_moltnews_skill_actions()}
+        results = []
+        context = {}
+        
+        for step in chain:
+            action_id = step.get("action")
+            args = step.get("args", {})
+            
+            if action_id not in actions:
+                results.append({"step": action_id, "error": "Unknown action"})
+                continue
+            
+            # Execute the skill
+            handler = actions[action_id]["handler"]
+            try:
+                result = handler(**args)
+                results.append({"step": action_id, "result": result})
+                
+                # Store in context for next steps
+                context[action_id] = result
+                
+                # Break chain if step failed
+                if not result.get("success"):
+                    break
+                    
+            except Exception as e:
+                results.append({"step": action_id, "error": str(e)})
+                break
+        
+        return {
+            "success": all(r.get("result", {}).get("success", False) for r in results if "result" in r),
+            "executed_steps": len(results),
+            "results": results,
+            "context": context
+        }
