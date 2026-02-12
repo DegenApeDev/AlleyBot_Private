@@ -1512,13 +1512,29 @@ Generate only the title (no explanations):"""
         await update.message.reply_text("🎨 Checking my self-image memory...")
         
         try:
-            # Get self-image from memory
-            core = self._get_core()
-            if not core:
-                await update.message.reply_text("❌ Core system not available")
-                return
+            # Get self-image from memory or file fallback
+            self_image = None
             
-            self_image = core.get_memory('alleybot_self_image')
+            # Try core memory first
+            core = self._get_core()
+            if core and hasattr(core, 'get_memory'):
+                try:
+                    self_image = core.get_memory('alleybot_self_image')
+                except Exception as e:
+                    print(f"⚠️ Core memory read failed: {e}")
+            
+            # Fallback: read from file
+            if not self_image:
+                import json
+                import os
+                file_path = 'data/alleybot_self_image.json'
+                if os.path.exists(file_path):
+                    try:
+                        with open(file_path, 'r') as f:
+                            self_image = json.load(f)
+                        print(f"🦞 Self-image loaded from file: {file_path}")
+                    except Exception as e:
+                        print(f"⚠️ File read failed: {e}")
             
             if not self_image:
                 await update.message.reply_text(

@@ -157,8 +157,8 @@ class CheapVisionAnalyzer:
             ext = os.path.splitext(image_path)[1].lower()
             mime_type = 'image/jpeg' if ext in ['.jpg', '.jpeg'] else 'image/png' if ext == '.png' else 'image/webp'
             
-            # Gemini API endpoint (use stable flash model)
-            url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+            # Gemini API endpoint (use stable vision model)
+            url = "https://generativelanguage.googleapis.com/v1/models/gemini-pro-vision:generateContent"
             
             # Add API key as query param
             params = {"key": self.gemini_key}

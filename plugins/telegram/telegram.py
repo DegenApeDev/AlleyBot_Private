@@ -506,12 +506,32 @@ Format as a prompt for image generation."""
                 "version": 1
             }
             
-            if self.core:
-                self.core.save_memory('alleybot_self_image', self_image_data)
-                print(f"🦞 Self-image stored: {image_path}")
+            # Try to store in core memory first
+            stored = False
+            if self.core and hasattr(self.core, 'save_memory'):
+                try:
+                    self.core.save_memory('alleybot_self_image', self_image_data)
+                    print(f"🦞 Self-image stored in core memory: {image_path}")
+                    stored = True
+                except Exception as e:
+                    print(f"⚠️ Core memory save failed: {e}")
+            
+            # Fallback: store to JSON file
+            if not stored:
+                import json
+                os.makedirs('data', exist_ok=True)
+                with open('data/alleybot_self_image.json', 'w') as f:
+                    json.dump(self_image_data, f, indent=2)
+                print(f"🦞 Self-image stored to file: data/alleybot_self_image.json")
+                stored = True
+            
+            return stored
             
         except Exception as e:
             print(f"⚠️ Failed to store self-image: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
 
     async def _handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular messages from owner"""
