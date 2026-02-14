@@ -1157,9 +1157,13 @@ Post:"""
             # Post to the target platform
             if platform == 'moltx':
                 moltx = plugins.get('moltx')
+                print(f"  🔍 Debug: plugins.keys() = {list(plugins.keys())}")
+                print(f"  🔍 Debug: moltx plugin = {moltx}")
+                if moltx:
+                    print(f"  🔍 Debug: moltx.create_post exists = {hasattr(moltx, 'create_post')}")
                 if moltx and hasattr(moltx, 'create_post'):
                     return moltx.create_post(content)
-                return "❌ MoltX plugin not available"
+                return f"❌ MoltX plugin not available (plugin={moltx}, has_create_post={hasattr(moltx, 'create_post') if moltx else False})"
             elif platform == 'moltbook':
                 moltbook = plugins.get('moltbook')
                 if moltbook and hasattr(moltbook, 'create_post_command'):
