@@ -180,8 +180,14 @@ class MoltxWalletMixin:
             raise Exception(f"Verify error: {result.get('error')}")
 
         self.evm_wallet_linked = True
-        self.wallet_address = result["data"]["evm_wallet"]
-        print(f"✅ Wallet linked: {self.wallet_address}")
+        evm_wallet = result.get("data", {}).get("evm_wallet")
+        if isinstance(evm_wallet, dict):
+            self.wallet_address = evm_wallet.get("address")
+        elif isinstance(evm_wallet, str):
+            self.wallet_address = evm_wallet
+        else:
+            self.wallet_address = account.address
+        print(f"✅ Wallet linked: {evm_wallet}")
         return True
 
     def _init_wallet(self):
@@ -226,7 +232,10 @@ class MoltxWalletMixin:
             if self.link_wallet():
                 self.evm_wallet_linked = True
                 self.evm_wallet_address = self.wallet_address
-                print(f"🔗 EVM wallet auto-linked: {self.wallet_address[:10]}...{self.wallet_address[-6:]}")
+                if isinstance(self.wallet_address, str) and len(self.wallet_address) >= 16:
+                    print(f"🔗 EVM wallet auto-linked: {self.wallet_address[:10]}...{self.wallet_address[-6:]}")
+                else:
+                    print(f"🔗 EVM wallet auto-linked: {self.wallet_address}")
                 return True
         except Exception as e:
             print(f"❌ Auto-link wallet failed: {e}")
@@ -234,7 +243,7 @@ class MoltxWalletMixin:
 
     def ensure_linked(self) -> bool:
         """Ensure wallet is linked, link if not"""
-        if self.is_linked and self.wallet_address:
+        if self.evm_wallet_linked and self.wallet_address:
             return True
         return self.link_wallet()
 

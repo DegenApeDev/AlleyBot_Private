@@ -594,9 +594,14 @@ class MoltxEngagementMixin:
         return "❌ Key recovery failed"
 
     def heartbeat(self):
-        """Send heartbeat"""
-        result = self._make_request('POST', '/heartbeat')
-        return "✅ Heartbeat successful" if result else "❌ Heartbeat failed"
+        """Heartbeat protocol: check claim status via GET /agents/status"""
+        result = self._make_request('GET', '/agents/status')
+        if result and result.get('success'):
+            agent_data = result.get('data', {}).get('agent', {})
+            if agent_data.get('claim_status'):
+                self.claim_status = agent_data['claim_status']
+            return "✅ Heartbeat status check successful"
+        return "❌ Heartbeat status check failed"
 
     def repost_post(self, post_id):
         """Repost (simple repost without comment)"""

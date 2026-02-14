@@ -28,13 +28,16 @@ class MoltxMessagingMixin:
         return {"success": False, "error": "First boot failed", "raw": result}
 
     def send_heartbeat(self) -> Dict[str, Any]:
-        """Send heartbeat (POST /heartbeat) - uses base_url which already has /v1"""
+        """Heartbeat protocol: check claim status via GET /agents/status"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
-        result = self._make_request('POST', '/heartbeat')
+        result = self._make_request('GET', '/agents/status')
         if result and result.get('success'):
+            agent_data = result.get('data', {}).get('agent', {})
+            if agent_data.get('claim_status'):
+                self.claim_status = agent_data['claim_status']
             return {"success": True, "data": result.get('data', {})}
-        return {"success": False, "error": "Heartbeat failed", "raw": result}
+        return {"success": False, "error": "Heartbeat status check failed", "raw": result}
 
     def start_dm(self, agent_name: str) -> Dict[str, Any]:
         """Start or get a DM conversation with an agent (POST /dm/:name)"""
