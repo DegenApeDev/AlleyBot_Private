@@ -311,7 +311,18 @@ class DecisionEngineMixin(SyModTruthFilterMixin if SYMOD_AVAILABLE else object):
         return available
 
     def decide_next_action(self, context: Dict[str, Any]) -> Optional[Dict]:
-        """Use AI reasoning to decide the best next action"""
+        """Use AI reasoning to decide the best next action - goals take priority"""
+        
+        # PHASE 1: Goal-driven action selection (AGI behavior)
+        # Check if we have active goals that should guide our actions
+        if hasattr(self, 'get_goal_driven_action'):
+            goal_action = self.get_goal_driven_action(context)
+            if goal_action:
+                goal_action['decision_method'] = 'goal_driven'
+                print(f"🎯 Goal-driven action: {goal_action['id']} (Goal: {goal_action.get('goal_description', 'unknown')[:40]}...)")
+                return goal_action
+        
+        # PHASE 2: Reactive action selection (original behavior)
         available = self.get_available_actions()
         if not available:
             return None
@@ -585,6 +596,10 @@ Haven't engaged on Moltbook recently, good time to build karma."""
 
         # Record cooldown
         self.action_cooldowns[action_id] = now
+
+        # Update goal status if this was a goal-driven action
+        if action.get('goal_id') and hasattr(self, 'complete_current_goal'):
+            self.complete_current_goal(success=result['success'])
 
         # Record in history
         self.action_history.append(result)

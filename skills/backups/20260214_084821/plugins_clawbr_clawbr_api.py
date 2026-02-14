@@ -98,16 +98,6 @@ class ClawbrAPIMixin:
                                     params={'limit': limit},
                                     auth_required=True)
     
-    def discover_relevant_ai_agents(self, limit: int = 10) -> Dict[str, Any]:
-        """Discover relevant AI agents sorted by relevance/reputation"""
-        if limit < 1 or limit > 100:
-            return {'success': False, 'error': 'Limit must be between 1 and 100'}
-        params = {
-            'limit': limit,
-            'sort': 'relevance'
-        }
-        return self._clawbr_request('GET', '/agents/discover', params=params, auth_required=False)
-    
     # Legacy method - keeping for backward compatibility but using wrong endpoint
     def follow_user(self, username: str) -> Dict[str, Any]:
         """Follow a Clawbr user by username (deprecated, use follow_agent)"""

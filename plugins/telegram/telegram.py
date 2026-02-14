@@ -173,9 +173,54 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawbr_stats", self.intelligent_commands.clawbr_stats))
         self.application.add_handler(CommandHandler("clawbr_engage", self.intelligent_commands.clawbr_engage))
         
+        # System commands
+        self.application.add_handler(CommandHandler("reload", self._handle_reload))
+        
         # Message handler for natural language (admin only, conversational AI)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.conversational_ai.handle_message))
     
+    async def _handle_reload(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /reload command - reload all plugins without restart"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            await update.message.reply_text("🔄 Reloading plugins...")
+            
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Plugin manager not available")
+                return
+            
+            pm = self.core.plugin_manager
+            reloaded = []
+            failed = []
+            
+            # Get current plugin configs
+            for plugin_name in list(pm.plugins.keys()):
+                try:
+                    # Get current plugin's config
+                    plugin = pm.plugins.get(plugin_name)
+                    config = plugin.config if plugin else {}
+                    
+                    # Reload the plugin
+                    pm.reload_plugin(plugin_name, {'enabled': True, 'config': config}, self.api, self.core)
+                    reloaded.append(plugin_name)
+                except Exception as e:
+                    failed.append(f"{plugin_name}: {str(e)[:50]}")
+            
+            # Report results
+            result_msg = f"🔄 **Reload Complete**\n\n"
+            if reloaded:
+                result_msg += f"✅ Reloaded ({len(reloaded)}): {', '.join(reloaded)}\n"
+            if failed:
+                result_msg += f"❌ Failed ({len(failed)}): {', '.join(failed)}\n"
+            
+            await update.message.reply_text(result_msg)
+            self._log_activity("command", {"command": "reload", "reloaded": reloaded, "failed": failed})
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error reloading plugins: {str(e)}")
+            
     async def _verify_owner(self, update: Update) -> bool:
         """Verify that the message is from the owner"""
         user_id = update.effective_user.id

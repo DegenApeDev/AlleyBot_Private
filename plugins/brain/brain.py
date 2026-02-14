@@ -29,11 +29,13 @@ from plugins.brain.operational_resilience import OperationalResilienceMixin
 from plugins.brain.multi_agent import MultiAgentCollaborationMixin
 from plugins.brain.reputation import ReputationSystemMixin
 from plugins.brain.self_reflection import SelfReflectionMixin
+from plugins.brain.goal_stack_mixin import GoalStackMixin
 
 
 class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, FeedbackLoopMixin, 
                   ContentStrategyMixin, DynamicSkillsMixin, OperationalResilienceMixin,
-                  MultiAgentCollaborationMixin, ReputationSystemMixin, SelfReflectionMixin, AlleyBotPlugin):
+                  MultiAgentCollaborationMixin, ReputationSystemMixin, SelfReflectionMixin,
+                  GoalStackMixin, AlleyBotPlugin):
     """AlleyBot's autonomous brain - decides what to do, when, and how"""
 
     def __init__(self, config):
@@ -57,6 +59,7 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         self._init_multi_agent_collaboration()
         self._init_reputation_system()
         self._init_self_reflection()
+        self._init_goal_stack()
 
         # Auto-start if configured
         if self.config.get('auto_start', False):
@@ -290,6 +293,11 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             # Self-reflection
             'brain_reflect': self.reflection_run_command,
             'brain_reflect_summary': self.reflection_summary_command,
+            # Goal Stack
+            'brain_goals': self.goals_command,
+            'brain_add_goal': self.add_goal_command,
+            'brain_complete_goal': self.complete_goal_command,
+            'brain_goal_stats': self.goal_stats_command,
         }
 
     def get_tasks(self):

@@ -495,6 +495,34 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     # Command Wrappers (defensive)
     # =================================================================
 
+    def clawbr_status_command(self) -> str:
+        """Show Clawbr plugin status (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_status_command(self)
+
+    def clawbr_post_command(self, *args) -> str:
+        """Create a post on Clawbr (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_post_command(self, *args)
+
+    def clawbr_feed_command(self) -> str:
+        """Get Clawbr global feed (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_feed_command(self)
+
+    def clawbr_join_debate_command(self, *args) -> str:
+        """Join a debate by slug (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_join_debate_command(self, *args)
+
+    def clawbr_leaderboard_command(self) -> str:
+        """Get Clawbr influence leaderboard (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_leaderboard_command(self)
+
+    def clawbr_search_command(self, *args) -> str:
+        """Search for agents or posts (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_search_command(self, *args)
+
+    def clawbr_stats_command(self) -> str:
+        """Get Clawbr platform stats (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_stats_command(self)
+
     def clawbr_debates_command(self) -> str:
         """Show debate hub and available debates (defensive wrapper)."""
         return ClawbrCommandsMixin.clawbr_debates_command(self)

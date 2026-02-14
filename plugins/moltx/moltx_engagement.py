@@ -46,15 +46,19 @@ class MoltxEngagementMixin:
         mime_type = mime_type or 'application/octet-stream'
         upload_url = f"{self.base_url}/media/upload"
         try:
-            headers = getattr(self, 'headers', {})
-            headers.setdefault('Accept', 'application/json')
+            headers = {'Accept': 'application/json'}
+            # Add Authorization header with API key
+            if hasattr(self, 'api_key') and self.api_key:
+                headers['Authorization'] = f'Bearer {self.api_key}'
             with open(file_path, 'rb') as f:
-                files = {'media': (os.path.basename(file_path), f, mime_type)}
+                files = {'file': (os.path.basename(file_path), f, mime_type)}
                 response = requests.post(upload_url, files=files, headers=headers, timeout=30)
                 response.raise_for_status()
                 data = response.json()
-                media_id = data.get('media_id') or data.get('id')
-                return media_id if media_id else "❌ No media_id returned"
+                # Return CDN URL from response (data.url per skill.md)
+                if data.get('success') and data.get('data'):
+                    return data.get('data', {}).get('url') or data.get('data', {}).get('media_url')
+                return "❌ No media URL returned"
         except Exception as e:
             return f"❌ Upload failed: {str(e)[:100]}"
 
@@ -156,12 +160,23 @@ class MoltxEngagementMixin:
             post_id = post_id.strip()
 
         result = self._make_request('POST', f'/posts/{post_id}/like')
+        
+        # Debug logging
+        print(f"🔍 like_post result for {post_id}: {result}")
 
-        if result:
-            self._record_activity('like', {'post_id': post_id})
-            return f"✅ Liked post {post_id}"
+        # Check for actual success - result should be dict with success=True
+        if result and isinstance(result, dict):
+            if result.get('success'):
+                self._record_activity('like', {'post_id': post_id})
+                return f"✅ Liked post {post_id}"
+            else:
+                error = result.get('error', result.get('message', 'Unknown error'))
+                return f"❌ Failed to like post {post_id}: {error}"
+        elif result:
+            # Unexpected response type
+            return f"⚠️ Unexpected response liking post {post_id}: {str(result)[:100]}"
         else:
-            return f"❌ Failed to like post {post_id}"
+            return f"❌ Failed to like post {post_id}: No response from API"
 
     def unlike_post(self, post_id):
         """Unlike a post (remove like)"""
@@ -500,7 +515,7 @@ class MoltxEngagementMixin:
 
     def get_trending_hashtags(self, limit=20):
         """Get trending hashtags"""
-        result = self._make_request('GET', '/v1/hashtags/trending', params={'limit': limit})
+        result = self._make_request('GET', '/hashtags/trending', params={'limit': limit})
         hashtags = result.get('hashtags', []) if result else []
         output = f"🔥 Trending Hashtags ({len(hashtags)}):\n\n"
         for tag in hashtags[:limit]:
@@ -566,7 +581,7 @@ class MoltxEngagementMixin:
     def claim_agent(self, tweet_url):
         """Claim agent for verified status"""
         data = {'tweet_url': tweet_url.strip()}
-        result = self._make_request('POST', '/v1/agents/claim', json=data)
+        result = self._make_request('POST', '/agents/claim', json=data)
         if result and result.get('success', result.get('claimed')):
             self.initialized = True
             return f"✅ Claimed agent with {tweet_url}"

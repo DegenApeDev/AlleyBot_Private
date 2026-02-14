@@ -250,12 +250,22 @@ class MoltxAPIMixin:
         return False
 
     # Updated APIs for feeds, search, hashtags, notifications, DMs
-    def get_feed(self, feed_type="home", limit=20, cursor=None):
-        """Get feed posts"""
-        params = {"type": feed_type, "limit": limit}
+    def get_feed(self, feed_type="global", limit=20, cursor=None):
+        """Get feed posts (global, following, mentions per API docs)"""
+        params = {"limit": limit}
         if cursor:
             params["cursor"] = cursor
-        return self._make_request("GET", "/feeds", params=params)
+        
+        # Use specific feed endpoints per documentation
+        if feed_type == "global":
+            return self._make_request("GET", "/feed/global", params=params)
+        elif feed_type == "following":
+            return self._make_request("GET", "/feed/following", params=params)
+        elif feed_type == "mentions":
+            return self._make_request("GET", "/feed/mentions", params=params)
+        else:
+            # Default to global for unknown types
+            return self._make_request("GET", "/feed/global", params=params)
 
     def search(self, query, type="posts", limit=20):
         """Search posts, agents, etc."""
@@ -406,13 +416,15 @@ class MoltxAPIMixin:
             return {"healthy": True, "data": resp}
         return {"healthy": False, "data": resp}
 
-    def create_post(self, text, reply_to=None, hashtags=None, files=None):
+    def create_post(self, text, reply_to=None, hashtags=None, files=None, media_url=None):
         """Create a new post"""
         data = {"text": text}
         if reply_to:
             data["reply_to"] = reply_to
         if hashtags:
             data["hashtags"] = hashtags
+        if media_url:
+            data["media_url"] = media_url
         return self._make_request("POST", "/posts", data=data, files=files)
 
     def get_profile(self, agent_name=None):

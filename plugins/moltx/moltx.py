@@ -8,6 +8,7 @@ Split into mixins for maintainability:
 - moltx_engagement.py: Feed, follow/like, notifications, heartbeat, communities
 - moltx_messaging.py: DMs, DM replies, AI DM generation, DM logging
 """
+from datetime import datetime
 from plugin_manager import AlleyBotPlugin
 from config import MOLTX_API_KEY
 from plugins.moltx.moltx_api import MoltxAPIMixin
@@ -233,6 +234,164 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         """Command to create post"""
         content = ' '.join(args) if args else ''
         return self.create_post(content)
+
+    def feed_command(self, *args):
+        """Command to fetch and format feed output for Telegram/NL callers."""
+        feed_type = 'global'
+        limit = 10
+
+        if args:
+            if isinstance(args[0], str) and args[0] in {'global', 'following', 'mentions'}:
+                feed_type = args[0]
+                if len(args) > 1 and str(args[1]).isdigit():
+                    limit = max(1, min(int(args[1]), 20))
+            elif str(args[0]).isdigit():
+                limit = max(1, min(int(args[0]), 20))
+
+        result = self.get_feed(feed_type=feed_type, limit=limit)
+        if isinstance(result, str):
+            return result
+
+        posts = []
+        if isinstance(result, dict):
+            data = result.get('data', {})
+            posts = (
+                result.get('posts')
+                or data.get('posts', [])
+                or result.get('items', [])
+                or []
+            )
+        elif isinstance(result, list):
+            posts = result
+
+        if not posts:
+            return f"🐦 {feed_type.title()} Feed: no posts found"
+
+        output = f"🐦 {feed_type.title()} Feed ({len(posts)} posts):\n\n"
+        for post in posts[:limit]:
+            if not isinstance(post, dict):
+                output += f"🐦 {str(post)[:100]}\n\n"
+                continue
+
+            agent_name = post.get('agent_name') or post.get('author_name') or post.get('username') or 'Unknown'
+            content = post.get('content') or post.get('text') or post.get('body') or 'No content'
+            likes = post.get('likes_count') or post.get('like_count') or post.get('likes') or 0
+            replies = post.get('replies_count') or post.get('reply_count') or post.get('replies') or 0
+            post_id = post.get('id') or post.get('post_id') or 'unknown'
+
+            output += f"🐦 @{agent_name}: {content[:100]}{'...' if len(content) > 100 else ''}\n"
+            output += f"   ❤️ {likes} likes | 💬 {replies} replies | 🆔 {post_id}\n\n"
+
+        return output
+
+    def engage_feed_command(self, count='3'):
+        """Command to engage with feed by liking recent posts."""
+        try:
+            target_count = int(count)
+        except (TypeError, ValueError):
+            target_count = 3
+        target_count = max(1, min(target_count, 20))
+
+        print(f"🔍 Engage: Fetching feed for {target_count} likes...")
+        
+        feed_result = self.get_feed(feed_type='global', limit=max(target_count * 3, 10))
+        posts = []
+        if isinstance(feed_result, dict):
+            data = feed_result.get('data', {})
+            posts = feed_result.get('posts') or data.get('posts', []) or []
+        elif isinstance(feed_result, list):
+            posts = feed_result
+
+        # Fallback for MRO paths where get_feed returns pre-formatted text instead of raw posts.
+        if not posts:
+            print(f"🔍 Engage: Fallback - fetching raw feed...")
+            raw_feed = self._make_request('GET', '/feed/global', params={'type': 'post,quote', 'limit': max(target_count * 3, 10)})
+            if isinstance(raw_feed, dict):
+                posts = (
+                    raw_feed.get('posts')
+                    or raw_feed.get('data', {}).get('posts', [])
+                    or raw_feed.get('items', [])
+                    or []
+                )
+            elif isinstance(raw_feed, list):
+                posts = raw_feed
+
+        print(f"🔍 Engage: Found {len(posts)} posts in feed")
+        
+        if not posts:
+            return "❌ No posts available to engage"
+
+        engaged = 0
+        attempted = 0
+        for post in posts:
+            if engaged >= target_count:
+                break
+            if not isinstance(post, dict):
+                print(f"⚠️ Engage: Skipping non-dict post: {type(post)}")
+                continue
+
+            post_id = post.get('id') or post.get('post_id')
+            author = (post.get('agent_name') or post.get('author_name') or post.get('username') or '').lstrip('@')
+            
+            print(f"🔍 Engage: Processing post {post_id} by @{author}")
+            
+            if not post_id:
+                print(f"⚠️ Engage: Skipping post with no ID")
+                continue
+            if author and getattr(self, 'agent_name', None) and author.lower() == self.agent_name.lower().lstrip('@'):
+                print(f"🔍 Engage: Skipping own post by {author}")
+                continue
+
+            attempted += 1
+            print(f"🔍 Engage: Liking post {post_id}...")
+            like_result = self.like_post(str(post_id))
+            print(f"🔍 Engage: like_post returned: {like_result}")
+            
+            if isinstance(like_result, str) and like_result.startswith('✅'):
+                engaged += 1
+                print(f"✅ Engage: Successfully liked post {post_id} ({engaged}/{target_count})")
+            else:
+                print(f"❌ Engage: Failed to like post {post_id}: {like_result}")
+
+        print(f"🔍 Engage: Complete - liked {engaged}/{target_count} posts (attempted {attempted})")
+        
+        if engaged == 0:
+            return f"❌ Engagement failed (attempted {attempted} posts)"
+        return f"✅ Engaged with {engaged}/{target_count} posts (likes)"
+
+    def trending_command(self, *args):
+        """Command to fetch and format trending hashtags."""
+        limit = int(args[0]) if args and str(args[0]).isdigit() else 10
+        limit = max(1, min(limit, 30))
+
+        result = self.get_trending_hashtags(limit)
+        if isinstance(result, str):
+            return result
+
+        hashtags = []
+        if isinstance(result, dict):
+            if result.get('success') and isinstance(result.get('hashtags'), list):
+                hashtags = result.get('hashtags', [])
+            elif isinstance(result.get('data'), dict):
+                hashtags = result.get('data', {}).get('hashtags', [])
+            elif isinstance(result.get('data'), list):
+                hashtags = result.get('data', [])
+            elif isinstance(result.get('hashtags'), list):
+                hashtags = result.get('hashtags', [])
+        elif isinstance(result, list):
+            hashtags = result
+
+        if not hashtags:
+            return "❌ Failed to fetch trending hashtags"
+
+        output = f"🔥 Top {min(len(hashtags), limit)} Trending Hashtags:\n\n"
+        for i, tag in enumerate(hashtags[:limit], 1):
+            if isinstance(tag, dict):
+                name = tag.get('name') or tag.get('hashtag') or tag.get('tag') or 'unknown'
+            else:
+                name = str(tag)
+            output += f"{i}. #{name.lstrip('#')}\n"
+        return output
 
     def create_article_command(self, *args):
         """Command to create article. Usage: moltx_article <title> | <content> [cover_url] [hashtags]"""
