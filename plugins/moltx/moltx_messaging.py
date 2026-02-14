@@ -1,7 +1,7 @@
 """
 Moltx Messaging Mixin
 Direct messages, DM replies, AI-powered DM generation, and DM activity logging.
-Uses v0.23.1 API format: POST /v1/dm/:name, GET /v1/dm, etc.
+Uses v0.23.1 API format: POST /dm/:name, GET /dm, etc.
 Enhanced with community support: browse public communities, join, list joined, message with media.
 Added: feeds, search, hashtags, notifications, articles, leaderboard, claim/rewards/key recovery, first boot/heartbeat protocols.
 """
@@ -18,41 +18,41 @@ class MoltxMessagingMixin:
         super().__init__(*args, **kwargs)
 
     def perform_first_boot(self) -> Dict[str, Any]:
-        """First boot protocol (POST /v1/boot)"""
+        """First boot protocol (POST /boot)"""
         if self.initialized:
             return {"success": True, "message": "Already booted"}
-        result = self._make_request('POST', '/v1/boot')
+        result = self._make_request('POST', '/boot')
         if result and result.get('success'):
             self.initialized = True
             return {"success": True, "data": result.get('data', {})}
         return {"success": False, "error": "First boot failed", "raw": result}
 
     def send_heartbeat(self) -> Dict[str, Any]:
-        """Send heartbeat (POST /v1/heartbeat)"""
+        """Send heartbeat (POST /heartbeat) - uses base_url which already has /v1"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
-        result = self._make_request('POST', '/v1/heartbeat')
+        result = self._make_request('POST', '/heartbeat')
         if result and result.get('success'):
             return {"success": True, "data": result.get('data', {})}
         return {"success": False, "error": "Heartbeat failed", "raw": result}
 
     def start_dm(self, agent_name: str) -> Dict[str, Any]:
-        """Start or get a DM conversation with an agent (POST /v1/dm/:name)"""
+        """Start or get a DM conversation with an agent (POST /dm/:name)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
-        result = self._make_request('POST', f'/v1/dm/{agent_name}')
+        result = self._make_request('POST', f'/dm/{agent_name}')
 
         if result and result.get('success'):
             return {"success": True, "data": result.get('data', {})}
         return {"success": False, "error": f"Failed to start DM with @{agent_name}", "raw": result}
 
     def list_dms(self) -> Dict[str, Any]:
-        """List all DM conversations (GET /v1/dm)"""
+        """List all DM conversations (GET /dm)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
-        result = self._make_request('GET', '/v1/dm')
+        result = self._make_request('GET', '/dm')
 
         if result and result.get('success'):
             conversations = result.get('data', {}).get('conversations', [])
@@ -60,12 +60,12 @@ class MoltxMessagingMixin:
         return {"success": False, "error": "Failed to list DMs", "raw": result}
 
     def get_dm_messages(self, agent_name: str, limit: int = 50) -> Dict[str, Any]:
-        """Get messages from a DM conversation (GET /v1/dm/:name/messages)"""
+        """Get messages from a DM conversation (GET /dm/:name/messages)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
         params = {'limit': limit}
-        result = self._make_request('GET', f'/v1/dm/{agent_name}/messages', params=params)
+        result = self._make_request('GET', f'/dm/{agent_name}/messages', params=params)
 
         if result and result.get('success'):
             messages = result.get('data', {}).get('messages', [])
@@ -73,7 +73,7 @@ class MoltxMessagingMixin:
         return {"success": False, "error": f"Failed to get messages with @{agent_name}", "raw": result}
 
     def send_dm_message(self, agent_name: str, content: str, media_url: str = None) -> Dict[str, Any]:
-        """Send a message to an agent (POST /v1/dm/:name/messages), supports media"""
+        """Send a message to an agent (POST /dm/:name/messages), supports media"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
@@ -81,7 +81,7 @@ class MoltxMessagingMixin:
         if media_url:
             data['media_url'] = media_url
 
-        result = self._make_request('POST', f'/v1/dm/{agent_name}/messages', data)
+        result = self._make_request('POST', f'/dm/{agent_name}/messages', data)
 
         if result and result.get('success'):
             msg_data = result.get('data', {})
@@ -108,11 +108,11 @@ class MoltxMessagingMixin:
     # --- Community Functionality ---
 
     def list_public_communities(self) -> Dict[str, Any]:
-        """Browse public communities/groups (GET /v1/communities)"""
+        """Browse public communities/groups (GET /communities)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
-        result = self._make_request('GET', '/v1/communities')
+        result = self._make_request('GET', '/communities')
 
         if result and result.get('success'):
             communities = result.get('data', {}).get('communities', [])
@@ -120,11 +120,11 @@ class MoltxMessagingMixin:
         return {"success": False, "error": "Failed to list public communities", "raw": result}
 
     def join_community(self, community_id: str) -> Dict[str, Any]:
-        """Join a community/group (POST /v1/communities/:id/join)"""
+        """Join a community/group (POST /communities/:id/join)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
-        result = self._make_request('POST', f'/v1/communities/{community_id}/join')
+        result = self._make_request('POST', f'/communities/{community_id}/join')
 
         if result and result.get('success'):
             self._record_activity('community_joined', {'community_id': community_id})
@@ -132,11 +132,11 @@ class MoltxMessagingMixin:
         return {"success": False, "error": f"Failed to join community {community_id}", "raw": result}
 
     def list_communities(self) -> Dict[str, Any]:
-        """List joined community conversations (GET /v1/conversations)"""
+        """List joined community conversations (GET /conversations)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
-        result = self._make_request('GET', '/v1/conversations')
+        result = self._make_request('GET', '/conversations')
 
         if result and result.get('success'):
             conversations = result.get('data', {}).get('conversations', [])
@@ -144,11 +144,11 @@ class MoltxMessagingMixin:
         return {"success": False, "error": "Failed to list communities", "raw": result}
 
     def leave_community(self, community_id: str) -> Dict[str, Any]:
-        """Leave a community (POST /v1/conversations/:id/leave)"""
+        """Leave a community (POST /conversations/:id/leave)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
-        result = self._make_request('POST', f'/v1/conversations/{community_id}/leave')
+        result = self._make_request('POST', f'/conversations/{community_id}/leave')
 
         if result and result.get('success'):
             self._record_activity('community_left', {'community_id': community_id})
@@ -156,12 +156,12 @@ class MoltxMessagingMixin:
         return {"success": False, "error": f"Failed to leave community {community_id}", "raw": result}
 
     def get_community_messages(self, conversation_id: str, limit: int = 50) -> Dict[str, Any]:
-        """Get messages from a community conversation (GET /v1/conversations/:id/messages)"""
+        """Get messages from a community conversation (GET /conversations/:id/messages)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
         params = {'limit': limit}
-        result = self._make_request('GET', f'/v1/conversations/{conversation_id}/messages', params=params)
+        result = self._make_request('GET', f'/conversations/{conversation_id}/messages', params=params)
 
         if result and result.get('success'):
             messages = result.get('data', {}).get('messages', [])
@@ -169,7 +169,7 @@ class MoltxMessagingMixin:
         return {"success": False, "error": f"Failed to get messages from community {conversation_id}", "raw": result}
 
     def send_community_message(self, conversation_id: str, content: str, media_url: str = None) -> Dict[str, Any]:
-        """Send a message to a community (POST /v1/conversations/:id/messages), supports media"""
+        """Send a message to a community (POST /conversations/:id/messages), supports media"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
@@ -177,7 +177,7 @@ class MoltxMessagingMixin:
         if media_url:
             data['media_url'] = media_url
 
-        result = self._make_request('POST', f'/v1/conversations/{conversation_id}/messages', data)
+        result = self._make_request('POST', f'/conversations/{conversation_id}/messages', data)
 
         if result and result.get('success'):
             msg_data = result.get('data', {})
@@ -192,12 +192,12 @@ class MoltxMessagingMixin:
     # --- Feed and Discovery ---
 
     def get_feed(self, feed_type: str = 'global', limit: int = 50) -> Dict[str, Any]:
-        """Get feed posts (GET /v1/feed)"""
+        """Get feed posts (GET /feed)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
         params = {'type': feed_type, 'limit': limit}
-        result = self._make_request('GET', '/v1/feed', params=params)
+        result = self._make_request('GET', '/feed', params=params)
 
         if result and result.get('success'):
             posts = result.get('data', {}).get('posts', [])
@@ -205,12 +205,12 @@ class MoltxMessagingMixin:
         return {"success": False, "error": f"Failed to get {feed_type} feed", "raw": result}
 
     def search_posts(self, query: str, limit: int = 20) -> Dict[str, Any]:
-        """Search for posts (GET /v1/search/posts)"""
+        """Search for posts (GET /search/posts)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
         params = {'q': query, 'limit': limit}
-        result = self._make_request('GET', '/v1/search/posts', params=params)
+        result = self._make_request('GET', '/search/posts', params=params)
 
         if result and result.get('success'):
             posts = result.get('data', {}).get('posts', [])
@@ -218,12 +218,12 @@ class MoltxMessagingMixin:
         return {"success": False, "error": f"Failed to search posts for '{query}'", "raw": result}
 
     def search_agents(self, query: str, limit: int = 20) -> Dict[str, Any]:
-        """Search for agents/users (GET /v1/search/agents)"""
+        """Search for agents/users (GET /search/agents)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
         params = {'q': query, 'limit': limit}
-        result = self._make_request('GET', '/v1/search/agents', params=params)
+        result = self._make_request('GET', '/search/agents', params=params)
 
         if result and result.get('success'):
             agents = result.get('data', {}).get('agents', [])
@@ -233,12 +233,12 @@ class MoltxMessagingMixin:
     # --- Hashtags ---
 
     def get_trending_hashtags(self, limit: int = 20) -> Dict[str, Any]:
-        """Get trending hashtags (GET /v1/hashtags/trending)"""
+        """Get trending hashtags (GET /hashtags/trending)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
         params = {'limit': limit}
-        result = self._make_request('GET', '/v1/hashtags/trending', params=params)
+        result = self._make_request('GET', '/hashtags/trending', params=params)
 
         if result and result.get('success'):
             hashtags = result.get('data', {}).get('hashtags', [])
@@ -248,12 +248,12 @@ class MoltxMessagingMixin:
     # --- Notifications ---
 
     def get_notifications(self, limit: int = 50, mark_read: bool = False) -> Dict[str, Any]:
-        """List notifications (GET /v1/notifications)"""
+        """List notifications (GET /notifications)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
         params = {'limit': limit, 'mark_read': mark_read}
-        result = self._make_request('GET', '/v1/notifications', params=params)
+        result = self._make_request('GET', '/notifications', params=params)
 
         if result and result.get('success'):
             notifs = result.get('data', {}).get('notifications', [])
@@ -263,12 +263,12 @@ class MoltxMessagingMixin:
     # --- Articles ---
 
     def list_articles(self, limit: int = 20) -> Dict[str, Any]:
-        """List articles (GET /v1/articles)"""
+        """List articles (GET /articles)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
         params = {'limit': limit}
-        result = self._make_request('GET', '/v1/articles', params=params)
+        result = self._make_request('GET', '/articles', params=params)
 
         if result and result.get('success'):
             articles = result.get('data', {}).get('articles', [])
@@ -276,7 +276,7 @@ class MoltxMessagingMixin:
         return {"success": False, "error": "Failed to list articles", "raw": result}
 
     def create_article(self, title: str, content: str, tags: List[str] = None, media_url: str = None) -> Dict[str, Any]:
-        """Create an article (POST /v1/articles)"""
+        """Create an article (POST /articles)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
@@ -289,7 +289,7 @@ class MoltxMessagingMixin:
         if media_url:
             data['media_url'] = media_url
 
-        result = self._make_request('POST', '/v1/articles', data)
+        result = self._make_request('POST', '/articles', data)
 
         if result and result.get('success'):
             self._record_activity('article_created', {'title': title[:50]})
@@ -299,12 +299,12 @@ class MoltxMessagingMixin:
     # --- Leaderboard ---
 
     def get_leaderboard(self, period: str = 'weekly', limit: int = 10) -> Dict[str, Any]:
-        """Get leaderboard (GET /v1/leaderboard)"""
+        """Get leaderboard (GET /leaderboard)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
         params = {'period': period, 'limit': limit}
-        result = self._make_request('GET', '/v1/leaderboard', params=params)
+        result = self._make_request('GET', '/leaderboard', params=params)
 
         if result and result.get('success'):
             entries = result.get('data', {}).get('entries', [])
@@ -314,12 +314,12 @@ class MoltxMessagingMixin:
     # --- Rewards and Account ---
 
     def claim_account(self, tweet_url: str) -> Dict[str, Any]:
-        """Claim account with tweet proof (POST /v1/agents/claim)"""
+        """Claim account with tweet proof (POST /agents/claim)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
         data = {'tweet_url': tweet_url}
-        result = self._make_request('POST', '/v1/agents/claim', data=data)
+        result = self._make_request('POST', '/agents/claim', data=data)
 
         if result and result.get('success'):
             self._record_activity('account_claimed', {'tweet_url': tweet_url})
@@ -327,11 +327,11 @@ class MoltxMessagingMixin:
         return {"success": False, "error": "Failed to claim account", "raw": result}
 
     def claim_rewards(self) -> Dict[str, Any]:
-        """Claim available rewards (POST /v1/rewards/claim)"""
+        """Claim available rewards (POST /rewards/claim)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
-        result = self._make_request('POST', '/v1/rewards/claim')
+        result = self._make_request('POST', '/rewards/claim')
 
         if result and result.get('success'):
             rewards_data = result.get('data', {})
@@ -340,11 +340,11 @@ class MoltxMessagingMixin:
         return {"success": False, "error": "Failed to claim rewards", "raw": result}
 
     def recover_key(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Recover account key (POST /v1/agents/key-recovery)"""
+        """Recover account key (POST /agents/key-recovery)"""
         if not self.initialized:
             return {"success": False, "error": "Moltx not initialized"}
 
-        result = self._make_request('POST', '/v1/agents/key-recovery', data=data)
+        result = self._make_request('POST', '/agents/key-recovery', data=data)
 
         if result and result.get('success'):
             self._record_activity('key_recovered', {'method': data.get('method', 'unknown')})
