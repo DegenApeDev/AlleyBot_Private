@@ -49,7 +49,10 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         # EVM wallet linking (mandatory for write operations per v0.22.1)
         self._init_wallet()
         if self.initialized and not self.evm_wallet_linked:
-            self.auto_link_wallet()
+            print(f"🔌 Attempting EVM wallet auto-link for @{self.agent_name}...")
+            link_result = self.auto_link_wallet()
+            if not link_result:
+                print(f"⚠️  Wallet auto-link failed - you can retry with /moltx_link_wallet")
 
         # Heartbeat protocol
         if self.initialized and hasattr(self, 'send_heartbeat'):
@@ -172,6 +175,25 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
             self.core.save_memory('moltx_activities', activities[-100:])
         except Exception as e:
             print(f"⚠️  Could not record activity: {e}")
+
+    def link_wallet_command(self):
+        """Manually trigger EVM wallet linking via EIP-712"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        
+        if not hasattr(self, 'private_key') or not self.private_key:
+            return "❌ No private key configured. Set BASE_WALLET_PRIVATE_KEY in .env"
+        
+        if not hasattr(self, 'agent_name') or not self.agent_name:
+            return "❌ No agent name available"
+        
+        print(f"🔌 Attempting wallet link for @{self.agent_name}...")
+        result = self.auto_link_wallet()
+        
+        if result and self.evm_wallet_linked:
+            return f"✅ Wallet linked successfully!\n🔗 Address: {self.evm_wallet_address}"
+        else:
+            return f"❌ Wallet linking failed. Check logs for details.\n📍 Configured address: {getattr(self, 'evm_wallet_address', 'N/A')}"
 
     def profile_command(self, display_name=None, description=None, avatar_emoji=None):
         """Command to update agent profile metadata (display_name, description, avatar_emoji)"""
