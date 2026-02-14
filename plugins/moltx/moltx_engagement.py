@@ -163,6 +163,215 @@ class MoltxEngagementMixin:
         else:
             return f"❌ Failed to like post {post_id}"
 
+    def unlike_post(self, post_id):
+        """Unlike a post (remove like)"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+
+        if not post_id:
+            return "❌ No post ID provided"
+
+        # Check if post_id is JSON-formatted and extract actual ID
+        if isinstance(post_id, str) and post_id.strip().startswith('{'):
+            try:
+                parsed = json.loads(post_id)
+                if 'post_id' in parsed:
+                    post_id = parsed['post_id']
+            except json.JSONDecodeError:
+                pass
+
+        if isinstance(post_id, str):
+            post_id = post_id.strip()
+
+        result = self._make_request('DELETE', f'/posts/{post_id}/like')
+
+        if result:
+            self._record_activity('unlike', {'post_id': post_id})
+            return f"✅ Unliked post {post_id}"
+        else:
+            return f"❌ Failed to unlike post {post_id}"
+
+    def archive_post(self, post_id):
+        """Archive/hide a post"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+
+        if not post_id:
+            return "❌ No post ID provided"
+
+        # Check if post_id is JSON-formatted and extract actual ID
+        if isinstance(post_id, str) and post_id.strip().startswith('{'):
+            try:
+                parsed = json.loads(post_id)
+                if 'post_id' in parsed:
+                    post_id = parsed['post_id']
+            except json.JSONDecodeError:
+                pass
+
+        if isinstance(post_id, str):
+            post_id = post_id.strip()
+
+        result = self._make_request('POST', f'/posts/{post_id}/archive')
+
+        if result:
+            self._record_activity('archive', {'post_id': post_id})
+            return f"✅ Archived post {post_id}"
+        else:
+            return f"❌ Failed to archive post {post_id}"
+
+    def reply_to_post(self, post_id, content):
+        """Reply to a post"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+
+        if not post_id:
+            return "❌ No post ID provided"
+
+        if not content:
+            return "❌ No reply content provided"
+
+        # Check if post_id is JSON-formatted and extract actual ID
+        if isinstance(post_id, str) and post_id.strip().startswith('{'):
+            try:
+                parsed = json.loads(post_id)
+                if 'post_id' in parsed:
+                    post_id = parsed['post_id']
+                elif 'id' in parsed:
+                    post_id = parsed['id']
+            except json.JSONDecodeError:
+                pass
+
+        if isinstance(post_id, str):
+            post_id = post_id.strip()
+
+        data = {
+            'type': 'reply',
+            'parent_id': post_id,
+            'content': content
+        }
+
+        result = self._make_request('POST', '/posts', json=data)
+
+        if result and 'post_id' in result:
+            reply_id = result['post_id']
+            self._record_activity('reply', {'post_id': post_id, 'reply_id': reply_id})
+            return f"✅ Replied to post {post_id}! Reply ID: {reply_id}"
+        return f"❌ Failed to reply to post {post_id}"
+
+    def quote_post(self, post_id, content):
+        """Quote/repost with comment"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+
+        if not post_id:
+            return "❌ No post ID provided"
+
+        if not content:
+            return "❌ No quote content provided"
+
+        # Check if post_id is JSON-formatted and extract actual ID
+        if isinstance(post_id, str) and post_id.strip().startswith('{'):
+            try:
+                parsed = json.loads(post_id)
+                if 'post_id' in parsed:
+                    post_id = parsed['post_id']
+                elif 'id' in parsed:
+                    post_id = parsed['id']
+            except json.JSONDecodeError:
+                pass
+
+        if isinstance(post_id, str):
+            post_id = post_id.strip()
+
+        data = {
+            'type': 'quote',
+            'parent_id': post_id,
+            'content': content
+        }
+
+        result = self._make_request('POST', '/posts', json=data)
+
+        if result and 'post_id' in result:
+            quote_id = result['post_id']
+            self._record_activity('quote', {'post_id': post_id, 'quote_id': quote_id})
+            return f"✅ Quoted post {post_id}! Quote ID: {quote_id}"
+        return f"❌ Failed to quote post {post_id}"
+
+    def get_notifications_unread_count(self):
+        """Get unread notification count"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+
+        result = self._make_request('GET', '/notifications/unread_count')
+
+        if result:
+            count = result.get('count', result.get('unread_count', 0))
+            return f"🔔 {count} unread notifications"
+        return "❌ Failed to get unread count"
+
+    def mark_notifications_read(self, notification_ids=None, mark_all=False):
+        """Mark notifications as read"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+
+        if mark_all:
+            data = {'all': True}
+        elif notification_ids:
+            if isinstance(notification_ids, str):
+                notification_ids = [n.strip() for n in notification_ids.split(',')]
+            data = {'ids': notification_ids}
+        else:
+            return "❌ Provide notification_ids or set mark_all=True"
+
+        result = self._make_request('POST', '/notifications/read', json=data)
+
+        if result:
+            return "✅ Notifications marked as read"
+        return "❌ Failed to mark notifications as read"
+
+    def get_system_stats(self):
+        """Get Moltx system stats"""
+        result = self._make_request('GET', '/stats')
+
+        if result:
+            output = "📊 Moltx System Stats:\n\n"
+            for key, value in result.items():
+                if isinstance(value, dict):
+                    output += f"{key}:\n"
+                    for k, v in value.items():
+                        output += f"  {k}: {v}\n"
+                else:
+                    output += f"{key}: {value}\n"
+            return output
+        return "❌ Failed to get system stats"
+
+    def get_agent_activity(self, agent_name=None, metric='posts', granularity='daily', range_days='7d'):
+        """Get agent activity graph"""
+        if not agent_name:
+            agent_name = self.agent_name
+
+        if not agent_name:
+            return "❌ No agent name provided"
+
+        params = {
+            'metric': metric,
+            'granularity': granularity,
+            'range': range_days
+        }
+
+        result = self._make_request('GET', f'/agent/{agent_name}/activity', params=params)
+
+        if result:
+            output = f"📈 Activity for @{agent_name}:\n\n"
+            data_points = result.get('data', result.get('activity', []))
+            if data_points:
+                for point in data_points[:10]:
+                    ts = point.get('timestamp', 'Unknown')
+                    val = point.get('value', point.get('count', 0))
+                    output += f"  {ts}: {val}\n"
+            return output
+        return f"❌ Failed to get activity for {agent_name}"
+
     def get_notifications(self, limit=20):
         """Get notifications"""
         if not self.initialized:
