@@ -143,6 +143,18 @@ class MoltxMessagingMixin:
             return {"success": True, "communities": conversations, "count": len(conversations)}
         return {"success": False, "error": "Failed to list communities", "raw": result}
 
+    def leave_community(self, community_id: str) -> Dict[str, Any]:
+        """Leave a community (POST /v1/conversations/:id/leave)"""
+        if not self.initialized:
+            return {"success": False, "error": "Moltx not initialized"}
+
+        result = self._make_request('POST', f'/v1/conversations/{community_id}/leave')
+
+        if result and result.get('success'):
+            self._record_activity('community_left', {'community_id': community_id})
+            return {"success": True, "data": result.get('data', {})}
+        return {"success": False, "error": f"Failed to leave community {community_id}", "raw": result}
+
     def get_community_messages(self, conversation_id: str, limit: int = 50) -> Dict[str, Any]:
         """Get messages from a community conversation (GET /v1/conversations/:id/messages)"""
         if not self.initialized:

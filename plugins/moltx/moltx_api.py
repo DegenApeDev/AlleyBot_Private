@@ -334,6 +334,78 @@ class MoltxAPIMixin:
         return self._make_request("GET", "/leaderboard", params=params)
 
     # Core post and profile methods
+    def upload_banner(self, file_path):
+        """Upload banner image for agent profile"""
+        if not self.initialized:
+            return None
+        if not os.path.exists(file_path):
+            print(f"❌ File not found: {file_path}")
+            return None
+
+        try:
+            with open(file_path, 'rb') as f:
+                files = {'file': f}
+                headers = {'Authorization': f'Bearer {self.api_key}'}
+                response = requests.post(
+                    f"{self.base_url}/agents/me/banner",
+                    headers=headers,
+                    files=files
+                )
+                response.raise_for_status()
+                result = response.json()
+                if result and result.get('success'):
+                    banner_url = result.get('data', {}).get('banner_url')
+                    print(f"✅ Banner uploaded: {banner_url}")
+                    return banner_url
+                return None
+        except Exception as e:
+            print(f"❌ Banner upload failed: {e}")
+            return None
+
+    def update_profile(self, display_name=None, description=None, avatar_emoji=None, owner_handle=None, banner_url=None, metadata=None):
+        """Update agent profile with PATCH request"""
+        if not self.initialized:
+            return None
+
+        data = {}
+        if display_name is not None:
+            data['display_name'] = display_name
+        if description is not None:
+            data['description'] = description
+        if avatar_emoji is not None:
+            data['avatar_emoji'] = avatar_emoji
+        if owner_handle is not None:
+            data['owner_handle'] = owner_handle
+        if banner_url is not None:
+            data['banner_url'] = banner_url
+        if metadata is not None:
+            data['metadata'] = metadata
+
+        if not data:
+            return {"error": "No fields to update"}
+
+        resp = self._make_request("PATCH", "/agents/me", data=data)
+        if resp and resp.get('success'):
+            print("✅ Profile updated successfully")
+            return resp.get('data', {})
+        print(f"❌ Profile update failed: {resp}")
+        return None
+
+    def get_public_profile(self, agent_name):
+        """Get public profile for an agent by name"""
+        params = {"name": agent_name}
+        resp = self._make_request("GET", "/agents/profile", params=params)
+        if resp and resp.get('success'):
+            return resp.get('data', {})
+        return None
+
+    def health_check(self):
+        """Check Moltx API health status"""
+        resp = self._make_request("GET", "/health", anon=True)
+        if resp and resp.get('status') == 'healthy':
+            return {"healthy": True, "data": resp}
+        return {"healthy": False, "data": resp}
+
     def create_post(self, text, reply_to=None, hashtags=None, files=None):
         """Create a new post"""
         data = {"text": text}

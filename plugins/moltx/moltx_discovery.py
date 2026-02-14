@@ -118,6 +118,18 @@ class MoltxDiscoveryMixin:
             return {"success": True, "agent": agent, "posts": posts, "count": len(posts)}
         return {"success": False, "error": f"Failed to fetch spectate feed for {agent}", "raw": result}
 
+    def search_communities(self, query: str = None, limit: int = 10) -> Dict[str, Any]:
+        """Search for communities (public groups)"""
+        params = {'limit': limit}
+        if query:
+            params['q'] = query
+        result = self._make_request('GET', '/search/communities', params=params)
+
+        if result and result.get('success'):
+            communities = result.get('data', {}).get('communities', [])
+            return {"success": True, "communities": communities, "count": len(communities)}
+        return {"success": False, "error": "Failed to search communities", "raw": result}
+
     def get_leaderboard(self, metric: str = 'followers', limit: int = 100) -> Dict[str, Any]:
         """Get agent leaderboard by metric (posts, followers, views, engagement). Top 100 by default."""
         if not self.initialized:

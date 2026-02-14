@@ -598,6 +598,167 @@ class MoltxEngagementMixin:
         result = self._make_request('POST', '/heartbeat')
         return "✅ Heartbeat successful" if result else "❌ Heartbeat failed"
 
+    def repost_post(self, post_id):
+        """Repost (simple repost without comment)"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+
+        if not post_id:
+            return "❌ No post ID provided"
+
+        # Check if post_id is JSON-formatted and extract actual ID
+        if isinstance(post_id, str) and post_id.strip().startswith('{'):
+            try:
+                parsed = json.loads(post_id)
+                if 'post_id' in parsed:
+                    post_id = parsed['post_id']
+                elif 'id' in parsed:
+                    post_id = parsed['id']
+            except json.JSONDecodeError:
+                pass
+
+        if isinstance(post_id, str):
+            post_id = post_id.strip()
+
+        data = {
+            'type': 'repost',
+            'parent_id': post_id
+        }
+
+        result = self._make_request('POST', '/posts', json=data)
+
+        if result and 'post_id' in result:
+            repost_id = result['post_id']
+            self._record_activity('repost', {'post_id': post_id, 'repost_id': repost_id})
+            return f"✅ Reposted post {post_id}! Repost ID: {repost_id}"
+        return f"❌ Failed to repost post {post_id}"
+
+    def get_post(self, post_id):
+        """Get a single post by ID with its replies"""
+        if not post_id:
+            return "❌ No post ID provided"
+
+        # Check if post_id is JSON-formatted and extract actual ID
+        if isinstance(post_id, str) and post_id.strip().startswith('{'):
+            try:
+                parsed = json.loads(post_id)
+                if 'post_id' in parsed:
+                    post_id = parsed['post_id']
+                elif 'id' in parsed:
+                    post_id = parsed['id']
+            except json.JSONDecodeError:
+                pass
+
+        if isinstance(post_id, str):
+            post_id = post_id.strip()
+
+        result = self._make_request('GET', f'/posts/{post_id}')
+
+        if result:
+            output = "🐦 Post:\n\n"
+            post = result.get('post', result.get('data', {}))
+            if isinstance(post, dict):
+                agent_name = post.get('agent_name') or post.get('author_name') or post.get('username') or 'Unknown'
+                content = post.get('content') or post.get('text') or post.get('body') or 'No content'
+                replies_count = post.get('replies_count') or post.get('reply_count') or 0
+                likes_count = post.get('likes_count') or post.get('like_count') or 0
+                timestamp = post.get('created_at') or post.get('timestamp') or 'Unknown time'
+                post_type = post.get('type', 'post')
+
+                output += f"🐦 @{agent_name} ({post_type}): {content}\n"
+                output += f"   💬 {replies_count} replies | ❤️ {likes_count} likes\n"
+                output += f"   🕐 {timestamp}\n"
+
+                # Show replies if any
+                replies = result.get('replies', result.get('data', {}).get('replies', []))
+                if replies:
+                    output += f"\n💬 Replies ({len(replies)}):\n"
+                    for reply in replies[:5]:
+                        if isinstance(reply, dict):
+                            reply_author = reply.get('agent_name') or reply.get('author_name') or 'Unknown'
+                            reply_content = reply.get('content') or reply.get('text', 'No content')
+                            output += f"   ↳ @{reply_author}: {reply_content[:80]}{'...' if len(reply_content) > 80 else ''}\n"
+            return output
+        return f"❌ Failed to get post {post_id}"
+
+    def list_posts(self, sort='new', limit=20, offset=0):
+        """List posts with sort options (new, top)"""
+        params = {'sort': sort, 'limit': limit, 'offset': offset}
+        result = self._make_request('GET', '/posts', params=params)
+
+        if result:
+            posts = result.get('posts', result.get('data', {}).get('posts', []))
+            if posts:
+                output = f"🐦 Posts (sorted by {sort}, {len(posts)} total):\n\n"
+                for post in posts[:limit]:
+                    if isinstance(post, dict):
+                        agent_name = post.get('agent_name') or post.get('author_name') or post.get('username') or 'Unknown'
+                        content = post.get('content') or post.get('text') or post.get('body') or 'No content'
+                        replies = post.get('replies_count') or post.get('reply_count') or 0
+                        likes = post.get('likes_count') or post.get('like_count') or 0
+                        post_id = post.get('id') or post.get('post_id') or 'unknown'
+                        output += f"🐦 @{agent_name}: {content[:100]}{'...' if len(content) > 100 else ''}\n"
+                        output += f"   💬 {replies} replies | ❤️ {likes} likes | 🆔 {post_id}\n\n"
+                return output
+            return "🐦 No posts found"
+        return "❌ Failed to list posts"
+
+    def search_posts_by_hashtag(self, hashtag, limit=20):
+        """Search posts by hashtag"""
+        # Remove # if provided
+        tag = hashtag.lstrip('#')
+        params = {'hashtag': tag, 'limit': limit}
+        result = self._make_request('GET', '/search/posts', params=params)
+
+        if result:
+            posts = result.get('posts', result.get('data', {}).get('posts', []))
+            if posts:
+                output = f"🔍 Posts with #{tag} ({len(posts)} results):\n\n"
+                for post in posts[:limit]:
+                    if isinstance(post, dict):
+                        agent_name = post.get('agent_name') or post.get('author_name') or post.get('username') or 'Unknown'
+                        content = post.get('content') or post.get('text') or post.get('body') or 'No content'
+                        output += f"🐦 @{agent_name}: {content[:100]}{'...' if len(content) > 100 else ''}\n"
+                return output
+            return f"🔍 No posts found for #{tag}"
+        return f"❌ Failed to search posts by hashtag #{tag}"
+
+    def get_article(self, article_id):
+        """Get a single article by ID with its replies"""
+        if not article_id:
+            return "❌ No article ID provided"
+
+        result = self._make_request('GET', f'/articles/{article_id}')
+
+        if result:
+            output = "📚 Article:\n\n"
+            article = result.get('article', result.get('data', {}))
+            if isinstance(article, dict):
+                title = article.get('title', 'No title')
+                content = article.get('content', 'No content')
+                author = article.get('agent_name') or article.get('author_name') or article.get('author', 'Unknown')
+                views = article.get('views_count') or article.get('views', 0)
+                likes = article.get('likes_count') or article.get('like_count', 0)
+                read_time = article.get('read_time', 0)
+                word_count = article.get('word_count', 0)
+
+                output += f"📚 {title}\n"
+                output += f"   by @{author} | 👀 {views} views | ❤️ {likes} likes\n"
+                output += f"   ⏱️ {read_time} min read | 📝 {word_count} words\n\n"
+                output += f"{content[:500]}{'...' if len(content) > 500 else ''}\n"
+
+                # Show replies if any
+                replies = result.get('replies', result.get('data', {}).get('replies', []))
+                if replies:
+                    output += f"\n💬 Replies ({len(replies)}):\n"
+                    for reply in replies[:5]:
+                        if isinstance(reply, dict):
+                            reply_author = reply.get('agent_name') or reply.get('author_name') or 'Unknown'
+                            reply_content = reply.get('content') or reply.get('text', 'No content')
+                            output += f"   ↳ @{reply_author}: {reply_content[:80]}{'...' if len(reply_content) > 80 else ''}\n"
+            return output
+        return f"❌ Failed to get article {article_id}"
+
     def first_boot(self):
         """Perform first boot"""
         if hasattr(self, '_booted') and self._booted:
