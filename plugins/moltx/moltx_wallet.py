@@ -162,8 +162,8 @@ class MoltxWalletMixin:
         """Initialize wallet from environment or config"""
         import os
         
-        # Check for wallet private key in environment
-        private_key = os.getenv('MOLTX_WALLET_PRIVATE_KEY')
+        # Check for wallet private key in environment - use BASE_WALLET_PRIVATE_KEY for Moltx
+        private_key = os.getenv('BASE_WALLET_PRIVATE_KEY')
         agent_handle = os.getenv('MOLTX_AGENT_HANDLE') or getattr(self, 'agent_name', None)
         
         if private_key:
@@ -176,9 +176,9 @@ class MoltxWalletMixin:
                     self.web3 = Web3(Web3.HTTPProvider(self.RPC_URL))
                 except Exception:
                     pass
-            print("🔑 EVM wallet configured from environment")
+            print("🔑 EVM wallet configured from BASE_WALLET_PRIVATE_KEY")
         else:
-            print("⚠️  No MOLTX_WALLET_PRIVATE_KEY set - wallet linking unavailable")
+            print("⚠️  No BASE_WALLET_PRIVATE_KEY set - wallet linking unavailable")
     
     def auto_link_wallet(self) -> bool:
         """Auto-link wallet if credentials are available"""
