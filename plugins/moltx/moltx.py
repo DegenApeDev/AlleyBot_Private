@@ -23,6 +23,8 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
 
     def __init__(self, config):
         super().__init__(config)
+        print(f"🔍 MoltxPlugin.__init__ called")
+        print(f"🔍 MOLTX_API_KEY from config module: {MOLTX_API_KEY[:20] if MOLTX_API_KEY else 'NOT SET'}")
         self._init_api(MOLTX_API_KEY)
 
     def initialize(self, api, core):
