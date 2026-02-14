@@ -227,16 +227,18 @@ class MoltxWalletMixin:
         return resp.json()
 
     def heartbeat(self) -> Dict[str, Any]:
-        """Heartbeat protocol"""
-        data = {
-            "agent_handle": self.agent_handle,
-            "status": "active",
-            "wallet_linked": self.is_linked,
-            "timestamp": int(time.time()),
-        }
-        resp = self.session.post(f"{self.API_BASE}/heartbeat", json=data)
-        resp.raise_for_status()
-        return resp.json()
+        """Heartbeat protocol - check claim status per heartbeat.md"""
+        # Per Moltx heartbeat.md: Step 1 - Check claim status
+        resp = self.session.get(f"{self.API_BASE}/agents/status")
+        if resp.status_code == 200:
+            data = resp.json()
+            # Update claim status from response
+            agent_data = data.get('data', {}).get('agent', {})
+            if agent_data.get('claim_status'):
+                self.claim_status = agent_data['claim_status']
+            print("💓 Heartbeat: Agent status check passed")
+            return data
+        return {"error": f"Status check failed: {resp.status_code}"}
 
     def claim(self, tweet_url: str) -> Dict[str, Any]:
         """Claim rewards and verified status"""
