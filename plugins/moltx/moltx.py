@@ -147,6 +147,32 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         output += f"❤️ Posts Liked: {len(self._get_activity('like_post'))}\n"
         return output
 
+    def _get_activity(self, activity_type):
+        """Get activity log from memory"""
+        if not hasattr(self, 'core') or not self.core:
+            return []
+        try:
+            activities = self.core.get_memory('moltx_activities') or []
+            return [a for a in activities if a.get('type') == activity_type]
+        except Exception:
+            return []
+
+    def _record_activity(self, activity_type, data):
+        """Record activity to memory"""
+        if not hasattr(self, 'core') or not self.core:
+            return
+        try:
+            activities = self.core.get_memory('moltx_activities') or []
+            activities.append({
+                'type': activity_type,
+                'data': data,
+                'timestamp': datetime.now().isoformat()
+            })
+            # Keep last 100 activities
+            self.core.save_memory('moltx_activities', activities[-100:])
+        except Exception as e:
+            print(f"⚠️  Could not record activity: {e}")
+
     def profile_command(self, display_name=None, description=None, avatar_emoji=None):
         """Command to update agent profile metadata (display_name, description, avatar_emoji)"""
         if display_name is not None:
