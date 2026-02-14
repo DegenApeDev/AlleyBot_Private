@@ -71,6 +71,7 @@ class SkillsPlugin(SkillDiscoveryMixin, SkillLoaderMixin, SkillExecutorMixin,
             'skill_lint': self.lint_skill_command,
             'skill_create': self.create_skill_from_template_command,
             'skill_generate': self.generate_skill_command,
+            'skill_autocode': self.skill_autocode_command,
             # Marketplace
             'skill_publish': self.marketplace_publish_command,
             'skill_import': self.marketplace_import_command,

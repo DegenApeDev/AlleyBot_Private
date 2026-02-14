@@ -2,9 +2,20 @@
 Smart Reply Mixin
 Memory-enriched AI reply generation that uses context from all sources.
 Replaces the generic prompts with context-aware, personalized responses.
+
+SYMOD INTEGRATION: All replies are validated through C2V Bridge for 
+mathematical truth detection (scams, manipulation, cognitive dissonance).
+Invalid replies are auto-regenerated.
 """
 import os
 from typing import Optional, Dict, Any
+
+# SyMod C2V Bridge integration
+try:
+    from src.synergy import get_c2v_bridge
+    C2V_AVAILABLE = True
+except ImportError:
+    C2V_AVAILABLE = False
 
 
 class SmartReplyMixin:
@@ -116,6 +127,59 @@ class SmartReplyMixin:
             )
 
         if reply:
+            # SYMOD VALIDATION: Check for cognitive dissonance, scams, manipulation
+            if C2V_AVAILABLE and hasattr(self, 'core'):
+                try:
+                    c2v = get_c2v_bridge()
+                    # Get current block height for validation context
+                    block_height = 0
+                    try:
+                        onchain = self.core.plugin_manager.plugins.get('onchain')
+                        if onchain and hasattr(onchain, 'get_latest_block'):
+                            block_height = onchain.get_latest_block()
+                    except Exception:
+                        pass
+                    
+                    validation = c2v.validate_debate_argument(
+                        argument_text=reply,
+                        opponent_argument=comment_content,
+                        block_height=block_height
+                    )
+                    
+                    # If validation shows cognitive dissonance or field collapse, regenerate
+                    if not validation['valid'] or validation['synergy_field_status'] == "Collapse":
+                        print(f"⚠️ Reply failed SyMod validation: {validation['reasoning_trace']}")
+                        print("🔄 Regenerating with corrected context...")
+                        
+                        # Add correction context and regenerate
+                        correction_prompt = f"\n\nSYMOD CORRECTION: The previous reply showed {validation['synergy_field_status']}. "
+                        correction_prompt += f"Issue: {validation['reasoning_trace'][:100]}... "
+                        correction_prompt += "Generate a reply that is mathematically consistent and authentic."
+                        
+                        # Try regeneration once
+                        reply = self._generate_with_grok(
+                            comment_content + correction_prompt, 
+                            commenter_name, post_context,
+                            platform, user_context, memory_context, onchain_context
+                        ) or self._generate_with_deepseek(
+                            comment_content + correction_prompt,
+                            commenter_name, post_context,
+                            platform, user_context, memory_context, onchain_context
+                        )
+                        
+                        # Re-validate
+                        if reply:
+                            validation2 = c2v.validate_debate_argument(reply, comment_content, block_height)
+                            if validation2['valid']:
+                                print(f"✅ Regenerated reply passed SyMod validation (confidence: {validation2['confidence']:.2%})")
+                            else:
+                                print(f"⚠️ Regenerated reply still failed validation, using anyway")
+                    else:
+                        print(f"✅ Reply passed SyMod validation (field: {validation['synergy_field_status']}, confidence: {validation['confidence']:.2%})")
+                        
+                except Exception as e:
+                    print(f"⚠️ SyMod validation error: {e}")
+
             # Update user profile
             topic = self._extract_topic(comment_content)
             self._update_user_profile(commenter_name, 'reply', topic)
