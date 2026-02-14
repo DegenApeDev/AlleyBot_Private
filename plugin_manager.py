@@ -102,6 +102,54 @@ class PluginManager:
                     "dashboard_port": 7001,
                     "refresh_interval": 120
                 }
+            },
+            "moltx": {
+                "enabled": True,
+                "config": {}
+            },
+            "moltbook": {
+                "enabled": True,
+                "config": {}
+            },
+            "moltchan": {
+                "enabled": True,
+                "config": {}
+            },
+            "moltroad": {
+                "enabled": True,
+                "config": {}
+            },
+            "clawbr": {
+                "enabled": True,
+                "config": {}
+            },
+            "onchain": {
+                "enabled": True,
+                "config": {}
+            },
+            "crypto": {
+                "enabled": True,
+                "config": {}
+            },
+            "telegram": {
+                "enabled": True,
+                "config": {}
+            },
+            "a2a": {
+                "enabled": True,
+                "config": {}
+            },
+            "selfimprove": {
+                "enabled": True,
+                "config": {}
+            },
+            "skills": {
+                "enabled": True,
+                "config": {}
+            },
+            "brain": {
+                "enabled": True,
+                "config": {}
             }
         }
         
