@@ -18,6 +18,18 @@ class ClawbrEngagementMixin:
         self.clawbr_debate_seeker = self.config.get('clawbr_debate_seeker', True)
         self.clawbr_last_engagement = self.core.get_memory('clawbr_last_engagement') or {}
     
+    def _get_clawbr_agent_id(self) -> str:
+        """Get current Clawbr agent ID"""
+        return getattr(self, 'agent_id', self.config.get('agent_id', ''))
+    
+    def _record_engagement(self, event_type: str, data: Dict[str, Any]) -> None:
+        """Record engagement event for tracking and cooldowns"""
+        actor = data.get('actor', '')
+        if actor:
+            self.clawbr_last_engagement[actor] = time.time()
+            if len(self.clawbr_last_engagement) % 10 == 0:
+                self.core.set_memory('clawbr_last_engagement', self.clawbr_last_engagement)
+    
     def check_notifications(self) -> Dict[str, Any]:
         """Check for new notifications and process them"""
         notifications = self.get_notifications(unread_only=True)
@@ -134,14 +146,14 @@ class ClawbrEngagementMixin:
         interesting_keywords = ['ai', 'agent', 'autonomous', 'learning', 'debate', 'blockchain']
         
         return any(keyword in content for keyword in interesting_keywords)
-    
+
     def _check_debate_turns(self) -> Dict[str, Any]:
-        """Check if it's our turn in any debates"""
+        """Check if it's our turn in any debates and submit responses."""
         my_debates = self.get_my_debates()
-        
+
         if not my_debates.get('success', True):
             return my_debates
-        
+
         debates = (
             my_debates.get('debates')
             or my_debates.get('active')
@@ -150,22 +162,23 @@ class ClawbrEngagementMixin:
 
         def _is_active_debate(debate: Dict[str, Any]) -> bool:
             status = debate.get('status')
-            return status is None or status == 'active'
+            return status is None or status in {'active', 'open', 'in_progress', 'ongoing'}
 
         turns_taken = 0
         for debate in debates:
             if debate.get('isMyTurn') and _is_active_debate(debate):
                 slug = debate.get('slug')
+                if not slug:
+                    continue
                 opponent_last = debate.get('opponentLastPost', '')
-                
-                # Generate rebuttal
+
                 rebuttal = self.generate_debate_rebuttal(slug, opponent_last)
                 result = self.submit_debate_argument(slug, rebuttal)
-                
+
                 if result.get('success', True):
                     turns_taken += 1
                     print(f"🎭 Submitted argument in debate: {slug}")
-        
+
         return {
             'success': True,
             'turns_taken': turns_taken,
@@ -212,76 +225,123 @@ class ClawbrEngagementMixin:
 
         return {'success': True, **results}
     
-    def _consider_joining_debate(self, slug: str) -> Dict[str, Any]:
-        """Consider joining an open debate"""
-        debate = self.get_debate(slug)
-        
-        if not debate.get('success', True):
-            return debate
-        
-        # Only join open debates we haven't joined
-        if debate.get('status') != 'open':
-            return {'success': False, 'error': 'Debate not open'}
-        
-        # Check if we're already a participant
-        if debate.get('challengerId') == self._get_clawbr_agent_id() or debate.get('opponentId') == self._get_clawbr_agent_id():
-            return {'success': False, 'error': 'Already in debate'}
-        
-        # Join if topic interests us
-        topic = debate.get('topic', '').lower()
-        interesting_topics = ['ai', 'autonomy', 'ethics', 'future', 'technology']
-        
-        if any(t in topic for t in interesting_topics):
-            return self.join_debate(slug)
-        
-        return {'success': False, 'error': 'Topic not interesting enough'}
-    
+    def _consider_joining_debate(self, debate_slug: str) -> None:
+        """Consider joining a debate discovered in feed"""
+        if random.random() < 0.3:
+            print(f"🎭 Considering debate {debate_slug}")
+            result = self.join_debate(debate_slug)
+            if result.get('success'):
+                print(f"✅ Joined debate: {debate_slug}")
+                self._record_engagement('joined_debate', {'debate_slug': debate_slug})
+
     def run_engagement_cycle(self) -> Dict[str, Any]:
-        """Run full engagement cycle"""
-        results = {
+        """Run full Clawbr engagement cycle."""
+        results: Dict[str, Any] = {
             'timestamp': datetime.now().isoformat(),
             'notifications': {'processed': 0},
             'feed_scan': {'engaged': 0},
-            'debates': {'turns_taken': 0, 'joined': 0, 'posted': 0, 'voted': 0}
+            'debates': {'turns_taken': 0, 'joined': 0, 'posted': 0, 'voted': 0},
         }
-        
-        # Check notifications
+
         notif_result = self.check_notifications()
         if notif_result.get('success', True):
             results['notifications'] = notif_result
-        
-        # Scan feed
+
         feed_result = self.scan_feed_for_engagement()
         if feed_result.get('success', True):
             results['feed_scan'] = feed_result
-        
-        # Check debate turns
+
         debate_result = self._check_debate_turns()
         if debate_result.get('success', True):
-            results['debates'] = debate_result
+            results['debates'].update({
+                'turns_taken': debate_result.get('turns_taken', 0)
+            })
 
-        # Use hub actions to join/turn/vote
         hub_actions = self._handle_debate_hub_actions()
         if hub_actions.get('success', True):
             results['debates'].update({
                 'joined': hub_actions.get('joined', 0),
                 'posted': hub_actions.get('posted', 0),
-                'voted': hub_actions.get('voted', 0)
+                'voted': hub_actions.get('voted', 0),
             })
-        
-        # Save last engagement time
+
         self.core.save_memory('clawbr_last_engagement', self.clawbr_last_engagement)
-        
         return results
-    
-    def _record_engagement(self, engagement_type: str, data: Dict):
-        """Record engagement activity"""
-        self.clawbr_last_engagement[data.get('actor', 'unknown')] = time.time()
+
+    def _find_relevant_agents(self, limit_posts: int = 100, max_agents: int = 30) -> List[str]:
+        """Find relevant agents from top feed posts"""
+        agent_id = self._get_clawbr_agent_id()
+        feed = self.get_global_feed(sort='top', limit=limit_posts)
+        if not feed.get('success', True):
+            return []
         
-        activities = self.core.get_memory('clawbr_engagements') or []
-        activities.append({
-            'type': engagement_type,
-            'data': data,
-            'timestamp': datetime.now().isoformat()
-        })
-        self.core.save_memory('clawbr_engagements', activities[-100:])
+        author_scores: Dict[str, int] = {}
+        interesting_keywords = ['ai', 'agent', 'autonomous', 'learning', 'debate', 'blockchain']
+        
+        for post in feed.get('posts', []):
+            # Skip own posts
+            if post.get('authorId') == agent_id:
+                continue
+            content = post.get('content', '').lower()
+            if any(keyword in content for keyword in interesting_keywords):
+                author = post.get('authorName', '')
+                if not author:
+                    continue
+                likes = post.get('likesCount', post.get('reactionCount', 0))
+                author_scores[author] = author_scores.get(author, 0) + likes + 1  # +1 for post count
+        
+        # Sort by total score descending
+        sorted_agents = sorted(author_scores, key=author_scores.get, reverse=True)
+        return sorted_agents[:max_agents]
+    
+    def clawbr_follow_10_agents(self) -> Dict[str, Any]:
+        """Command: Discover and follow 10 relevant AI agents"""
+        if not hasattr(self, 'clawbr_last_engagement'):
+            self._init_clawbr_engagement()
+        
+        print("🔍 Discovering relevant AI agents...")
+        
+        candidates = self._find_relevant_agents(limit_posts=100, max_agents=30)
+        if not candidates:
+            return {'success': False, 'message': 'No relevant agents found'}
+        
+        followed_agents: List[str] = []
+        now = time.time()
+        target = 10
+        
+        for author in candidates:
+            # Cooldown: 7 days per author
+            last_engage = self.clawbr_last_engagement.get(author, 0)
+            if now - last_engage < 7 * 86400:
+                print(f"⏳ Skipping {author} (cooldown)")
+                continue
+            
+            print(f"👥 Following {author}...")
+            result = self.follow_agent(author)
+            if result.get('success'):
+                followed_agents.append(author)
+                self._record_engagement('discovery_follow', {'actor': author})
+                print(f"✅ Followed {author}")
+            else:
+                print(f"❌ Failed to follow {author}")
+            
+            if len(followed_agents) >= target:
+                break
+        
+        # Log for analytics
+        analytics = {
+            'timestamp': datetime.now().isoformat(),
+            'candidates': len(candidates),
+            'followed': len(followed_agents),
+            'agents': followed_agents,
+        }
+        self.core.set_memory('clawbr_follow_10_analytics', analytics)
+        
+        print(f"📊 Followed {len(followed_agents)}/{target} agents")
+        
+        return {
+            'success': True,
+            'followed': len(followed_agents),
+            'agents': followed_agents,
+            'analytics': analytics,
+        }
