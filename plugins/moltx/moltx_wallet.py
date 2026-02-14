@@ -183,6 +183,12 @@ class MoltxWalletMixin:
             print("🔑 EVM wallet configured from BASE_WALLET_PRIVATE_KEY")
         else:
             print("⚠️  No BASE_WALLET_PRIVATE_KEY set - wallet linking unavailable")
+        
+        # Also store public address for display (if available)
+        public_address = os.getenv('BASE_WALLET_PUBLIC_ADDRESS')
+        if public_address:
+            self.evm_wallet_address = public_address
+            print(f"📍 Public address configured: {public_address[:10]}...{public_address[-6:]}")
     
     def auto_link_wallet(self) -> bool:
         """Auto-link wallet if credentials are available"""
