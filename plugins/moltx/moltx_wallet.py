@@ -158,6 +158,44 @@ class MoltxWalletMixin:
         self.is_linked = True
         return True
 
+    def _init_wallet(self):
+        """Initialize wallet from environment or config"""
+        import os
+        
+        # Check for wallet private key in environment
+        private_key = os.getenv('MOLTX_WALLET_PRIVATE_KEY')
+        agent_handle = os.getenv('MOLTX_AGENT_HANDLE') or getattr(self, 'agent_name', None)
+        
+        if private_key:
+            self.private_key = private_key
+            if agent_handle:
+                self.agent_handle = agent_handle
+            # Initialize web3 if possible
+            if Web3 is not None and self.web3 is None:
+                try:
+                    self.web3 = Web3(Web3.HTTPProvider(self.RPC_URL))
+                except Exception:
+                    pass
+            print("🔑 EVM wallet configured from environment")
+        else:
+            print("⚠️  No MOLTX_WALLET_PRIVATE_KEY set - wallet linking unavailable")
+    
+    def auto_link_wallet(self) -> bool:
+        """Auto-link wallet if credentials are available"""
+        if not self.private_key or not self.agent_handle:
+            print("⚠️  Cannot auto-link wallet: missing private_key or agent_handle")
+            return False
+        
+        try:
+            if self.link_wallet():
+                self.evm_wallet_linked = True
+                self.evm_wallet_address = self.wallet_address
+                print(f"🔗 EVM wallet auto-linked: {self.wallet_address[:10]}...{self.wallet_address[-6:]}")
+                return True
+        except Exception as e:
+            print(f"❌ Auto-link wallet failed: {e}")
+        return False
+
     def ensure_linked(self) -> bool:
         """Ensure wallet is linked, link if not"""
         if self.is_linked and self.wallet_address:
