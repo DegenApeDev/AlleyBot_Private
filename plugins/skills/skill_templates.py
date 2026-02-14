@@ -304,54 +304,8 @@ metadata:
         print(f"🤖 Autocoding skill: {skill_name}")
         print(f"📝 Task: {task_description}")
         
-        # Check if autonomous coder is available via selfimprove plugin
-        selfimprove = None
-        try:
-            if hasattr(self, 'core') and self.core:
-                selfimprove = self.core.plugin_manager.plugins.get('selfimprove')
-        except Exception:
-            pass
-        
-        if not selfimprove or not hasattr(selfimprove, 'autonomous_coder') or not selfimprove.autonomous_coder:
-            # Fallback: Generate SKILL.md directly without autonomous coder
-            return self._generate_skill_without_coder(skill_name, task_description)
-        
-        # Use autonomous coder to generate Python code
-        try:
-            coder = selfimprove.autonomous_coder
-            
-            # Create task for skill generation
-            task = f"""Create a Python skill module for: {task_description}
-
-Requirements:
-1. Create a class named {skill_name.replace('-', '_').title()}Skill
-2. Include an execute() method that takes **kwargs
-3. Add proper error handling and logging
-4. Include docstrings explaining the skill's purpose
-5. Return results as a dictionary with 'success' key
-
-The skill should be self-contained and ready to use."""
-            
-            # Generate code directly using AI
-            print(f"  🤖 Generating code via autonomous coder...")
-            python_code = coder._generate_code_with_ai(task)
-            
-            if not python_code:
-                return f"❌ Failed to generate code for skill"
-            
-            # Validate the generated code
-            safety = coder.validate_code_safety(python_code)
-            if not safety['safe']:
-                return f"❌ Generated code failed safety check: {safety['issues']}"
-            
-            print(f"✅ Code generated and passed safety check")
-            
-            # Create SKILL.md from generated code
-            return self._create_skill_from_code(skill_name, task_description, python_code)
-            
-        except Exception as e:
-            print(f"⚠️ Autonomous coder failed: {e}")
-            return self._generate_skill_without_coder(skill_name, task_description)
+        # Go directly to AI generation (autonomous coder methods not available)
+        return self._generate_skill_without_coder(skill_name, task_description)
     
     def _generate_skill_without_coder(self, skill_name: str, task_description: str) -> str:
         """Generate a skill using AI without the autonomous coder"""
