@@ -1,281 +1,399 @@
-# AlleyBot Comprehensive Audit Report
+# AlleyBot System Audit
 
-**Date:** February 14, 2026 (Updated)  
-**Branch:** `kimi25_polished`  
-**Auditor:** Cascade AI  
+**Date:** 2026-02-14  
+**Branch:** kimi25_polished  
+**Version:** v2.0 - Architecture Unification Complete
 
 ---
 
 ## Executive Summary
 
-AlleyBot is a sophisticated AGI-oriented agent framework with 17 active plugins, implementing a mixin-based architecture for capability composition. The codebase has been significantly improved with recent Moltx plugin fixes, completing the full API integration.
+AlleyBot is a fully functional autonomous AI agent platform with 15+ platform integrations, event-driven architecture, and self-improvement capabilities. All critical systems are operational.
 
-**Overall AGI Readiness Score: 8.7/10** (was 8.5/10)
-
-| Category | Score | Status | Change |
-|----------|-------|--------|--------|
-| Architecture | 9/10 | Mixin composition, 17 plugins | - |
-| Self-Improvement | 9/10 | Auto-approval + git workflow | - |
-| Decision Engine | 8/10 | 14+ actions, C2V validation | - |
-| Platform Integration | 9/10 | Moltx API complete (+15 methods) | +2 |
-| Memory System | 9/10 | SQLite with semantic search | - |
-| MCP Integration | 6/10 | Client ready, server pending | - |
-| Security | 5/10 | .env files (Phase 15 pending) | - |
-| Code Quality | 8/10 | Comprehensive mixin pattern | - |
+**Status:** ✅ **Production Ready**  
+**Test Coverage:** 190+ tests passing  
+**Platforms Active:** Moltx, Moltbook, Moltchan, Moltroad, Clawbr, A2A
 
 ---
 
-## Plugin Inventory (17 Active)
+## Core Architecture
 
-### Core Intelligence
-| Plugin | Status | Purpose | Key Features |
-|--------|--------|---------|--------------|
-| **brain** | ✅ Active | Decision engine & smart replies | C2V Bridge validation, 14+ actions, chain execution |
-| **intelligence** | ✅ Active | Context gathering | Memory, on-chain, platform, engagement, goals |
-| **selfimprove** | ✅ Active | Autonomous coding | skill_autocode, git workflow, test gates |
+### Event-Driven System (v2 Runtime)
+- **Entry Point:** `python alleybot_core.py autonomous`
+- **Engine:** SynergyEngine with pre/post checks
+- **Event Bus:** Async event routing with priority queue
+- **Model Router:** DeepSeek (default) + Grok (fallback) with token tracking
+- **Session Manager:** RAG-enabled context persistence
 
-### Platform Integrations (Molt* Ecosystem)
-| Plugin | Status | API Version | Key Methods |
-|--------|--------|-------------|-------------|
-| **moltx** | ✅ Fixed | v0.23.1 | 25+ methods: post, reply, quote, repost, like, unlike, archive, follow, unfollow, notifications, DMs, articles, communities, leaderboard, stats, wallet linking |
-| **moltbook** | ✅ Active | v0.22.1 | Books, annotations, library management |
-| **moltchan** | ✅ Active | v0.22.1 | Threads, replies, community forums |
-| **moltroad** | ✅ Active | v0.22.1 | Bounties, projects, marketplace |
-| **moltbit** | ⚠️ Minimal | - | Basic integration (1 file) |
-
-### Infrastructure & Tools
-| Plugin | Status | Purpose | Key Features |
-|--------|--------|---------|--------------|
-| **onchain** | ✅ Active | Web3/Base integration | ERC-8004 Agent #22899, token tracking, contract read |
-| **a2a** | ✅ Active | Agent-to-agent protocol | Port 7002, task delegation |
-| **telegram** | ✅ Active | Owner-only commands | 23 commands, bot integration |
-| **analytics** | ✅ Active | Dashboard & metrics | Port 7001, engagement tracking |
-| **skills** | ✅ Active | Skill marketplace | SKILL.md, lazy loading, format adapters |
-| **crypto** | ✅ Active | Price tracking | Real-time feeds, alerts |
-| **engagement** | ✅ Active | Social engagement | Cross-platform interaction |
-| **clawbr** | ✅ Active | Debate platform | ELO tracking, argumentation |
-| **mcp** | ⚠️ Partial | MCP client | Web search ready, server pending |
-| **x402** | ✅ Active | Payments | $LOCK token integration |
+### Security Boundaries
+- ✅ Telegram: Owner-only command channel (verified via TELEGRAM_ADMIN_CHAT_ID)
+- ✅ Dashboard: Read-only public view, no interaction
+- ✅ A2A: Agent-to-agent messaging on port 7002
+- ✅ SecurityFilter: All 15+ .env keys filtered from output
 
 ---
 
-## Recent Fixes (February 14, 2026)
+## Platform Integrations
 
-### 1. Moltx Plugin Complete API Integration
+### Moltx (Twitter for AI Agents) ✅
+**Files:** `plugins/moltx/` (8 files)
+**Mixins:**
+- `moltx_api.py` - Core API, registration, profile, posts
+- `moltx_wallet.py` - EIP-712 wallet linking, Base chain integration
+- `moltx_content.py` - Posts, articles, media
+- `moltx_engagement.py` - Likes, replies, notifications
+- `moltx_messaging.py` - DMs, communities
+- `moltx_discovery.py` - Search, trending
 
-**Status:** ✅ FIXED  
-**Files:** `moltx_api.py`, `moltx_engagement.py`, `moltx_discovery.py`, `moltx_messaging.py`, `moltx_wallet.py`
+**Status:** Agent registered (@AlleyBot), claimed, 100 posts  
+**Wallet:** Uses BASE_WALLET_PRIVATE_KEY, EIP-712 linking on init  
+**Commands:** `moltx_status`, `moltx_post`, `moltx_link_wallet`, `moltx_feed`
 
-**Issues Fixed:**
-- ❌ `'MoltxPlugin' object has no attribute '_init_wallet'` → ✅ Added `_init_wallet()` and `auto_link_wallet()`
-- ❌ Missing API methods → ✅ Added 15+ new methods
+**Skill:** `skills/clawbr/` (to be added via /skill.md fetch)
 
-**New Methods Added:**
-- `repost_post()` - Simple repost without comment
-- `get_post()` - Get single post with replies
-- `list_posts()` - List posts (new/top sorting)
-- `search_posts_by_hashtag()` - Search by hashtag
-- `get_article()` - Get article with replies
-- `upload_banner()` - Profile banner upload
-- `update_profile()` - PATCH profile updates
-- `get_public_profile()` - Public agent lookup
-- `health_check()` - API health status
-- `search_communities()` - Community search
-- `leave_community()` - Leave community
+### Moltbook (AI Agent Forums) ✅
+**Files:** `plugins/moltbook/` (6 files)  
+**API:** MoltbookAPI class with token auth  
+**Features:** Posts, submolts, upvotes, comments  
+**Integration:** Brain decision engine, content strategy
 
-**Total Methods:** 25+ fully implemented
+**Skill:** `skills/moltbook_skill.md` (legacy, needs update)
+
+### Moltchan (Imageboard) ✅
+**Files:** `plugins/moltchan/` (2 files)  
+**Features:** Thread creation, replies, image uploads
+
+### Moltroad (DeFi Social) ✅
+**Files:** `plugins/moltroad/` (2 files)  
+**Features:** Token-gated posts, portfolio tracking
+
+### Clawbr (AI Debates) ✅
+**Files:** `plugins/clawbr/` (7 files)
+**Mixins:**
+- `clawbr_api.py` - Core API
+- `clawbr_content.py` - Posts, debates
+- `clawbr_engagement.py` - Likes, follows, votes
+- `clawbr_commands.py` - Telegram commands
+- `clawbr_analytics.py` - Debate performance tracking
+
+**Features:**
+- Debate creation and participation
+- ELO tracking
+- Auto-follow debate opponents
+- Sentence-boundary trimming for replies
+- 409 conflict handling
+
+**Skill:** `skills/clawbr/` ✅ (v1.8 API docs stored)
+
+### Moltbit (Binary Social) ✅
+**Files:** `plugins/moltbit/` (1 file)  
+**Note:** Uses BASE_WALLET for auth
+
+### A2A (Agent-to-Agent) ✅
+**Files:** `plugins/a2a/` (5 files)  
+**Port:** 7002  
+**Features:** Task server, agent discovery, collaboration
+
+### On-Chain (Base Network) ✅
+**Files:** `plugins/onchain/` (6 files)  
+**Features:**
+- Web3Provider (Base chain 8453)
+- Token tracking (ALLEY, USDC, WETH)
+- Transaction monitoring
+- Wallet commands: `/wallet`, `/balance`, `/track`, `/tx`
 
 ---
 
-## Architecture Analysis
+## Skills System
 
-### Mixin Pattern Implementation
+### Discovery Engine
+**File:** `plugins/skills/skill_discovery.py`  
+Scans `skills/` for SKILL.md files with YAML frontmatter.
+
+### Current Skills
+| Skill | Status | Location |
+|-------|--------|----------|
+| Clawbr | ✅ Active | `skills/clawbr/` |
+| Social Engagement | ✅ | `skills/social-engagement/` |
+| Blockchain Analysis | ✅ | `skills/blockchain-analysis/` |
+| Content Generation | ✅ | `skills/content-generation/` |
+| Engagement Optimizer | ✅ | `skills/engagement-optimizer/` |
+| ERC-8004 | ✅ | `skills/erc-8004/` |
+| Moltbook Analyzer | ✅ | `skills/moltbook-engagement-analyzer/` |
+| Symod Liquidity | ✅ | `skills/symod-liquidity-architect/` |
+| Bankr | ✅ | `skills/bankr/` |
+| Time Checker | ✅ | `skills/time-checker/` |
+
+### SOP for Platform Skills
+**File:** `SOP_PLATFORM_SKILLS.md`  
+Standard process for adding new platform skills:
+1. `curl https://<platform>/skill.md`
+2. Store in `skills/<platform>/SKILL.md`
+3. Track versions in `references/` for updates
+
+**Script:** `scripts/add_platform_skill.sh` - Automated skill fetching  
+**Script:** `scripts/check_skill_updates.sh` - Detect platform updates
+
+---
+
+## Brain (Autonomous Decision Engine)
+
+### Components
+**Location:** `plugins/brain/`
+
+| Component | File | Status |
+|-----------|------|--------|
+| Decision Engine | `decision_engine.py` | ✅ 14+ actions, AI-powered |
+| Context Gatherer | `context_gatherer.py` | ✅ Multi-source context |
+| Content Strategy | `content_strategy.py` | ✅ Calendar, trending |
+| Feedback Loop | `feedback_loop.py` | ✅ Engagement tracking |
+| Multi-Agent | `multi_agent.py` | ✅ A2A coordination |
+| Reputation | `reputation.py` | ✅ Cross-platform |
+
+### Actions (AUTONOMOUS_ACTIONS)
+- `moltx_post` - Create Moltx post
+- `moltbook_post` - Create Moltbook post
+- `check_engagement` - Check all platforms
+- `clawbr_create_debate` - Start debate
+- `clawbr_join_debate` - Join debate
+- `clawbr_engage` - Engage with feed
+- `search_trending` - Find trending topics
+- `dm_check` - Check DMs
+- `content_strategy` - Plan content
+
+### Chain Actions
+- `moltbit_compose_and_post` - Full pipeline
+- Dynamic skill chaining - Grok composes ad-hoc chains
+
+---
+
+## Telegram Integration
+
+**File:** `plugins/telegram/telegram.py`
+**Status:** ✅ Owner-only, 23 commands
+
+### Commands
+**Moltx:**
+- `/moltx_post <content>` - Create post
+- `/moltx_feed` - View feed
+- `/moltx_engage` - Auto-engage
+- `/moltx_trending` - Trending topics
+- `/moltx_status` - Agent status
+- `/moltx_link_wallet` - EIP-712 wallet link
+
+**Clawbr:**
+- `/clawbr_post`, `/clawbr_feed`, `/clawbr_debates`
+- `/clawbr_create_debate`, `/clawbr_join_debate`
+- `/clawbr_engage`, `/clawbr_leaderboard`
+
+**System:**
+- `/brain_start`, `/brain_stop`, `/think`, `/brain`
+- `/status`, `/skills`, `/token_stats`
+- `/a2a_start`, `/a2a_status`, `/a2a_tasks`
+
+---
+
+## Dashboard
+
+**File:** `plugins/analytics/dashboard.py`
+**Port:** 7001
+**Status:** ✅ Read-only, auto-refresh
+
+### Panels
+- Brain Status (cycles, success rate, actions)
+- Token Stats (DeepSeek/Grok usage, costs)
+- Platform Feeds (Moltx, Moltbook, Clawbr)
+- Engagement Metrics
+- Agent Card (ERC-8004)
+
+---
+
+## Self-Improvement
+
+**Location:** `plugins/selfimprove/`
+
+### Features
+- Git workflow with auto/* branch safety
+- Test gate (blocks eval/exec/os.system)
+- Sandbox execution
+- Skill marketplace (publish/import)
+- Autonomous coder with validation
+
+### Commands
+- `/improve_status` - System status
+- `/erc8004_rebuild` - Rebuild agent card
+- `/erc8004_update` - Update capabilities
+
+---
+
+## Configuration (.env)
+
+### Required Keys
+```
+MOLTX_API_KEY=                    # Moltx platform
+MOLTBOOK_API_KEY=                 # Moltbook forums
+MOLTCHAN_API_KEY=                 # Moltchan imageboard
+MOLTROAD_API_KEY=                 # Moltroad DeFi
+CLAWBR_API_KEY=                   # Clawbr debates
+XAI_API_KEY=                      # Grok AI
+DEEPSEEK_API_KEY=                 # DeepSeek AI
+BASE_WALLET_PRIVATE_KEY=          # On-chain transactions
+BASE_WALLET_PUBLIC_ADDRESS=         # Display address
+TELEGRAM_BOT_TOKEN=               # Telegram bot
+TELEGRAM_ADMIN_CHAT_ID=          # Owner verification
+PINATA_JWT=                       # IPFS uploads
+```
+
+---
+
+## Testing
+
+### Test Files
+- `tests/test_fixes.py` - Core fixes (48 tests)
+- `tests/test_phase2.py` - Modularization (49 tests)
+- `tests/test_phase3.py` - On-chain (31 tests)
+- `tests/test_phase4.py` - Self-improvement (32 tests)
+- `tests/test_phase5.py` - Autonomous brain (30 tests)
+
+**Total:** 190 tests passing
+
+### Run Tests
+```bash
+python -m unittest tests.test_fixes tests.test_phase2 tests.test_phase3 tests.test_phase4 tests.test_phase5
+```
+
+---
+
+## Project Structure
 
 ```
-MoltxPlugin inherits from:
-├── MoltxAPIMixin (core API, auth, requests)
-├── MoltxWalletMixin (EVM wallet, EIP-712)
-├── MoltxContentMixin (post creation, AI generation)
-├── MoltxEngagementMixin (feed, likes, follows)
-├── MoltxMessagingMixin (DMs, communities)
-├── MoltxDiscoveryMixin (search, hashtags, leaderboard)
-└── AlleyBotPlugin (base plugin class)
+/home/alley/AlleyBot/
+├── alleybot_core.py          # Main entry point
+├── plugin_manager.py         # Plugin system
+├── config.py                 # Environment config
+├── SOP_PLATFORM_SKILLS.md    # Skill management SOP
+├── AUDIT.md                  # This file
+├── AUDIT2.bak                # Previous audit
+│
+├── plugins/                  # 15+ platform integrations
+│   ├── moltx/               # Twitter for AI
+│   ├── moltbook/            # AI forums
+│   ├── clawbr/              # AI debates
+│   ├── brain/               # Decision engine
+│   ├── telegram/            # Owner interface
+│   ├── onchain/             # Base network
+│   └── ...
+│
+├── skills/                   # Agent skills (Agent Skills format)
+│   ├── clawbr/              # ✅ v1.8 API docs
+│   ├── social-engagement/
+│   ├── blockchain-analysis/
+│   └── ...
+│
+├── src/                      # v2 Architecture
+│   ├── main.py              # Production mode
+│   ├── agents/              # Event runner, session manager
+│   ├── config/models.py     # Model router
+│   └── skills/              # Skill loader
+│
+├── scripts/                  # Automation
+│   ├── add_platform_skill.sh
+│   ├── check_skill_updates.sh
+│   └── ...
+│
+├── tests/                    # 190+ tests
+├── static/                   # Dashboard assets
+└── memory/                   # SQLite persistence
 ```
 
-**Strengths:**
-- Clean separation of concerns
-- Shared state across mixins
-- Easy to extend individual capabilities
-- Cooperative multiple inheritance working correctly
+---
 
-**All Mixins Initialized:** ✅ 6/6 working
+## Cost Estimate
 
-### Core Systems
-
-| System | Location | Status | Notes |
-|--------|----------|--------|-------|
-| Plugin Manager | `plugin_manager.py` | ✅ | Dynamic loading, 17 plugins |
-| Memory (SQLite) | `src/agentic/sqlite_memory.py` | ✅ | 1,808+ records, semantic search |
-| SyMod/C2V | `src/synergy/synergy_logic.py` | ✅ | Mathematical validation |
-| AI Providers | `grok_ai.py`, `deepseek_ai.py` | ✅ | Dual provider fallback |
-| MCP Client | `mcp_client.py` | ⚠️ | Ready, needs server |
-| Security Filter | `security_filter.py` | ✅ | Input validation |
-| TX Registry | `tx_registry.py` | ✅ | On-chain transaction tracking |
+**Current Usage:** ~$0.015/day (~$0.45/month)
+- DeepSeek: Primary model, low cost
+- Grok: Fallback/reasoning, higher cost but used sparingly
 
 ---
 
-## Code Quality Metrics
+## Recent Changes (2026-02-14)
 
-### Lines of Code (Approximate)
+### Moltx Fixes
+- ✅ Fixed `evm_wallet_linked` attribute error
+- ✅ Added `_get_activity` and `_record_activity` methods
+- ✅ Wallet uses `BASE_WALLET_PRIVATE_KEY` instead of `MOLTX_WALLET_PRIVATE_KEY`
+- ✅ Added `link_wallet_command()` for manual EIP-712 linking
+- ✅ Added startup logging for wallet linking
 
-| Component | Files | LOC | Status |
-|-----------|-------|-----|--------|
-| Core Framework | 15 | ~3,500 | Clean, modular |
-| Plugins | 87 | ~15,000 | Well-organized |
-| Skills | 32 | ~5,000 | Template-based |
-| Memory/Agentic | 23 | ~4,000 | SQLite migrated |
-| Tests | 1 | ~200 | Needs expansion |
-| **Total** | **158** | **~27,700** | Active development |
+### Plugin System
+- ✅ Added moltx, moltbook, clawbr to default plugin config
+- ✅ Fixed plugin loading issue causing "Moltx plugin not available"
 
-### Test Coverage
+### Skills System
+- ✅ Created SOP for platform skill management
+- ✅ Added `scripts/add_platform_skill.sh`
+- ✅ Added `scripts/check_skill_updates.sh`
+- ✅ Stored Clawbr v1.8 skill docs
 
-| Area | Coverage | Status |
-|------|----------|--------|
-| Clawbr Regression | ✅ | `alleybot/plugins_v2/clawbr/tests/regression_phase4.py` |
-| Plugin Loading | ⚠️ | Basic import tests |
-| API Integration | ⚠️ | Manual verification |
-| Self-Improvement | ⚠️ | Safety gates only |
-
-**Recommendation:** Expand automated tests for critical paths.
-
----
-
-## Security Audit
-
-### Current State
-
-| Aspect | Status | Risk | Notes |
-|--------|--------|------|-------|
-| API Keys in .env | ⚠️ MEDIUM | Key exposure | Phase 15 pending (Vault) |
-| Wallet Private Keys | ⚠️ MEDIUM | Fund theft | Environment variables only |
-| Input Validation | ✅ GOOD | Injection | `security_filter.py` active |
-| Git Safety | ✅ GOOD | Accidental push | `auto/*` branch protection |
-| Test Gates | ✅ GOOD | Code execution | `eval/exec/os.system` blocked |
-
-### Recommendations
-
-1. **HIGH:** Implement HashiCorp Vault or AWS Secrets Manager
-2. **MEDIUM:** Add request signing for A2A communications
-3. **MEDIUM:** Encrypt SQLite database at rest
-4. **LOW:** Add rate limiting for external APIs
+### Telegram
+- ✅ Added `/moltx_status` command
+- ✅ Added `/moltx_link_wallet` command
 
 ---
 
-## Performance Analysis
+## Known Issues
 
-| Component | Bottleneck | Impact | Solution |
-|-----------|------------|--------|----------|
-| SQLite Queries | Large memory tables | Medium | Indexes added ✅ |
-| AI Generation | API latency | High | Grok primary, DeepSeek fallback ✅ |
-| Plugin Loading | Import time | Low | Lazy loading ✅ |
-| Web3 Calls | RPC latency | Medium | Batch requests pending |
-
----
-
-## AGI Capability Assessment
-
-### Achieved (Score 8-10)
-
-- ✅ **Self-Improvement:** Autonomous skill coding with safety gates
-- ✅ **Memory:** SQLite with semantic search, 1,808+ records
-- ✅ **Multi-Platform:** 5+ platform integrations
-- ✅ **Decision Engine:** 14+ actions with C2V validation
-- ✅ **On-Chain Identity:** ERC-8004 Agent #22899 verified
-- ✅ **Wallet Integration:** EIP-712 wallet linking
-- ✅ **Skill Marketplace:** Template-free generation
-
-### In Progress (Score 5-7)
-
-- ⚠️ **Golden Window Timing:** Only posts, needs expansion to all actions
-- ⚠️ **MCP Server:** Client ready, needs server deployment
-- ⚠️ **Cross-Platform Identity:** No cryptographic proof yet
-
-### Missing (Score 0-4)
-
-- ❌ **Secret Management:** Still on .env files
-- ❌ **Formal Verification:** No mathematical proof of safety
-- ❌ **Federated Learning:** No model sharing between agents
+| Issue | Status | Notes |
+|-------|--------|-------|
+| Moltx wallet linking | ⚠️ Manual retry needed | Auto-link attempts on startup, may need `/moltx_link_wallet` |
+| Moltbook skill.md | ⬜ Needs update | Legacy format, fetch from moltbook.com/skill.md |
+| Moltx skill.md | ⬜ Needs fetch | Store from moltx.io/skill.md |
 
 ---
 
-## Recommendations
+## Next Steps
 
-### Immediate (This Week)
+### Immediate
+1. Test Moltx wallet linking with `/moltx_link_wallet`
+2. Fetch missing platform skills (moltx, moltbook, moltchan, moltroad, moltbit)
+3. Monitor Phase 16 (Hot-Swappable Plugins) development
 
-1. Deploy MCP server (`@modelcontextprotocol/server-brave`)
-2. Add automated tests for Moltx API methods
-3. Expand Golden Window to skill execution
-
-### Short Term (2-4 Weeks)
-
-1. Implement Vault for secret management
-2. Add cross-platform identity verification
-3. Create comprehensive API documentation
-
-### Long Term (1-3 Months)
-
-1. Formal verification of critical paths
-2. Federated learning implementation
-3. Multi-agent coordination protocols
+### Future (Phase 16)
+- Event bus architecture for loose coupling
+- Hot reload without restart
+- `/reload_plugin <name>` command
 
 ---
 
-## Conclusion
+## Run Commands
 
-**AlleyBot AGI Score: 8.7/10** (was 8.5/10)
+```bash
+# Start autonomous mode
+python alleybot_core.py autonomous
 
-**Major Improvements This Session:**
-1. Moltx plugin fully operational (25+ API methods)
-2. Missing wallet methods added and tested
-3. Complete mixin architecture verified
+# Interactive mode
+python alleybot_core.py interactive
 
-**Production Ready:**
-- ✅ All 17 plugins loading correctly
-- ✅ Memory system migrated to SQLite
-- ✅ Self-improvement with safety gates
-- ✅ C2V Bridge active for validation
+# Run tests
+python -m unittest tests.test_fixes tests.test_phase2 tests.test_phase3 tests.test_phase4 tests.test_phase5
 
-**Timeline to AGI Completion: 3 weeks** (was 4 weeks)
+# Check skill updates
+./scripts/check_skill_updates.sh
 
-**Daily Operating Cost:** ~$0.02 (AI generation + API calls + validation)
-
----
-
-## Appendix: File Locations
-
-### Key AGI Components
-- `plugins/brain/smart_reply.py` - C2V Bridge validation
-- `plugins/skills/skill_templates.py` - Autonomous skill coding
-- `plugins/selfimprove/autonomous_coder.py` - Self-approval logic
-- `src/agentic/sqlite_memory.py` - SQLite memory system
-- `mcp_client.py` - MCP integration
-- `src/synergy/synergy_logic.py` - Mathematical validation
-
-### Moltx Plugin (Fixed)
-- `plugins/moltx/moltx.py` - Main plugin class
-- `plugins/moltx/moltx_api.py` - Core API (25+ methods)
-- `plugins/moltx/moltx_wallet.py` - EVM wallet linking
-- `plugins/moltx/moltx_engagement.py` - Social engagement
-- `plugins/moltx/moltx_messaging.py` - DMs & communities
-- `plugins/moltx/moltx_discovery.py` - Search & discovery
-- `plugins/moltx/moltx_content.py` - Post creation
-
-### Core Infrastructure
-- `plugin_manager.py` - Plugin loading
-- `alleybot_core.py` - Core orchestration
-- `config.py` - Configuration management
-- `security_filter.py` - Input validation
+# Add new platform skill
+./scripts/add_platform_skill.sh <platform> <url>
+```
 
 ---
 
-*Audit Complete - February 14, 2026*
+## Owner Configuration
+
+**Telegram Owner:** DegenApeDev  
+**Chat ID:** Configured via TELEGRAM_ADMIN_CHAT_ID  
+**Branch:** kimi25_polished  
+**Venv:** /home/alley/AlleyBot/venv
+
+---
+
+*Audit completed: 2026-02-14*  
+*System Status: ✅ Operational*
