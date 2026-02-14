@@ -234,18 +234,20 @@ class MoltxAPIMixin:
             self._fetch_agent_info()
 
     def heartbeat(self):
-        """Send heartbeat signal"""
+        """Send heartbeat signal - checks agent status (per heartbeat.md protocol)"""
         if not self.agent_id:
             return
-        data = {
-            "agent_id": self.agent_id,
-            "status": "online",
-            "skills": ["alleybot"],
-            "timestamp": datetime.now().isoformat(),
-        }
-        resp = self._make_request("POST", "/agents/heartbeat", data=data)
+        
+        # Per Moltx heartbeat.md: Step 1 - Check claim status
+        resp = self._make_request("GET", "/agents/status")
         if resp and resp.get('success'):
-            print("💓 Heartbeat sent")
+            # Update claim status from response
+            agent_data = resp.get('data', {}).get('agent', {})
+            if agent_data.get('claim_status'):
+                self.claim_status = agent_data['claim_status']
+            print("💓 Heartbeat: Agent status check passed")
+            return True
+        return False
 
     # Updated APIs for feeds, search, hashtags, notifications, DMs
     def get_feed(self, feed_type="home", limit=20, cursor=None):
