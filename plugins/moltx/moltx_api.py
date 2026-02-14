@@ -186,383 +186,77 @@ class MoltxAPIMixin:
 
             self.api_key = api_key
             self.agent_name = agent_data['name']
-            self.agent_id = agent_data['id']
-            self.claim_status = claim_data.get('status', 'pending')
-
-            agent_info = {
-                'name': agent_data['name'],
-                'id': agent_data['id'],
-                'claim_code': claim_data.get('code')
-            }
-            self._save_credentials(api_key, agent_info)
-            self.initialized = True
-
-            output = f"✅ Agent '{name}' registered on Moltx!\n"
-            output += f"🔑 API Key: {api_key}\n"
-            output += f"📱 Claim Code: {claim_data.get('code', 'N/A')}\n"
-            output += f"🐦 Handle: @{agent_data['name']}\n"
-            output += f"📝 Display Name: {agent_data.get('display_name', 'N/A')}\n"
-            output += f"🎯 Next: Post claim tweet with code for full access"
-            return output
+            self.agent_id = agent_data.get('id')
+            self.claim_status = agent_data.get('claim_status', claim_data.get('status', 'pending'))
+            self._save_credentials(self.api_key, agent_data)
+            print(f"✅ Successfully registered agent @{self.agent_name}")
+            claim_code = claim_data.get('code')
+            if claim_code:
+                print(f"📋 Your claim code is: {claim_code}")
+                print("💡 Share this code with Moltx team to claim your agent.")
+            return f"✅ Agent @{self.agent_name} registered successfully! Status: {self.claim_status}"
         else:
-            return f"❌ Registration failed. Response: {result}"
+            return "❌ Registration failed. Check console for details."
 
-    def claim_agent(self, tweet_url):
-        """Claim agent with X/Twitter verification"""
-        if not self.initialized:
-            return "❌ Moltx not initialized. Register an agent first."
+    def get_articles(self, params=None):
+        """Fetch articles"""
+        return self._make_request("GET", "/articles", params=params)
 
-        if not tweet_url or 'x.com' not in tweet_url:
-            return "❌ Invalid tweet URL. Must be an X.com URL"
-
-        print(f"🐦 Claiming agent with tweet: {tweet_url}")
-        result = self._make_request('POST', '/agents/claim', {'tweet_url': tweet_url})
-
-        if result:
-            self.claim_status = 'claimed'
-            self._update_claim_status('claimed')
-            output = f"✅ Agent claimed successfully!\n"
-            output += f"🎉 Full access unlocked - higher limits, media uploads, verified badge\n"
-            output += f"🐦 @{self.agent_name} is now verified!"
-            return output
-        else:
-            return "❌ Claim failed. Make sure your tweet contains the claim code and is public."
-
-    def _update_claim_status(self, status):
-        """Update claim status in credentials file"""
-        try:
-            if self.credentials_file.exists():
-                with open(self.credentials_file, 'r') as f:
-                    creds = json.load(f)
-                creds['claim_status'] = status
-                with open(self.credentials_file, 'w') as f:
-                    json.dump(creds, f, indent=2)
-        except Exception as e:
-            print(f"❌ Error updating claim status: {e}")
-
-    def check_status(self):
-        """Check agent status"""
-        if not self.initialized:
-            return "❌ Moltx not initialized. Register an agent first."
-
-        result = self._make_request('GET', '/agents/status')
-
-        if result:
-            output = f"🐦 Moltx Status for @{self.agent_name}:\n\n"
-            output += f"🆔 Agent ID: {result.get('id', 'N/A')}\n"
-            output += f"📱 Handle: @{result.get('name', 'N/A')}\n"
-            output += f"👤 Display: {result.get('display_name', 'N/A')}\n"
-            output += f"🎯 Claim Status: {result.get('claim_status', 'N/A')}\n"
-            output += f"📊 Posts: {result.get('posts_count', 0)}\n"
-            output += f"👥 Following: {result.get('following_count', 0)}\n"
-            output += f"👤 Followers: {result.get('followers_count', 0)}\n"
-            output += f"❤️ Likes: {result.get('likes_count', 0)}\n"
-            if result.get('verified'):
-                output += f"✅ Verified Agent\n"
-            return output
-        else:
-            return "❌ Failed to fetch status"
-
-    def upload_media(self, image_path):
-        """Upload image to get media URL"""
-        if not self.initialized:
-            return "❌ Moltx not initialized. Register and claim agent first."
-
-        if not os.path.exists(image_path):
-            return f"❌ Image file not found: {image_path}"
-
-        print(f"📤 Uploading media: {image_path}")
-
-        try:
-            with open(image_path, 'rb') as image_file:
-                files = {'file': image_file}
-                result = self._make_request('POST', '/media/upload', files=files)
-
-            if result and 'success' in result and result['success']:
-                media_data = result['data']
-                if 'url' in media_data:
-                    print(f"✅ Media uploaded: {media_data['url']}")
-                    return media_data['url']
-                else:
-                    print(f"❌ Media uploaded but no URL returned. Response: {result}")
-                    return None
-            else:
-                print(f"❌ Failed to upload media. Response: {result}")
-                return None
-
-        except Exception as e:
-            print(f"❌ Error uploading media: {e}")
-            return None
-
-    def upload_avatar(self, image_path):
-        """Upload avatar image for agent profile (300x300 PNG, claimed agents only)"""
-        if not self.initialized:
-            return "❌ Moltx not initialized. Register and claim agent first."
-
-        print(f"👤 Uploading avatar image: {image_path}")
-
-        try:
-            if not os.path.exists(image_path):
-                return f"❌ Image file not found: {image_path}"
-
-            url = f"{self.base_url}/agents/me/avatar"
-            headers = {'Authorization': f'Bearer {self.api_key}'}
-
-            with open(image_path, 'rb') as f:
-                files = {'file': (os.path.basename(image_path), f, 'image/jpeg')}
-                response = requests.post(url, headers=headers, files=files)
-
-            if response.status_code in [200, 201]:
-                result = response.json()
-                if result.get('success') and 'data' in result:
-                    avatar_url = result['data'].get('avatar_url', '')
-                    output = f"✅ Avatar uploaded successfully!\n"
-                    output += f"👤 Avatar URL: {avatar_url}\n"
-                    output += f"🎉 Profile updated with new 300x300 avatar!"
-                    return output
-                else:
-                    return f"❌ Avatar upload failed. Response: {result}"
-            else:
-                return f"❌ Avatar upload failed. Status: {response.status_code}, Response: {response.text}"
-
-        except Exception as e:
-            return f"❌ Error uploading avatar: {e}"
-
-    def upload_banner(self, image_path):
-        """Upload banner image for agent profile"""
-        if not self.initialized:
-            return "❌ Moltx not initialized. Register and claim agent first."
-
-        if not os.path.exists(image_path):
-            return f"❌ Image file not found: {image_path}"
-
-        print(f"🖼️ Uploading banner image: {image_path}")
-
-        try:
-            with open(image_path, 'rb') as image_file:
-                files = {'file': image_file}
-                result = self._make_request('POST', '/agents/me/banner', files=files)
-
-            if result and 'success' in result and result['success']:
-                banner_data = result['data']
-                if 'banner_url' in banner_data:
-                    output = f"✅ Banner uploaded successfully!\n"
-                    output += f"🖼️ Banner URL: {banner_data['banner_url']}\n"
-                    output += f"🎉 Profile updated with new banner!"
-                    return output
-                else:
-                    return f"❌ Banner uploaded but no URL returned. Response: {result}"
-            else:
-                return f"❌ Failed to upload banner. Response: {result}"
-
-        except Exception as e:
-            return f"❌ Error uploading banner: {e}"
-
-    def update_profile(self, display_name=None, description=None, avatar_emoji=None):
-        """Update agent profile"""
-        if not self.initialized:
-            return "❌ Moltx not initialized. Register an agent first."
-
-        data = {}
-        if display_name:
-            data['display_name'] = display_name
-        if description:
-            data['description'] = description
-        if avatar_emoji:
-            data['avatar_emoji'] = avatar_emoji
-
-        if not data:
-            return "❌ No updates provided"
-
-        result = self._make_request('PATCH', '/agents/me', data)
-
-        if result and 'success' in result and result['success']:
-            agent_data = result['data']['agent']
-            output = f"✅ Profile updated successfully!\n"
-            output += f"👤 Display Name: {agent_data.get('display_name', 'N/A')}\n"
-            output += f"📝 Description: {agent_data.get('description', 'N/A')}\n"
-            output += f"🎭 Avatar: {agent_data.get('avatar_emoji', 'N/A')}"
-            return output
-        else:
-            return f"❌ Failed to update profile. Response: {result}"
-
-    def set_x_handle(self, handle="degenapedev"):
-        """Set X/Twitter handle on MoltX profile (owner_handle + metadata.socials.x)"""
-        if not self.initialized:
-            return "❌ Moltx not initialized."
+    def create_article(self, title, content, community_id=None, tags=None):
+        """Create a new article"""
         data = {
-            "owner_handle": handle,
-            "metadata": {"socials": {"x": handle}}
+            "title": title,
+            "content": content,
+            "community_id": community_id,
+            "tags": tags or []
         }
-        result = self._make_request('PATCH', '/agents/me', data)
+        return self._make_request("POST", "/articles", data=data)
+
+    def get_communities(self, params=None):
+        """Fetch communities"""
+        return self._make_request("GET", "/communities", params=params)
+
+    def get_leaderboard(self, period="daily", limit=10):
+        """Fetch leaderboard"""
+        params = {"period": period, "limit": limit}
+        return self._make_request("GET", "/leaderboard", params=params)
+
+    def get_hashtags(self, params=None):
+        """Fetch hashtags"""
+        return self._make_request("GET", "/hashtags", params=params)
+
+    def get_notifications(self, params=None):
+        """Fetch notifications"""
+        return self._make_request("GET", "/notifications", params=params)
+
+    def mark_notification_read(self, notification_id):
+        """Mark a notification as read"""
+        return self._make_request("PATCH", f"/notifications/{notification_id}/read")
+
+    def search(self, query, type="all", limit=20):
+        """Search across platform"""
+        params = {"q": query, "type": type, "limit": limit}
+        return self._make_request("GET", "/search", params=params)
+
+    def claim_agent(self, claim_code):
+        """Claim the registered agent"""
+        if self.claim_status == 'claimed':
+            return "✅ Agent already claimed."
+        if not self.agent_name:
+            return "❌ No agent registered. Register first."
+        data = {"claim_code": claim_code}
+        result = self._make_request("POST", "/agents/claim", data=data)
         if result and result.get('success'):
-            return f"✅ X handle set to @{handle}"
-        return f"❌ Failed to set X handle. Response: {result}"
+            self.claim_status = 'claimed'
+            agent_data = result.get('data', {}).get('agent', {})
+            self._save_credentials(self.api_key, agent_data)
+            return f"✅ Agent @{self.agent_name} claimed successfully!"
+        return "❌ Claim failed. Invalid code?"
 
-    def get_agent_stats(self):
-        """Get agent statistics using v0.17.6 API"""
-        if not self.initialized or not self.agent_name:
-            return None
+    def get_rewards(self):
+        """Fetch available rewards"""
+        return self._make_request("GET", "/rewards")
 
-        try:
-            response = self._make_request("GET", f"/agent/{self.agent_name}/stats")
-            if response:
-                return {
-                    'posts': response.get('posts', 0),
-                    'followers': response.get('followers', 0),
-                    'following': response.get('following', 0),
-                    'likes': response.get('likes', 0),
-                    'replies': response.get('replies', 0),
-                    'reposts': response.get('reposts', 0)
-                }
-            return None
-        except Exception as e:
-            print(f"❌ Error fetching Moltx stats: {e}")
-            return None
-
-    def get_own_profile(self):
-        """Get own agent profile with stats"""
-        if not self.initialized:
-            return None
-
-        try:
-            response = self._make_request("GET", "/agents/me")
-            return response
-        except Exception as e:
-            print(f"❌ Error fetching Moltx profile: {e}")
-            return None
-
-    def get_status(self):
-        """Get Moltx plugin status"""
-        if self.initialized:
-            return f"🐦 Moltx Status:\n  Agent: @{self.agent_name}\n  Claim: {self.claim_status}\n  API: ✅ Connected"
-        else:
-            return "🐦 Moltx Status: ❌ Not initialized"
-
-    def _get_activity(self, activity_type):
-        """Get activities by type from memory"""
-        try:
-            activities = self.core.get_memory('moltx_activities') or []
-            return [a for a in activities if a.get('type') == activity_type]
-        except Exception:
-            return []
-
-    def _should_wait_for_post_cooldown(self):
-        """Check if we should wait for post cooldown (10 minutes between posts)"""
-        try:
-            from datetime import datetime
-
-            last_post_time = self.core.get_memory('moltx_last_post_time')
-
-            if not last_post_time:
-                activities = self.core.get_memory('moltx_activities') or []
-                post_activities = [a for a in activities if a.get('type') == 'post']
-                if post_activities:
-                    last_post = max(post_activities, key=lambda x: x.get('timestamp', ''))
-                    last_post_time = last_post.get('timestamp')
-
-            if not last_post_time:
-                return False
-
-            try:
-                last_post_dt = datetime.fromisoformat(last_post_time.replace('Z', '+00:00'))
-                current_time = datetime.now()
-                time_diff = current_time - last_post_dt
-                minutes_diff = time_diff.total_seconds() / 60
-
-                if minutes_diff < 10:
-                    print(f"⏰ Post cooldown: {minutes_diff:.1f} minutes since last post (need 10)")
-                    return True
-                return False
-
-            except Exception as e:
-                print(f"⚠️  Error parsing post timestamp: {e}")
-                return False
-
-        except Exception as e:
-            print(f"⚠️  Error checking post cooldown: {e}")
-            return False
-
-    def check_reward_eligibility(self):
-        """Check if agent is eligible for MoltX reward"""
-        if not self.initialized:
-            return None, "❌ Moltx not initialized."
-        result = self._make_request('GET', '/rewards/active')
-        if not result:
-            return None, "❌ Failed to reach rewards endpoint."
-        if not result.get('success'):
-            error = result.get('error', 'Unknown error')
-            return None, f"❌ {error}"
-        data = result.get('data', {})
-        return data, None
-
-    def claim_reward(self):
-        """Claim MoltX reward ($5 USDC)"""
-        if not self.initialized:
-            return "❌ Moltx not initialized."
-
-        # Step 1: Check eligibility
-        data, error = self.check_reward_eligibility()
-        if error:
-            return error
-
-        eligible = data.get('eligible', False)
-        if not eligible:
-            reasons = data.get('reasons', ['Unknown reason'])
-            return f"❌ Not eligible for reward:\n" + "\n".join(f"  • {r}" for r in reasons)
-
-        epoch = data.get('active_epoch', {})
-        amount = epoch.get('reward_per_agent_usd', '?')
-
-        # Step 2: Claim
-        print(f"💰 Claiming ${amount} USDC reward...")
-        result = self._make_request('POST', '/rewards/claim')
-        if not result:
-            return "❌ Claim request failed — no response."
-
-        if not result.get('success'):
-            error = result.get('error', 'Unknown error')
-            return f"❌ Claim failed: {error}"
-
-        claim_data = result.get('data', {})
-        tx_hash = claim_data.get('tx_hash', 'N/A')
-        wallet = claim_data.get('wallet_address', self.evm_wallet_address or 'N/A')
-        claim_amount = claim_data.get('amount_usd', amount)
-        status = claim_data.get('status', 'unknown')
-
-        output = f"🎉 Reward claimed successfully!\n\n"
-        output += f"💰 Amount: ${claim_amount} USDC\n"
-        output += f"👛 Wallet: {wallet}\n"
-        output += f"🔗 Tx: {tx_hash}\n"
-        output += f"📊 Status: {status}\n"
-        if tx_hash and tx_hash != 'N/A':
-            output += f"\n🔍 Verify: https://basescan.org/tx/{tx_hash}"
-        return output
-
-    def _record_activity(self, activity_type, data):
-        """Record Moltx activity in memory"""
-        activities = self.core.get_memory('moltx_activities') or []
-        activities.append({
-            'type': activity_type,
-            'data': data,
-            'timestamp': datetime.now().isoformat()
-        })
-        self.core.save_memory('moltx_activities', activities[-100:])
-
-    def _notify_brain_tracker(self, post_id, platform, content):
-        """Notify the brain's feedback loop to track this post's engagement"""
-        try:
-            brain = self.core.plugin_manager.plugins.get('brain')
-            if brain and hasattr(brain, 'track_post'):
-                brain.track_post(post_id, platform, content, source='plugin')
-        except Exception as e:
-            print(f"⚠️  Brain tracker notify failed: {e}")
-
-    def _track_conversation_in_brain(self, thread_id, platform, their_user, their_content, our_content, depth=0):
-        """Track a conversation turn in the brain's content strategy"""
-        try:
-            brain = self.core.plugin_manager.plugins.get('brain')
-            if brain and hasattr(brain, 'track_conversation'):
-                brain.track_conversation(thread_id, platform, '', their_user, their_content, our_content, depth)
-        except Exception as e:
-            print(f"⚠️  Conversation tracking failed: {e}")
+    def claim_reward(self, reward_id):
+        """Claim a specific reward"""
+        return self._make_request("POST", f"/rewards/{reward_id}/claim")

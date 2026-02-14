@@ -485,6 +485,47 @@ Haven't engaged on Moltbook recently, good time to build karma."""
                 print(f"  ⏱️  Rate limiting: sleeping {delay}s")
                 time.sleep(delay)
 
+        # GOLDEN WINDOW: Mathematical timing validation for high-value actions
+        # High-impact actions execute ONLY when block height aligns with D(n)/Dg(n) harmonics
+        if action.get('impact') in ['high', 'medium'] and hasattr(self, 'should_execute_in_golden_window'):
+            try:
+                # Get block height from on-chain plugin
+                block_height = 0
+                onchain = plugins.get('onchain')
+                if onchain and hasattr(onchain, 'get_latest_block'):
+                    try:
+                        block_height = onchain.get_latest_block()
+                    except:
+                        pass
+                
+                # Check Golden Window alignment
+                should_execute, timing_details = self.should_execute_in_golden_window(
+                    action_id, 
+                    block_height,
+                    min_harmony=0.6 if action.get('impact') == 'high' else 0.5
+                )
+                
+                if not should_execute:
+                    # Action blocked by Golden Window - schedule for next window
+                    next_window = timing_details.get('next_window_estimate', '?')
+                    reason = timing_details.get('reason', 'Golden Window alignment required')
+                    
+                    result['output'] = f"⏳ QUEUED for Golden Window (next window: ~{next_window} blocks): {reason}"
+                    result['golden_window_blocked'] = True
+                    result['timing_details'] = timing_details
+                    print(f"⏳ Action {action_id} QUEUED: {reason}")
+                    
+                    # Store for later execution
+                    self._queue_action_for_golden_window(action_id, action, timing_details)
+                    return result
+                
+                print(f"🌟 Action {action_id} APPROVED by Golden Window (harmony: {timing_details.get('harmony', 0):.1%})")
+                result['golden_window_approved'] = True
+                result['timing_details'] = timing_details
+                
+            except Exception as e:
+                print(f"⚠️  Golden Window check failed: {e} - proceeding without timing validation")
+
         # SYMOD TRUTH FILTER: Mandatory validation for high-value actions
         # Mathematical certainty over LLM probabilistic output
         if SYMOD_AVAILABLE and hasattr(self, '_symod_enabled') and self._symod_enabled:
@@ -1381,6 +1422,104 @@ Respond with ONLY the debate topic, nothing else."""
         except Exception:
             pass
         return 0
+    
+    def _queue_action_for_golden_window(self, action_id: str, action: Dict, timing_details: Dict):
+        """
+        Queue an action to execute when Golden Window aligns.
+        Stores the action for automatic retry at optimal timing.
+        """
+        try:
+            # Get or create the queue
+            queued_actions = self.core.get_memory('golden_window_queue') or []
+            if not isinstance(queued_actions, list):
+                queued_actions = []
+            
+            # Add action to queue with estimated execution time
+            queue_entry = {
+                'action_id': action_id,
+                'action': action,
+                'queued_at': datetime.datetime.now().isoformat(),
+                'estimated_block': timing_details.get('block_height', 0) + timing_details.get('next_window_estimate', 50),
+                'timing_details': timing_details,
+                'retry_count': 0,
+            }
+            
+            # Check if already queued
+            existing = [q for q in queued_actions if q['action_id'] == action_id]
+            if existing:
+                # Update existing entry
+                queued_actions = [q for q in queued_actions if q['action_id'] != action_id]
+            
+            queued_actions.append(queue_entry)
+            
+            # Save queue (keep last 20)
+            self.core.save_memory('golden_window_queue', queued_actions[-20:])
+            
+            print(f"📋 Queued {action_id} for Golden Window (~{timing_details.get('next_window_estimate', '?')} blocks)")
+            
+        except Exception as e:
+            print(f"⚠️  Failed to queue action: {e}")
+    
+    def _execute_queued_actions(self):
+        """
+        Check queued actions and execute those whose Golden Window has arrived.
+        Called periodically during autonomous operation.
+        """
+        try:
+            queued_actions = self.core.get_memory('golden_window_queue') or []
+            if not queued_actions:
+                return
+            
+            current_block = self.get_latest_block()
+            executed = []
+            remaining = []
+            
+            for entry in queued_actions:
+                action_id = entry['action_id']
+                estimated_block = entry.get('estimated_block', 0)
+                
+                # Check if we're close to or past the estimated block
+                if current_block >= estimated_block - 2:  # Within 2 blocks
+                    # Verify Golden Window is actually open
+                    should_execute, timing_details = self.should_execute_in_golden_window(
+                        action_id, 
+                        current_block,
+                        min_harmony=0.5
+                    )
+                    
+                    if should_execute:
+                        print(f"🌟 Golden Window arrived for queued action: {action_id}")
+                        try:
+                            # Execute the action
+                            result = self.execute_action(entry['action'])
+                            if result.get('success') or result.get('golden_window_approved'):
+                                executed.append(action_id)
+                                print(f"✅ Executed queued action: {action_id}")
+                            else:
+                                # Failed, keep in queue with retry count
+                                entry['retry_count'] = entry.get('retry_count', 0) + 1
+                                if entry['retry_count'] < 3:
+                                    remaining.append(entry)
+                        except Exception as e:
+                            print(f"❌ Failed to execute queued action {action_id}: {e}")
+                            entry['retry_count'] = entry.get('retry_count', 0) + 1
+                            if entry['retry_count'] < 3:
+                                remaining.append(entry)
+                    else:
+                        # Still not in window, re-queue with updated estimate
+                        entry['estimated_block'] = current_block + timing_details.get('next_window_estimate', 50)
+                        remaining.append(entry)
+                else:
+                    # Not time yet
+                    remaining.append(entry)
+            
+            # Update queue
+            if executed:
+                print(f"🌟 Executed {len(executed)} queued actions in Golden Window")
+                self.core.save_memory('golden_window_queue', remaining[-20:])
+            
+        except Exception as e:
+            print(f"⚠️  Failed to execute queued actions: {e}")
     
     def symod_status_command(self) -> str:
         """CLI command: Check SyMod Truth Filter status"""

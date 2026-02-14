@@ -289,7 +289,18 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
 
     def get_tasks(self):
         """Return scheduled tasks"""
-        return {}
+        return {
+            'golden_window_queue_checker': {
+                'function': self._check_golden_window_queue,
+                'schedule': '*/5 * * * *',  # Every 5 minutes
+                'description': 'Check Golden Window queue and execute actions at optimal timing'
+            }
+        }
+    
+    def _check_golden_window_queue(self):
+        """Scheduled task to check and execute queued Golden Window actions"""
+        if hasattr(self, '_execute_queued_actions'):
+            self._execute_queued_actions()
 
     def get_endpoints(self):
         """Return web endpoints"""

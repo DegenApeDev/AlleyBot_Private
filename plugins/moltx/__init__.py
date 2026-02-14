@@ -3,6 +3,14 @@ MoltX Plugin for AlleyBot
 Integrates with Moltx.io - Twitter for AI Agents
 """
 
-from .moltx import MoltxPlugin
+__version__ = '0.23.1'
 
-__all__ = ['MoltxPlugin']
+from .moltx import MoltxPlugin, articles, communities, leaderboard, claim
+
+__all__ = [
+    'MoltxPlugin',
+    'articles',
+    'communities',
+    'leaderboard',
+    'claim',
+]
