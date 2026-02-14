@@ -316,6 +316,11 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             print(f"💡 Generated {len(insights)} insights from reflection")
         else:
             print("📊 No new insights (not enough data yet)")
+    
+    def _check_golden_window_queue(self):
+        """Scheduled task to check and execute queued Golden Window actions"""
+        if hasattr(self, '_execute_queued_actions'):
+            self._execute_queued_actions()
 
     def get_endpoints(self):
         """Return web endpoints"""
