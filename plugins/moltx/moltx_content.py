@@ -16,6 +16,77 @@ class MoltxContentMixin:
         """Initialize mixin - accepts any args/kwargs for cooperative inheritance"""
         super().__init__(*args, **kwargs)
 
+    def _should_wait_for_post_cooldown(self) -> bool:
+        """Check if cooldown period since last post"""
+        last_post_str = self.core.get_memory('moltx_last_post_time')
+        if not last_post_str:
+            return False
+        try:
+            last_post = datetime.fromisoformat(last_post_str)
+            return (datetime.now() - last_post).total_seconds() < 600  # 10 minutes
+        except (ValueError, TypeError):
+            return False
+
+    def _is_topic_request(self, content: str) -> bool:
+        """Detect if content is a topic request for AI generation"""
+        content_lower = content.lower().strip()
+        patterns = [
+            r'^topic[:\s]',
+            r'^write about',
+            r'^generate',
+            r'\btrending\b',
+            r'\bhashtag\b'
+        ]
+        return bool(re.search('|'.join(patterns), content_lower))
+
+    def _generate_content(self, prompt: str, mode: str) -> Optional[str]:
+        """Generate enhanced content using AI"""
+        try:
+            from grok_ai import grok_ai
+            system_prompt = f"You are an expert {mode} content creator for Moltx. Create engaging, concise {mode}s. Use hashtags and calls to action."
+            max_tokens = 4000 if mode == 'article' else 300
+            response = grok_ai.chat(prompt, system=system_prompt, max_tokens=max_tokens)
+            return response.strip()
+        except Exception as e:
+            print(f"❌ AI content generation failed: {e}")
+            return None
+
+    def _generate_comment(self, parent_content: str, agent_name: Optional[str] = None) -> Optional[str]:
+        """Generate contextual comment for quote/reply/repost"""
+        try:
+            from grok_ai import grok_ai
+            user = agent_name or "user"
+            prompt = f"Write a short, engaging comment replying to @{user}: {parent_content[:300]}"
+            response = grok_ai.chat(prompt, max_tokens=100)
+            return response.strip()
+        except Exception as e:
+            print(f"❌ AI comment generation failed: {e}")
+            return None
+
+    def _calculate_read_time(self, content: str) -> str:
+        """Estimate read time for articles"""
+        word_count = len(re.findall(r'\w+', content))
+        minutes = max(1, word_count // 225)
+        return f"{minutes} min"
+
+    def _record_activity(self, action: str, details: dict) -> None:
+        """Record platform activity"""
+        activity = {
+            'platform': 'moltx',
+            'action': action,
+            'timestamp': datetime.now().isoformat(),
+            **details
+        }
+        print(f"📈 Activity recorded: {action} - {details}")
+
+    def _notify_brain_tracker(self, post_id: str, platform: str, content: str) -> None:
+        """Notify brain tracker of new post"""
+        summary = f"{platform.upper()} post created ({post_id}): {content[:100]}..."
+        try:
+            self.core.notify_brain(summary)
+        except AttributeError:
+            print(f"🧠 Tracker: {summary}")
+
     def create_post(
         self,
         content: Union[str, List[str]],
@@ -152,4 +223,4 @@ class MoltxContentMixin:
             if post_id_match:
                 current_parent_id = post_id_match.group(1)
 
-        return "\n".join(results)
+        return '\n'.join(results)

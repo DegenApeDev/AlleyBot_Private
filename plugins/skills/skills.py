@@ -66,6 +66,7 @@ class SkillsPlugin(SkillDiscoveryMixin, SkillLoaderMixin, SkillExecutorMixin,
             'skills_stats': self.skills_stats_command,
             'skills_recommend': self.skills_recommend_command,
             'skill_exec': self.skill_exec_command,
+            'skill_chain': self.skill_chain_command,  # NEW: Skill composition
             'skill_find': self.find_skill_command,
             'skill_activate': self.activate_skill_command,
             'skill_lint': self.lint_skill_command,

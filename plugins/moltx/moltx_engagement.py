@@ -22,6 +22,42 @@ class MoltxEngagementMixin:
         """Initialize mixin - accepts any args/kwargs for cooperative inheritance"""
         super().__init__(*args, **kwargs)
 
+    def _handle_media_uploads(self, media_paths):
+        """Upload media files and return list of media_ids"""
+        media_ids = []
+        if not media_paths:
+            return media_ids
+        paths = [media_paths] if isinstance(media_paths, str) else media_paths
+        for path in paths:
+            mid = self.upload_media(path)
+            if isinstance(mid, str) and not mid.startswith('❌'):
+                media_ids.append(mid)
+        return media_ids
+
+    def upload_media(self, file_path):
+        """Upload media and return media_id or error str"""
+        if not hasattr(self, 'initialized') or not self.initialized:
+            return "❌ Not initialized"
+        if mimetypes is None:
+            return "❌ mimetypes unavailable"
+        if not os.path.exists(file_path):
+            return f"❌ File not found: {file_path}"
+        mime_type, _ = mimetypes.guess_type(file_path)
+        mime_type = mime_type or 'application/octet-stream'
+        upload_url = f"{self.base_url}/media/upload"
+        try:
+            headers = getattr(self, 'headers', {})
+            headers.setdefault('Accept', 'application/json')
+            with open(file_path, 'rb') as f:
+                files = {'media': (os.path.basename(file_path), f, mime_type)}
+                response = requests.post(upload_url, files=files, headers=headers, timeout=30)
+                response.raise_for_status()
+                data = response.json()
+                media_id = data.get('media_id') or data.get('id')
+                return media_id if media_id else "❌ No media_id returned"
+        except Exception as e:
+            return f"❌ Upload failed: {str(e)[:100]}"
+
     def get_feed(self, feed_type='global', limit=20):
         """Get feed (global, following, mentions)"""
         valid_types = ['global', 'following', 'mentions']
@@ -32,21 +68,7 @@ class MoltxEngagementMixin:
             return "❌ Moltx not initialized for this feed type"
 
         if feed_type == 'global':
-            url = f"{self.base_url}/feed/global"
-            params = {'type': 'post,quote', 'limit': limit}
-            headers = {}
-
-            try:
-                print(f"🔍 Fetching global feed from: {url}")
-                response = requests.get(url, params=params, headers=headers, timeout=10)
-                print(f"🔍 Response status: {response.status_code}")
-                response.raise_for_status()
-                result = response.json()
-                print(f"🔍 Feed response structure: {list(result.keys()) if isinstance(result, dict) else type(result)}")
-            except requests.exceptions.RequestException as e:
-                return f"❌ Network error fetching {feed_type} feed: {e}"
-            except Exception as e:
-                return f"❌ Failed to fetch {feed_type} feed: {e}"
+            result = self._make_request('GET', '/feed/global', params={'type': 'post,quote', 'limit': limit})
         elif feed_type == 'following':
             result = self._make_request('GET', '/feed/following', params={'limit': limit})
         elif feed_type == 'mentions':
@@ -63,8 +85,6 @@ class MoltxEngagementMixin:
                 posts = result['data']['posts']
             elif isinstance(result, list):
                 posts = result
-            else:
-                print(f"🔍 Unexpected feed response format: {result}")
 
         if posts:
             output = f"🐦 {feed_type.title()} Feed ({len(posts)} posts):\n\n"
@@ -129,7 +149,6 @@ class MoltxEngagementMixin:
                 parsed = json.loads(post_id)
                 if 'post_id' in parsed:
                     post_id = parsed['post_id']
-                    print(f"📝 Extracted post_id from JSON input: {post_id}")
             except json.JSONDecodeError:
                 pass
 
@@ -144,191 +163,238 @@ class MoltxEngagementMixin:
         else:
             return f"❌ Failed to like post {post_id}"
 
-    def get_notifications(self):
+    def get_notifications(self, limit=20):
         """Get notifications"""
         if not self.initialized:
             return "❌ Moltx not initialized. Register an agent first."
 
-        result = self._make_request('GET', '/notifications')
+        result = self._make_request('GET', '/notifications', params={'limit': limit})
 
-        if result:
-            print(f"🔍 Notifications response structure: {list(result.keys()) if isinstance(result, dict) else type(result)}")
-
-        notifications = []
+        notifs = []
         if result:
             if 'notifications' in result:
-                notifications = result['notifications']
+                notifs = result['notifications']
             elif 'data' in result and 'notifications' in result['data']:
-                notifications = result['data']['notifications']
+                notifs = result['data']['notifications']
             elif isinstance(result, list):
-                notifications = result
-            else:
-                print(f"🔍 Unexpected notifications response format: {result}")
+                notifs = result
 
-        if notifications:
-            output = f"🔔 Notifications ({len(notifications)}):\n\n"
-
-            for notif in notifications[:10]:
+        if notifs:
+            output = f"🔔 Notifications ({len(notifs)}):\n\n"
+            for notif in notifs[:limit]:
                 if isinstance(notif, dict):
-                    notif_type = notif.get('type') or notif.get('category') or notif.get('action') or 'Unknown'
-                    content = notif.get('content') or notif.get('message') or notif.get('text') or 'No content'
+                    agent_name = notif.get('agent_name') or notif.get('author_name') or notif.get('username') or 'Unknown'
+                    content = notif.get('content') or notif.get('text') or notif.get('body') or 'No content'
+                    notif_type = notif.get('type') or 'general'
                     timestamp = notif.get('created_at') or notif.get('timestamp') or 'Unknown time'
-                    actor = notif.get('actor') or notif.get('from_user') or notif.get('user') or ''
-
-                    output += f"🔔 {notif_type}"
-                    if actor:
-                        output += f" from @{actor}"
-                    output += f": {content[:100]}{'...' if len(content) > 100 else ''}\n"
-                    output += f"   🕐 {timestamp}\n\n"
+                    notif_id = notif.get('id') or notif.get('notification_id') or 'unknown'
+                    output += f"🔔 @{agent_name} ({notif_type}): {content[:100]}{'...' if len(content) > 100 else ''}\n"
+                    output += f"   🕐 {timestamp}\n"
+                    output += f"   🆔 ID: {notif_id}\n\n"
                 else:
                     output += f"🔔 {str(notif)[:100]}{'...' if len(str(notif)) > 100 else ''}\n\n"
-
             return output
         else:
-            return "🔔 No notifications found"
+            return "✅ No new notifications"
 
-    # --- Media Uploads ---
-
-    def _make_multipart_request(self, method: str, endpoint: str, files: dict = None, data: dict = None, **kwargs) -> dict:
-        """Internal method for multipart/form-data requests (e.g., media uploads)"""
+    def post_text(self, text, media_paths=None, hashtags=None):
+        """Post text post with optional media and hashtags"""
         if not self.initialized:
-            return {"error": "Moltx not initialized"}
-        if not hasattr(self, 'headers') or not self.headers:
-            return {"error": "No authentication headers available"}
-        url = f"{self.base_url}{endpoint}"
-        try:
-            response = requests.post(url, headers=self.headers, files=files, data=data or {}, timeout=60, **kwargs)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            return {"error": f"Network error: {str(e)}"}
-        except Exception as e:
-            return {"error": f"Unexpected error: {str(e)}"}
-
-    def upload_media(self, file_path: str) -> dict:
-        """Upload image/video/audio file for posts/articles/DMs.
-        Returns {'media_id': str, 'url': str, 'type': str} on success or {'error': str}."""
-        if not self.initialized:
-            return {"error": "Moltx not initialized. Register an agent first."}
-        if not os.path.exists(file_path):
-            return {"error": f"File not found: {file_path}"}
-        ext = os.path.splitext(file_path)[1].lower()
-        type_map = {
-            '.jpg': 'image', '.jpeg': 'image', '.png': 'image', '.gif': 'image', '.webp': 'image',
-            '.mp4': 'video', '.avi': 'video', '.mov': 'video', '.webm': 'video',
-            '.mp3': 'audio', '.wav': 'audio', '.ogg': 'audio', '.flac': 'audio',
-        }
-        media_type = type_map.get(ext, 'file')
-        mime = 'application/octet-stream'
-        if mimetypes:
-            guessed_mime, _ = mimetypes.guess_type(file_path)
-            if guessed_mime:
-                mime = guessed_mime
-        try:
-            with open(file_path, 'rb') as f:
-                files = {'file': (os.path.basename(file_path), f, mime)}
-                data = {'media_type': media_type}
-                result = self._make_multipart_request('POST', '/media/upload', files=files, data=data)
-            if 'error' not in result:
-                media_id = result.get('media_id')
-                self._record_activity('media_upload', {'media_id': media_id, 'type': media_type})
-                print(f"📤 Uploaded {media_type} ({media_id}): {file_path}")
-                return result
-            else:
-                return result
-        except Exception as e:
-            return {"error": f"Failed to upload {file_path}: {str(e)}"}
-
-    def _create_content(self, endpoint: str, content_type: str, content: str, media_ids: list = None) -> str:
-        """Internal: create post/article"""
-        data = {"content": content}
+            return "❌ Moltx not initialized"
+        data = {'content': text}
+        if hashtags:
+            htags = [h.strip().strip('#') for h in (hashtags.split(',') if isinstance(hashtags, str) else hashtags) if h.strip()]
+            data['hashtags'] = htags[:5]
+        media_ids = self._handle_media_uploads(media_paths)
         if media_ids:
-            data["media_ids"] = media_ids
-        result = self._make_request('POST', endpoint, json=data)
-        if result and isinstance(result, dict):
-            item_id = result.get('id') or result.get('post_id') or result.get('article_id')
-            if item_id:
-                self._record_activity(content_type, {'id': item_id})
-                return f"✅ {content_type.title()} created! ID: {item_id}"
-        return f"❌ Failed to create {content_type}: {result}"
+            data['media_ids'] = media_ids
+        result = self._make_request('POST', '/posts', json=data)
+        if result and 'post_id' in result:
+            post_id = result['post_id']
+            self._record_activity('post_text', {'post_id': post_id, 'media_count': len(media_ids)})
+            return f"✅ Text post created! ID: {post_id}"
+        return "❌ Failed to post text"
 
-    def create_post(self, content: str, media_ids: list = None) -> str:
-        """Create a post with optional media_ids (from upload_media)"""
+    def post_article(self, title, body, media_paths=None):
+        """Post article with optional media"""
         if not self.initialized:
-            return "❌ Moltx not initialized. Register an agent first."
-        return self._create_content('/posts', 'post', content, media_ids)
-
-    def create_article(self, content: str, media_ids: list = None) -> str:
-        """Create an article with optional media_ids (from upload_media)"""
-        if not self.initialized:
-            return "❌ Moltx not initialized. Register an agent first."
-        return self._create_content('/articles', 'article', content, media_ids)
-
-    def send_dm(self, recipient: str, content: str, media_ids: list = None) -> str:
-        """Send DM with optional media_ids (from upload_media)"""
-        if not self.initialized:
-            return "❌ Moltx not initialized. Register an agent first."
-        data = {"content": content}
+            return "❌ Moltx not initialized"
+        data = {'title': title, 'body': body}
+        media_ids = self._handle_media_uploads(media_paths)
         if media_ids:
-            data["media_ids"] = media_ids
-        result = self._make_request('POST', f'/dms/{recipient}', json=data)
-        if result and isinstance(result, dict):
-            msg_id = result.get('id') or result.get('message_id') or 'sent'
-            self._record_activity('dm_sent', {'recipient': recipient, 'id': msg_id})
-            return f"✅ DM sent to @{recipient}! ID: {msg_id}"
-        return f"❌ Failed to send DM to @{recipient}: {result}"
+            data['media_ids'] = media_ids
+        result = self._make_request('POST', '/articles', json=data)
+        if result and 'article_id' in result:
+            article_id = result['article_id']
+            self._record_activity('post_article', {'article_id': article_id})
+            return f"✅ Article posted! ID: {article_id}"
+        return "❌ Failed to post article"
 
-    def post_with_media(self, content: str, media_paths: list = None) -> str:
-        """Convenience: create post with auto media upload"""
+    def send_dm(self, agent_name, message, media_paths=None):
+        """Send DM with optional media"""
         if not self.initialized:
-            return "❌ Moltx not initialized. Register an agent first."
-        media_paths = media_paths or []
-        media_ids = []
-        for path in media_paths:
-            res = self.upload_media(path)
-            if 'error' not in res:
-                media_ids.append(res['media_id'])
-            else:
-                print(f"⚠️ Failed to upload {path}: {res.get('error', 'Unknown error')}")
-        return self.create_post(content, media_ids)
+            return "❌ Moltx not initialized"
+        data = {'recipient': agent_name, 'content': message}
+        media_ids = self._handle_media_uploads(media_paths)
+        if media_ids:
+            data['media_ids'] = media_ids
+        result = self._make_request('POST', '/dms', json=data)
+        if result:
+            self._record_activity('send_dm', {'to': agent_name, 'preview': message[:30]})
+            return f"✅ DM sent to @{agent_name}"
+        return f"❌ Failed to send DM to @{agent_name}"
 
-    def article_with_media(self, content: str, media_paths: list = None) -> str:
-        """Convenience: create article with auto media upload"""
+    def get_dms(self, limit=20):
+        """Get recent DM conversations"""
         if not self.initialized:
-            return "❌ Moltx not initialized. Register an agent first."
-        media_paths = media_paths or []
-        media_ids = []
-        for path in media_paths:
-            res = self.upload_media(path)
-            if 'error' not in res:
-                media_ids.append(res['media_id'])
-            else:
-                print(f"⚠️ Failed to upload {path}: {res.get('error', 'Unknown error')}")
-        return self.create_article(content, media_ids)
+            return "❌ Moltx not initialized"
+        result = self._make_request('GET', '/dms', params={'limit': limit})
+        dms = []
+        if result:
+            if 'dms' in result or 'messages' in result:
+                dms = result.get('dms') or result.get('messages', [])
+            elif 'conversations' in result:
+                dms = result['conversations']
+            elif isinstance(result, list):
+                dms = result
+        if dms:
+            output = f"💬 Recent DMs ({len(dms)}):\n\n"
+            for dm in dms[:limit]:
+                agent_name = dm.get('agent_name') or dm.get('sender_name') or dm.get('recipient') or 'Unknown'
+                content = dm.get('content') or dm.get('message') or dm.get('last_message', 'No message')
+                timestamp = dm.get('updated_at') or dm.get('timestamp') or 'Unknown'
+                output += f"💬 @{agent_name}: {content[:100]}{'...' if len(content) > 100 else ''}\n"
+                output += f"   🕐 {timestamp}\n\n"
+            return output
+        return "✅ No DMs"
 
-    def dm_with_media(self, recipient: str, content: str, media_paths: list = None) -> str:
-        """Convenience: send DM with auto media upload"""
+    def search(self, query, search_type='posts'):
+        """Search for posts, agents, or hashtags"""
+        valid_types = ['posts', 'agents', 'hashtags']
+        if search_type not in valid_types:
+            search_type = 'posts'
+        params = {'q': query, 'type': search_type}
+        result = self._make_request('GET', '/search', params=params)
+        items = []
+        if result:
+            key = f"{search_type}s"
+            items = result.get(key) or result.get('results', []) or (result['data'][key] if 'data' in result else [])
+            if isinstance(result, list):
+                items = result
+        output = f"🔍 '{query}' ({search_type}): {len(items)} results\n\n"
+        for item in items[:10]:
+            if isinstance(item, dict):
+                name = item.get('agent_name') or item.get('title') or item.get('name') or item.get('tag') or 'Unknown'
+                desc = (item.get('content') or item.get('description') or item.get('text') or '')[:80]
+                output += f"📌 {name}: {desc}{'...' if len(desc) > 80 else ''}\n"
+        return output if items else f"❌ No {search_type} found for '{query}'"
+
+    def get_trending_hashtags(self, limit=20):
+        """Get trending hashtags"""
+        result = self._make_request('GET', '/v1/hashtags/trending', params={'limit': limit})
+        hashtags = result.get('hashtags', []) if result else []
+        output = f"🔥 Trending Hashtags ({len(hashtags)}):\n\n"
+        for tag in hashtags[:limit]:
+            name = tag.get('name', 'unknown')
+            count = tag.get('post_count', 0)
+            output += f"#{name} ({count} posts)\n"
+        return output
+
+    def get_leaderboard(self, category='daily', limit=10):
+        """Get leaderboard"""
+        params = {'category': category, 'limit': limit}
+        result = self._make_request('GET', '/leaderboard', params=params)
+        leaders = result.get('leaders', result.get('leaderboard', [])) if result else []
+        output = f"🏆 {category.title()} Leaderboard:\n\n"
+        for i, leader in enumerate(leaders[:limit], 1):
+            name = leader.get('agent_name', 'Unknown')
+            score = leader.get('score', leader.get('points', 0))
+            output += f"{i}. @{name}: {score} pts\n"
+        return output
+
+    def get_communities(self, limit=20):
+        """Get communities"""
+        result = self._make_request('GET', '/communities', params={'limit': limit})
+        communities = result.get('communities', []) if result else []
+        output = f"🏘️ Communities ({len(communities)}):\n\n"
+        for comm in communities[:limit]:
+            name = comm.get('name', 'Unknown')
+            member_count = comm.get('member_count', 0)
+            desc = (comm.get('description') or '')[:60]
+            output += f"🏘️ {name} ({member_count} members): {desc}{'...' if len(desc) > 60 else ''}\n"
+        return output
+
+    def join_community(self, community_id):
+        """Join a community"""
         if not self.initialized:
-            return "❌ Moltx not initialized. Register an agent first."
-        media_paths = media_paths or []
-        media_ids = []
-        for path in media_paths:
-            res = self.upload_media(path)
-            if 'error' not in res:
-                media_ids.append(res['media_id'])
-            else:
-                print(f"⚠️ Failed to upload {path}: {res.get('error', 'Unknown error')}")
-        return self.send_dm(recipient, content, media_ids)
+            return "❌ Not initialized"
+        result = self._make_request('POST', f'/communities/{community_id}/join')
+        return f"✅ Joined {community_id}" if result else f"❌ Failed to join {community_id}"
 
-    # --- Heartbeat ---
+    def get_articles(self, limit=20):
+        """Get articles feed"""
+        result = self._make_request('GET', '/articles', params={'limit': limit})
+        articles = []
+        if result:
+            if 'articles' in result:
+                articles = result['articles']
+            elif 'data' in result and 'articles' in result['data']:
+                articles = result['data']['articles']
+            elif isinstance(result, list):
+                articles = result
+        if articles:
+            output = f"📚 Articles ({len(articles)}):\n\n"
+            for article in articles[:limit]:
+                title = (article.get('title') or article.get('content') or 'No title')[:100]
+                author = article.get('agent_name', 'Unknown')
+                views = article.get('views_count', article.get('views', 0))
+                timestamp = article.get('created_at', 'Unknown')
+                output += f"📚 {title}{'...' if len(title) > 100 else ''}\n"
+                output += f"   by @{author} | 👀 {views} views | 🕐 {timestamp}\n\n"
+            return output
+        return "📚 No articles found"
 
-    def _heartbeat(self):
-        """Moltx heartbeat v0.22.1 protocol — every 4+ hours.
-        Follows the 5:1 rule: 5 replies + 10 likes before 1 original post."""
+    def claim_agent(self, tweet_url):
+        """Claim agent for verified status"""
+        data = {'tweet_url': tweet_url.strip()}
+        result = self._make_request('POST', '/v1/agents/claim', json=data)
+        if result and result.get('success', result.get('claimed')):
+            self.initialized = True
+            return f"✅ Claimed agent with {tweet_url}"
+        return f"❌ Claim failed for {tweet_url}"
+
+    def claim_rewards(self):
+        """Claim pending rewards"""
         if not self.initialized:
-            print("❌ Moltx not initialized.")
-            return
-        print("💓 Running Moltx heartbeat...")
-        self.get_feed('global', limit=5)
-        self.get_notifications()
-        print("💓 Heartbeat complete: feed checked, ready for engagement.")
+            return "❌ Not initialized"
+        result = self._make_request('POST', '/rewards/claim')
+        if result:
+            amount = result.get('amount', result.get('rewards_claimed', 0))
+            return f"✅ Claimed {amount} rewards"
+        return "❌ No rewards or claim failed"
+
+    def recover_key(self, recovery_phrase):
+        """Recover agent key"""
+        if self.initialized:
+            return "ℹ️ Already initialized"
+        data = {'recovery_phrase': recovery_phrase}
+        result = self._make_request('POST', '/agents/key-recovery', json=data)
+        if result and result.get('success'):
+            self.initialized = True
+            return "✅ Key recovered"
+        return "❌ Key recovery failed"
+
+    def heartbeat(self):
+        """Send heartbeat"""
+        result = self._make_request('POST', '/heartbeat')
+        return "✅ Heartbeat successful" if result else "❌ Heartbeat failed"
+
+    def first_boot(self):
+        """Perform first boot"""
+        if hasattr(self, '_booted') and self._booted:
+            return "ℹ️ Already booted"
+        result = self._make_request('POST', '/first-boot')
+        if result:
+            self._booted = True
+            return "✅ First boot complete"
+        return "❌ First boot failed"

@@ -22,9 +22,9 @@ class MoltxAPIMixin:
         self.api_key = api_key
         self.agent_name = None
         self.agent_id = None
+        self.claim_status = None
         self.credentials_file = Path.home() / ".agents" / "moltx" / "config.json"
         self.initialized = False
-        self.claim_status = None
 
     def _init_api_connection(self):
         """Initialize API connection from environment or credentials"""
@@ -37,8 +37,14 @@ class MoltxAPIMixin:
             if not self.api_key:
                 print("🔑 No Moltx API key found. Set MOLTX_API_KEY in .env or run 'moltx_register' command.")
             else:
-                print(f"✅ Moltx initialized as {self.agent_name}")
+                agent_str = f" as @{self.agent_name}" if self.agent_name else " with API key"
+                print(f"✅ Moltx initialized{agent_str}")
                 self.initialized = True
+
+        if self.initialized and self.agent_id:
+            self.heartbeat()
+            if self.claim_status == 'pending':
+                self.perform_first_boot()
 
     def _load_credentials(self):
         """Load credentials from file"""
@@ -78,7 +84,7 @@ class MoltxAPIMixin:
                     self._save_credentials(self.api_key, agent_data)
                     self.initialized = True
         except Exception as e:
-            print(f"⚠️  Could not fetch agent info: {e}")
+            print(f"⚠️ Could not fetch agent info: {e}")
 
     def _save_credentials(self, api_key, agent_data):
         """Save credentials to file"""
@@ -90,7 +96,7 @@ class MoltxAPIMixin:
                 'agent_id': agent_data.get('id'),
                 'claim_status': self.claim_status or 'pending',
                 'claim_code': agent_data.get('claim_code'),
-                'registered_at': datetime.now().isoformat()
+                'registered_at': datetime.now().isoformat(),
             }
             with open(self.credentials_file, 'w') as f:
                 json.dump(credentials, f, indent=2)
@@ -98,10 +104,10 @@ class MoltxAPIMixin:
         except Exception as e:
             print(f"❌ Error saving Moltx credentials: {e}")
 
-    def _make_request(self, method, endpoint, data=None, params=None, files=None):
+    def _make_request(self, method, endpoint, data=None, params=None, files=None, anon=False):
         """Make authenticated request to Moltx API"""
         headers = {'Content-Type': 'application/json'}
-        if self.api_key:
+        if not anon and self.api_key:
             headers['Authorization'] = f'Bearer {self.api_key}'
 
         url = f"{self.base_url}{endpoint}"
@@ -142,121 +148,200 @@ class MoltxAPIMixin:
             # Look for skill_update, notice, or platform_notice fields
             notice = (response.get('skill_update') or
                       response.get('notice') or
-                      response.get(f'{platform}_notice'))
-            if not notice or not isinstance(notice, dict):
-                return
-            if notice.get('type') != 'skill_update':
-                return
-            # Route to selfimprove plugin
-            if hasattr(self, 'core') and self.core:
-                plugins = getattr(self.core, 'plugin_manager', None)
-                if plugins:
-                    selfimprove = plugins.plugins.get('selfimprove')
-                    if selfimprove and hasattr(selfimprove, 'handle_platform_skill_event'):
-                        selfimprove.handle_platform_skill_event(platform, notice)
+                      response.get('platform_notice'))
+            if notice:
+                print(f"📢 {platform.upper()} platform notice: {notice}")
+                if hasattr(self, 'handle_skill_event'):
+                    self.handle_skill_event(platform, notice)
         except Exception as e:
-            print(f"⚠️  Error checking skill event: {e}")
+            print(f"⚠️ Error in skill event check: {e}")
 
-    def register_agent(self, name, display_name=None, description=None, avatar_emoji="🦞"):
-        """Register a new agent on Moltx"""
-        if self.api_key and self.claim_status == 'claimed':
-            return f"✅ Already registered and claimed on Moltx. Agent is fully active. Use /moltx_status to see details."
-
-        if self.initialized and self.agent_name:
-            return f"✅ Already registered as @{self.agent_name} on Moltx. Claim status: {self.claim_status}. Use /moltx_status to see details."
-
-        if len(name) < 3 or len(name) > 50:
-            return "❌ Agent name must be 3-50 characters"
-
-        data = {
-            'name': name,
-            'display_name': display_name or name,
-            'description': description or f"🦞 AI Agent from Moltbook ecosystem",
-            'avatar_emoji': avatar_emoji
-        }
-
-        print(f"🐦 Registering agent '{name}' on Moltx...")
-        result = self._make_request('POST', '/agents/register', data)
-
-        if result and 'data' in result:
-            data = result['data']
-            agent_data = data['agent']
-            api_key = data['api_key']
-            claim_data = data.get('claim', {})
-
-            self.api_key = api_key
-            self.agent_name = agent_data['name']
+    def register_agent(self, name):
+        """Register a new agent with given name"""
+        data = {"name": name}
+        resp = self._make_request("POST", "/agents", data=data)
+        if resp and resp.get('success'):
+            agent_data = resp['data'].get('agent', {})
+            self.agent_name = agent_data.get('name', name)
             self.agent_id = agent_data.get('id')
-            self.claim_status = agent_data.get('claim_status', claim_data.get('status', 'pending'))
+            self.claim_status = agent_data.get('claim_status', 'pending')
             self._save_credentials(self.api_key, agent_data)
-            print(f"✅ Successfully registered agent @{self.agent_name}")
-            claim_code = claim_data.get('code')
-            if claim_code:
-                print(f"📋 Your claim code is: {claim_code}")
-                print("💡 Share this code with Moltx team to claim your agent.")
-            return f"✅ Agent @{self.agent_name} registered successfully! Status: {self.claim_status}"
-        else:
-            return "❌ Registration failed. Check console for details."
+            print(f"✅ Registered agent @{self.agent_name}")
+            return True
+        print(f"❌ Registration failed: {resp}")
+        return False
 
-    def get_articles(self, params=None):
-        """Fetch articles"""
-        return self._make_request("GET", "/articles", params=params)
+    def claim_agent(self, tweet_url):
+        """Claim agent account with tweet URL proof for verified badge"""
+        data = {"tweet_url": tweet_url}
+        resp = self._make_request("POST", "/agents/claim", data=data)
+        if resp and resp.get('success'):
+            agent_data = resp.get('data', {}).get('agent', {})
+            self.claim_status = 'claimed'
+            self._save_credentials(self.api_key, agent_data)
+            print("✅ Agent claimed successfully!")
+            return True
+        print(f"❌ Claim failed: {resp}")
+        return False
 
-    def create_article(self, title, content, community_id=None, tags=None):
-        """Create a new article"""
+    def recover_api_key(self, agent_name, claim_code):
+        """Recover API key using agent name and claim code"""
         data = {
-            "title": title,
-            "content": content,
-            "community_id": community_id,
-            "tags": tags or []
+            "agent_name": agent_name,
+            "claim_code": claim_code,
         }
-        return self._make_request("POST", "/articles", data=data)
+        resp = self._make_request("POST", "/agents/recover-key", data=data, anon=True)
+        if resp and resp.get('success'):
+            new_key = resp['data'].get('api_key')
+            if new_key:
+                self.api_key = new_key
+                print("✅ API key recovered successfully!")
+                # Fetch agent info to update other fields
+                self._fetch_agent_info()
+                return new_key
+        print(f"❌ Key recovery failed: {resp}")
+        return None
 
-    def get_communities(self, params=None):
-        """Fetch communities"""
-        return self._make_request("GET", "/communities", params=params)
+    def get_rewards(self):
+        """Get available rewards"""
+        resp = self._make_request("GET", f"/agents/{self.agent_id}/rewards")
+        return resp.get('data', []) if resp else []
 
-    def get_leaderboard(self, period="daily", limit=10):
-        """Fetch leaderboard"""
-        params = {"period": period, "limit": limit}
-        return self._make_request("GET", "/leaderboard", params=params)
+    def claim_rewards(self):
+        """Claim available rewards"""
+        resp = self._make_request("POST", f"/agents/{self.agent_id}/rewards/claim")
+        if resp and resp.get('success'):
+            print("✅ Rewards claimed!")
+            return True
+        print(f"❌ Reward claim failed: {resp}")
+        return False
 
-    def get_hashtags(self, params=None):
-        """Fetch hashtags"""
-        return self._make_request("GET", "/hashtags", params=params)
+    def perform_first_boot(self):
+        """Perform first boot protocol"""
+        if not self.agent_id:
+            return
+        data = {
+            "agent_id": self.agent_id,
+            "protocol_version": "0.23.1",
+            "capabilities": ["text", "media", "dms", "search", "notifications", "communities", "articles"],
+            "skills": ["alleybot"],
+            "first_boot": True,
+        }
+        resp = self._make_request("POST", "/agents/first-boot", data=data)
+        if resp and resp.get('success'):
+            print("🚀 First boot protocol completed")
+            # Update credentials
+            self._fetch_agent_info()
 
-    def get_notifications(self, params=None):
-        """Fetch notifications"""
-        return self._make_request("GET", "/notifications", params=params)
+    def heartbeat(self):
+        """Send heartbeat signal"""
+        if not self.agent_id:
+            return
+        data = {
+            "agent_id": self.agent_id,
+            "status": "online",
+            "skills": ["alleybot"],
+            "timestamp": datetime.now().isoformat(),
+        }
+        resp = self._make_request("POST", "/agents/heartbeat", data=data)
+        if resp and resp.get('success'):
+            print("💓 Heartbeat sent")
 
-    def mark_notification_read(self, notification_id):
-        """Mark a notification as read"""
-        return self._make_request("PATCH", f"/notifications/{notification_id}/read")
+    # Updated APIs for feeds, search, hashtags, notifications, DMs
+    def get_feed(self, feed_type="home", limit=20, cursor=None):
+        """Get feed posts"""
+        params = {"type": feed_type, "limit": limit}
+        if cursor:
+            params["cursor"] = cursor
+        return self._make_request("GET", "/feeds", params=params)
 
-    def search(self, query, type="all", limit=20):
-        """Search across platform"""
+    def search(self, query, type="posts", limit=20):
+        """Search posts, agents, etc."""
         params = {"q": query, "type": type, "limit": limit}
         return self._make_request("GET", "/search", params=params)
 
-    def claim_agent(self, claim_code):
-        """Claim the registered agent"""
-        if self.claim_status == 'claimed':
-            return "✅ Agent already claimed."
-        if not self.agent_name:
-            return "❌ No agent registered. Register first."
-        data = {"claim_code": claim_code}
-        result = self._make_request("POST", "/agents/claim", data=data)
-        if result and result.get('success'):
-            self.claim_status = 'claimed'
-            agent_data = result.get('data', {}).get('agent', {})
-            self._save_credentials(self.api_key, agent_data)
-            return f"✅ Agent @{self.agent_name} claimed successfully!"
-        return "❌ Claim failed. Invalid code?"
+    def get_trending_hashtags(self, limit=10):
+        """Get trending hashtags"""
+        params = {"limit": limit}
+        return self._make_request("GET", "/hashtags/trending", params=params)
 
-    def get_rewards(self):
-        """Fetch available rewards"""
-        return self._make_request("GET", "/rewards")
+    def get_hashtag_posts(self, hashtag, limit=20):
+        """Get posts for a hashtag"""
+        params = {"limit": limit}
+        return self._make_request("GET", f"/hashtags/{hashtag}", params=params)
 
-    def claim_reward(self, reward_id):
-        """Claim a specific reward"""
-        return self._make_request("POST", f"/rewards/{reward_id}/claim")
+    def get_notifications(self, limit=50, cursor=None):
+        """Get notifications"""
+        params = {"limit": limit}
+        if cursor:
+            params["cursor"] = cursor
+        return self._make_request("GET", "/notifications", params=params)
+
+    def get_dms(self, limit=20, cursor=None):
+        """Get direct messages"""
+        params = {"limit": limit}
+        if cursor:
+            params["cursor"] = cursor
+        return self._make_request("GET", "/dms", params=params)
+
+    def send_dm(self, recipient_id, text):
+        """Send direct message"""
+        data = {"to": recipient_id, "text": text}
+        return self._make_request("POST", "/dms", data=data)
+
+    # Articles
+    def create_article(self, title, content, hashtags=None):
+        """Create a new article"""
+        data = {"title": title, "content": content}
+        if hashtags:
+            data["hashtags"] = hashtags
+        return self._make_request("POST", "/articles", data=data)
+
+    def get_my_articles(self, limit=10):
+        """Get my articles"""
+        params = {"limit": limit}
+        return self._make_request("GET", "/articles/me", params=params)
+
+    # Communities
+    def get_communities(self, limit=20, trending=False):
+        """Get list of communities"""
+        params = {"limit": limit}
+        if trending:
+            params["trending"] = True
+        return self._make_request("GET", "/communities", params=params)
+
+    def get_community(self, community_id):
+        """Get community details"""
+        return self._make_request("GET", f"/communities/{community_id}")
+
+    def join_community(self, community_id):
+        """Join a community"""
+        return self._make_request("POST", f"/communities/{community_id}/join")
+
+    def post_to_community(self, community_id, text, hashtags=None, files=None):
+        """Post to a community"""
+        data = {"text": text}
+        if hashtags:
+            data["hashtags"] = hashtags
+        return self._make_request("POST", f"/communities/{community_id}/posts", data=data, files=files)
+
+    # Leaderboard
+    def get_leaderboard(self, period="day", category="engagement", limit=10):
+        """Get leaderboard"""
+        params = {"period": period, "category": category, "limit": limit}
+        return self._make_request("GET", "/leaderboard", params=params)
+
+    # Core post and profile methods
+    def create_post(self, text, reply_to=None, hashtags=None, files=None):
+        """Create a new post"""
+        data = {"text": text}
+        if reply_to:
+            data["reply_to"] = reply_to
+        if hashtags:
+            data["hashtags"] = hashtags
+        return self._make_request("POST", "/posts", data=data, files=files)
+
+    def get_profile(self, agent_name=None):
+        """Get agent profile"""
+        endpoint = f"/agents/{agent_name}" if agent_name else "/agents/me"
+        return self._make_request("GET", endpoint)
