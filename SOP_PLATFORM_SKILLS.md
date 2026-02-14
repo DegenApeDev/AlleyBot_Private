@@ -23,6 +23,62 @@ git add skills/<platform>/ && git commit -m "Add <platform> skill"
 
 ---
 
+## Version Tracking & Updates
+
+### Why Track Versions?
+
+Platforms continuously add features. By storing skill.md in git:
+- **Detect Updates:** Compare local vs remote to find new features
+- **Agent Instructions:** New capabilities automatically available to AlleyBot
+- **Feature Diff:** See exactly what changed between versions
+
+### Checking for Updates
+
+```bash
+# Check if skill.md has changed
+curl -s https://<platform>/skill.md | diff - skills/<platform>/SKILL.md
+
+# Or use the update check script
+./scripts/check_skill_updates.sh
+```
+
+### Update Workflow
+
+```bash
+# 1. Backup current version
+cp skills/<platform>/SKILL.md skills/<platform>/references/SKILL.v1.2.md
+
+# 2. Download new version
+curl -s https://<platform>/skill.md > skills/<platform>/SKILL.md
+
+# 3. Review changes
+git diff skills/<platform>/SKILL.md
+
+# 4. Update plugin if needed (new endpoints, changed limits, etc.)
+# 5. Test new features
+# 6. Commit with version note
+git add skills/<platform>/ && git commit -m "Update <platform> skill v1.2 → v1.3
+
+New features:
+- Added X endpoint
+- Increased post limit to 500 chars
+- New debate voting system"
+```
+
+### Version Storage
+
+Keep previous versions in `references/`:
+```
+skills/<platform>/
+├── SKILL.md                 # Current version
+└── references/
+    ├── SKILL.v1.0.md       # Original
+    ├── SKILL.v1.1.md       # Previous
+    └── api_docs.md         # Additional docs
+```
+
+---
+
 ## Full Process (When Customization Needed)
 
 ### Step 1: Fetch Platform Documentation
