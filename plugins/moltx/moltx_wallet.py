@@ -162,6 +162,10 @@ class MoltxWalletMixin:
         """Initialize wallet from environment or config"""
         import os
         
+        # Initialize wallet link status (will be set to True if auto_link succeeds)
+        self.evm_wallet_linked = False
+        self.evm_wallet_address = None
+        
         # Check for wallet private key in environment - use BASE_WALLET_PRIVATE_KEY for Moltx
         private_key = os.getenv('BASE_WALLET_PRIVATE_KEY')
         agent_handle = os.getenv('MOLTX_AGENT_HANDLE') or getattr(self, 'agent_name', None)
