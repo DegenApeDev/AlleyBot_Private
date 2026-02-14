@@ -28,11 +28,12 @@ from plugins.brain.dynamic_skills import DynamicSkillsMixin
 from plugins.brain.operational_resilience import OperationalResilienceMixin
 from plugins.brain.multi_agent import MultiAgentCollaborationMixin
 from plugins.brain.reputation import ReputationSystemMixin
+from plugins.brain.self_reflection import SelfReflectionMixin
 
 
 class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, FeedbackLoopMixin, 
                   ContentStrategyMixin, DynamicSkillsMixin, OperationalResilienceMixin,
-                  MultiAgentCollaborationMixin, ReputationSystemMixin, AlleyBotPlugin):
+                  MultiAgentCollaborationMixin, ReputationSystemMixin, SelfReflectionMixin, AlleyBotPlugin):
     """AlleyBot's autonomous brain - decides what to do, when, and how"""
 
     def __init__(self, config):
@@ -55,6 +56,7 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         self._init_operational_resilience()
         self._init_multi_agent_collaboration()
         self._init_reputation_system()
+        self._init_self_reflection()
 
         # Auto-start if configured
         if self.config.get('auto_start', False):
@@ -285,6 +287,9 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             'brain_reputation': self.reputation_check_command,
             'brain_reputation_trends': self.reputation_trends_command,
             'brain_reputation_goals': self.reputation_goals_command,
+            # Self-reflection
+            'brain_reflect': self.reflection_run_command,
+            'brain_reflect_summary': self.reflection_summary_command,
         }
 
     def get_tasks(self):
@@ -294,13 +299,23 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
                 'function': self._check_golden_window_queue,
                 'schedule': '*/5 * * * *',  # Every 5 minutes
                 'description': 'Check Golden Window queue and execute actions at optimal timing'
+            },
+            'self_reflection': {
+                'function': self._run_scheduled_reflection,
+                'schedule': '0 2 * * *',  # Every day at 2 AM
+                'description': 'Run self-reflection and update decision weights'
             }
         }
     
-    def _check_golden_window_queue(self):
-        """Scheduled task to check and execute queued Golden Window actions"""
-        if hasattr(self, '_execute_queued_actions'):
-            self._execute_queued_actions()
+    def _run_scheduled_reflection(self):
+        """Scheduled self-reflection task"""
+        print("🧠 Running scheduled self-reflection...")
+        result = self.run_self_reflection()
+        insights = result.get('insights', [])
+        if insights:
+            print(f"💡 Generated {len(insights)} insights from reflection")
+        else:
+            print("📊 No new insights (not enough data yet)")
 
     def get_endpoints(self):
         """Return web endpoints"""
