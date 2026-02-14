@@ -779,6 +779,101 @@ class MoltxEngagementMixin:
             return output
         return f"❌ Failed to get article {article_id}"
 
+    def _record_to_world_state(self, post: dict, interaction_type: str = "observed"):
+        """Record a post and its author to World State"""
+        try:
+            # Get World State from core
+            if not hasattr(self, 'core') or not self.core:
+                return
+            brain = self.core.plugin_manager.plugins.get('brain')
+            if not brain or not hasattr(brain, 'world_state'):
+                return
+            
+            ws = brain.world_state
+            if not ws:
+                return
+            
+            # Extract post data
+            post_id = post.get('id') or post.get('post_id')
+            author = post.get('agent_name') or post.get('author_name') or post.get('username', 'unknown')
+            content = post.get('content') or post.get('text') or ''
+            timestamp = post.get('created_at') or datetime.now().isoformat()
+            likes = post.get('likes_count') or post.get('like_count', 0)
+            replies = post.get('replies_count') or post.get('reply_count', 0)
+            
+            if not post_id:
+                return
+            
+            # Create author entity
+            author_id = f"moltx_{author.lstrip('@')}"
+            from src.autonomy.world_state import Entity, Fact, Event
+            
+            author_entity = Entity(
+                id=author_id,
+                type='agent',
+                name=author.lstrip('@'),
+                display_name=author,
+                attributes={'platform': 'moltx'}
+            )
+            ws.add_entity(author_entity)
+            
+            # Create post entity
+            post_entity = Entity(
+                id=f"moltx_post_{post_id}",
+                type='post',
+                name=f"Post {post_id[:8]}",
+                attributes={
+                    'platform': 'moltx',
+                    'content_preview': content[:100] if content else '',
+                    'author_id': author_id
+                }
+            )
+            ws.add_entity(post_entity)
+            
+            # Record facts about the post
+            ws.add_fact(Fact(
+                entity_id=f"moltx_post_{post_id}",
+                attribute='likes_count',
+                value=str(likes),
+                value_type='int',
+                source='moltx_api',
+                timestamp=timestamp
+            ))
+            
+            ws.add_fact(Fact(
+                entity_id=f"moltx_post_{post_id}",
+                attribute='replies_count',
+                value=str(replies),
+                value_type='int',
+                source='moltx_api',
+                timestamp=timestamp
+            ))
+            
+            # Record event
+            ws.add_event(Event(
+                event_type=f'post_{interaction_type}',
+                actor_id=author_id,
+                target_id=f"moltx_post_{post_id}",
+                platform='moltx',
+                data={'post_id': post_id, 'content_preview': content[:50] if content else ''},
+                timestamp=timestamp
+            ))
+            
+            # Record relationship if we interacted
+            if interaction_type in ('liked', 'replied', 'engaged'):
+                from src.autonomy.world_state import Relationship
+                ws.add_relationship(Relationship(
+                    from_entity=f"agent_{self.agent_name.lstrip('@') if hasattr(self, 'agent_name') else 'alleybot'}",
+                    to_entity=author_id,
+                    relation_type='engaged_with',
+                    strength=0.6,
+                    context={'interaction': interaction_type, 'post_id': post_id}
+                ))
+                
+        except Exception as e:
+            # Silent fail - don't break main functionality
+            print(f"⚠️ World State recording failed: {e}")
+    
     def first_boot(self):
         """Perform first boot"""
         if hasattr(self, '_booted') and self._booted:

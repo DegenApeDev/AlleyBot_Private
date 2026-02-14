@@ -1141,6 +1141,135 @@ Generate only the title (no explanations):"""
             await self._safe_reply(update, f"❌ Error: {e}")
 
     # =================================================================
+    # World State Commands
+    # =================================================================
+
+    async def world_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show World State statistics"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            result = await self._run_sync(brain.world_status_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_entity(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show entity details"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await self._safe_reply(update, "Usage: /world_entity <entity_id>")
+                return
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            result = await self._run_sync(brain.world_entity_command, context.args[0])
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_facts(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show facts for an entity"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await self._safe_reply(update, "Usage: /world_facts <entity_id> [attribute]")
+                return
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            entity_id = context.args[0]
+            attribute = context.args[1] if len(context.args) > 1 else None
+            result = await self._run_sync(brain.world_facts_command, entity_id, attribute)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_relations(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show relationships for an entity"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await self._safe_reply(update, "Usage: /world_relations <entity_id>")
+                return
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            result = await self._run_sync(brain.world_relations_command, context.args[0])
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Search entities"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            query = ' '.join(context.args) if context.args else ""
+            result = await self._run_sync(brain.world_search_command, query)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_events(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show recent events"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            event_type = context.args[0] if context.args else None
+            result = await self._run_sync(brain.world_events_command, event_type)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_trends(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show trending topics"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            result = await self._run_sync(brain.world_trends_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_cleanup(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Cleanup expired facts"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            result = await self._run_sync(brain.world_cleanup_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    # =================================================================
     # A2A Commands
     # =================================================================
 

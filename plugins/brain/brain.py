@@ -30,12 +30,13 @@ from plugins.brain.multi_agent import MultiAgentCollaborationMixin
 from plugins.brain.reputation import ReputationSystemMixin
 from plugins.brain.self_reflection import SelfReflectionMixin
 from plugins.brain.goal_stack_mixin import GoalStackMixin
+from plugins.brain.world_state_mixin import WorldStateMixin
 
 
 class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, FeedbackLoopMixin, 
                   ContentStrategyMixin, DynamicSkillsMixin, OperationalResilienceMixin,
                   MultiAgentCollaborationMixin, ReputationSystemMixin, SelfReflectionMixin,
-                  GoalStackMixin, AlleyBotPlugin):
+                  GoalStackMixin, WorldStateMixin, AlleyBotPlugin):
     """AlleyBot's autonomous brain - decides what to do, when, and how"""
 
     def __init__(self, config):
@@ -60,6 +61,7 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         self._init_reputation_system()
         self._init_self_reflection()
         self._init_goal_stack()
+        self._init_world_state()
 
         # Auto-start if configured
         if self.config.get('auto_start', False):
@@ -298,6 +300,15 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             'brain_add_goal': self.add_goal_command,
             'brain_complete_goal': self.complete_goal_command,
             'brain_goal_stats': self.goal_stats_command,
+            # World State
+            'brain_world_status': self.world_status_command,
+            'brain_world_entity': self.world_entity_command,
+            'brain_world_facts': self.world_facts_command,
+            'brain_world_relations': self.world_relations_command,
+            'brain_world_search': self.world_search_command,
+            'brain_world_events': self.world_events_command,
+            'brain_world_trends': self.world_trends_command,
+            'brain_world_cleanup': self.world_cleanup_command,
         }
 
     def get_tasks(self):
@@ -312,6 +323,11 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
                 'function': self._run_scheduled_reflection,
                 'schedule': '0 2 * * *',  # Every day at 2 AM
                 'description': 'Run self-reflection and update decision weights'
+            },
+            'world_state_cleanup': {
+                'function': self._cleanup_expired_world_state,
+                'schedule': '0 */6 * * *',  # Every 6 hours
+                'description': 'Cleanup expired facts from World State'
             }
         }
     
