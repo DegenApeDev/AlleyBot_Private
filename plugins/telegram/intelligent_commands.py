@@ -1269,6 +1269,21 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
 
+    async def world_sync(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Sync platforms to World State"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            platform = context.args[0] if context.args else None
+            result = await self._run_sync(brain.world_sync_command, platform)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
     # =================================================================
     # A2A Commands
     # =================================================================

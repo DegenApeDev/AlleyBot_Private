@@ -19,6 +19,7 @@ class Entity:
     type: str  # 'user', 'agent', 'post', 'topic', 'platform', 'conversation'
     name: Optional[str] = None
     display_name: Optional[str] = None
+    platform: Optional[str] = None  # 'moltx', 'clawbr', 'telegram', etc.
     attributes: Optional[Dict] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -39,6 +40,7 @@ class Entity:
             'type': self.type,
             'name': self.name,
             'display_name': self.display_name,
+            'platform': self.platform,
             'attributes': json.dumps(self.attributes) if self.attributes else '{}',
             'created_at': self.created_at,
             'updated_at': self.updated_at,
@@ -54,6 +56,7 @@ class Entity:
             type=row['type'],
             name=row['name'],
             display_name=row['display_name'],
+            platform=row['platform'] if 'platform' in row.keys() else None,
             attributes=json.loads(attrs) if attrs else {},
             created_at=row['created_at'],
             updated_at=row['updated_at'],

@@ -158,6 +158,7 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("world_events", self.intelligent_commands.world_events))
         self.application.add_handler(CommandHandler("world_trends", self.intelligent_commands.world_trends))
         self.application.add_handler(CommandHandler("world_cleanup", self.intelligent_commands.world_cleanup))
+        self.application.add_handler(CommandHandler("brain_world_sync", self.intelligent_commands.world_sync))
         
         # A2A commands
         self.application.add_handler(CommandHandler("a2a_status", self.intelligent_commands.a2a_status))
