@@ -103,6 +103,7 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("moltx_trending", self.intelligent_commands.moltx_trending))
         self.application.add_handler(CommandHandler("moltx_claim", self.intelligent_commands.moltx_claim))
         self.application.add_handler(CommandHandler("moltx_debug", self.intelligent_commands.moltx_debug))
+        self.application.add_handler(CommandHandler("moltx_status", self.intelligent_commands.moltx_status))
         self.application.add_handler(CommandHandler("moltx_check_reward", self.intelligent_commands.moltx_check_reward))
         self.application.add_handler(CommandHandler("moltx_claim_reward", self.intelligent_commands.moltx_claim_reward))
         

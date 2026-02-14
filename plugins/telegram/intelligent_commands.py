@@ -285,6 +285,31 @@ Generate only the post content (no explanations):"""
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
 
+    async def moltx_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show Moltx agent status and connection info"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            moltx = self.core.plugin_manager.plugins.get('moltx') if self.core else None
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+            
+            # Check if status_command method exists
+            if hasattr(moltx, 'status_command'):
+                result = moltx.status_command()
+                await update.message.reply_text(f"🐦 Moltx Status:\n{result}")
+            else:
+                # Fallback: show basic info
+                msg = f"🐦 Moltx Plugin Info:\n\n"
+                msg += f"initialized: {moltx.initialized}\n"
+                msg += f"agent_id: {getattr(moltx, 'agent_id', 'N/A')}\n"
+                msg += f"agent_name: {getattr(moltx, 'agent_name', 'N/A')}\n"
+                msg += f"api_key: {'Set' if moltx.api_key else 'Not set'}\n"
+                await update.message.reply_text(msg)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
     async def moltx_check_reward(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Check MoltX reward eligibility without claiming"""
         if not await self._verify_admin(update):
