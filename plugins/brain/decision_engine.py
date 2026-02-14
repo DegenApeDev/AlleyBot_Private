@@ -1072,6 +1072,45 @@ Respond with ONLY the debate topic, no explanation."""
         if action == 'moltbit_compose_and_post':
             return self._chain_compose_and_post(chain_context, platform or 'moltbit', plugins)
 
+        # Engagement checking
+        if action == 'check_engagement':
+            # Check engagement metrics across platforms
+            output_parts = ["📊 Engagement Check:"]
+            
+            # Check Moltx engagement
+            moltx = plugins.get('moltx')
+            if moltx and hasattr(moltx, 'get_agent_activity'):
+                try:
+                    activity = moltx.get_agent_activity()
+                    output_parts.append(f"  🐦 Moltx: {activity[:100]}...")
+                except Exception as e:
+                    output_parts.append(f"  🐦 Moltx: Error - {e}")
+            
+            # Check Moltbook engagement
+            moltbook = plugins.get('moltbook')
+            if moltbook and hasattr(moltbook, 'get_my_books'):
+                try:
+                    books = moltbook.get_my_books()
+                    output_parts.append(f"  📚 Moltbook: {books.get('count', 0)} books")
+                except Exception as e:
+                    output_parts.append(f"  📚 Moltbook: Error - {e}")
+            
+            return "\n".join(output_parts)
+
+        # Moltbook direct post (for dynamic chains)
+        if action == 'moltbook_post':
+            moltbook = plugins.get('moltbook')
+            if moltbook and hasattr(moltbook, 'create_post'):
+                # Generate content if not provided in args
+                content = args if args else None
+                if not content and hasattr(self, '_generate_post_content'):
+                    content = self._generate_post_content('moltbook')
+                if content:
+                    result = moltbook.create_post(content)
+                    return result
+                return "❌ No content for moltbook post"
+            return "❌ Moltbook plugin not available"
+
         return f"❌ Unknown chain step: {action}"
 
     def _chain_compose_and_post(self, chain_context: Dict, platform: str, plugins: Dict) -> str:
