@@ -26,7 +26,7 @@ class WorldStateMixin:
     """
     
     def _init_world_state(self):
-        """Initialize World State Manager"""
+        """Initialize World State Manager and platform adapters"""
         try:
             if hasattr(self, 'core') and self.core:
                 data_dir = getattr(self.core, 'data_dir', 'data')
@@ -40,10 +40,46 @@ class WorldStateMixin:
             if stats['entities'] == 0:
                 self._seed_default_entities()
             
+            # Register platform adapters
+            self._register_platform_adapters()
+            
             print("🌍 World State integrated with Brain")
         except Exception as e:
             print(f"⚠️ World State init failed: {e}")
             self.world_state = None
+            self.ingestion_engine = None
+    
+    def _register_platform_adapters(self):
+        """Register all platform adapters for World State ingestion"""
+        try:
+            from src.autonomy.platform_adapter import WorldStateIngestionEngine
+            
+            # Create ingestion engine
+            self.ingestion_engine = WorldStateIngestionEngine(self.world_state)
+            
+            # Register Moltx adapter if available
+            moltx = self.core.plugin_manager.plugins.get('moltx') if hasattr(self, 'core') and self.core else None
+            if moltx:
+                try:
+                    from plugins.moltx.moltx_adapter import MoltxAdapter
+                    self.ingestion_engine.register_adapter(MoltxAdapter(moltx))
+                except ImportError as e:
+                    print(f"⚠️ Moltx adapter not found: {e}")
+            
+            # Register Clawbr adapter if available
+            clawbr = self.core.plugin_manager.plugins.get('clawbr') if hasattr(self, 'core') and self.core else None
+            if clawbr:
+                try:
+                    from plugins.clawbr.clawbr_adapter import ClawbrAdapter
+                    self.ingestion_engine.register_adapter(ClawbrAdapter(clawbr))
+                except ImportError as e:
+                    print(f"⚠️ Clawbr adapter not found: {e}")
+            
+            print(f"📡 Registered {len(self.ingestion_engine.adapters)} platform adapters")
+            
+        except Exception as e:
+            print(f"⚠️ Platform adapter registration failed: {e}")
+            self.ingestion_engine = None
     
     def _seed_default_entities(self):
         """Seed initial platform entities"""
@@ -476,3 +512,38 @@ class WorldStateMixin:
             count = self.world_state.cleanup_expired_facts()
             if count > 0:
                 print(f"🧹 World State cleanup: {count} expired facts removed")
+    
+    def _sync_world_state(self):
+        """Scheduled sync of all platforms to World State"""
+        if hasattr(self, 'ingestion_engine') and self.ingestion_engine:
+            try:
+                stats = self.ingestion_engine.sync_all(limit=50)
+                total = sum(s.get('interactions', 0) for s in stats.values() if isinstance(s, dict))
+                print(f"🌍 World State sync complete: {total} interactions from {len(stats)} platforms")
+            except Exception as e:
+                print(f"⚠️ World State sync failed: {e}")
+    
+    def world_sync_command(self, platform: str = None) -> str:
+        """CLI command: Sync platforms to World State"""
+        if not self.world_state or not hasattr(self, 'ingestion_engine') or not self.ingestion_engine:
+            return "❌ World State or ingestion engine not available"
+        
+        try:
+            if platform:
+                # Sync specific platform
+                stats = self.ingestion_engine.sync_platform(platform, limit=50)
+                return f"🔄 Synced {platform}:\n  Entities: {stats.get('entities', 0)}\n  Interactions: {stats.get('interactions', 0)}\n  Relationships: {stats.get('relationships', 0)}"
+            else:
+                # Sync all platforms
+                all_stats = self.ingestion_engine.sync_all(limit=50)
+                total_entities = sum(s.get('entities', 0) for s in all_stats.values() if isinstance(s, dict))
+                total_interactions = sum(s.get('interactions', 0) for s in all_stats.values() if isinstance(s, dict))
+                
+                output = "🌍 World State Sync Complete\n\n"
+                for p, s in all_stats.items():
+                    if isinstance(s, dict):
+                        output += f"  {p}: {s.get('interactions', 0)} interactions, {s.get('entities', 0)} entities\n"
+                output += f"\nTotal: {total_interactions} interactions, {total_entities} entities"
+                return output
+        except Exception as e:
+            return f"❌ Sync failed: {e}"

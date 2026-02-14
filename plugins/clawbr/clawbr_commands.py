@@ -108,6 +108,9 @@ Logged to analytics."""
             
             return status_msg
         
+        except Exception as e:
+            return f"❌ Error following agents: {str(e)}"
+    
     def clawbr_post_command(self, *args) -> str:
         """Create a post on Clawbr (wrapper around create_post)"""
         content = ' '.join(args) if args else ""

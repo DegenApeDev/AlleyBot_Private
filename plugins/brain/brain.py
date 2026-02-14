@@ -309,6 +309,7 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             'brain_world_events': self.world_events_command,
             'brain_world_trends': self.world_trends_command,
             'brain_world_cleanup': self.world_cleanup_command,
+            'brain_world_sync': self.world_sync_command,
         }
 
     def get_tasks(self):
@@ -328,6 +329,11 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
                 'function': self._cleanup_expired_world_state,
                 'schedule': '0 */6 * * *',  # Every 6 hours
                 'description': 'Cleanup expired facts from World State'
+            },
+            'world_state_sync': {
+                'function': self._sync_world_state,
+                'schedule': '*/15 * * * *',  # Every 15 minutes
+                'description': 'Sync all platforms to World State'
             }
         }
     

@@ -1642,6 +1642,16 @@ Or just send any message naturally!
 /brain_stop - Stop autonomous mode
 /brain - Brain status
 
+**🌍 World State (Memory):**
+/world_status - World State statistics
+/world_entity <id> - Show entity details
+/world_facts <id> - Show facts for entity
+/world_relations <id> - Show entity relationships
+/world_search <query> - Search entities
+/world_events - Recent events
+/world_trends - Trending topics
+/world_cleanup - Cleanup expired data
+
 **🤝 A2A Protocol:**
 /a2a_status - Server status
 /a2a_start - Start A2A server
