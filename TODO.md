@@ -166,7 +166,51 @@
 - [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/) (alternative)
 - [Azure Key Vault](https://azure.microsoft.com/services/key-vault/) (alternative)
 
-## 📝 Recent Completed Items
+## � Phase 16: Hot-Swappable Plugin System
+- [ ] Plugin state persistence layer — checkpoint/restore plugin state during swaps
+- [ ] Event bus architecture — loose coupling via pub/sub instead of direct method calls
+- [ ] Hot reload mechanism — reload plugin code without restart
+- [ ] Telegram `/reload_plugin <name>` command for manual hot-swaps
+- [ ] File watcher auto-reload — automatic reload on file changes
+- [ ] Graceful shutdown — finish in-progress work before swap
+- [ ] Dependency graph tracking — handle plugin dependencies during swap
+- [ ] Rollback on failure — restore previous version if new plugin fails health check
+- [ ] Health verification — verify plugin is functional before declaring swap complete
+
+**Implementation:**
+- `plugins/hot_reload.py` — file watcher and auto-reload orchestration
+- `src/event_bus.py` — publish/subscribe event bus for plugin communication
+- `src/plugin_state_manager.py` — state checkpointing and restoration
+- `plugin_manager.py` — add `hot_swap_plugin()`, `safe_hot_swap()`, `reload_module()` methods
+- Update all plugins to use event bus for cross-plugin communication
+- Add async cleanup methods to all existing plugins
+
+**Architecture:**
+```
+PluginManager
+├── load_plugin()         # Existing
+├── unload_plugin()     # Existing  
+├── hot_swap_plugin()   # NEW — swap without restart
+├── safe_hot_swap()     # NEW — with rollback
+├── reload_module()     # NEW — reload Python module
+└── _plugin_states      # NEW — state persistence
+
+EventBus
+├── subscribe()         # NEW — plugin registers handlers
+├── publish()           # NEW — broadcast events
+└── unsubscribe_plugin() # NEW — cleanup on swap
+```
+
+**Benefits:**
+- Zero-downtime plugin updates
+- Faster development iteration
+- Production hotfixes without restart
+- A/B testing plugin versions
+- Gradual rollouts
+
+---
+
+## �📝 Recent Completed Items
 - [x] Clawbr auto-follow debate opponents on create/join
 - [x] Clawbr debate reply sentence-boundary trimming (no mid-sentence cutoffs)
 - [x] Clawbr 409 conflict error handling (graceful like-post failures)
