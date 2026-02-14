@@ -332,38 +332,19 @@ Requirements:
 
 The skill should be self-contained and ready to use."""
             
-            # Generate code draft
-            draft_result = coder.create_draft(task)
-            if not draft_result.get('draft_id'):
-                return f"❌ Failed to create code draft: {draft_result.get('error', 'Unknown error')}"
-            
-            draft_id = draft_result['draft_id']
-            print(f"📋 Code draft created: {draft_id}")
-            
-            # Test the draft
-            test_result = coder.test_code(draft_id)
-            if test_result.get('status') == 'test_error':
-                return f"❌ Skill code failed tests: {test_result.get('error')}"
-            
-            if test_result.get('tests_failed', 0) > 0:
-                return f"❌ Skill has {test_result['tests_failed']} failing tests. Fix before publishing."
-            
-            print(f"✅ Code passed tests: {test_result.get('tests_passed', 0)} passed")
-            
-            # Get the code and convert to SKILL.md
-            draft = coder.get_draft(draft_id)
-            if not draft or 'files' not in draft:
-                return "❌ Could not retrieve generated code"
-            
-            # Extract Python code from draft
-            python_code = None
-            for file_info in draft.get('files', []):
-                if file_info.get('path', '').endswith('.py'):
-                    python_code = file_info.get('content')
-                    break
+            # Generate code directly using AI
+            print(f"  🤖 Generating code via autonomous coder...")
+            python_code = coder._generate_code_with_ai(task)
             
             if not python_code:
-                return "❌ No Python code generated"
+                return f"❌ Failed to generate code for skill"
+            
+            # Validate the generated code
+            safety = coder.validate_code_safety(python_code)
+            if not safety['safe']:
+                return f"❌ Generated code failed safety check: {safety['issues']}"
+            
+            print(f"✅ Code generated and passed safety check")
             
             # Create SKILL.md from generated code
             return self._create_skill_from_code(skill_name, task_description, python_code)
