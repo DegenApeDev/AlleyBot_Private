@@ -599,26 +599,37 @@ Send /brain_start to go autonomous. 🤖"""
         if not await self._verify_owner(update):
             return
         
-        help_message = """🦞 **AlleyBot Commands**:
+        help_message = """🦞 **AlleyBot AGI Commands**:
 
-**📊 Information:**
-/status - Get comprehensive status report
+**🧠 AGI Meta-Brain:**
+/agi_cycle - Run full 14-phase AGI cycle
+/multi_platform [topic] - Blast to all 6 platforms
+
+**� World State (Phase 7):**
+/trends - Cross-platform trend analysis
+/predict - Predict future trends
+/anomalies - Detect anomalies
+/sentiment - Platform sentiment
+
+**� Causal Understanding (Phase 10):**
+/causal - Causal summary
+/why [event] - Why it happened
+/whatif [scenario] - Counterfactual analysis
+/root_cause [problem] - Root cause analysis
+/attribution - Impact attribution
+
+**📺 Console Monitor:**
+/console_monitor - Toggle monitoring
+/console_stats - Detection statistics
+/pending_messages - Process pending messages
+
+**🤖 System:**
+/status - Get comprehensive status
 /help - Show this help message
-
-**💬 Moltx DM Management:**
-/dm_check - Check and reply to new DMs
-/dm_log - View DM activity log
-
-**📢 Social Media:**
-/post [message] - Create a Moltx post
-/feed - Get Moltx feed
-/engage - Engage with feed posts
-
-**🤖 Autonomous Control:**
-/autonomous - Toggle autonomous mode
+/reload - Reload all plugins
 
 **💬 Chat:**
-Just send any message and I'll respond using Grok 4-1 reasoning!
+Just send any message and I'll respond!
 
 🔒 This bot is private and only responds to DegenApeDev."""
         
