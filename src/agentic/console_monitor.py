@@ -573,49 +573,46 @@ class ConsoleMonitor:
         4. Register the skill
         """
         try:
-            # Check if skill system is available
-            if not self.core:
-                return {'success': False, 'error': 'No core available'}
+            skill_spec = {
+                'name': skill_name,
+                'version': version,
+                'source': skill_url or 'platform_announcement',
+                'auto_acquired': True,
+                'detected_at': datetime.now().isoformat()
+            }
             
-            # Try to use skill generator if available
-            if 'skill_generator' in dir(self.core) or hasattr(self.core, 'skill_generator'):
-                # Use existing skill generation pipeline
-                skill_spec = {
-                    'name': skill_name,
-                    'version': version,
-                    'source': skill_url or 'platform_announcement',
-                    'auto_acquired': True,
-                    'detected_at': datetime.now().isoformat()
-                }
-                
-                # Store skill spec for later processing
-                skill_path = f"skills/auto_acquired/{skill_name}_{version}.json"
-                os.makedirs(os.path.dirname(skill_path), exist_ok=True)
-                
-                with open(skill_path, 'w') as f:
-                    json.dump(skill_spec, f, indent=2)
-                
-                # Register skill with plugin manager if available
-                if hasattr(self.core, 'plugin_manager') and self.core.plugin_manager:
-                    # Reload skills to pick up new one
-                    if hasattr(self.core.plugin_manager, 'reload_skills'):
-                        self.core.plugin_manager.reload_skills()
-                
-                return {
-                    'success': True,
-                    'skill_name': skill_name,
-                    'version': version,
-                    'path': skill_path,
-                    'method': 'auto_acquired'
-                }
+            # Store skill spec for later processing
+            skill_path = f"skills/auto_acquired/{skill_name}_{version}.json"
+            os.makedirs(os.path.dirname(skill_path), exist_ok=True)
             
-            # Fallback: just log the skill announcement
+            with open(skill_path, 'w') as f:
+                json.dump(skill_spec, f, indent=2)
+            
+            # Try to download skill.md if URL provided
+            if skill_url:
+                try:
+                    import requests
+                    md_path = f"skills/auto_acquired/{skill_name}_{version}.md"
+                    response = requests.get(skill_url, timeout=10)
+                    if response.status_code == 200:
+                        with open(md_path, 'w') as f:
+                            f.write(response.text)
+                        logger.info(f"✅ Downloaded skill.md from {skill_url}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not download skill.md: {e}")
+            
+            # Register skill with plugin manager if core is available
+            if self.core and hasattr(self.core, 'plugin_manager') and self.core.plugin_manager:
+                if hasattr(self.core.plugin_manager, 'reload_skills'):
+                    self.core.plugin_manager.reload_skills()
+            
             return {
                 'success': True,
                 'skill_name': skill_name,
                 'version': version,
-                'method': 'logged',
-                'note': 'Skill system not fully integrated - logged for manual review'
+                'path': skill_path,
+                'method': 'auto_acquired',
+                'core_available': self.core is not None
             }
             
         except Exception as e:
@@ -706,23 +703,6 @@ AlleyBot has automatically acquired this new skill from platform announcement an
         """Generate response using full AGI stack"""
         try:
             from src.agentic.agi_orchestrator import get_agi_orchestrator
-            
-            orchestrator = get_agi_orchestrator(core=self.core)
-            
-            # Run targeted AGI cycle for response generation
-            # This uses: Social Intelligence + Creative + Metacognition
-            
-            # Predict sender's intent
-            intent_prediction = orchestrator.social.predict_intent(
-                message.sender,
-                context={'message': message.content, 'platform': message.platform}
-            )
-            
-            # Generate appropriate response
-            response = self._generate_contextual_response(message, intent_prediction)
-            
-            return response
-            
         except Exception as e:
             logger.error(f"❌ AGI response generation failed: {e}")
             return f"Thanks for reaching out! I'm AlleyBot, an AI agent exploring the decentralized web. 🦞"
