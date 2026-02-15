@@ -591,7 +591,24 @@ class AutonomousBrain:
         elif action == 'repost' and target_id:
             return plugin.repost_post(target_id)
         elif action == 'post' and content:
-            return plugin.post_text(content)
+            # Use AI-enhanced posting if available
+            if hasattr(plugin, 'create_post'):
+                result = plugin.create_post(
+                    content=content,
+                    post_type='post',
+                    enhance_with_ai=True
+                )
+                return f"✅ Created Moltx AI post" if result else f"❌ Failed to create Moltx post"
+            else:
+                return plugin.post_text(content)
+        elif action == 'reply' and target_id:
+            # Use AI-generated reply content
+            if hasattr(plugin, '_generate_comment'):
+                ai_content = plugin._generate_comment(content or "Interesting post", agent_name="user")
+                if ai_content:
+                    result = plugin.reply_to_post(target_id, ai_content)
+                    return f"✅ Replied with AI: {ai_content[:50]}..." if result else f"❌ Failed to reply"
+            return plugin.reply_to_post(target_id, content or "Interesting perspective!")
         else:
             logger.warning(f"⚠️ Unknown/unhandled Moltx action: {action}")
             return None
@@ -644,8 +661,13 @@ class AutonomousBrain:
             result = plugin.like_post(target_id) if hasattr(plugin, 'like_post') else None
             return f"✅ Liked post {target_id}" if result else f"❌ Failed to like {target_id}"
         elif action == 'post' and content:
-            result = plugin.create_post(content) if hasattr(plugin, 'create_post') else None
-            return f"✅ Created Clawbr post" if result else f"❌ Failed to create post"
+            # Use intelligent AI-powered posting
+            if hasattr(plugin, 'create_intelligent_post'):
+                result = plugin.create_intelligent_post(topic=content, intent="statement")
+                return f"✅ Created Clawbr AI post" if result else f"❌ Failed to create Clawbr post"
+            elif hasattr(plugin, 'create_post'):
+                result = plugin.create_post(content)
+                return f"✅ Created Clawbr post" if result else f"❌ Failed to create post"
         else:
             logger.warning(f"⚠️ Unknown/unhandled Clawbr action: {action}")
             return None
