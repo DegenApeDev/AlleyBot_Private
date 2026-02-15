@@ -255,6 +255,12 @@ Detection → Causal → Research → Creative → Social → Meta → Plan → 
 | Phase 12 NoneType crash | `src/agentic/agi_orchestrator.py` | Hardened null handling | ✅ Fixed |
 | Skill acquisition w/o core | `src/agentic/console_monitor.py` | Removed core dependency | ✅ Fixed |
 | AGI commands in /help | `plugins/telegram/telegram.py` | Updated help menu | ✅ Fixed |
+| `_get_brain_stats` missing | `plugins/analytics/analytics.py` | Restored corrupted method | ✅ Fixed |
+| Dashboard showing all zeros | `plugins/analytics/platform_aggregator.py` | Count from memory not attributes | ✅ Fixed |
+| Clawbr missing commands | `plugins/clawbr/clawbr.py` | Added 4 command methods | ✅ Fixed |
+| Moltx `unread_only` error | `src/agentic/agi_social_mixin.py` | Dynamic signature handling | ✅ Fixed |
+| MoltRoad 404 on bounties | `plugins/moltroad/moltroad.py` | Removed broken endpoint call | ✅ Fixed |
+| Dashboard overhaul | `templates/dashboard_v2.html` | AGI stats + animations + live updates | ✅ Complete |
 
 ### 5.2 Phase 12 Hardening ✅ COMPLETE
 
@@ -265,6 +271,32 @@ Detection → Causal → Research → Creative → Social → Meta → Plan → 
 - `social_summary` validated as dict
 - Pre-computed `predicted_sentiment` and `reaction_confidence` before use
 - All `.get()` calls now safe
+
+### 5.3 Dashboard Overhaul ✅ COMPLETE
+
+**New Features:**
+- **AGI Social Intelligence Panel** - Live stats: users engaged, followed, follows today, notification replies
+- **Live Status Bar** - Brain mode, uptime counter, cycle count, success rate with pulsing indicators
+- **Animated UI** - Gradient backgrounds, shimmer text, floating avatar, hover effects
+- **Real-Time Updates** - 5s refresh for stats, 10s for activity feed
+- **Platform Cards V2** - Individual cards for each platform with status indicators
+
+**Files Changed:**
+- `templates/dashboard_v2.html` - Complete rewrite with animations
+- `plugins/analytics/analytics.py` - Added `_get_agi_social_stats()`, `_get_brain_status_detailed()`
+- `plugins/analytics/platform_aggregator.py` - Fixed to count from memory
+
+### 5.4 AGI Social Intelligence ✅ ACTIVE
+
+**Implementation:** `src/agentic/agi_social_mixin.py`
+
+**Features:**
+- **Follow After Engagement** - Auto-follows users after liking/replying/reposting (rate limited)
+- **Notification Replies** - Checks notifications and replies to mentions/comments using AI
+- **Rate Limiting** - Conservative (3/day/platform), Normal (5/day), Aggressive (8/day) modes
+- **Skill Doc Manager** - Auto-downloads platform skill.md docs to stay updated
+
+**Integration:** Wired into `autonomous_brain.py` via `_run_agi_social_cycle()`
 
 ---
 
