@@ -7,6 +7,7 @@ from .synergy_logic import (
     SynergyStandardModel,
     SyModValidationResult,
     get_symod,
+    get_c2v_bridge,
 )
 
 from .symod_filter import (
@@ -23,6 +24,7 @@ __all__ = [
     'SynergyStandardModel',
     'SyModValidationResult',
     'get_symod',
+    'get_c2v_bridge',
     'SyModTruthFilterMixin',
     'create_symod_filter',
     'SyModCalendarMixin',

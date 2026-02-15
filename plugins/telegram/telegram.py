@@ -89,6 +89,30 @@ class Telegram(AlleyBotPlugin):
         from plugins.telegram.conversational_ai import ConversationalAI
         self.conversational_ai = ConversationalAI(self)
         
+        # Import brain commands
+        from plugins.telegram.brain_commands import BrainCommands
+        self.brain_commands = BrainCommands(self)
+        
+        # Import goal commands
+        from plugins.telegram.goal_commands import GoalCommands
+        self.goal_commands = GoalCommands(self)
+        
+        # Import plan commands
+        from plugins.telegram.plan_commands import PlanCommands
+        self.plan_commands = PlanCommands(self)
+        
+        # Import Phase 1: Self-Reflection commands
+        from plugins.telegram.reflection_commands import ReflectionCommands
+        self.reflection_commands = ReflectionCommands(self)
+        
+        # Import Phase 7: World State Intelligence commands
+        from plugins.telegram.intelligence_commands import IntelligenceCommands
+        self.intelligence_commands = IntelligenceCommands(self)
+        
+        # Import Phase 10: Causal Understanding commands
+        from plugins.telegram.causal_commands import CausalCommands
+        self.causal_commands = CausalCommands(self)
+        
         # Basic commands
         self.application.add_handler(CommandHandler("start", self._handle_start))
         self.application.add_handler(CommandHandler("help", self.intelligent_commands.help_command))
@@ -152,9 +176,30 @@ class Telegram(AlleyBotPlugin):
         
         # Brain commands
         self.application.add_handler(CommandHandler("think", self.intelligent_commands.brain_think))
-        self.application.add_handler(CommandHandler("brain_start", self.intelligent_commands.brain_start))
-        self.application.add_handler(CommandHandler("brain_stop", self.intelligent_commands.brain_stop))
-        self.application.add_handler(CommandHandler("brain", self.intelligent_commands.brain_status))
+        self.application.add_handler(CommandHandler("brain_start", self.brain_commands.brain_start))
+        self.application.add_handler(CommandHandler("brain_stop", self.brain_commands.brain_stop))
+        self.application.add_handler(CommandHandler("brain_status", self.brain_commands.brain_status))
+        self.application.add_handler(CommandHandler("brain_mode", self.brain_commands.brain_mode))
+        self.application.add_handler(CommandHandler("brain_log", self.brain_commands.brain_log))
+        self.application.add_handler(CommandHandler("brain", self.brain_commands.brain_status))  # alias
+        
+        # Goal commands
+        self.application.add_handler(CommandHandler("goals", self.goal_commands.goals_list))
+        self.application.add_handler(CommandHandler("goals_scan", self.goal_commands.goals_scan))
+        self.application.add_handler(CommandHandler("goals_propose", self.goal_commands.goals_propose))
+        self.application.add_handler(CommandHandler("goals_approve", self.goal_commands.goals_approve))
+        self.application.add_handler(CommandHandler("goals_reject", self.goal_commands.goals_reject))
+        self.application.add_handler(CommandHandler("goals_start", self.goal_commands.goals_start))
+        self.application.add_handler(CommandHandler("goals_complete", self.goal_commands.goals_complete))
+        self.application.add_handler(CommandHandler("goals_detail", self.goal_commands.goals_detail))
+        self.application.add_handler(CommandHandler("goals_stats", self.goal_commands.goals_stats))
+        
+        # Plan commands
+        self.application.add_handler(CommandHandler("plan_create", self.plan_commands.plan_create))
+        self.application.add_handler(CommandHandler("plan_status", self.plan_commands.plan_status))
+        self.application.add_handler(CommandHandler("plan_next", self.plan_commands.plan_next))
+        self.application.add_handler(CommandHandler("plan_retry", self.plan_commands.plan_retry))
+        self.application.add_handler(CommandHandler("plan_list", self.plan_commands.plan_list))
         
         # World State commands
         self.application.add_handler(CommandHandler("world_status", self.intelligent_commands.world_status))
@@ -190,6 +235,29 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawbr_search", self.intelligent_commands.clawbr_search))
         self.application.add_handler(CommandHandler("clawbr_stats", self.intelligent_commands.clawbr_stats))
         self.application.add_handler(CommandHandler("clawbr_engage", self.intelligent_commands.clawbr_engage))
+        
+        # Phase 1: Self-Reflection commands
+        self.application.add_handler(CommandHandler("reflection_status", self.reflection_commands.reflection_status))
+        self.application.add_handler(CommandHandler("reflection_log", self.reflection_commands.reflection_log))
+        self.application.add_handler(CommandHandler("reflection_tune", self.reflection_commands.reflection_tune))
+        self.application.add_handler(CommandHandler("evolve", self.reflection_commands.evolve))
+        self.application.add_handler(CommandHandler("strategies", self.reflection_commands.strategies))
+        
+        # Phase 7: World State Intelligence commands
+        self.application.add_handler(CommandHandler("trends", self.intelligence_commands.trends))
+        self.application.add_handler(CommandHandler("influencers", self.intelligence_commands.influencers))
+        self.application.add_handler(CommandHandler("predict", self.intelligence_commands.predict))
+        self.application.add_handler(CommandHandler("anomalies", self.intelligence_commands.anomalies))
+        self.application.add_handler(CommandHandler("sentiment", self.intelligence_commands.sentiment))
+        self.application.add_handler(CommandHandler("patterns", self.intelligence_commands.patterns))
+        self.application.add_handler(CommandHandler("intel", self.intelligence_commands.intel))
+        
+        # Phase 10: Causal Understanding commands
+        self.application.add_handler(CommandHandler("causal", self.causal_commands.causal_summary))
+        self.application.add_handler(CommandHandler("why", self.causal_commands.why))
+        self.application.add_handler(CommandHandler("whatif", self.causal_commands.whatif))
+        self.application.add_handler(CommandHandler("root_cause", self.causal_commands.root_cause))
+        self.application.add_handler(CommandHandler("attribution", self.causal_commands.attribution))
         
         # System commands
         self.application.add_handler(CommandHandler("reload", self._handle_reload))

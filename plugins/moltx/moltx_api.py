@@ -427,7 +427,7 @@ class MoltxAPIMixin:
 
     def create_post(self, text, reply_to=None, hashtags=None, files=None, media_url=None):
         """Create a new post"""
-        data = {"text": text}
+        data = {"content": text}
         if reply_to:
             data["reply_to"] = reply_to
         if hashtags:
