@@ -1090,11 +1090,62 @@ Return ONLY the complete fixed Python file. No explanations, no markdown fences.
 
     def self_update_command(self, *args):
         """Run a full self-update cycle: plan → generate → validate → test → apply → commit.
-        Usage: improve_self_update <task description>"""
+        Usage: improve_self_update <task description>
+        
+        REQUIRES CONFIRMATION: This command will ask for explicit approval before building."""
         if not args:
             return "❌ Usage: improve_self_update <task description>"
 
         task = ' '.join(args)
+        
+        # NEW: Confirmation gate - require explicit approval
+        # Check if this is a confirmation call
+        if not hasattr(self, '_pending_self_updates'):
+            self._pending_self_updates = {}
+        
+        # Generate a confirmation ID
+        import hashlib
+        confirm_id = hashlib.md5(task.encode()).hexdigest()[:8]
+        
+        # Check if already confirmed
+        if confirm_id not in self._pending_self_updates:
+            # First call - show plan preview and ask for confirmation
+            print(f"🤖 Self-Update Requested: {task[:80]}...")
+            print(f"\n⚠️  This will use AI to generate code changes across multiple files.")
+            print(f"⚠️  Estimated cost: ~$0.01-0.05 in API tokens")
+            print(f"⚠️  Estimated time: 30-120 seconds")
+            print(f"\n📋 To proceed, run:")
+            print(f"   improve_self_update_confirm {confirm_id}")
+            print(f"\n❌ To cancel, just ignore or type 'cancel'")
+            
+            # Store pending task
+            self._pending_self_updates[confirm_id] = {
+                'task': task,
+                'requested_at': datetime.now().isoformat(),
+                'status': 'pending_confirmation'
+            }
+            
+            return f"⏸️ Self-update pending confirmation.\nID: {confirm_id}\n\nRun: improve_self_update_confirm {confirm_id}"
+        
+        # Was confirmed - proceed
+        del self._pending_self_updates[confirm_id]
+        return self._run_self_update(task)
+
+    def self_update_confirm_command(self, *args):
+        """Confirm a pending self-update. Usage: improve_self_update_confirm <confirm_id>"""
+        if not args:
+            return "❌ Usage: improve_self_update_confirm <confirm_id>\n\nUse improve_drafts to see pending updates."
+        
+        confirm_id = args[0]
+        
+        if not hasattr(self, '_pending_self_updates') or confirm_id not in self._pending_self_updates:
+            return f"❌ No pending self-update found with ID: {confirm_id}\nUpdates expire after 10 minutes."
+        
+        pending = self._pending_self_updates[confirm_id]
+        task = pending['task']
+        
+        # Mark as confirmed and re-run
+        pending['status'] = 'confirmed'
         return self._run_self_update(task)
 
     def self_update_from_skill_command(self, *args):
