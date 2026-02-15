@@ -25,6 +25,16 @@ try:
 except ImportError:
     SQLITE_MEMORY_AVAILABLE = False
 
+# Import Tier 2 Synergy Gate (optional - falls back gracefully)
+try:
+    from lib.synergy_gate import get_synergy_gate, validate_action
+    from src.agentic.recursive_strategy import RecursiveStrategyEngine
+    TIER2_AVAILABLE = True
+    print("🔐 Tier 2 Cryptographic Trust: ENABLED")
+except ImportError as e:
+    TIER2_AVAILABLE = False
+    print(f"⚠️ Tier 2 framework unavailable: {e}")
+
 class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
     """Minimal core that orchestrates plugins with SQLite memory"""
     

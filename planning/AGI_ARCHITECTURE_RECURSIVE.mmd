@@ -1,0 +1,214 @@
+```mermaid
+flowchart TB
+    subgraph "🔄 Recursive AGI Strategic Loop - Tier 2 Cryptographic Trust"
+        direction TB
+        
+        START["🚀 Phase 0: Trigger<br/>Scheduled / Manual / Anomaly<br/>On-chain Signal / Owner Command"]::start
+        
+        subgraph "Phase 1-2: Context Acquisition"
+            P1["👁️ Phase 1: Understanding<br/>Query LTM for similar tasks<br/>Pattern matching from history"]::phase1
+            P2["🧠 Phase 2: Contextualizing<br/>Load relevant memories<br/>Entity/Fact/Relationship resolution"]::phase2
+        end
+        
+        subgraph "Phase 3: Recursive Strategizing"
+            P3["💭 Phase 3: Strategizing<br/>Generate approach hypotheses<br/>Evaluate D(n) alignment"]::phase3
+            P3A["🔄 Recursive Core<br/>Self-referential strategy evaluation"]::recurse
+            P3B["⚡ Synergy Gate Check<br/>validate_thought() call<br/>Digital Root D(n) validation"]::symod
+        end
+        
+        P4["🔍 Phase 4: Confidence Check<br/>High? → Proceed<br/>Low? → Trigger RCA"]::phase4
+        
+        subgraph "Recursive Correction Loops"
+            RCA["🌿 Root Cause Analysis<br/>Missing_Data / Logic_Error<br/>Resource_Constraint"]::rca
+            WEB["🌐 Autonomous Web Search<br/>RCA == Missing_Data"]::web
+            REFACTOR["🔧 Self Code Refactor<br/>RCA == Logic_Error"]::refactor
+            A2A_TIER3["🤝 A2A Tier 3 Outsourcing<br/>Escalate to TEE-verified peer"]::a2a
+        end
+        
+        subgraph "Phase 5-7: Execution Pipeline"
+            P5["⚡ Phase 5: Execution<br/>High-trust action dispatch"]::phase5
+            P6["📤 Phase 6: Output<br/>Generate result artifacts"]::phase6
+            P7["✅ Phase 7: Success/Failure<br/>Outcome determination"]::phase7
+        end
+        
+        subgraph "Phase 8: Synergy Audit & Attestation"
+            P8["🔐 Phase 8: Synergy Audit<br/>Final gate before completion"]::phase8
+            QUOTE["📜 Generate Validation Quote<br/>Task_ID + Code_Hash + Timestamp<br/>Self-Signed Attestation"]::quote
+            REGISTRY["🗄️ Memory Registry<br/>Store hash for ERC-8004<br/>Future validation submissions"]::registry
+        end
+        
+        subgraph "Post-Execution Learning"
+            LESSON["🎓 Phase 7b: Lesson Learned<br/>Extract insight from outcome<br/>Improve future confidence"]::lesson
+            STORE["💾 Store in LTM<br/>Update SyMod confidence model"]::store
+        end
+        
+        %% Main Flow
+        START --> P1
+        P1 --> P2
+        P2 --> P3
+        P3 --> P3A
+        P3A --> P3B
+        
+        %% Synergy Gate Decision
+        P3B -->|"Valid=True<br/>Confidence ≥ 0.85"| P4
+        P3B -->|"Valid=False OR<br/>Confidence < 0.85"| RCA
+        
+        %% Confidence Check
+        P4 -->|"High Confidence"| P5
+        P4 -->|"Low Confidence"| RCA
+        
+        %% RCA Logic
+        RCA -->|"Missing_Data"| WEB
+        RCA -->|"Logic_Error"| REFACTOR
+        RCA -->|"Resource_Constraint"| A2A_TIER3
+        
+        %% Recursive Return
+        WEB -->|"Data acquired"| P3
+        REFACTOR -->|"Logic fixed"| P3
+        A2A_TIER3 -->|"Outsourced complete"| P5
+        
+        %% Execution Flow
+        P5 --> P6
+        P6 --> P7
+        
+        %% Phase 8 Synergy Audit
+        P7 --> P8
+        P8 -->|"All checks pass"| QUOTE
+        P8 -->|"Audit failed"| REFACTOR
+        
+        %% Registry Storage
+        QUOTE --> REGISTRY
+        
+        %% Learning Loop
+        P7 --> LESSON
+        LESSON --> STORE
+        STORE -.->|"Improves future Phase 1"| P1
+        
+        %% Self-Correction Feedback
+        REFACTOR -.->|"Updates codebase"| P3B
+        
+        %% Styling
+        classDef start fill:#e8f5e9,stroke:#1b5e20,stroke-width:4px
+        classDef phase1 fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+        classDef phase2 fill:#e3f2fd,stroke:#0d47a1,stroke-width:2px
+        classDef phase3 fill:#fff3e0,stroke:#e65100,stroke-width:3px
+        classDef recurse fill:#fce4ec,stroke:#880e4f,stroke-width:3px
+        classDef symod fill:#ffebee,stroke:#b71c1c,stroke-width:4px
+        classDef phase4 fill:#f3e5f5,stroke:#4a148c,stroke-width:3px,shape:diamond
+        classDef phase5 fill:#ffebee,stroke:#b71c1c,stroke-width:4px
+        classDef phase6 fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+        classDef phase7 fill:#fff8e1,stroke:#f57f17,stroke-width:3px
+        classDef phase8 fill:#ffebee,stroke:#b71c1c,stroke-width:4px
+        classDef rca fill:#e8eaf6,stroke:#283593,stroke-width:3px
+        classDef web fill:#e0f7fa,stroke:#006064,stroke-width:2px
+        classDef refactor fill:#fff3e0,stroke:#ef6c00,stroke-width:3px
+        classDef a2a fill:#f3e5f5,stroke:#6a1b9a,stroke-width:3px
+        classDef quote fill:#fff9c4,stroke:#f57f17,stroke-width:3px
+        classDef registry fill:#f5f5f5,stroke:#212121,stroke-width:3px
+        classDef lesson fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+        classDef store fill:#e3f2fd,stroke:#01579b,stroke-width:2px
+    end
+```
+
+---
+
+## Recursive AGI Strategic Loop Documentation
+
+### Phase 8: Synergy Audit (New)
+
+The final gate before execution completion. Performs:
+- Cryptographic hash generation of output (Task_ID, Code_Version_Hash, Execution_Timestamp)
+- Self-Signed Attestation using VPS-based signing
+- ERC-8004 validation registry preparation
+- Auto-report POST request logic for success/failure
+
+### Memory Registry Actor
+
+Centralized storage for:
+- Validation quotes with cryptographic hashes
+- Task outcomes for future ERC-8004 submissions
+- Historical SyMod confidence scores
+- Lesson learned entries for LTM improvement
+
+### Self-Correction Node
+
+Triggered when:
+- RCA identifies Logic_Error
+- Phase 8 audit fails
+- Digital root validation indicates field collapse
+
+Actions:
+- Self_Code_Refactor execution
+- Codebase digital root recalculation
+- Geometric integrity restoration
+
+### A2A Outsourcing Branch (Tier 3)
+
+For tasks requiring "High Trust (Tier 3)" or exceeding confidence threshold:
+- Auto-escalate to TEE-verified peer agents
+- Maintain cryptographic attestation chain
+- Integrate peer result with local validation
+
+### Recursive Loops
+
+**RCA Loop:**
+```
+Phase 4 Low Confidence → RCA → Missing_Data → Web Search → Return to Phase 3
+                                         ↓
+                         RCA → Logic_Error → Refactor → Return to Phase 3
+```
+
+**Refactoring Loop:**
+```
+Phase 8 Fail → Self-Correction → Code Update → Synergy Gate Recheck
+```
+
+**Learning Loop:**
+```
+Phase 7 Outcome → Lesson Extraction → LTM Storage → Phase 1 Enhancement
+```
+
+---
+
+## Integration Points
+
+### Synergy Gate Integration
+```python
+from lib.synergy_gate import get_synergy_gate, validate_action
+
+# Before any high-stakes action
+gate = get_synergy_gate(threshold=0.85)
+result = gate.validate_thought(action_data)
+can_exec, reason = result.can_execute()
+
+if not can_exec:
+    # Trigger Refactoring Loop
+    refactoring_plan = gate.trigger_refactoring_loop(result, action_data)
+```
+
+### ERC-8004 Validation Registry
+```python
+# Post-execution
+quote = gate.generate_validation_quote(
+    task_id=task_id,
+    code_version=git_hash,
+    inputs=inputs,
+    outputs=outputs,
+    symod_result=result
+)
+# Store in registry for future submission
+```
+
+### A2A Tier 3 Escalation
+```python
+if result.rca_type == RCAType.RESOURCE_CONSTRAINT:
+    # Outsource to TEE-verified peer
+    peer_result = await a2a_protocol.outsource_task(
+        task_data,
+        required_trust_tier=3
+    )
+```
+
+---
+
+*Updated for kimi25_polished branch - Recursive AGI Framework with SyMod Tier 2 Trust*
