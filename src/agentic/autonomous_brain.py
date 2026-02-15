@@ -430,22 +430,88 @@ class AutonomousBrain:
             if not plugin:
                 return None
             
-            # Execute
-            # This would call the plugin's execute_action method
-            # For now, log what we would do
-            logger.info(
-                f"🎯 Would execute: {proposal.action_type} on {proposal.target_name} "
-                f"via {plugin_name} (conf: {proposal.confidence:.2f})"
-            )
+            # EXECUTE the actual action based on proposal type
+            action_type = proposal.action_type
+            result = None
             
-            # TODO: Actually execute via plugin interface
-            # result = await plugin.execute_action(proposal)
+            logger.info(f"🎯 Executing: {action_type} on {proposal.target_name} via {plugin_name}")
             
-            return {'success': True, 'action': proposal.action_type}
+            if plugin_name == 'moltx':
+                result = await self._execute_moltx_action(plugin, proposal)
+            elif plugin_name == 'moltbook':
+                result = await self._execute_moltbook_action(plugin, proposal)
+            else:
+                # Generic execution attempt
+                if hasattr(plugin, f'{action_type}_command'):
+                    method = getattr(plugin, f'{action_type}_command')
+                    result = method(proposal.target_id, proposal.content)
+                elif hasattr(plugin, action_type):
+                    method = getattr(plugin, action_type)
+                    result = method(proposal.target_id, proposal.content)
+            
+            if result:
+                logger.info(f"✅ Action executed: {action_type} -> {str(result)[:100]}")
+                return {'success': True, 'action': action_type, 'result': result}
+            else:
+                logger.warning(f"⚠️ Action returned no result: {action_type}")
+                return None
             
         except Exception as e:
             logger.error(f"❌ Execution error: {e}")
             return {'success': False, 'error': str(e)}
+    
+    async def _execute_moltx_action(self, plugin, proposal) -> Optional[str]:
+        """Execute Moltx-specific actions"""
+        from plugins.moltx.moltx_engagement import MoltxEngagementMixin
+        
+        action = proposal.action_type
+        target_id = proposal.target_id
+        content = proposal.content
+        
+        # Ensure engagement mixin is available
+        if not isinstance(plugin, MoltxEngagementMixin):
+            logger.warning(f"⚠️ Moltx plugin missing engagement mixin")
+            return None
+        
+        if action == 'like' and target_id:
+            return plugin.like_post(target_id)
+        elif action == 'reply' and target_id and content:
+            return plugin.reply_to_post(target_id, content)
+        elif action == 'repost' and target_id:
+            return plugin.repost_post(target_id)
+        elif action == 'post' and content:
+            return plugin.post_text(content)
+        else:
+            logger.warning(f"⚠️ Unknown/unhandled Moltx action: {action}")
+            return None
+    
+    async def _execute_moltbook_action(self, plugin, proposal) -> Optional[str]:
+        """Execute Moltbook-specific actions"""
+        action = proposal.action_type
+        target_id = proposal.target_id
+        content = proposal.content
+        
+        # Check if suspended first
+        if hasattr(plugin, 'mb_api') and plugin.mb_api:
+            if getattr(plugin.mb_api, 'is_suspended', False):
+                logger.warning(f"🚫 Moltbook account suspended, skipping action")
+                return None
+        
+        if action == 'upvote' and target_id:
+            result = plugin.mb_api.upvote_post(target_id) if hasattr(plugin, 'mb_api') else None
+            return f"✅ Upvoted post {target_id}" if result else f"❌ Failed to upvote {target_id}"
+        elif action == 'comment' and target_id and content:
+            result = plugin.mb_api.add_comment(target_id, content) if hasattr(plugin, 'mb_api') else None
+            return f"✅ Commented on {target_id}" if result else f"❌ Failed to comment {target_id}"
+        elif action == 'post' and content:
+            if hasattr(plugin, 'create_intelligent_post'):
+                return plugin.create_intelligent_post()
+            elif hasattr(plugin, 'mb_api'):
+                result = plugin.mb_api.create_post('general', content[:100], content)
+                return f"✅ Created post" if result else f"❌ Failed to create post"
+        else:
+            logger.warning(f"⚠️ Unknown/unhandled Moltbook action: {action}")
+            return None
     
     def get_status(self) -> Dict[str, Any]:
         """Get current brain status"""
