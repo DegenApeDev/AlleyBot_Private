@@ -263,6 +263,11 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("agi_cycle", self._handle_agi_cycle))
         self.application.add_handler(CommandHandler("multi_platform", self._handle_multi_platform))
         
+        # Console Monitor commands
+        self.application.add_handler(CommandHandler("console_monitor", self._handle_console_monitor))
+        self.application.add_handler(CommandHandler("console_stats", self._handle_console_stats))
+        self.application.add_handler(CommandHandler("pending_messages", self._handle_pending_messages))
+        
         # System commands
         self.application.add_handler(CommandHandler("reload", self._handle_reload))
         
@@ -428,6 +433,91 @@ class Telegram(AlleyBotPlugin):
         except Exception as e:
             logger.error(f"Error in multi_platform: {e}")
             await update.message.reply_text(f"❌ Error running multi-platform campaign: {e}")
+    
+    async def _handle_console_monitor(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /console_monitor command - toggle console message monitoring"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            from src.agentic.console_monitor import get_console_monitor
+            
+            monitor = get_console_monitor(core=self.core)
+            
+            if monitor.is_monitoring:
+                monitor.stop_monitoring()
+                await update.message.reply_text("📺 Console monitoring **STOPPED**")
+            else:
+                monitor.start_monitoring()
+                await update.message.reply_text(
+                    "📺 Console monitoring **STARTED**\n\n"
+                    "Now watching stdout/stderr for platform messages to AlleyBot.\n"
+                    "Detected messages will trigger automatic responses."
+                )
+            
+            self._log_activity("command", {"command": "console_monitor", "active": monitor.is_monitoring})
+            
+        except Exception as e:
+            logger.error(f"Error in console_monitor: {e}")
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def _handle_console_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /console_stats command - show console monitor statistics"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            from src.agentic.console_monitor import get_console_monitor
+            
+            monitor = get_console_monitor(core=self.core)
+            stats = monitor.get_stats()
+            
+            msg = f"📺 **Console Monitor Stats**\n\n"
+            msg += f"Monitoring: {'✅ Active' if stats['is_monitoring'] else '❌ Stopped'}\n"
+            msg += f"Patterns loaded: {stats['patterns_loaded']}\n"
+            msg += f"Custom patterns: {stats['custom_patterns']}\n"
+            msg += f"Skill handlers: {stats['skill_handlers']}\n"
+            msg += f"Messages detected: {stats['messages_detected']}\n"
+            msg += f"Pending responses: {stats['pending_responses']}\n"
+            msg += f"Platforms connected: {stats['platforms_connected']}\n"
+            msg += f"Lines captured: {stats['lines_captured']}\n"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+            self._log_activity("command", {"command": "console_stats"})
+            
+        except Exception as e:
+            logger.error(f"Error in console_stats: {e}")
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def _handle_pending_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /pending_messages command - process pending console messages"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            from src.agentic.console_monitor import get_console_monitor
+            
+            monitor = get_console_monitor(core=self.core)
+            
+            # Process pending messages with AGI
+            processed = monitor.process_pending_messages(max_batch=5)
+            
+            if processed:
+                msg = f"✅ **Processed {len(processed)} messages**\n\n"
+                for msg_obj in processed:
+                    msg += f"• {msg_obj.sender} ({msg_obj.platform}): {msg_obj.content[:40]}...\n"
+                    msg += f"  → Response: {msg_obj.response[:40]}...\n\n"
+            else:
+                msg = "📭 No pending messages to process"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+            self._log_activity("command", {"command": "pending_messages", "processed": len(processed)})
+            
+        except Exception as e:
+            logger.error(f"Error in pending_messages: {e}")
+            await update.message.reply_text(f"❌ Error: {e}")
     
     async def _verify_owner(self, update: Update) -> bool:
         """Verify that the message is from the owner"""
