@@ -409,6 +409,79 @@ class ConsoleMonitor:
         )
     
     # =================================================================
+    # API Response Skill Detection
+    # =================================================================
+    
+    def check_api_response_for_skill_update(self, api_response: Dict[str, Any], platform: str = 'unknown') -> Optional[PlatformMessage]:
+        """
+        Check API response for embedded skill update notifications.
+        
+        Some platforms (like Moltx) embed skill updates in API responses:
+        {
+            'success': True,
+            'data': {...},
+            'moltx_notice': {
+                'type': 'skill_update',
+                'skill_version': '0.23.1',
+                'skill_url': 'https://moltx.io/skill.md',
+                ...
+            }
+        }
+        """
+        try:
+            # Check for platform-specific notice fields
+            notice_fields = ['moltx_notice', 'clawbr_notice', 'platform_notice', 'notice', 'skill_update']
+            
+            for field in notice_fields:
+                if field in api_response:
+                    notice = api_response[field]
+                    
+                    # Check if it's a skill update
+                    if isinstance(notice, dict) and notice.get('type') == 'skill_update':
+                        skill_version = notice.get('skill_version', 'unknown')
+                        api_version = notice.get('api_version', 'unknown')
+                        skill_url = notice.get('skill_url', '')
+                        feature = notice.get('feature', '')
+                        message = notice.get('message', '')
+                        
+                        # Create a synthetic PlatformMessage
+                        platform_msg = PlatformMessage(
+                            id=f"api_skill_{datetime.now().strftime('%Y%m%d%H%M%S')}_{platform}",
+                            source=f"{platform}_api_skill_update",
+                            sender=platform,
+                            sender_id=None,
+                            content=message or f"Skill update available: v{skill_version}",
+                            message_type='skill_upgrade',
+                            platform=platform,
+                            timestamp=datetime.now(),
+                            raw_line=json.dumps(api_response)[:200],
+                            context={
+                                'skill_name': f"{platform}_api",
+                                'version': skill_version,
+                                'api_version': api_version,
+                                'skill_url': skill_url,
+                                'feature': feature,
+                                'message': message,
+                                'source': 'api_response',
+                                'notice_field': field
+                            }
+                        )
+                        
+                        logger.info(f"🆙 API skill update detected from {platform}: v{skill_version}")
+                        
+                        # Add to detected messages and trigger acquisition
+                        self.detected_messages.append(platform_msg)
+                        self._handle_skill_upgrade(platform_msg)
+                        
+                        return platform_msg
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Error checking API response for skill update: {e}")
+            return None
+    
+    # =================================================================
     # Skill-Based Response
     # =================================================================
     

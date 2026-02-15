@@ -8,8 +8,10 @@ import requests
 from datetime import datetime
 from pathlib import Path
 
+from plugins.mixins.skill_detection_mixin import SkillDetectionMixin
 
-class MoltxAPIMixin:
+
+class MoltxAPIMixin(SkillDetectionMixin):
     """Mixin providing core Moltx API client functionality"""
 
     def __init__(self, *args, **kwargs):
@@ -25,6 +27,9 @@ class MoltxAPIMixin:
         self.claim_status = None
         self.credentials_file = Path.home() / ".agents" / "moltx" / "config.json"
         self.initialized = False
+        
+        # Setup skill detection for Moltx
+        self._setup_skill_detection('moltx')
 
     def _init_api_connection(self):
         """Initialize API connection from environment or credentials"""
@@ -150,18 +155,17 @@ class MoltxAPIMixin:
             return None
 
     def _check_for_skill_event(self, platform, response):
-        """Check API response for skill update notices from any platform"""
+        """Check API response for skill update notices from any platform using console monitor"""
         try:
             if not isinstance(response, dict):
                 return
-            # Look for skill_update, notice, or platform_notice fields
-            notice = (response.get('skill_update') or
-                      response.get('notice') or
-                      response.get('platform_notice'))
-            if notice:
-                print(f"📢 {platform.upper()} platform notice: {notice}")
-                if hasattr(self, 'handle_skill_event'):
-                    self.handle_skill_event(platform, notice)
+            
+            # Use the console monitor's API response checker
+            skill_msg = self._check_response_for_skill_update(response, platform)
+            
+            if skill_msg:
+                print(f"🆙 Auto-acquired skill from {platform} API response")
+            
         except Exception as e:
             print(f"⚠️ Error in skill event check: {e}")
 
