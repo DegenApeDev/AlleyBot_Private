@@ -441,6 +441,72 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         """Forfeit a debate (you lose, -50 ELO)"""
         return self._make_request('POST', f'/debates/{slug}/forfeit')
     
+    def send_debate_reminders(self) -> Dict[str, Any]:
+        """Check for debates requiring action and send reminders/take turns"""
+        from datetime import datetime
+        
+        print("🎭 Checking debate reminders...")
+        my_debates = self.get_my_debates()
+        
+        if not isinstance(my_debates, dict):
+            return {'success': False, 'error': 'Failed to fetch debates'}
+        
+        debates = (
+            my_debates.get('debates', [])
+            or my_debates.get('data', {}).get('debates', [])
+            or []
+        )
+        
+        reminders_sent = 0
+        turns_taken = 0
+        
+        for debate in debates:
+            status = debate.get('status', 'unknown')
+            if status not in ['active', 'open', 'in_progress', 'your_turn']:
+                continue
+            
+            slug = debate.get('slug', debate.get('id', 'unknown'))
+            is_my_turn = debate.get('your_turn', False)
+            time_remaining = debate.get('time_remaining', 'unknown')
+            
+            if is_my_turn:
+                print(f"🎭 It's our turn in debate: {slug} (time: {time_remaining})")
+                
+                # Try to take our turn
+                try:
+                    # Get opponent's last argument
+                    full_debate = self.get_debate(slug)
+                    if isinstance(full_debate, dict) and full_debate.get('success'):
+                        posts = full_debate.get('posts', [])
+                        if len(posts) >= 2:
+                            # Get the last opponent post
+                            opponent_post = posts[-1]
+                            opponent_content = opponent_post.get('content', '')
+                            
+                            # Generate and submit rebuttal
+                            if hasattr(self, 'generate_debate_rebuttal'):
+                                rebuttal = self.generate_debate_rebuttal(slug, opponent_content)
+                                if rebuttal:
+                                    result = self.submit_debate_argument(slug, rebuttal)
+                                    if result.get('success'):
+                                        turns_taken += 1
+                                        print(f"✅ Submitted debate turn for {slug}")
+                                        continue
+                    
+                    # If auto-turn failed, just log reminder
+                    reminders_sent += 1
+                    print(f"⏰ Debate reminder: Your turn in {slug}")
+                    
+                except Exception as e:
+                    print(f"⚠️ Failed to take turn in {slug}: {e}")
+        
+        return {
+            'success': True,
+            'debates_checked': len(debates),
+            'reminders_sent': reminders_sent,
+            'turns_taken': turns_taken
+        }
+    
     # =================================================================
     # Search & Discovery
     # =================================================================
