@@ -20,6 +20,7 @@ import os
 
 from src.agentic.action_logger import ActionLogger, ActionRecord
 from src.agentic.symod_core import get_symod_manager, SyModObservation
+from src.agentic.skilldoc_manager import get_skilldoc_manager
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,10 @@ class AutonomousBrain:
             'start_time': None
         }
         
+        # Skill documentation manager
+        self.skilldoc_manager = get_skilldoc_manager()
+        self._skilldoc_task: Optional[asyncio.Task] = None
+        
         logger.info("🧠 AutonomousBrain initialized")
     
     def register_plugins_with_symod(self) -> None:
@@ -170,6 +175,9 @@ class AutonomousBrain:
         # Start background task
         self._task = asyncio.create_task(self._brain_loop())
         
+        # Start skill.md periodic check (every 6 hours)
+        self._skilldoc_task = asyncio.create_task(self._skilldoc_check_loop())
+        
         msg = (
             f"🧠 Autonomous Brain Started\n"
             f"Mode: {mode.upper()}\n"
@@ -193,6 +201,14 @@ class AutonomousBrain:
             self._task.cancel()
             try:
                 await self._task
+            except asyncio.CancelledError:
+                pass
+        
+        # Stop skilldoc checker
+        if self._skilldoc_task:
+            self._skilldoc_task.cancel()
+            try:
+                await self._skilldoc_task
             except asyncio.CancelledError:
                 pass
         
@@ -474,7 +490,40 @@ class AutonomousBrain:
                 logger.error(f"❌ Failed to gather from Moltbit: {e}")
         
         return observations
+
+    async def _skilldoc_check_loop(self):
+        """Periodic check for skill.md updates"""
+        await asyncio.sleep(30)  # Wait for bot to fully initialize
+        
+        while self._running:
+            try:
+                print("📚 Checking skill.md documentation for updates...")
+                results = await self.skilldoc_manager.check_for_updates()
+                
+                updated = [p for p, r in results.items() if r.get('updated')]
+                errors = [p for p, r in results.items() if r.get('error')]
+                
+                if updated:
+                    print(f"✅ Updated skill.md for: {', '.join(updated)}")
+                    for platform in updated:
+                        caps = self.skilldoc_manager.extract_api_capabilities(platform)
+                        if caps:
+                            print(f"📖 {platform} capabilities: {len(caps.get('endpoints', []))} endpoints")
+                
+                if errors:
+                    print(f"⚠️ Failed to check: {', '.join(errors)}")
+                
+                await asyncio.sleep(6 * 3600)  # Check every 6 hours
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"❌ Skilldoc check error: {e}")
+                await asyncio.sleep(3600)
     
+    def get_skill_doc(self, platform: str) -> Optional[str]:
+        """Get skill.md documentation for a platform"""
+        return self.skilldoc_manager.get_skill_doc(platform)
+
     async def _get_proposals(self) -> List[Any]:
         """Get action proposals from SyMod"""
         from src.agentic.symod_core import SyModActionProposal
