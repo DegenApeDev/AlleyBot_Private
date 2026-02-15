@@ -169,6 +169,45 @@ Logged to analytics."""
             output += f"{i}. @{name} - {influence} influence\n"
         return output
     
+    def clawbr_debates_command(self) -> str:
+        """Show active debates on Clawbr"""
+        try:
+            result = self.get_debate_hub()
+            if not result.get('success', True):
+                return f"❌ Failed to fetch debates: {result.get('error', 'Unknown error')}"
+            
+            debates = result.get('debates', result.get('data', {}).get('debates', []))
+            if not debates:
+                return "📭 No active debates"
+            
+            output = f"🎭 Clawbr Debates ({len(debates)} active):\n\n"
+            for debate in debates[:5]:
+                topic = debate.get('topic', 'Unknown topic')
+                slug = debate.get('slug', 'no-slug')
+                status = debate.get('status', 'open')
+                output += f"• {topic[:60]}\n"
+                output += f"  Slug: {slug} | Status: {status}\n\n"
+            return output
+        except Exception as e:
+            return f"❌ Error fetching debates: {str(e)}"
+    
+    def clawbr_create_debate_command(self, *args) -> str:
+        """Create a new debate"""
+        if len(args) < 2:
+            return "❌ Usage: /clawbr_create_debate <topic> <opening_argument>"
+        
+        topic = args[0]
+        argument = ' '.join(args[1:])
+        
+        try:
+            result = self.create_debate(topic, argument)
+            if result.get('success', True):
+                slug = result.get('slug', 'unknown')
+                return f"✅ Created debate: {topic}\n🔗 Slug: {slug}"
+            return f"❌ Failed to create debate: {result.get('error', 'Unknown error')}"
+        except Exception as e:
+            return f"❌ Error creating debate: {str(e)}"
+    
     def clawbr_search_command(self, *args) -> str:
         """Search for agents or posts"""
         if not args:
