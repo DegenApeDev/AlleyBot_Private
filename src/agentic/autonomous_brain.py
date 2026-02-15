@@ -369,7 +369,34 @@ class AutonomousBrain:
             except Exception as e:
                 logger.error(f"❌ Failed to gather mentions: {e}")
         
-        # TODO: Add other platforms (MoltBook, Clawbr, etc.)
+        # Get from Clawbr
+        clawbr = self.plugin_manager.get_plugin('clawbr')
+        if clawbr and hasattr(clawbr, 'get_global_feed'):
+            try:
+                feed = clawbr.get_global_feed(sort='recent', limit=20)
+                if isinstance(feed, dict):
+                    posts = feed.get('posts', [])
+                    for post in posts:
+                        if not isinstance(post, dict):
+                            continue
+                        obs = SyModObservation(
+                            observation_type='post',
+                            source_plugin='clawbr',
+                            data={
+                                'id': post.get('id'),
+                                'content': post.get('content', ''),
+                                'author_id': post.get('authorId'),
+                                'author_name': post.get('authorName'),
+                                'likes': post.get('likesCount', 0),
+                                'replies': post.get('repliesCount', 0),
+                                'debate_slug': post.get('debateSlug')
+                            }
+                        )
+                        observations.append(obs)
+            except Exception as e:
+                logger.error(f"❌ Failed to gather from Clawbr: {e}")
+        
+        # TODO: Add other platforms (MoltChan, MoltRoad, etc.)
         
         return observations
     
@@ -395,7 +422,7 @@ class AutonomousBrain:
                             'min_confidence': self.config.min_confidence
                         }
                     },
-                    available_actions=['like', 'reply', 'repost', 'follow', 'post']
+                    available_actions=['like', 'reply', 'repost', 'follow', 'post', 'engage', 'clawbr_engage', 'upvote', 'comment']
                 )
                 
                 # Tag with plugin name
@@ -440,6 +467,8 @@ class AutonomousBrain:
                 result = await self._execute_moltx_action(plugin, proposal)
             elif plugin_name == 'moltbook':
                 result = await self._execute_moltbook_action(plugin, proposal)
+            elif plugin_name == 'clawbr':
+                result = await self._execute_clawbr_action(plugin, proposal)
             else:
                 # Generic execution attempt
                 if hasattr(plugin, f'{action_type}_command'):
@@ -511,6 +540,32 @@ class AutonomousBrain:
                 return f"✅ Created post" if result else f"❌ Failed to create post"
         else:
             logger.warning(f"⚠️ Unknown/unhandled Moltbook action: {action}")
+            return None
+    
+    async def _execute_clawbr_action(self, plugin, proposal) -> Optional[str]:
+        """Execute Clawbr-specific actions"""
+        action = proposal.action_type
+        target_id = proposal.target_id
+        content = proposal.content
+        
+        if action == 'engage' or action == 'clawbr_engage':
+            # Run the full engagement cycle
+            if hasattr(plugin, 'run_engagement_cycle'):
+                result = plugin.run_engagement_cycle()
+                if result and isinstance(result, dict):
+                    engaged = result.get('feed_scan', {}).get('engaged', 0)
+                    debates = result.get('debates', {})
+                    return f"✅ Clawbr engagement: {engaged} posts, debates: {debates}"
+                return "✅ Clawbr engagement cycle completed"
+            return None
+        elif action == 'like' and target_id:
+            result = plugin.like_post(target_id) if hasattr(plugin, 'like_post') else None
+            return f"✅ Liked post {target_id}" if result else f"❌ Failed to like {target_id}"
+        elif action == 'post' and content:
+            result = plugin.create_post(content) if hasattr(plugin, 'create_post') else None
+            return f"✅ Created Clawbr post" if result else f"❌ Failed to create post"
+        else:
+            logger.warning(f"⚠️ Unknown/unhandled Clawbr action: {action}")
             return None
     
     def get_status(self) -> Dict[str, Any]:
