@@ -366,7 +366,7 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
                 seen_ids.add(pid)
                 unique_posts.append(post)
         
-        print(f"🤖 Dynamic Engage: Found {len(unique_posts)} unique posts from {len(sources)} sources")
+        print(f"🔍 Dynamic Engage: Found {len(unique_posts)} unique posts from {len(sources)} sources")
         
         if not unique_posts:
             return "❌ Dynamic Engage: No posts available to engage"
@@ -395,12 +395,13 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
                 score += 2
             
             # Prefer posts with content (not empty)
-            if len(content) > 20:
+            content_len = len(content) if content else 0
+            if content_len > 20:
                 score += 1
             
             # Prefer AI/crypto related content
             ai_keywords = ['ai', 'agent', 'crypto', 'defi', 'web3', 'autonomous', 'gpt', 'llm', 'blockchain']
-            if any(kw in content.lower() for kw in ai_keywords):
+            if content and any(kw in content.lower() for kw in ai_keywords):
                 score += 2
             
             scored_posts.append((score, post))
