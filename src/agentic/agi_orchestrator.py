@@ -452,8 +452,15 @@ class AGIOrchestrator:
         start = datetime.now()
         
         try:
+            if not isinstance(creative_output, dict):
+                creative_output = {}
+
             # Predict community reaction to proposed content
-            content = creative_output.get('recommended_content', {}).get('title', '')
+            recommended_content = creative_output.get('recommended_content') or {}
+            if not isinstance(recommended_content, dict):
+                recommended_content = {}
+
+            content = recommended_content.get('title') or recommended_content.get('content') or ''
             
             if not content:
                 # No content to analyze
@@ -472,16 +479,23 @@ class AGIOrchestrator:
                 )
             
             reaction = self.social.simulate_community_reaction(content)
+            if not isinstance(reaction, dict):
+                reaction = {}
             
             # Check for high-risk deception patterns in recent interactions
-            social_summary = self.social.get_social_summary()
+            social_summary = self.social.get_social_summary() or {}
+            if not isinstance(social_summary, dict):
+                social_summary = {}
+
+            predicted_sentiment = reaction.get('predicted_sentiment')
+            reaction_confidence = reaction.get('confidence', 0)
             
             if reaction:
                 output = {
                     'predicted_reaction': reaction,
-                    'risk_assessment': 'low' if reaction.get('predicted_sentiment') == 'positive' else 'medium',
+                    'risk_assessment': 'low' if predicted_sentiment == 'positive' else 'medium',
                     'entities_tracked': social_summary.get('entities_modeled', 0),
-                    'proceed_recommended': reaction.get('predicted_sentiment') in ['positive', 'neutral']
+                    'proceed_recommended': predicted_sentiment in ['positive', 'neutral']
                 }
             else:
                 output = {
@@ -495,7 +509,7 @@ class AGIOrchestrator:
                 phase=Phase.SOCIAL_INTELLIGENCE,
                 success=True,
                 output=output,
-                confidence=0.75 if reaction and reaction.get('confidence', 0) > 0.6 else 0.5,
+                confidence=0.75 if reaction_confidence > 0.6 else 0.5,
                 duration_seconds=(datetime.now() - start).total_seconds(),
                 triggered_phases=[Phase.METACOGNITION]
             )
