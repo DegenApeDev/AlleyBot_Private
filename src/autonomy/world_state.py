@@ -670,3 +670,15 @@ def create_world_state_manager(core=None) -> WorldStateManager:
     else:
         db_path = "data/world_state.db"
     return WorldStateManager(str(db_path))
+
+
+# Singleton instance
+_world_state_manager_instance: Optional[WorldStateManager] = None
+
+
+def get_world_state_manager(core=None) -> WorldStateManager:
+    """Get or create WorldStateManager singleton"""
+    global _world_state_manager_instance
+    if _world_state_manager_instance is None:
+        _world_state_manager_instance = create_world_state_manager(core)
+    return _world_state_manager_instance

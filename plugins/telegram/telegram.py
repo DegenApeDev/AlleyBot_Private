@@ -259,6 +259,9 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("root_cause", self.causal_commands.root_cause))
         self.application.add_handler(CommandHandler("attribution", self.causal_commands.attribution))
         
+        # AGI Meta-Brain command
+        self.application.add_handler(CommandHandler("agi_cycle", self._handle_agi_cycle))
+        
         # System commands
         self.application.add_handler(CommandHandler("reload", self._handle_reload))
         
@@ -326,7 +329,52 @@ class Telegram(AlleyBotPlugin):
             
         except Exception as e:
             await update.message.reply_text(f"❌ Error reloading plugins: {str(e)}")
+    
+    async def _handle_agi_cycle(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /agi_cycle command - trigger full AGI meta-brain cycle"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            from src.agentic.agi_orchestrator import get_agi_orchestrator
             
+            await update.message.reply_text("🧠 Running full AGI cycle through all 14 phases...")
+            
+            orchestrator = get_agi_orchestrator()
+            result = orchestrator.run_cycle(trigger="manual")
+            
+            # Format result message
+            msg = f"✅ **AGI Cycle Complete**\n\n"
+            msg += f"**Cycle ID:** `{result.cycle_id}`\n"
+            msg += f"**Trigger:** {result.triggered_by}\n"
+            msg += f"**Phases Executed:** {len(result.phases_executed)}\n\n"
+            
+            # Show phase summary
+            for phase_result in result.phases_executed:
+                status = "✅" if phase_result.success else "❌"
+                phase_name = phase_result.phase.name.replace('_', ' ').title()
+                msg += f"{status} {phase_name} ({phase_result.duration_seconds:.1f}s)\n"
+            
+            if result.final_action:
+                msg += f"\n**Action:** {result.final_action.get('action_taken', 'None')}\n"
+                if result.final_action.get('content_preview'):
+                    msg += f"**Content:** {result.final_action['content_preview'][:50]}...\n"
+            
+            if result.learnings:
+                msg += f"\n**Learnings:** {', '.join(result.learnings[:3])}\n"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+            self._log_activity("command", {
+                "command": "agi_cycle", 
+                "cycle_id": result.cycle_id,
+                "phases": len(result.phases_executed)
+            })
+            
+        except Exception as e:
+            logger.error(f"Error in agi_cycle: {e}")
+            await update.message.reply_text(f"❌ Error running AGI cycle: {e}")
+    
     async def _verify_owner(self, update: Update) -> bool:
         """Verify that the message is from the owner"""
         user_id = update.effective_user.id

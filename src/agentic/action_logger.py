@@ -331,3 +331,16 @@ class ActionLogger:
     def close(self) -> None:
         """Close database connection"""
         pass  # SQLite connections are context-managed
+
+
+# Singleton instance
+_action_logger_instance: Optional[ActionLogger] = None
+
+
+def get_action_logger(db_path: str = 'data/action_log.db') -> ActionLogger:
+    """Get or create ActionLogger singleton"""
+    global _action_logger_instance
+    if _action_logger_instance is None:
+        _action_logger_instance = ActionLogger(db_path)
+    return _action_logger_instance
+
