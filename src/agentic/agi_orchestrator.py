@@ -495,7 +495,7 @@ class AGIOrchestrator:
                 phase=Phase.SOCIAL_INTELLIGENCE,
                 success=True,
                 output=output,
-                confidence=0.75 if reaction.get('confidence', 0) > 0.6 else 0.5,
+                confidence=0.75 if reaction and reaction.get('confidence', 0) > 0.6 else 0.5,
                 duration_seconds=(datetime.now() - start).total_seconds(),
                 triggered_phases=[Phase.METACOGNITION]
             )
