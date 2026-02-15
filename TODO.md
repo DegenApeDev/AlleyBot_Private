@@ -219,6 +219,10 @@ These should be exhibited across all phases:
 
 ## 📝 Recent Completed Items
 - [x] **AGI Core Phases 1-14 COMPLETE** — Full AGI capability implementation
+- [x] **Multi-Platform Engine** (`src/agentic/multi_platform_engine.py`) — Unified 6-platform interface
+- [x] **Console Monitor & Auto-Skills** (`src/agentic/console_monitor.py`) — Detects messages + auto-acquires skills
+- [x] **API Response Skill Detection** — Parses `moltx_notice` for skill updates (https://moltx.io/skill.md)
+- [x] Telegram commands: `/agi_cycle`, `/multi_platform`, `/console_monitor`, `/console_stats`, `/pending_messages`
 - [x] Phase 7: World State Intelligence (`src/autonomy/inference_engine.py`) — trends, anomalies, predictions
 - [x] Phase 8: Self-Reflective Learning (`plugins/brain/self_reflection.py`) — action-outcome logging, strategy evolution
 - [x] Phase 9: Multi-Step Planning (`src/agentic/planning.py`) — goal decomposition, dependency tracking
@@ -227,7 +231,6 @@ These should be exhibited across all phases:
 - [x] Phase 12: Social Intelligence (`src/agentic/social_intelligence.py`) — agent modeling, deception detection
 - [x] Phase 13: Creative Generation (`src/agentic/creative_engine.py`) — novel content, A/B tests, story arcs
 - [x] Phase 14: Metacognition (`src/agentic/metacognition.py`) — self-assessment, confidence calibration
-- [x] Telegram commands for all new phases: `/trends`, `/causal`, `/whatif`, `/predict`, `/anomalies`, `/intel`
 - [x] **Hot-Loading Plugin Architecture** — Full implementation with SOP.md, WORLD_MODEL.md, AGENTIC_BEHAVIOR.md documentation
 - [x] BasePlugin interface at `plugins/base_plugin.py` — all plugins max 200 lines
 - [x] PluginManager at `src/agentic/plugin_manager.py` — hot-loading with dependencies
