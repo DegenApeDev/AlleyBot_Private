@@ -14,14 +14,36 @@ logger = logging.getLogger(__name__)
 
 
 class AGISocialMixin:
-    """Mixin providing AGI-level social intelligence for autonomous brain"""
+    """Mixin providing AGI-level social intelligence for autonomous brain
     
-    def __init__(self):
+    Follow Rate Limits (recommended for healthy account growth):
+    - Conservative: 3 follows/day per platform (90/month)
+    - Normal: 5 follows/day per platform (150/month)  
+    - Aggressive: 8 follows/day per platform (240/month)
+    
+    These limits maintain healthy follower:following ratios and avoid
+    appearing spammy to platform algorithms.
+    """
+    
+    # Daily follow limits per platform
+    FOLLOW_LIMITS = {
+        'conservative': 3,
+        'normal': 5,
+        'aggressive': 8
+    }
+    
+    def __init__(self, follow_mode: str = 'normal'):
         # Track who we've engaged with for follow decisions
         self._engagement_history: Dict[str, Dict[str, Any]] = {}
         self._followed_users: Set[str] = set()
         self._notification_replies_sent: Set[str] = set()  # Track replied notifications
         self._last_notification_check: Optional[datetime] = None
+        
+        # Follow rate limiting
+        self._follow_mode = follow_mode if follow_mode in self.FOLLOW_LIMITS else 'normal'
+        self._follows_today: Dict[str, int] = {}  # Platform -> count
+        self._last_follow_date: Optional[datetime] = None
+        self._total_follows_all_time: int = 0
     
     async def _process_platform_notifications(self, platform: str, plugin) -> Dict[str, Any]:
         """Process notifications for a platform and reply to comments/mentions"""
@@ -162,13 +184,18 @@ class AGISocialMixin:
         return None
     
     async def _follow_if_engaged(self, platform: str, plugin, username: str) -> bool:
-        """Follow a user if we've engaged with them and don't already follow"""
+        """Follow a user if we've engaged with them, respecting daily limits"""
         if not username or username == 'unknown':
             return False
         
         # Check if already following
         follow_key = f"{platform}:{username}"
         if follow_key in self._followed_users:
+            return False
+        
+        # Check daily follow limit
+        if not self._can_follow_today(platform):
+            logger.debug(f"⏸️ Daily follow limit reached for {platform}")
             return False
         
         # Record engagement
@@ -203,13 +230,37 @@ class AGISocialMixin:
                 
                 if result:
                     self._followed_users.add(follow_key)
-                    print(f"👥 Followed {username} on {platform} (engagement: {engagement_count}x)")
+                    self._record_follow(platform)
+                    print(f"👥 Followed {username} on {platform} (engagement: {engagement_count}x, daily: {self._follows_today.get(platform, 0)}/{self.FOLLOW_LIMITS[self._follow_mode]})")
                     return True
                     
             except Exception as e:
                 logger.error(f"❌ Failed to follow {username} on {platform}: {e}")
         
         return False
+    
+    def _can_follow_today(self, platform: str) -> bool:
+        """Check if we can still follow users today on this platform"""
+        # Reset counter if it's a new day
+        today = datetime.now().date()
+        if self._last_follow_date != today:
+            self._follows_today = {}
+            self._last_follow_date = today
+        
+        # Check limit
+        limit = self.FOLLOW_LIMITS.get(self._follow_mode, 5)
+        current = self._follows_today.get(platform, 0)
+        return current < limit
+    
+    def _record_follow(self, platform: str):
+        """Record a follow action for rate limiting"""
+        today = datetime.now().date()
+        if self._last_follow_date != today:
+            self._follows_today = {}
+            self._last_follow_date = today
+        
+        self._follows_today[platform] = self._follows_today.get(platform, 0) + 1
+        self._total_follows_all_time += 1
     
     async def _follow_after_debate(self, platform: str, plugin, opponent_name: str):
         """Follow opponent after engaging in a debate"""
@@ -238,9 +289,18 @@ class AGISocialMixin:
     
     def get_social_stats(self) -> Dict[str, Any]:
         """Get statistics on AGI social behaviors"""
+        today = datetime.now().date()
+        if self._last_follow_date != today:
+            follows_today_display = 0
+        else:
+            follows_today_display = sum(self._follows_today.values())
+        
         return {
             'users_engaged': len(self._engagement_history),
             'users_followed': len(self._followed_users),
+            'follows_today': follows_today_display,
+            'follow_limit_today': self.FOLLOW_LIMITS[self._follow_mode] * 5,  # All platforms
+            'follow_mode': self._follow_mode,
             'notification_replies': len(self._notification_replies_sent),
             'last_notification_check': self._last_notification_check.isoformat() if self._last_notification_check else None,
             'engagement_breakdown': {
@@ -248,3 +308,10 @@ class AGISocialMixin:
                 for platform in set(v['platform'] for v in self._engagement_history.values())
             }
         }
+    
+    def set_follow_mode(self, mode: str) -> str:
+        """Set follow rate limit mode: conservative, normal, or aggressive"""
+        if mode not in self.FOLLOW_LIMITS:
+            return f"❌ Invalid mode. Choose from: {', '.join(self.FOLLOW_LIMITS.keys())}"
+        self._follow_mode = mode
+        return f"✅ Follow mode set to {mode}: {self.FOLLOW_LIMITS[mode]} follows/day per platform"
