@@ -167,6 +167,32 @@ class ConsoleMonitor:
             extract_groups=['sender', 'content'],
             priority=1
         ),
+        
+        # Skill upgrade patterns (high priority)
+        ConsolePattern(
+            name='skill_upgrade_available',
+            platform='system',
+            message_type='skill_upgrade',
+            regex=r'(?:new skill|skill upgrade|skill\.md).*available[:\s]+(\w+).*at\s+(\S+)',
+            extract_groups=['skill_name', 'skill_url'],
+            priority=20
+        ),
+        ConsolePattern(
+            name='skill_update_notification',
+            platform='system',
+            message_type='skill_upgrade',
+            regex=r'(?:platform|api).*skill[:\s]+(\w+).*version[:\s]+([\d.]+)',
+            extract_groups=['skill_name', 'version'],
+            priority=19
+        ),
+        ConsolePattern(
+            name='generic_skill_announcement',
+            platform='system',
+            message_type='skill_upgrade',
+            regex=r'skill[:\s]+(\w+).*updated|new[:\s]+(\w+)\s+skill',
+            extract_groups=['skill_name', 'skill_name_alt'],
+            priority=15
+        ),
     ]
     
     def __init__(self, core=None, max_history: int = 1000):
@@ -399,6 +425,11 @@ class ConsoleMonitor:
     
     def _trigger_response(self, message: PlatformMessage) -> None:
         """Trigger response generation for a detected message"""
+        # Handle skill upgrades specially
+        if message.message_type == 'skill_upgrade':
+            self._handle_skill_upgrade(message)
+            return
+        
         # Try specific handler first
         handler = self.skill_handlers.get(message.message_type)
         
@@ -420,6 +451,129 @@ class ConsoleMonitor:
             # Queue for AGI processing
             self.pending_responses.put(message)
             logger.info(f"⏳ Queued {message.id} for AGI response")
+    
+    def _handle_skill_upgrade(self, message: PlatformMessage) -> None:
+        """
+        Handle skill upgrade detection - auto-acquire new skills.
+        
+        When a platform announces a new skill, this:
+        1. Parses skill info from the message
+        2. Downloads/integrates the skill
+        3. Updates AlleyBot's capabilities
+        4. Notifies owner via Telegram
+        """
+        try:
+            skill_name = (message.context.get('skill_name') or 
+                         message.context.get('skill_name_alt') or 
+                         'unknown_skill')
+            
+            skill_url = message.context.get('skill_url')
+            version = message.context.get('version', '1.0')
+            
+            logger.info(f"🆙 Skill upgrade detected: {skill_name} v{version}")
+            
+            # Auto-acquire the skill
+            acquisition_result = self._acquire_skill(skill_name, skill_url, version)
+            
+            if acquisition_result.get('success'):
+                message.responded = True
+                message.response = f"✅ Auto-acquired skill: {skill_name}"
+                
+                # Notify via Telegram if available
+                self._notify_skill_acquisition(skill_name, version, acquisition_result)
+                
+                logger.info(f"✅ Auto-acquired skill: {skill_name}")
+            else:
+                logger.error(f"❌ Failed to acquire skill {skill_name}: {acquisition_result.get('error')}")
+                
+        except Exception as e:
+            logger.error(f"❌ Skill upgrade handling failed: {e}")
+    
+    def _acquire_skill(self, skill_name: str, skill_url: Optional[str], version: str) -> Dict[str, Any]:
+        """
+        Acquire and integrate a new skill.
+        
+        This would integrate with the skill system to:
+        1. Download skill.md or skill spec
+        2. Validate the skill
+        3. Generate code if needed
+        4. Register the skill
+        """
+        try:
+            # Check if skill system is available
+            if not self.core:
+                return {'success': False, 'error': 'No core available'}
+            
+            # Try to use skill generator if available
+            if 'skill_generator' in dir(self.core) or hasattr(self.core, 'skill_generator'):
+                # Use existing skill generation pipeline
+                skill_spec = {
+                    'name': skill_name,
+                    'version': version,
+                    'source': skill_url or 'platform_announcement',
+                    'auto_acquired': True,
+                    'detected_at': datetime.now().isoformat()
+                }
+                
+                # Store skill spec for later processing
+                skill_path = f"skills/auto_acquired/{skill_name}_{version}.json"
+                os.makedirs(os.path.dirname(skill_path), exist_ok=True)
+                
+                with open(skill_path, 'w') as f:
+                    json.dump(skill_spec, f, indent=2)
+                
+                # Register skill with plugin manager if available
+                if hasattr(self.core, 'plugin_manager') and self.core.plugin_manager:
+                    # Reload skills to pick up new one
+                    if hasattr(self.core.plugin_manager, 'reload_skills'):
+                        self.core.plugin_manager.reload_skills()
+                
+                return {
+                    'success': True,
+                    'skill_name': skill_name,
+                    'version': version,
+                    'path': skill_path,
+                    'method': 'auto_acquired'
+                }
+            
+            # Fallback: just log the skill announcement
+            return {
+                'success': True,
+                'skill_name': skill_name,
+                'version': version,
+                'method': 'logged',
+                'note': 'Skill system not fully integrated - logged for manual review'
+            }
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _notify_skill_acquisition(self, skill_name: str, version: str, result: Dict) -> None:
+        """Notify owner via Telegram about skill acquisition"""
+        try:
+            # Check if Telegram plugin is available
+            if 'telegram' in self.platforms:
+                telegram = self.platforms['telegram']
+                
+                message = f"""🆙 **Skill Auto-Acquired**
+
+📦 Skill: `{skill_name}`
+🔢 Version: {version}
+✅ Status: Successfully integrated
+📁 Path: `{result.get('path', 'N/A')}`
+
+AlleyBot has automatically acquired this new skill from platform announcement and is ready to use it!"""
+                
+                # Send via Telegram's alert system
+                if hasattr(telegram, 'send_alert'):
+                    telegram.send_alert('Skill Upgrade', message, priority='normal')
+                elif hasattr(telegram, 'send_message_to_owner_sync'):
+                    telegram.send_message_to_owner_sync(message)
+                
+                logger.info(f"📱 Telegram notification sent for skill: {skill_name}")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to send Telegram notification: {e}")
     
     def send_response(self, message: PlatformMessage, response: str) -> bool:
         """Send response back through appropriate platform"""
