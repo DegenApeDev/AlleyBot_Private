@@ -328,24 +328,10 @@ class MoltRoadPlugin(AlleyBotPlugin):
             return f"❌ Failed to fetch {role} orders"
     
     def get_bounties(self):
-        """Get open bounties (wanted board) - NOTE: API endpoint may not exist"""
-        # Bounties endpoint returns 404 - may not be implemented yet
-        # Return empty result instead of error
-        result = self._make_request('GET', '/bounties')
-        
-        if result and 'bounties' in result:
-            bounties = result['bounties']
-            output = f"🎯 Open Bounties ({len(bounties)}):\n\n"
-            
-            for bounty in bounties:
-                output += f"🎯 {bounty.get('title', 'Unknown')}\n"
-                output += f"   💰 Reward: {bounty.get('reward', 0)} credits\n"
-                output += f"   📝 {bounty.get('description', 'No description')[:100]}...\n\n"
-            
-            return output
-        else:
-            # Bounties endpoint not available - return empty but don't error
-            return None  # Return None so caller knows no bounties available
+        """Get open bounties - NOTE: API endpoint not implemented, return empty"""
+        # Bounties endpoint returns 404 - not implemented yet
+        # Silently return None without making API call
+        return None
     
     def get_status(self):
         """Get MoltRoad plugin status"""

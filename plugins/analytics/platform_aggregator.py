@@ -305,7 +305,7 @@ class PlatformStatsAggregator:
                 fetched = datetime.fromisoformat(self._follower_cache['fetched_at'])
                 age = (now - fetched).total_seconds()
                 if age < cache_ttl:
-                    print(f"[DASHBOARD-DEBUG] Using cached follower data ({age/60:.0f}m old)")
+                    # print(f"[DASHBOARD-DEBUG] Using cached follower data ({age/60:.0f}m old)")
                     return self._follower_cache
             except (ValueError, TypeError, KeyError):
                 pass
@@ -317,11 +317,12 @@ class PlatformStatsAggregator:
                 fetched = datetime.fromisoformat(cached.get('fetched_at', ''))
                 age = (now - fetched).total_seconds()
                 if age < cache_ttl:
-                    print(f"[DASHBOARD-DEBUG] Using persistent follower cache ({age/60:.0f}m old)")
+                    # print(f"[DASHBOARD-DEBUG] Using persistent follower cache ({age/60:.0f}m old)")
                     self._follower_cache = cached
                     return cached
         except Exception as e:
-            print(f"[DASHBOARD-DEBUG] Error reading follower cache: {e}")
+            # print(f"[DASHBOARD-DEBUG] Error reading follower cache: {e}")
+            pass
 
         # Fetch fresh data from public APIs
         moltbook_followers = 0
@@ -333,17 +334,18 @@ class PlatformStatsAggregator:
                 'https://www.moltbook.com/api/v1/agents/profile?name=AlleyBot',
                 timeout=10
             )
-            print(f"[DASHBOARD-DEBUG] MoltBook profile response: {resp.status_code}")
+            # print(f"[DASHBOARD-DEBUG] MoltBook profile response: {resp.status_code}")
             if resp.status_code == 200:
                 data = resp.json()
-                print(f"[DASHBOARD-DEBUG] MoltBook data keys: {list(data.keys()) if isinstance(data, dict) else 'not dict'}")
+                # print(f"[DASHBOARD-DEBUG] MoltBook data keys: {list(data.keys()) if isinstance(data, dict) else 'not dict'}")
                 if isinstance(data, dict):
                     agent = data.get('agent', data.get('data', data))
                     if isinstance(agent, dict):
                         moltbook_followers = agent.get('follower_count', agent.get('followers', 0))
-                        print(f"[DASHBOARD-DEBUG] MoltBook followers found: {moltbook_followers}")
+                        # print(f"[DASHBOARD-DEBUG] MoltBook followers found: {moltbook_followers}")
         except Exception as e:
-            print(f"[DASHBOARD-DEBUG] MoltBook follower fetch error: {e}")
+            # print(f"[DASHBOARD-DEBUG] MoltBook follower fetch error: {e}")
+            pass
 
         # MoltX: Try multiple endpoints for followers
         # Try stats endpoint first
@@ -352,16 +354,17 @@ class PlatformStatsAggregator:
                 'https://moltx.io/v1/agent/AlleyBot/stats',
                 timeout=10
             )
-            print(f"[DASHBOARD-DEBUG] Moltx stats response: {resp.status_code}")
+            # print(f"[DASHBOARD-DEBUG] Moltx stats response: {resp.status_code}")
             if resp.status_code == 200:
                 data = resp.json()
-                print(f"[DASHBOARD-DEBUG] Moltx stats data: {data}")
+                # print(f"[DASHBOARD-DEBUG] Moltx stats data: {data}")
                 if isinstance(data, dict):
                     stats_data = data.get('data', data.get('stats', data))
                     if isinstance(stats_data, dict):
                         moltx_followers = stats_data.get('followers', stats_data.get('follower_count', 0))
         except Exception as e:
-            print(f"[DASHBOARD-DEBUG] Moltx stats endpoint error: {e}")
+            # print(f"[DASHBOARD-DEBUG] Moltx stats endpoint error: {e}")
+            pass
         
         # Fallback to profile endpoint if stats didn't work
         if moltx_followers == 0:
@@ -370,17 +373,18 @@ class PlatformStatsAggregator:
                     'https://moltx.io/v1/agents/profile?name=AlleyBot',
                     timeout=10
                 )
-                print(f"[DASHBOARD-DEBUG] Moltx profile response: {resp.status_code}")
+                # print(f"[DASHBOARD-DEBUG] Moltx profile response: {resp.status_code}")
                 if resp.status_code == 200:
                     data = resp.json()
-                    print(f"[DASHBOARD-DEBUG] Moltx profile data keys: {list(data.keys()) if isinstance(data, dict) else 'not dict'}")
+                    # print(f"[DASHBOARD-DEBUG] Moltx profile data keys: {list(data.keys()) if isinstance(data, dict) else 'not dict'}")
                     if isinstance(data, dict):
                         agent = data.get('agent', data.get('data', data))
                         if isinstance(agent, dict):
                             moltx_followers = agent.get('follower_count', agent.get('followers', 0))
-                            print(f"[DASHBOARD-DEBUG] Moltx followers from profile: {moltx_followers}")
+                            # print(f"[DASHBOARD-DEBUG] Moltx followers from profile: {moltx_followers}")
             except Exception as e:
-                print(f"[DASHBOARD-DEBUG] Moltx profile endpoint error: {e}")
+                # print(f"[DASHBOARD-DEBUG] Moltx profile endpoint error: {e}")
+                pass
 
         result = {
             'moltbook': moltbook_followers,
@@ -389,7 +393,7 @@ class PlatformStatsAggregator:
             'fetched_at': now.isoformat(),
         }
 
-        print(f"[DASHBOARD-DEBUG] Total followers: {result['total']} (MoltBook: {moltbook_followers}, Moltx: {moltx_followers})")
+        # print(f"[DASHBOARD-DEBUG] Total followers: {result['total']} (MoltBook: {moltbook_followers}, Moltx: {moltx_followers})")
 
         # Save to both in-memory and persistent cache
         self._follower_cache = result
@@ -397,7 +401,8 @@ class PlatformStatsAggregator:
             if self.core:
                 self.core.save_memory('follower_cache', result)
         except Exception as e:
-            print(f"[DASHBOARD-DEBUG] Error saving follower cache: {e}")
+            # print(f"[DASHBOARD-DEBUG] Error saving follower cache: {e}")
+            pass
 
         return result
 

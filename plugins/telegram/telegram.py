@@ -113,6 +113,10 @@ class Telegram(AlleyBotPlugin):
         from plugins.telegram.causal_commands import CausalCommands
         self.causal_commands = CausalCommands(self)
         
+        # Import Tier 2: Synergy Gate commands
+        from plugins.telegram.synergy_commands import SynergyCommands
+        self.synergy_commands = SynergyCommands(self)
+        
         # Basic commands
         self.application.add_handler(CommandHandler("start", self._handle_start))
         self.application.add_handler(CommandHandler("help", self.intelligent_commands.help_command))
@@ -140,6 +144,7 @@ class Telegram(AlleyBotPlugin):
         
         # MoltBook commands
         self.application.add_handler(CommandHandler("moltbook_post", self.intelligent_commands.moltbook_post))
+        self.application.add_handler(CommandHandler("moltchan_post", self.intelligent_commands.moltchan_post))
         
         # System commands
         self.application.add_handler(CommandHandler("status", self.conversational_ai.status_command))
@@ -258,6 +263,12 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("whatif", self.causal_commands.whatif))
         self.application.add_handler(CommandHandler("root_cause", self.causal_commands.root_cause))
         self.application.add_handler(CommandHandler("attribution", self.causal_commands.attribution))
+        
+        # Tier 2: Synergy Gate commands
+        self.application.add_handler(CommandHandler("validate", self.synergy_commands.validate))
+        self.application.add_handler(CommandHandler("integrity", self.synergy_commands.integrity))
+        self.application.add_handler(CommandHandler("attest", self.synergy_commands.attest))
+        self.application.add_handler(CommandHandler("synergy", self.synergy_commands.synergy_status))
         
         # AGI Meta-Brain command
         self.application.add_handler(CommandHandler("agi_cycle", self._handle_agi_cycle))

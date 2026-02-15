@@ -31,12 +31,13 @@ from plugins.brain.reputation import ReputationSystemMixin
 from plugins.brain.self_reflection import SelfReflectionMixin
 from plugins.brain.goal_stack_mixin import GoalStackMixin
 from plugins.brain.world_state_mixin import WorldStateMixin
+from plugins.brain.cross_platform_engagement import CrossPlatformEngagementMixin
 
 
 class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, FeedbackLoopMixin, 
                   ContentStrategyMixin, DynamicSkillsMixin, OperationalResilienceMixin,
                   MultiAgentCollaborationMixin, ReputationSystemMixin, SelfReflectionMixin,
-                  GoalStackMixin, WorldStateMixin, AlleyBotPlugin):
+                  GoalStackMixin, WorldStateMixin, CrossPlatformEngagementMixin, AlleyBotPlugin):
     """AlleyBot's autonomous brain - decides what to do, when, and how"""
 
     def __init__(self, config):
@@ -62,6 +63,7 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         self._init_self_reflection()
         self._init_goal_stack()
         self._init_world_state()
+        self._init_cross_platform_engagement()
 
         # Auto-start if configured
         if self.config.get('auto_start', False):

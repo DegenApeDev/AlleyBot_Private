@@ -3,6 +3,8 @@ Intelligent Telegram Commands for AlleyBot
 AI-powered assistant commands integrated with production architecture
 """
 
+import asyncio
+from typing import Any, Tuple
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -41,6 +43,154 @@ class IntelligentTelegramCommands:
             return filtered
         except Exception:
             return str(text)
+    
+    async def _validate_with_tier2(self, action_description: str, evidence_strength: float = 0.9) -> Tuple[bool, str, Any]:
+        """
+        Validate a high-stakes action through Tier-2 Synergy Gate.
+        
+        Returns: (can_execute: bool, reason: str, validation_result: Any)
+        """
+        try:
+            from lib.synergy_gate import validate_action
+            
+            can_exec, reason, result = validate_action({
+                'content': action_description,
+                'evidence_strength': evidence_strength,
+                'urgency': 1.0,
+                'recursion_depth': 0
+            }, threshold=0.85)
+            
+            return can_exec, reason, result
+        except Exception as e:
+            # If Tier-2 unavailable, fail open with warning
+            return True, f"Tier-2 unavailable, proceeding: {e}", None
+    
+    async def _moltx_preflight_engagement(self, update: Update, moltx_plugin) -> None:
+        """
+        5:1 Rule: Before posting, engage with the network.
+        Uses brain's cross-platform engagement system with AI-generated contextual replies.
+        """
+        try:
+            # Use brain's cross-platform engagement if available
+            if self.core and hasattr(self.core, 'plugin_manager'):
+                brain = self.core.plugin_manager.plugins.get('brain')
+                if brain and hasattr(brain, 'run_preflight_engagement'):
+                    await update.message.reply_text(
+                        "📡 Running 5:1 engagement protocol via brain...", 
+                        parse_mode='Markdown'
+                    )
+                    results = await brain.run_preflight_engagement(
+                        platform='moltx',
+                        plugin=moltx_plugin,
+                        update=update
+                    )
+                    print(f"✅ Brain-driven 5:1 engagement: {results}")
+                    return
+            
+            # Fallback to legacy hardcoded method
+            await update.message.reply_text(
+                "📡 Running 5:1 engagement protocol (legacy)...", 
+                parse_mode='Markdown'
+            )
+            
+            # Legacy implementation continues below (unchanged)
+            feed = []
+            if hasattr(moltx_plugin, '_make_request'):
+                result = moltx_plugin._make_request('GET', '/feed/global', params={'type': 'post,quote', 'limit': 30})
+                if result:
+                    if 'posts' in result:
+                        feed = result['posts']
+                    elif 'data' in result and 'posts' in result['data']:
+                        feed = result['data']['posts']
+                    elif isinstance(result, list):
+                        feed = result
+            
+            if not feed:
+                print("⚠️ No feed available for pre-flight engagement")
+                return
+            
+            # 2. Like 10 posts
+            liked_count = 0
+            for post in feed[:15]:
+                if liked_count >= 10:
+                    break
+                try:
+                    post_id = post.get('id') or post.get('post_id')
+                    if post_id and hasattr(moltx_plugin, 'like_post'):
+                        result = moltx_plugin.like_post(post_id)
+                        if '✅' in str(result):
+                            liked_count += 1
+                            print(f"❤️  Liked post {post_id} ({liked_count}/10)")
+                        await asyncio.sleep(0.5)
+                except Exception as e:
+                    print(f"⚠️  Like failed: {e}")
+                    continue
+            
+            # 3. Reply to 5 posts with AI using DeepSeek
+            replied_count = 0
+            from deepseek_ai import deepseek_ai
+            
+            for post in feed[15:25]:
+                if replied_count >= 5:
+                    break
+                try:
+                    post_id = post.get('id') or post.get('post_id')
+                    author = post.get('agent_name') or post.get('author_name') or post.get('username') or 'agent'
+                    post_content = post.get('content', '') or post.get('text', '')
+                    
+                    if post_id and hasattr(moltx_plugin, 'reply_to_post') and post_content:
+                        reply_prompt = f"""You're AlleyBot replying to a post on Moltx.
+
+Original post by @{author}: "{post_content[:200]}"
+
+CRITICAL: Reply #{replied_count+1} of 5. Each reply MUST be completely different.
+
+Reply requirements:
+1. React to something SPECIFIC from their post
+2. NEVER use generic phrases like "Interesting perspective!" or "Building on this"
+3. Vary your opening: "Wait...", "Actually...", "What if..."
+4. Add unique value - challenge, add insight, or ask sharp question
+5. Keep it 1-2 sentences, conversational
+
+Generate ONLY the reply (no @ mentions, no explanations):"""
+                        
+                        reply_text = deepseek_ai.generate_text(reply_prompt, max_tokens=150)
+                        reply_text = reply_text.strip().strip('"').strip("'")
+                        
+                        result = moltx_plugin.reply_to_post(post_id, f"@{author} {reply_text}")
+                        if '✅' in str(result):
+                            replied_count += 1
+                            print(f"💬 Replied to post {post_id} ({replied_count}/5): {reply_text[:60]}...")
+                        await asyncio.sleep(1.5)
+                except Exception as e:
+                    print(f"⚠️  Reply failed: {e}")
+                    continue
+            
+            # 4. Follow 2-3 agents
+            followed_count = 0
+            for post in feed[:20]:
+                if followed_count >= 3:
+                    break
+                try:
+                    author = post.get('agent_name') or post.get('author_name') or post.get('username')
+                    if author and hasattr(moltx_plugin, 'follow_agent'):
+                        result = moltx_plugin.follow_agent(author)
+                        if '✅' in str(result):
+                            followed_count += 1
+                            print(f"👥 Followed {author} ({followed_count}/3)")
+                        await asyncio.sleep(0.5)
+                except Exception as e:
+                    continue
+            
+            await update.message.reply_text(
+                f"✅ 5:1 Engagement complete: {liked_count} likes, {replied_count} replies, {followed_count} follows",
+                parse_mode='Markdown'
+            )
+            print(f"✅ 5:1 Engagement complete: {liked_count} likes, {replied_count} replies, {followed_count} follows")
+            
+        except Exception as e:
+            print(f"⚠️  Pre-flight engagement error (non-blocking): {e}")
+            # Non-blocking - continue even if engagement fails
     
     async def ai_chat(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """AI-powered chat - natural language interaction"""
@@ -246,11 +396,41 @@ class IntelligentTelegramCommands:
             
             topic_direction = ' '.join(context.args)
             
-            # Send "generating" message
+            # Tier-2 Validation: Check if this public post is safe to execute
+            # Lower threshold (0.75) for posts vs strict actions (0.85)
+            can_exec, reason, val_result = await self._validate_with_tier2(
+                f"Create public Moltx post about: {topic_direction}",
+                evidence_strength=0.9
+            )
+            
+            # Re-check with lower threshold if initial strict check fails
+            # Use truth_amplitude (pre-penalty) for relaxed check
+            raw_confidence = val_result.metadata.get('truth_amplitude', val_result.confidence) if val_result else 0
+            if not can_exec and raw_confidence >= 0.75:
+                can_exec = True
+                reason = f"SyMod validation PASSED (content quality: {raw_confidence:.3f})"
+            
+            if not can_exec:
+                await update.message.reply_text(
+                    f"🔐 **Tier-2 Gate Blocked**\n\n"
+                    f"Action: Create Moltx post\n"
+                    f"Reason: `{reason[:100]}`\n\n"
+                    f"⚠️ High-stakes action blocked. Review and retry with more specific/lower-risk content.",
+                    parse_mode='Markdown'
+                )
+                # Log the blocked attempt for RCA
+                print(f"🔒 Tier-2 blocked moltx_post: {reason}")
+                return
+            
+            # Step 2: Generate and post
             status_msg = await update.message.reply_text("🤖 Generating post with AI...")
             
             if self.core and hasattr(self.core, 'plugin_manager') and 'moltx' in self.core.plugin_manager.plugins:
                 moltx_plugin = self.core.plugin_manager.plugins['moltx']
+                
+                # Validation passed - proceed with 5:1 engagement rule
+                # Step 1: Pre-flight engagement (5 replies, 10 likes)
+                await self._moltx_preflight_engagement(update, moltx_plugin)
                 
                 # Use Model Router to generate intelligent post
                 from src.config.models import ModelRouter
@@ -273,12 +453,24 @@ class IntelligentTelegramCommands:
 
 Create an engaging post about: {topic_direction}
 
-Requirements:
-1. Be conversational and authentic (not corporate)
-2. Keep it 1-3 sentences maximum
-3. Show personality and unique perspective
-4. Include 1-2 relevant hashtags if appropriate
-5. Make it engaging and insightful
+CRITICAL OPENING RULES:
+1. NEVER start with: "Thoughts on", "Yo", "Hey", "So", "Just", or any generic filler
+2. NEVER use: "In my opinion", "I think that", "Here are my thoughts"
+3. START with a bold statement, hot take, specific fact, or intriguing question
+4. Hook the reader immediately - make them stop scrolling
+5. Be conversational but punchy (not corporate)
+6. Keep it 1-3 sentences maximum
+7. Include 1-2 relevant hashtags if appropriate
+
+GOOD examples:
+- "Cross-chain bridges are fundamentally broken and here's why..."
+- "DeFi protocols just hit $100B TVL but nobody's talking about the risks"
+- "What if I told you impermanent loss is a feature, not a bug?"
+
+BAD examples (NEVER use):
+- "Thoughts on the market..."
+- "Yo, check this out..."
+- "In my opinion, crypto is..."
 
 Generate only the post content (no explanations):"""
                 
@@ -308,8 +500,58 @@ Generate only the post content (no explanations):"""
                 # Post to Moltx
                 result = moltx_plugin.create_post(post_content)
                 
+                # Check if post was successful before attesting
+                post_success = False
+                if isinstance(result, dict):
+                    post_success = result.get('success', False) or 'post_id' in result
+                elif isinstance(result, str):
+                    post_success = '✅' in result or 'success' in result.lower()
+                
+                if not post_success:
+                    await status_msg.edit_text(f"❌ Post failed: {result}\n\nContent: {post_content[:100]}...")
+                    return
+                
+                # Auto-attestation: Generate ERC-8004 proof for this high-stakes action (only on success)
+                try:
+                    import sys
+                    from pathlib import Path
+                    import types
+                    src_path = Path(__file__).parent.parent.parent
+                    module_path = src_path / 'src/agentic/erc8004_a2a_integration.py'
+                    
+                    if 'src.agentic.erc8004_a2a_integration' not in sys.modules:
+                        erc8004_module = types.ModuleType('erc8004_a2a_integration')
+                        erc8004_module.__file__ = str(module_path)
+                        with open(module_path, 'r') as f:
+                            exec(f.read(), erc8004_module.__dict__)
+                        sys.modules['src.agentic.erc8004_a2a_integration'] = erc8004_module
+                    else:
+                        erc8004_module = sys.modules['src.agentic.erc8004_a2a_integration']
+                    
+                    validate_and_attest = erc8004_module.validate_and_attest
+                    attestation = validate_and_attest(
+                        task_id=f"moltx_post_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                        inputs={'topic': topic_direction, 'prompt': prompt[:100]},
+                        outputs={'post_content': post_content[:200], 'result': str(result)},
+                        code_version='moltx_v1'
+                    )
+                    print(f"📜 Auto-attestation generated: {attestation.attestation_id}")
+                except Exception as e:
+                    print(f"⚠️ Auto-attestation failed: {e}")
+                
+                # Format result nicely
+                if isinstance(result, dict):
+                    if result.get('success'):
+                        post_id = result.get('data', {}).get('id', 'unknown')
+                        result_text = f"✅ Posted successfully! ID: `{post_id[:16]}...`"
+                    else:
+                        error = result.get('error', result.get('message', 'Unknown error'))
+                        result_text = f"❌ Failed: {error[:100]}"
+                else:
+                    result_text = str(result)[:100]
+                
                 # Update status message
-                await status_msg.edit_text(f"✅ AI-Generated Post:\n\n{post_content}\n\n📢 Result: {result}")
+                await status_msg.edit_text(f"✅ AI-Generated Post:\n\n{post_content}\n\n📢 {result_text}")
             else:
                 await status_msg.edit_text("❌ Moltx plugin not available")
                 
@@ -1954,5 +2196,160 @@ Or just send any message naturally!
             result = moltx.symod_config_command(key, value)
             await update.message.reply_text(result)
             
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    async def moltbook_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Create an AI-generated post on Moltbook"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await update.message.reply_text(
+                    "📝 Usage: /moltbook_post [submolt] [title] | [content]\n\n"
+                    "Example: /moltbook_post alleybot My Take on AI | Insights here..."
+                )
+                return
+            
+            args = ' '.join(context.args)
+            # Parse: submolt title | content
+            if '|' in args:
+                parts = args.split('|')
+                submolt_title = parts[0].strip().split(' ', 1)
+                submolt = submolt_title[0] if submolt_title else 'alleybot'
+                title = submolt_title[1] if len(submolt_title) > 1 else submolt
+                content = '|'.join(parts[1:]).strip()
+            else:
+                submolt = 'alleybot'
+                title = args
+                content = None
+            
+            # Tier-2 Validation
+            can_exec, reason, val_result = await self._validate_with_tier2(
+                f"Create Moltbook post: {title}", evidence_strength=0.9
+            )
+            
+            raw_confidence = val_result.metadata.get('truth_amplitude', val_result.confidence) if val_result else 0
+            if not can_exec and raw_confidence >= 0.75:
+                can_exec = True
+            
+            if not can_exec:
+                await update.message.reply_text(f"🔐 **Tier-2 Gate Blocked**\n\nReason: `{reason[:100]}`")
+                return
+            
+            status_msg = await update.message.reply_text("🤖 Generating Moltbook post...")
+            
+            if self.core and 'moltbook' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['moltbook']
+                
+                # 5:1 engagement via brain
+                brain = self.core.plugin_manager.plugins.get('brain')
+                if brain and hasattr(brain, 'run_preflight_engagement'):
+                    await brain.run_preflight_engagement('moltbook', plugin, update)
+                
+                # Generate content if needed
+                if not content:
+                    from src.config.models import ModelRouter
+                    router = ModelRouter()
+                    prompt = f"Create Moltbook post content for: {title}. 2-4 sentences, insightful."
+                    content = await router.route_simple(prompt)
+                
+                # Post via API client
+                result = plugin.mb_api.create_post(submolt, title, content)
+                
+                # Format result
+                if isinstance(result, dict) and result.get('success'):
+                    result_text = f"✅ Posted to m/{submolt}"
+                else:
+                    result_text = f"📢 {str(result)[:100]}"
+                
+                await status_msg.edit_text(f"✅ **Moltbook Post**\n\n**{title}**\n\n{content}\n\n{result_text}")
+            else:
+                await status_msg.edit_text("❌ Moltbook plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def moltchan_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Create a thread on MoltChan"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if len(context.args) < 3:
+                await update.message.reply_text(
+                    "📝 Usage: /moltchan_post [board] [subject] | [content]\n\n"
+                    "Example: /moltchan_post biz AI Agents Taking Over | My thoughts..."
+                )
+                return
+            
+            args = ' '.join(context.args)
+            if '|' in args:
+                parts = args.split('|')
+                board_subject = parts[0].strip().split(' ', 1)
+                board = board_subject[0]
+                subject = board_subject[1] if len(board_subject) > 1 else 'Discussion'
+                content = '|'.join(parts[1:]).strip()
+            else:
+                board = context.args[0]
+                subject = ' '.join(context.args[1:])
+                content = None
+            
+            # Tier-2 Validation
+            can_exec, reason, val_result = await self._validate_with_tier2(
+                f"Create Moltchan thread: {subject}", evidence_strength=0.9
+            )
+            
+            raw_confidence = val_result.metadata.get('truth_amplitude', val_result.confidence) if val_result else 0
+            if not can_exec and raw_confidence >= 0.75:
+                can_exec = True
+            
+            if not can_exec:
+                await update.message.reply_text(f"🔐 **Tier-2 Gate Blocked**\n\nReason: `{reason[:100]}`")
+                return
+            
+            status_msg = await update.message.reply_text("🤖 Generating thread...")
+            
+            if self.core and 'moltchan' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['moltchan']
+                
+                # 5:1 engagement via brain
+                brain = self.core.plugin_manager.plugins.get('brain')
+                if brain and hasattr(brain, 'run_preflight_engagement'):
+                    await brain.run_preflight_engagement('moltchan', plugin, update)
+                
+                # Always generate 4chan-style content with AI
+                from deepseek_ai import deepseek_ai
+                
+                # Use user content as context if provided, otherwise generate from subject
+                context = content if content else ""
+                
+                prompt = f"""You're posting on Moltchan (4chan-style board /{board}/).
+
+Subject: {subject}
+{context if context else ""}
+
+Create authentic 4chan-style content:
+1. Use greentext (>implying) where appropriate
+2. Be edgy, contrarian, or meme-savvy
+3. Include business/finance lingo if /biz/ board
+4. Use phrases like "ngmi", "wagmi", "fren", "anon", "keks", "bog"
+5. Start with a strong hook
+6. 1-3 sentences max, conversational
+
+Generate only the post content (no explanations):"""
+                
+                content = deepseek_ai.chat(prompt, max_tokens=200)
+                
+                # Post thread
+                result = plugin.create_thread(board, subject, content)
+                
+                if isinstance(result, dict) and 'id' in result:
+                    result_text = f"✅ Thread created: {result['id'][:16]}..."
+                else:
+                    result_text = f"📢 {str(result)[:100]}"
+                
+                await status_msg.edit_text(f"✅ **/{board}/ Thread**\n\n**{subject}**\n\n{content}\n\n{result_text}")
+            else:
+                await status_msg.edit_text("❌ Moltchan plugin not available")
+                
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")

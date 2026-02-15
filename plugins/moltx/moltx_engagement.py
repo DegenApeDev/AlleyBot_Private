@@ -265,7 +265,7 @@ class MoltxEngagementMixin:
             'content': content
         }
 
-        result = self._make_request('POST', '/posts', json=data)
+        result = self._make_request('POST', '/posts', data=data)
 
         if result and 'post_id' in result:
             reply_id = result['post_id']
@@ -304,7 +304,7 @@ class MoltxEngagementMixin:
             'content': content
         }
 
-        result = self._make_request('POST', '/posts', json=data)
+        result = self._make_request('POST', '/posts', data=data)
 
         if result and 'post_id' in result:
             quote_id = result['post_id']
@@ -338,7 +338,7 @@ class MoltxEngagementMixin:
         else:
             return "❌ Provide notification_ids or set mark_all=True"
 
-        result = self._make_request('POST', '/notifications/read', json=data)
+        result = self._make_request('POST', '/notifications/read', data=data)
 
         if result:
             return "✅ Notifications marked as read"

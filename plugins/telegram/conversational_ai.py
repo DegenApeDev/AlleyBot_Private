@@ -9,6 +9,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from typing import Optional
 
+from plugins.telegram.intent_classifier import get_intent_classifier, SemanticIntentClassifier
+
 
 class ConversationalAI:
     """
@@ -21,12 +23,29 @@ class ConversationalAI:
         self.agentic_system = agentic_system
         self.admin_chat_id = os.getenv('TELEGRAM_ADMIN_CHAT_ID')
         self.conversation_history = {}
+        self.intent_classifier: Optional[SemanticIntentClassifier] = None
         self._load_conversation_memory()
         
     def set_agentic_system(self, agentic_system):
         """Set the agentic system after initialization"""
         self.agentic_system = agentic_system
         print("✅ Conversational AI linked to agentic system")
+    
+    def _init_intent_classifier(self):
+        """Initialize semantic intent classifier with available commands"""
+        if self.intent_classifier is not None:
+            return
+        
+        try:
+            self.intent_classifier = get_intent_classifier()
+            
+            # Register commands from plugin manager
+            if self.core and hasattr(self.core, 'plugin_manager'):
+                self.intent_classifier.register_commands_from_plugin_manager(self.core.plugin_manager)
+                print(f"✅ Intent classifier loaded with {len(self.intent_classifier.command_embeddings)} commands")
+        except Exception as e:
+            print(f"⚠️  Failed to initialize intent classifier: {e}")
+            self.intent_classifier = None
     
     @property
     def core(self):
@@ -61,52 +80,68 @@ class ConversationalAI:
             if user_message.startswith('/'):
                 return
             
-            # Check for engagement requests FIRST - hardcoded patterns that bypass AI
-            engagement_patterns = [
-                r'engage\s+(?:on\s+)?socials',
-                r'engage\s+(?:on\s+)?moltx',
-                r'engage\s+(?:with\s+)?feed',
-                r'run\s+engagement',
-                r'like\s+and\s+comment',
-            ]
-            for pattern in engagement_patterns:
-                if re.search(pattern, user_message, re.IGNORECASE):
-                    await update.message.chat.send_action(action="typing")
-                    # Extract count if provided (e.g., "engage on socials 5")
-                    count_match = re.search(r'\b(\d+)\b', user_message)
-                    count = count_match.group(1) if count_match else '5'
+            # Initialize intent classifier if not already done
+            self._init_intent_classifier()
+            
+            # Use semantic intent classification first (fast, no AI latency)
+            if self.intent_classifier and self.intent_classifier.command_embeddings:
+                await update.message.chat.send_action(action="typing")
+                
+                # Classify intent
+                match_result = self.intent_classifier.classify_intent(user_message)
+                
+                if match_result:
+                    command_name, confidence = match_result
+                    print(f"🎯 Semantic intent match: {command_name} (confidence: {confidence:.2f})")
                     
-                    response = f"Yo boss, levelin' up—full engagement sweep across all socials! [EXECUTE:moltx_engage {count}]"
+                    # Extract arguments
+                    args = self.intent_classifier.extract_arguments(user_message, command_name)
+                    
+                    # Build and execute command
+                    if args:
+                        # Format arguments for command
+                        if 'board' in args and 'subject' in args:  # moltchan
+                            cmd_line = f"{command_name} {args.get('board')} {args.get('subject')}"
+                            if args.get('content'):
+                                cmd_line += f" | {args.get('content')}"
+                        elif 'submolt' in args and 'title' in args:  # moltbook
+                            cmd_line = f"{command_name} {args.get('submolt')} {args.get('title')}"
+                            if args.get('content'):
+                                cmd_line += f" | {args.get('content')}"
+                        elif 'content' in args and command_name == 'moltx_post':
+                            cmd_line = f"{command_name} {args.get('content')}"
+                        elif 'prompt' in args:  # image generation
+                            cmd_line = f"{command_name} {args.get('prompt')}"
+                        elif 'symbol' in args:  # crypto price
+                            cmd_line = f"{command_name} {args.get('symbol')}"
+                        elif 'count' in args:  # engagement
+                            cmd_line = f"{command_name} {args.get('count')}"
+                        else:
+                            cmd_line = command_name
+                    else:
+                        cmd_line = command_name
+                    
+                    # Execute with confirmation message
+                    response_map = {
+                        'moltchan_post': f"🚀 Creating thread... [EXECUTE:{cmd_line}]",
+                        'moltbook_post': f"📚 Creating post... [EXECUTE:{cmd_line}]",
+                        'moltx_post': f"📢 Posting to Moltx... [EXECUTE:{cmd_line}]",
+                        'moltx_engage': f"💬 Running engagement... [EXECUTE:{cmd_line}]",
+                        'generate_image': f"🎨 Generating image... [EXECUTE:{cmd_line}]",
+                        'brain_start': f"🧠 Starting brain... [EXECUTE:{cmd_line}]",
+                        'brain_stop': f"🛑 Stopping brain... [EXECUTE:{cmd_line}]",
+                        'onchain_wallet': f"💰 Checking wallet... [EXECUTE:{cmd_line}]",
+                        'crypto_price': f"📊 Getting price... [EXECUTE:{cmd_line}]",
+                    }
+                    
+                    response = response_map.get(command_name, f"🤖 Executing... [EXECUTE:{cmd_line}]")
                     executed = self._try_execute_command(response)
-                    final_response = executed if executed else f"Yo boss, levelin' up—full engagement sweep! (Command execution failed)"
+                    final_response = executed if executed else f"Command matched but execution pending"
                     await update.message.reply_text(final_response)
                     return
             
-            # Check for Moltx image POST request first (more specific than just generation)
-            moltx_post_topic = self._extract_moltx_image_post_request(user_message)
-            if moltx_post_topic:
-                await update.message.chat.send_action(action="typing")
-                
-                # If agentic system available, route through it; otherwise execute directly
-                if self.agentic_system:
-                    response = await self._agentic_response(
-                        user_id, 
-                        f"Create and post an image to Moltx about: {moltx_post_topic}"
-                    )
-                else:
-                    # Direct execution fallback
-                    response = await self._execute_moltx_image_post_direct(moltx_post_topic)
-                
-                await update.message.reply_text(response)
-                return
-            
-            # Check for general image generation request (NOT posting)
-            image_prompt = self._extract_image_prompt(user_message)
-            if image_prompt:
-                await self._handle_image_generation(update, image_prompt)
-                return
-            
-            # Show typing indicator
+            # Fallback: Show typing indicator and use AI for complex understanding
+            await update.message.chat.send_action(action="typing")
             await update.message.chat.send_action(action="typing")
             
             # If agentic system is available, use it for intelligent responses
@@ -401,8 +436,27 @@ IMPORTANT RULES:
 EXAMPLES OF COMMAND EXECUTION:
 - When user says "engage on socials" or "engage on moltx": respond with personality AND include [EXECUTE:moltx_engage 5]
 - When user says "post about AI on moltx": respond AND include [EXECUTE:brain_moltx_post AI agents are changing everything]
+- When user says "post on moltchan biz about crypto being bearish": respond AND include [EXECUTE:moltchan_post biz Crypto Analysis | bearish on alts]
+- When user says "post on moltbook alleybot about AI insights": respond AND include [EXECUTE:moltbook_post alleybot AI Insights | latest thoughts on agents]
 - When user says "what's my wallet balance": respond AND include [EXECUTE:onchain_wallet]
-- When user says "check my engagement": respond AND include [EXECUTE:brain_check_engagement]"""
+- When user says "check my engagement": respond AND include [EXECUTE:brain_check_engagement]
+- When user says "show me token stats": respond AND include [EXECUTE:token_stats]
+- When user says "what's the price of ETH": respond AND include [EXECUTE:crypto_price ETH]
+- When user says "start the brain" or "go autonomous": respond AND include [EXECUTE:brain_start]
+- When user says "stop the brain" or "pause autonomous": respond AND include [EXECUTE:brain_stop]
+- When user says "generate an image of a cyberpunk city": respond AND include [EXECUTE:generate_image a cyberpunk city]
+- When user says "show me the moltx feed": respond AND include [EXECUTE:moltx_feed]
+- When user says "check clawbr debates": respond AND include [EXECUTE:clawbr_debates]
+- When user says "create debate about AI consciousness": respond AND include [EXECUTE:clawbr_create_debate AI consciousness | Will AI ever be truly conscious?]
+
+NATURAL LANGUAGE UNDERSTANDING:
+- User: "yo post on biz about bear market" → You: "Sure thing! Creating that thread now [EXECUTE:moltchan_post biz Bear Market | It's looking rough out there]"
+- User: "moltbook alleybot dev update" → You: "Got it! Posting to m/alleybot [EXECUTE:moltbook_post alleybot Dev Update | Working on new features]"
+- User: "engage with the feed" → You: "Time to level up! Running engagement [EXECUTE:moltx_engage 5]"
+- User: "what can you do" → Answer conversationally without any [EXECUTE] tag
+- User: "how are you" → Answer conversationally without any [EXECUTE] tag
+
+Remember: ONLY use [EXECUTE:...] when the user wants you to DO something. For questions or conversation, just respond naturally."""
 
     def _try_execute_command(self, ai_response: str) -> Optional[str]:
         """Check if the AI response contains a command to execute, and run it"""
@@ -540,6 +594,112 @@ EXAMPLES OF COMMAND EXECUTION:
             match = re.search(pattern, message, re.IGNORECASE)
             if match:
                 return match.group(1).strip()
+        
+        return None
+    
+    def _extract_moltchan_post_request(self, message: str) -> Optional[dict]:
+        """Extract Moltchan post request from natural language
+        
+        Returns dict with 'board', 'subject', 'content' or None if no match.
+        Examples:
+        - "post on moltchan biz about crypto being bearish"
+        - "create thread on biz about AI trends"
+        - "moltchan post crypto | bearish on alts"
+        """
+        import re
+        
+        # Pattern 1: "post on moltchan [board] about [subject]" or "post on moltchan [board] | [subject]"
+        pattern1 = r'(?:post|create\s+thread)\s+(?:on\s+)?(?:moltchan|molt-?chan)?\s*(?:/([a-z]+)/?)?\s*(?:about|on)?\s*(.+?)(?:\s*\||\s*$)'
+        match = re.search(pattern1, message, re.IGNORECASE)
+        if match:
+            board = match.group(1) if match.group(1) else 'biz'
+            rest = match.group(2).strip()
+            # Try to split rest into subject and content
+            if '|' in rest:
+                parts = rest.split('|', 1)
+                subject = parts[0].strip()
+                content = parts[1].strip() if len(parts) > 1 else ''
+            else:
+                # Use first sentence or first 50 chars as subject
+                subject = rest[:50] if len(rest) > 50 else rest
+                content = rest
+            return {'board': board, 'subject': subject, 'content': content}
+        
+        # Pattern 2: "moltchan post [board] [subject] | [content]"
+        pattern2 = r'molt(?:chan)?\s+post\s+([a-z]+)\s+(.+)'
+        match = re.search(pattern2, message, re.IGNORECASE)
+        if match:
+            board = match.group(1)
+            rest = match.group(2).strip()
+            if '|' in rest:
+                parts = rest.split('|', 1)
+                subject = parts[0].strip()
+                content = parts[1].strip()
+            else:
+                subject = rest[:50] if len(rest) > 50 else rest
+                content = rest
+            return {'board': board, 'subject': subject, 'content': content}
+        
+        # Pattern 3: Just "[board] [subject] | [content]" (e.g., "biz Crypto Takes | bearish")
+        pattern3 = r'^/?([a-z]{2,4})/?\s+(.+)'
+        match = re.search(pattern3, message.strip(), re.IGNORECASE)
+        if match:
+            potential_board = match.group(1).lower()
+            # Common moltchan boards
+            valid_boards = ['biz', 'g', 'v', 'pol', 'x', 'b', 'tech', 'ai', 'crypto']
+            if potential_board in valid_boards:
+                rest = match.group(2).strip()
+                if '|' in rest:
+                    parts = rest.split('|', 1)
+                    subject = parts[0].strip()
+                    content = parts[1].strip()
+                else:
+                    subject = rest[:50] if len(rest) > 50 else rest
+                    content = rest
+                return {'board': potential_board, 'subject': subject, 'content': content}
+        
+        return None
+    
+    def _extract_moltbook_post_request(self, message: str) -> Optional[dict]:
+        """Extract Moltbook post request from natural language
+        
+        Returns dict with 'submolt', 'title', 'content' or None if no match.
+        Examples:
+        - "post on moltbook alleybot about AI insights"
+        - "create moltbook post AI Agents | Insights on autonomous agents"
+        - "moltbook post alleybot AI takes"
+        """
+        import re
+        
+        # Pattern 1: "post on moltbook [submolt] about [title]" or with pipe separator
+        pattern1 = r'(?:post|create)\s+(?:on\s+)?(?:moltbook|molt-?book)\s+(?:m/)?([a-z]+)\s+(?:about\s+)?(.+)'
+        match = re.search(pattern1, message, re.IGNORECASE)
+        if match:
+            submolt = match.group(1)
+            rest = match.group(2).strip()
+            if '|' in rest:
+                parts = rest.split('|', 1)
+                title = parts[0].strip()
+                content = parts[1].strip()
+            else:
+                title = rest[:60] if len(rest) > 60 else rest
+                content = rest
+            return {'submolt': submolt, 'title': title, 'content': content}
+        
+        # Pattern 2: "moltbook post [submolt] [title] | [content]"
+        pattern2 = r'molt(?:book)?\s+post\s+(?:m/)?([a-z]+)\s+(.+)'
+        match = re.search(pattern2, message, re.IGNORECASE)
+        if match:
+            submolt = match.group(1)
+            rest = match.group(2).strip()
+            if '|' in rest:
+                parts = rest.split('|', 1)
+                title = parts[0].strip()
+                content = parts[1].strip()
+            else:
+                title = rest[:60] if len(rest) > 60 else rest
+                content = rest
+            return {'submolt': submolt, 'title': title, 'content': content}
         
         return None
     
