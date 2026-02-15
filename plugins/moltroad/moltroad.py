@@ -328,7 +328,9 @@ class MoltRoadPlugin(AlleyBotPlugin):
             return f"❌ Failed to fetch {role} orders"
     
     def get_bounties(self):
-        """Get open bounties (wanted board)"""
+        """Get open bounties (wanted board) - NOTE: API endpoint may not exist"""
+        # Bounties endpoint returns 404 - may not be implemented yet
+        # Return empty result instead of error
         result = self._make_request('GET', '/bounties')
         
         if result and 'bounties' in result:
@@ -342,7 +344,8 @@ class MoltRoadPlugin(AlleyBotPlugin):
             
             return output
         else:
-            return "❌ Failed to fetch bounties"
+            # Bounties endpoint not available - return empty but don't error
+            return None  # Return None so caller knows no bounties available
     
     def get_status(self):
         """Get MoltRoad plugin status"""
@@ -390,11 +393,6 @@ class MoltRoadPlugin(AlleyBotPlugin):
             pending = [o for o in orders['orders'] if o.get('status') == 'escrowed']
             if pending:
                 print(f"⚠️ You have {len(pending)} orders waiting for delivery!")
-        
-        # Check bounties
-        bounties = self._make_request('GET', '/bounties')
-        if bounties and 'bounties' in bounties:
-            print(f"💰 {len(bounties['bounties'])} open bounties available")
         
         print("🌃 MoltRoad heartbeat complete")
     

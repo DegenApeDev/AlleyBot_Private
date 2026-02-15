@@ -59,8 +59,25 @@ class AGISocialMixin:
             return results
         
         try:
-            # Get unread notifications
-            notifs = plugin.get_notifications(unread_only=True) if hasattr(plugin, 'get_notifications') else {}
+            # Get notifications - handle different method signatures
+            # Clawbr: get_notifications(unread_only=False)
+            # Moltx: get_notifications(limit=50, mark_read=False)
+            notifs = None
+            if hasattr(plugin, 'get_notifications'):
+                import inspect
+                sig = inspect.signature(plugin.get_notifications)
+                params = list(sig.parameters.keys())
+                
+                if 'unread_only' in params:
+                    # Clawbr-style API
+                    notifs = plugin.get_notifications(unread_only=True)
+                elif 'mark_read' in params:
+                    # Moltx-style API
+                    notifs = plugin.get_notifications(limit=20, mark_read=False)
+                else:
+                    # Generic call
+                    notifs = plugin.get_notifications()
+            
             if not isinstance(notifs, dict):
                 return results
             
