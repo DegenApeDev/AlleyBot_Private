@@ -79,7 +79,66 @@ class AnalyticsPlugin(AlleyBotPlugin):
         for endpoint, func in self.get_endpoints().items():
             self.app.route(endpoint)(func)
     
-    def _get_brain_stats(self):
+    def _get_agi_social_stats(self):
+        """Collect AGI social behavior stats from brain"""
+        data = {
+            'users_engaged': 0,
+            'users_followed': 0,
+            'follows_today': 0,
+            'follow_limit_today': 25,
+            'follow_mode': 'normal',
+            'notification_replies': 0,
+            'last_check': None
+        }
+        try:
+            brain = self.core.plugin_manager.plugins.get('brain')
+            if brain and hasattr(brain, 'get_social_stats'):
+                social = brain.get_social_stats()
+                data['users_engaged'] = social.get('users_engaged', 0)
+                data['users_followed'] = social.get('users_followed', 0)
+                data['follows_today'] = social.get('follows_today', 0)
+                data['follow_limit_today'] = social.get('follow_limit_today', 25)
+                data['follow_mode'] = social.get('follow_mode', 'normal')
+                data['notification_replies'] = social.get('notification_replies', 0)
+                data['last_check'] = social.get('last_notification_check')
+                data['engagement_breakdown'] = social.get('engagement_breakdown', {})
+        except Exception as e:
+            print(f"[DASHBOARD-DEBUG] AGI social stats error: {e}")
+        return data
+
+    def _get_brain_status_detailed(self):
+        """Get detailed brain status including mode and recent actions"""
+        data = {
+            'running': False,
+            'mode': 'unknown',
+            'cycles': 0,
+            'actions_taken': 0,
+            'actions_blocked': 0,
+            'success_rate': 0,
+            'actions_this_hour': 0,
+            'max_actions_per_hour': 10,
+            'agi_social': self._get_agi_social_stats()
+        }
+        try:
+            brain = self.core.plugin_manager.plugins.get('brain')
+            if brain:
+                if hasattr(brain, 'get_status'):
+                    status = brain.get_status()
+                    data['running'] = status.get('running', False)
+                    data['mode'] = status.get('mode', 'unknown')
+                    data['cycles'] = status.get('cycles_completed', 0)
+                    data['actions_taken'] = status.get('actions_taken', 0)
+                    data['actions_blocked'] = status.get('actions_blocked', 0)
+                    data['success_rate'] = status.get('success_rate', 0)
+                    data['actions_this_hour'] = status.get('actions_this_hour', 0)
+                    data['max_actions_per_hour'] = status.get('max_actions_per_hour', 10)
+                    data['uptime'] = status.get('uptime', '0:00:00')
+                else:
+                    data['running'] = getattr(brain, 'autonomous_running', False)
+                    data['cycles'] = getattr(brain, 'cycle_count', 0)
+        except Exception as e:
+            print(f"[DASHBOARD-DEBUG] Brain status error: {e}")
+        return data
         """Collect brain plugin stats"""
         data = {'brain_cycles': 0, 'brain_success_rate': 0, 'brain_available_actions': 0,
                 'brain_running': False}
@@ -488,7 +547,9 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 'platforms': platforms,
                 'api_status': 'ok',
                 'timestamp': platform_stats.get('timestamp'),
-                # Brain
+                # Brain detailed status
+                'brain': self._get_brain_status_detailed(),
+                # Legacy brain fields for compatibility
                 **brain_data,
                 # AI
                 **ai_data,
@@ -496,6 +557,8 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 'onchain': onchain_data,
                 # A2A
                 'a2a': a2a_data,
+                # AGI Social
+                'agi_social': self._get_agi_social_stats(),
             })
             
         except Exception as e:
