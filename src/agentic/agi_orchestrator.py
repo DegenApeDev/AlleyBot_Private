@@ -50,6 +50,7 @@ from src.agentic.goal_manager import get_goal_manager
 from src.agentic.action_logger import get_action_logger
 from src.agentic.strategy_evolver import get_strategy_evolver
 from src.autonomy.world_state import get_world_state_manager
+from src.agentic.multi_platform_engine import get_multi_platform_engine, Platform
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,9 @@ class AGIOrchestrator:
         self.strategy_evolver = get_strategy_evolver()
         self.world_state = get_world_state_manager()
         
+        # Multi-platform execution engine
+        self.multi_platform = get_multi_platform_engine(core=core)
+        
         # Core reference for plugin access
         self.core = core
         
@@ -137,6 +141,7 @@ class AGIOrchestrator:
         self.learning_accumulator: Dict[str, Any] = {}
         
         logger.info("🧠 AGI Orchestrator initialized - 14 phases ready")
+        logger.info(f"🌐 Multi-Platform Engine: {len([p for p, a in self.multi_platform.available_platforms.items() if a])} platforms available")
     
     def run_cycle(self, trigger: str = "scheduled") -> AGICycleResult:
         """
@@ -755,7 +760,66 @@ class AGIOrchestrator:
             'research_summary': self.research.get_research_summary(),
             'social_summary': self.social.get_social_summary(),
             'creative_summary': self.creative.get_creative_summary(),
-            'meta_summary': self.metacognition.get_metacognitive_summary()
+            'meta_summary': self.metacognition.get_metacognitive_summary(),
+            'multi_platform_summary': self.multi_platform.get_engine_summary()
+        }
+    
+    def run_multi_platform_cycle(self, topic: str = None, platforms: List[str] = None) -> Dict[str, Any]:
+        """
+        Run a multi-platform content cycle using the unified engine.
+        
+        Detects cross-platform trends, creates content for multiple platforms, and executes.
+        """
+        logger.info(f"🌐 Starting multi-platform cycle for topic: {topic}")
+        
+        # Step 1: Detect cross-platform trends
+        cross_trends = self.multi_platform.detect_cross_platform_trends(hours=24)
+        
+        # Use detected trend if no topic provided
+        if not topic and cross_trends:
+            topic = cross_trends[0].topic
+            logger.info(f"   Using trending topic: {topic}")
+        elif not topic:
+            topic = "AI and blockchain convergence"
+        
+        # Step 2: Check on-chain signals
+        on_chain_signals = self.multi_platform.check_on_chain_signals()
+        
+        # Step 3: Determine target platforms
+        if platforms:
+            target_platforms = [Platform(p) for p in platforms if hasattr(Platform, p.upper())]
+        else:
+            # Use available platforms
+            target_platforms = [p for p, available in self.multi_platform.available_platforms.items() if available]
+        
+        if not target_platforms:
+            return {'success': False, 'error': 'No platforms available'}
+        
+        # Step 4: Create multi-platform campaign
+        campaign = self.multi_platform.create_multi_platform_content(
+            topic=topic,
+            platforms=target_platforms,
+            include_image=True
+        )
+        
+        # Step 5: Execute campaign
+        results = self.multi_platform.execute_campaign(campaign, a2a_coordination=False)
+        
+        # Step 6: Trigger ERC-8004 evolution if successful
+        self.multi_platform.trigger_erc8004_evolution(results)
+        
+        # Log the cycle
+        successful_posts = sum(1 for r in results.values() if r.get('success'))
+        
+        return {
+            'success': successful_posts > 0,
+            'topic': topic,
+            'campaign_id': campaign.id,
+            'platforms_targeted': len(target_platforms),
+            'platforms_succeeded': successful_posts,
+            'cross_trends_detected': len(cross_trends),
+            'on_chain_signals': len(on_chain_signals),
+            'platform_results': {p.value: r for p, r in results.items()}
         }
 
 

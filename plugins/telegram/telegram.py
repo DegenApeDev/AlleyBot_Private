@@ -261,6 +261,7 @@ class Telegram(AlleyBotPlugin):
         
         # AGI Meta-Brain command
         self.application.add_handler(CommandHandler("agi_cycle", self._handle_agi_cycle))
+        self.application.add_handler(CommandHandler("multi_platform", self._handle_multi_platform))
         
         # System commands
         self.application.add_handler(CommandHandler("reload", self._handle_reload))
@@ -374,6 +375,59 @@ class Telegram(AlleyBotPlugin):
         except Exception as e:
             logger.error(f"Error in agi_cycle: {e}")
             await update.message.reply_text(f"❌ Error running AGI cycle: {e}")
+    
+    async def _handle_multi_platform(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /multi_platform command - blast content to multiple platforms"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            from src.agentic.agi_orchestrator import get_agi_orchestrator
+            
+            # Parse arguments
+            args = context.args if context.args else []
+            topic = ' '.join(args) if args else None
+            
+            await update.message.reply_text(
+                f"🌐 Starting multi-platform campaign...\n"
+                f"Topic: {topic or 'Auto-detected trend'}"
+            )
+            
+            orchestrator = get_agi_orchestrator(core=self.core)
+            result = orchestrator.run_multi_platform_cycle(topic=topic)
+            
+            # Format response
+            if result.get('success'):
+                msg = f"✅ **Multi-Platform Campaign Complete**\n\n"
+                msg += f"📝 Topic: {result['topic']}\n"
+                msg += f"📢 Platforms: {result['platforms_succeeded']}/{result['platforms_targeted']} succeeded\n"
+                msg += f"🔍 Cross-trends detected: {result['cross_trends_detected']}\n"
+                msg += f"⛓️ On-chain signals: {result['on_chain_signals']}\n\n"
+                
+                # Show per-platform results
+                msg += "**Platform Results:**\n"
+                for platform, platform_result in result['platform_results'].items():
+                    status = "✅" if platform_result.get('success') else "❌"
+                    msg += f"{status} {platform}: {platform_result.get('action_taken', 'unknown')}\n"
+                
+                msg += f"\nCampaign ID: `{result['campaign_id']}`"
+            else:
+                msg = f"❌ **Campaign Failed**\n\n"
+                msg += f"Error: {result.get('error', 'Unknown error')}\n"
+                msg += f"Topic attempted: {result.get('topic', 'N/A')}"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+            self._log_activity("command", {
+                "command": "multi_platform",
+                "topic": topic,
+                "success": result.get('success'),
+                "platforms": result.get('platforms_succeeded', 0)
+            })
+            
+        except Exception as e:
+            logger.error(f"Error in multi_platform: {e}")
+            await update.message.reply_text(f"❌ Error running multi-platform campaign: {e}")
     
     async def _verify_owner(self, update: Update) -> bool:
         """Verify that the message is from the owner"""
