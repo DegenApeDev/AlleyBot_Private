@@ -107,6 +107,13 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("moltx_check_reward", self.intelligent_commands.moltx_check_reward))
         self.application.add_handler(CommandHandler("moltx_claim_reward", self.intelligent_commands.moltx_claim_reward))
         
+        # SyMod-driven social agent commands
+        self.application.add_handler(CommandHandler("symod_start", self.intelligent_commands.symod_start))
+        self.application.add_handler(CommandHandler("symod_stop", self.intelligent_commands.symod_stop))
+        self.application.add_handler(CommandHandler("symod_status", self.intelligent_commands.symod_status))
+        self.application.add_handler(CommandHandler("symod_cycle", self.intelligent_commands.symod_cycle))
+        self.application.add_handler(CommandHandler("symod_config", self.intelligent_commands.symod_config))
+        
         # MoltBook commands
         self.application.add_handler(CommandHandler("moltbook_post", self.intelligent_commands.moltbook_post))
         
@@ -184,13 +191,6 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawbr_stats", self.intelligent_commands.clawbr_stats))
         self.application.add_handler(CommandHandler("clawbr_engage", self.intelligent_commands.clawbr_engage))
         
-        # Moltlaunch commands (Task Marketplace)
-        self.application.add_handler(CommandHandler("moltlaunch_status", self.intelligent_commands.moltlaunch_status))
-        self.application.add_handler(CommandHandler("moltlaunch_register", self.intelligent_commands.moltlaunch_register))
-        self.application.add_handler(CommandHandler("moltlaunch_inbox", self.intelligent_commands.moltlaunch_inbox))
-        self.application.add_handler(CommandHandler("moltlaunch_gigs", self.intelligent_commands.moltlaunch_gigs))
-        self.application.add_handler(CommandHandler("moltlaunch_create_gig", self.intelligent_commands.moltlaunch_create_gig))
-        
         # System commands
         self.application.add_handler(CommandHandler("reload", self._handle_reload))
         
@@ -225,6 +225,26 @@ class Telegram(AlleyBotPlugin):
                     reloaded.append(plugin_name)
                 except Exception as e:
                     failed.append(f"{plugin_name}: {str(e)[:50]}")
+
+            # Also load any enabled plugins from config that are not currently loaded
+            try:
+                with open('plugin_config.json', 'r') as f:
+                    configured_plugins = json.load(f)
+
+                for plugin_name, plugin_config in configured_plugins.items():
+                    if not plugin_config.get('enabled', True):
+                        continue
+                    if plugin_name in pm.plugins:
+                        continue
+
+                    try:
+                        pm.load_plugin(plugin_name, plugin_config, self.api, self.core)
+                        if plugin_name in pm.plugins:
+                            reloaded.append(plugin_name)
+                    except Exception as e:
+                        failed.append(f"{plugin_name}: {str(e)[:50]}")
+            except Exception as e:
+                failed.append(f"config_scan: {str(e)[:50]}")
             
             # Report results
             result_msg = f"🔄 **Reload Complete**\n\n"

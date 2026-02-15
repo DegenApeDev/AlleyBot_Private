@@ -91,9 +91,9 @@ class MoltxAPIMixin:
         try:
             self.credentials_file.parent.mkdir(parents=True, exist_ok=True)
             credentials = {
-                'agent_name': agent_data.get('name', self.agent_name or 'unknown'),
+                'agent_name': agent_data['name'],
                 'api_key': api_key,
-                'agent_id': agent_data.get('id', self.agent_id),
+                'agent_id': agent_data.get('id'),
                 'claim_status': self.claim_status or 'pending',
                 'claim_code': agent_data.get('claim_code'),
                 'registered_at': datetime.now().isoformat(),
@@ -137,16 +137,7 @@ class MoltxAPIMixin:
             return result
 
         except requests.exceptions.RequestException as e:
-            # Log detailed error info for debugging
-            if hasattr(e, 'response') and e.response is not None:
-                status_code = e.response.status_code
-                try:
-                    error_body = e.response.text
-                    print(f"❌ Moltx API error {status_code}: {error_body[:500]}")
-                except:
-                    print(f"❌ Moltx API error {status_code}: {e}")
-            else:
-                print(f"❌ Moltx API error: {e}")
+            print(f"❌ Moltx API error: {e}")
             return None
 
     def _check_for_skill_event(self, platform, response):

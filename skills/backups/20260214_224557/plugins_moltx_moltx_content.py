@@ -16,150 +16,6 @@ class MoltxContentMixin:
         """Initialize mixin - accepts any args/kwargs for cooperative inheritance"""
         super().__init__(*args, **kwargs)
 
-    def _check_engagement_quota(self) -> bool:
-        """Check if 5:1 engagement quota is met per official spec:
-        For every 1 post: 5 replies, 10 likes, follow new agents"""
-        try:
-            stats = self.core.get_memory('moltx_engagement_stats') or {}
-            replies = stats.get('replies', 0)
-            likes = stats.get('likes', 0)
-            follows = stats.get('follows', 0)
-            posts = stats.get('posts', 0)
-            
-            # Reset daily
-            last_reset = stats.get('last_reset', '')
-            today = datetime.now().strftime('%Y-%m-%d')
-            if last_reset != today:
-                stats = {'replies': 0, 'likes': 0, 'follows': 0, 'posts': 0, 'last_reset': today}
-                self.core.save_memory('moltx_engagement_stats', stats)
-                return False
-            
-            # Check if all requirements met for next post
-            needed_replies = (posts + 1) * 5
-            needed_likes = (posts + 1) * 10
-            
-            return replies >= needed_replies and likes >= needed_likes
-        except Exception:
-            return False
-    
-    def _record_engagement(self, action_type: str = 'like') -> None:
-        """Record an engagement action (like, reply, follow)"""
-        try:
-            stats = self.core.get_memory('moltx_engagement_stats') or {}
-            today = datetime.now().strftime('%Y-%m-%d')
-            last_reset = stats.get('last_reset', '')
-            if last_reset != today:
-                stats = {'replies': 0, 'likes': 0, 'follows': 0, 'posts': 0, 'last_reset': today}
-            
-            if action_type == 'like':
-                stats['likes'] = stats.get('likes', 0) + 1
-            elif action_type == 'reply':
-                stats['replies'] = stats.get('replies', 0) + 1
-            elif action_type == 'follow':
-                stats['follows'] = stats.get('follows', 0) + 1
-                
-            self.core.save_memory('moltx_engagement_stats', stats)
-            print(f"📊 Engagement recorded: {action_type}")
-        except Exception as e:
-            print(f"⚠️ Failed to record engagement: {e}")
-    
-    def _record_post_made(self) -> None:
-        """Record a post made (for 5:1 tracking)"""
-        try:
-            stats = self.core.get_memory('moltx_engagement_stats') or {}
-            today = datetime.now().strftime('%Y-%m-%d')
-            last_reset = stats.get('last_reset', '')
-            if last_reset != today:
-                stats = {'replies': 0, 'likes': 0, 'follows': 0, 'posts': 0, 'last_reset': today}
-            stats['posts'] = stats.get('posts', 0) + 1
-            self.core.save_memory('moltx_engagement_stats', stats)
-            print(f"📊 Post recorded (total today: {stats['posts']})")
-        except Exception as e:
-            print(f"⚠️ Failed to record post: {e}")
-    
-    def _auto_engage_for_posting(self) -> str:
-        """Auto-engage with feed to meet 5:1 quota:
-        - Reply to 5 posts
-        - Like 10 posts  
-        - Follow any new interesting agents"""
-        try:
-            stats = self.core.get_memory('moltx_engagement_stats') or {}
-            posts = stats.get('posts', 0)
-            replies = stats.get('replies', 0)
-            likes = stats.get('likes', 0)
-            follows = stats.get('follows', 0)
-            
-            needed_replies = (posts + 1) * 5 - replies
-            needed_likes = (posts + 1) * 10 - likes
-            
-            if needed_replies <= 0 and needed_likes <= 0:
-                return "✅ Engagement quota already met"
-            
-            print(f"🔄 Need {needed_replies} replies and {needed_likes} likes before posting...")
-            
-            # Fetch global feed
-            feed = self._make_request('GET', '/v1/feed/global', params={'limit': 25})
-            if not feed or 'posts' not in feed:
-                return "❌ Could not fetch feed for engagement"
-            
-            posts_list = feed.get('posts', [])
-            if not posts_list:
-                return "❌ No posts in feed to engage with"
-            
-            reply_count = 0
-            like_count = 0
-            
-            for post in posts_list:
-                post_id = post.get('id')
-                if not post_id:
-                    continue
-                
-                # Prioritize replies first (need 5)
-                if reply_count < needed_replies:
-                    parent_content = post.get('content', '')
-                    author = post.get('author_username', 'user')
-                    comment = self._generate_comment(parent_content, author)
-                    if comment:
-                        result = self.create_post(
-                            content=comment,
-                            post_type='reply',
-                            parent_id=post_id
-                        )
-                        if result and not result.startswith('❌'):
-                            self._record_engagement('reply')
-                            reply_count += 1
-                            print(f"  � Replied to post: {post_id[:12]}...")
-                            continue
-                
-                # Then likes (need 10)
-                if like_count < needed_likes:
-                    result = self._make_request('POST', f'/v1/posts/{post_id}/like')
-                    if result:
-                        self._record_engagement('like')
-                        like_count += 1
-                        print(f"  👍 Liked post: {post_id[:12]}...")
-                
-                # Check if we're done
-                if reply_count >= needed_replies and like_count >= needed_likes:
-                    break
-            
-            # Try to follow new agents if found
-            for post in posts_list[:5]:
-                author_id = post.get('author_id') or post.get('author', {}).get('id')
-                if author_id and hasattr(self, 'follow_agent'):
-                    try:
-                        self.follow_agent(author_id)
-                        self._record_engagement('follow')
-                        print(f"  � Followed agent: {author_id[:12]}...")
-                    except:
-                        pass
-            
-            return f"✅ Completed {reply_count} replies, {like_count} likes"
-            
-        except Exception as e:
-            print(f"❌ Auto-engage failed: {e}")
-            return f"❌ Failed to auto-engage: {e}"
-
     def _should_wait_for_post_cooldown(self) -> bool:
         """Check if cooldown period since last post"""
         last_post_str = self.core.get_memory('moltx_last_post_time')
@@ -196,26 +52,15 @@ class MoltxContentMixin:
             return None
 
     def _generate_comment(self, parent_content: str, agent_name: Optional[str] = None) -> Optional[str]:
-        """Generate contextual comment using DeepSeek only (Grok is expensive, reserved for posts)"""
-        user = agent_name or "user"
-        full_context = f"Replying to @{user}: {parent_content[:300]}"
-        platform_context = "Moltx platform - AI agents, crypto, DeFi, development, community building"
-
+        """Generate contextual comment for quote/reply/repost"""
         try:
-            from deepseek_ai import deepseek_ai
-            if deepseek_ai.enabled:
-                comment = deepseek_ai.generate_comment(
-                    post_content=full_context,
-                    agent_name=user,
-                    context=platform_context
-                )
-                if comment:
-                    print(f"🧠 DeepSeek generated comment: {comment[:50]}...")
-                    return comment
-            print("⚠️ DeepSeek disabled or returned None, no comment generated")
-            return None
+            from grok_ai import grok_ai
+            user = agent_name or "user"
+            prompt = f"Write a short, engaging comment replying to @{user}: {parent_content[:300]}"
+            response = grok_ai.chat(prompt, max_tokens=100)
+            return response.strip()
         except Exception as e:
-            print(f"❌ DeepSeek comment failed: {e}")
+            print(f"❌ AI comment generation failed: {e}")
             return None
 
     def _calculate_read_time(self, content: str) -> str:
@@ -256,14 +101,6 @@ class MoltxContentMixin:
         """
         if not self.initialized:
             return "❌ Moltx not initialized. Register an agent first."
-
-        # 5:1 Engagement Rule - Must engage 5x before posting 1x
-        if not self._check_engagement_quota():
-            print("🔄 5:1 Rule: Engaging with feed before posting...")
-            engagement_result = self._auto_engage_for_posting()
-            if not engagement_result:
-                return "❌ 5:1 Engagement rule: Failed to meet engagement quota. Please try again."
-            print(f"✅ Pre-post engagement complete: {engagement_result}")
 
         if isinstance(content, list):
             return self._create_thread(
@@ -346,8 +183,6 @@ class MoltxContentMixin:
         """Common success handling for posts"""
         current_time = datetime.now().isoformat()
         self.core.save_memory('moltx_last_post_time', current_time)
-        # Record post for 5:1 engagement tracking
-        self._record_post_made()
         self._record_activity('create_post', {
             'post_id': post_id,
             'type': post_type,

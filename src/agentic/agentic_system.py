@@ -29,6 +29,7 @@ from src.agentic.skill_generator import DynamicSkillGenerator
 from src.agentic.enhanced_memory import EnhancedMemorySystem
 from src.agentic.security_filter import SecurityFilter
 from src.agentic.approval_dashboard import ApprovalDashboard
+from src.agentic.agi_kernel import AGIKernel, get_agi_kernel
 
 
 class AgenticAlleyBot:
@@ -138,6 +139,10 @@ class AgenticAlleyBot:
         else:
             print("✅ Opportunity detector initialized (Web3 not available)")
         
+        # Initialize AGI Kernel
+        self.agi_kernel = get_agi_kernel(core)
+        print("✅ AGI Kernel initialized")
+        
         # Initialize proactive scheduler
         self.scheduler = ProactiveAgentScheduler(
             agent_executor=self._execute_agent_task,
@@ -215,7 +220,19 @@ class AgenticAlleyBot:
             )
         ])
         
-        # Add self-improvement tools
+        # Add AGI tools
+        tools.extend([
+            Tool(
+                name="agi_introspect",
+                func=lambda x: self._agi_introspect_tool(x),
+                description="Get AGI mental state: goals, mood, learning. Input: 'brief' or 'full'"
+            ),
+            Tool(
+                name="agi_generate_goals",
+                func=lambda x: self._agi_generate_goals_tool(x),
+                description="Generate autonomous goals from opportunities. Input: platform name or 'all'"
+            )
+        ])
         tools.extend([
             Tool(
                 name="run_tests",
@@ -430,6 +447,56 @@ class AgenticAlleyBot:
         
         return output
     
+    def _agi_introspect_tool(self, input_str: str) -> str:
+        """Get AGI introspection data"""
+        try:
+            introspection = self.agi_kernel.get_introspection()
+            
+            if input_str == 'brief':
+                mood = introspection['mental_state']['mood_description']
+                goals = introspection['mental_state']['active_goal_count']
+                return f"🧠 Mood: {mood} | Active Goals: {goals}"
+            
+            # Full introspection
+            output = "🧠 AGI Introspection\n\n"
+            output += f"Mood: {introspection['mental_state']['mood_description']}\n"
+            output += f"Active Goals: {introspection['mental_state']['active_goal_count']}\n"
+            output += f"Total Memories: {introspection['mental_state']['total_memories']}\n\n"
+            
+            if introspection['active_goals']:
+                output += "Active Goals:\n"
+                for goal in introspection['active_goals'][:3]:
+                    output += f"  • {goal['description']}\n"
+            
+            if introspection['learning_insights']:
+                output += "\nLearning Insights:\n"
+                for insight in introspection['learning_insights'][:3]:
+                    output += f"  • {insight}\n"
+            
+            return output
+            
+        except Exception as e:
+            return f"❌ AGI introspection failed: {e}"
+    
+    def _agi_generate_goals_tool(self, input_str: str) -> str:
+        """Generate autonomous goals from opportunities"""
+        try:
+            onchain = self._get_onchain_plugin()
+            new_goals = self.agi_kernel.goal_manager.scan_and_generate(onchain)
+            
+            if not new_goals:
+                return "📭 No new opportunities detected"
+            
+            output = f"🎯 Generated {len(new_goals)} autonomous goals:\n\n"
+            for goal in new_goals:
+                output += f"• {goal.description}\n"
+                output += f"  Priority: {goal.priority_score:.1f} | Origin: {goal.origin.value}\n"
+            
+            return output
+            
+        except Exception as e:
+            return f"❌ Goal generation failed: {e}"
+    
     def _run_tests_tool(self, input_str: str) -> str:
         """Run project test suite tool"""
         if not self.selfimprove_plugin:
@@ -535,7 +602,7 @@ class AgenticAlleyBot:
     
     def run_task(self, task: str, on_chain_context: Optional[Dict] = None) -> Dict:
         """
-        Run a task with the agentic system
+        Run a task with the agentic system using AGI capabilities
         
         Args:
             task: Task description
@@ -546,9 +613,22 @@ class AgenticAlleyBot:
         """
         print(f"🎯 Running task: {task}")
         
-        # Check for capability gaps
+        # 1. Perceive the task through AGI kernel
+        perception = self.agi_kernel.perceive(
+            observation=task,
+            context={'source': 'user_task'}
+        )
+        
+        # 2. Enhance task with AGI context
+        enhanced_task = self.agi_kernel.enhance_prompt(task, perception)
+        
+        # 3. Check for autonomous goals that might be relevant
+        if self.agi_kernel.goal_manager.get_active_goals():
+            print(f"🎯 Active AGI goals: {len(self.agi_kernel.goal_manager.get_active_goals())}")
+        
+        # 4. Check for capability gaps
         available_tools = [t.name for t in self.tools]
-        gap = self.skill_generator.identify_capability_gap(task, available_tools)
+        gap = self.skill_generator.identify_capability_gap(enhanced_task, available_tools)
         
         if gap:
             print(f"🔍 Capability gap identified: {gap}")
@@ -564,10 +644,18 @@ class AgenticAlleyBot:
                 # Reload tools
                 self.tools = self._build_tools()
         
-        # Execute task
-        result = self._execute_agent_task(task, on_chain_context)
+        # 5. Execute task with AGI-enhanced context
+        result = self._execute_agent_task(enhanced_task, on_chain_context)
         
-        # Get execution summary
+        # 6. Learn from the outcome
+        self.agi_kernel.learn(
+            context=task,
+            action=str(result.get('output', 'unknown')),
+            outcome=str(result.get('output', 'unknown')),
+            success=result.get('success', False)
+        )
+        
+        # 7. Get execution summary
         summary = self.agent.get_execution_summary()
         print(f"\n📊 Execution Summary:")
         print(f"  Iterations: {summary['total_iterations']}")

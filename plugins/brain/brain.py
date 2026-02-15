@@ -187,8 +187,26 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         return result if result else "❌ Image post failed"
 
     def moltx_post_command(self, *args):
-        """Show current context summary"""
-        return f"🧠 Current Context:\n\n{self.build_context_summary()}"
+        """Create a post on Moltx. Usage: brain_moltx_post [topic/content]"""
+        topic = ' '.join(args) if args else None
+        
+        # Get moltx plugin
+        if not hasattr(self, 'core') or not self.core:
+            return "❌ Core not available"
+        
+        moltx = self.core.plugin_manager.plugins.get('moltx')
+        if not moltx:
+            return "❌ Moltx plugin not loaded"
+        
+        # Generate content using decision engine
+        content = self._generate_post_content('moltx')
+        
+        if not content:
+            return "❌ Failed to generate post content"
+        
+        # Create the post
+        result = moltx.create_post(content)
+        return result if result else "❌ Failed to create post"
 
     def context_command(self, *args):
         """Show current context summary"""

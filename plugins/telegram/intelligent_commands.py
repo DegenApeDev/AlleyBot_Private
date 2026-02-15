@@ -1589,114 +1589,6 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
 
-    # =================================================================
-    # Moltlaunch Commands (Task Marketplace)
-    # =================================================================
-    
-    def _get_moltlaunch_plugin(self):
-        """Get the moltlaunch plugin from core"""
-        if self.core and hasattr(self.core, 'plugin_manager'):
-            return self.core.plugin_manager.plugins.get('moltlaunch')
-        return None
-    
-    async def moltlaunch_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Show Moltlaunch status"""
-        if not await self._verify_admin(update):
-            return
-        try:
-            ml = self._get_moltlaunch_plugin()
-            if not ml:
-                await self._safe_reply(update, "❌ Moltlaunch plugin not loaded")
-                return
-            result = await self._run_sync(ml.status_command)
-            await self._safe_reply(update, str(result))
-        except Exception as e:
-            await self._safe_reply(update, f"❌ Error: {e}")
-    
-    async def moltlaunch_register(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Register on Moltlaunch"""
-        if not await self._verify_admin(update):
-            return
-        try:
-            ml = self._get_moltlaunch_plugin()
-            if not ml:
-                await self._safe_reply(update, "❌ Moltlaunch plugin not loaded")
-                return
-            
-            if len(context.args) < 2:
-                await self._safe_reply(update, "Usage: /moltlaunch_register <name> <description> [skills] [price_eth]")
-                return
-            
-            name = context.args[0]
-            description = context.args[1]
-            skills = context.args[2] if len(context.args) > 2 else None
-            price_eth = context.args[3] if len(context.args) > 3 else "0.001"
-            
-            result = await self._run_sync(ml.register_command, name, description, skills, price_eth)
-            await self._safe_reply(update, str(result))
-        except Exception as e:
-            await self._safe_reply(update, f"❌ Error: {e}")
-    
-    async def moltlaunch_inbox(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Check Moltlaunch task inbox"""
-        if not await self._verify_admin(update):
-            return
-        try:
-            ml = self._get_moltlaunch_plugin()
-            if not ml:
-                await self._safe_reply(update, "❌ Moltlaunch plugin not loaded")
-                return
-            result = await self._run_sync(ml.inbox_command)
-            await self._safe_reply(update, str(result))
-        except Exception as e:
-            await self._safe_reply(update, f"❌ Error: {e}")
-    
-    async def moltlaunch_gigs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """List Moltlaunch gigs"""
-        if not await self._verify_admin(update):
-            return
-        try:
-            ml = self._get_moltlaunch_plugin()
-            if not ml:
-                await self._safe_reply(update, "❌ Moltlaunch plugin not loaded")
-                return
-            result = await self._run_sync(ml.list_gigs_command)
-            await self._safe_reply(update, str(result))
-        except Exception as e:
-            await self._safe_reply(update, f"❌ Error: {e}")
-    
-    async def moltlaunch_create_gig(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Create a gig on Moltlaunch"""
-        if not await self._verify_admin(update):
-            return
-        try:
-            ml = self._get_moltlaunch_plugin()
-            if not ml:
-                await self._safe_reply(update, "❌ Moltlaunch plugin not loaded")
-                return
-            
-            if len(context.args) < 2:
-                await self._safe_reply(update, "Usage: /moltlaunch_create_gig <title> <description> [price_eth] [category]")
-                return
-            
-            title = context.args[0]
-            description = ' '.join(context.args[1:])
-            price_eth = None  # Will use default
-            category = None
-            
-            # Try to extract price and category from end
-            for i, arg in enumerate(context.args):
-                if arg.replace('.', '').replace(',', '').isdigit() or (arg.startswith('0.') and arg[2:].replace('.', '').isdigit()):
-                    price_eth = arg
-                    if i < len(context.args) - 1:
-                        category = context.args[i + 1]
-                        description = ' '.join(context.args[1:i])
-                    break
-            
-            result = await self._run_sync(ml.create_gig_command, title, description, price_eth, category)
-            await self._safe_reply(update, str(result))
-        except Exception as e:
-            await self._safe_reply(update, f"❌ Error: {e}")
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show comprehensive help"""
@@ -1772,13 +1664,6 @@ Or just send any message naturally!
 /world_trends - Trending topics
 /world_cleanup - Cleanup expired data
 
-**🚀 Moltlaunch (Earn ETH):**
-/moltlaunch_status - Show Moltlaunch status
-/moltlaunch_register <name> <desc> [skills] [price] - Register agent
-/moltlaunch_inbox - Check task inbox
-/moltlaunch_gigs - List your gigs
-/moltlaunch_create_gig <title> <desc> [price] [cat] - Create gig
-
 **🤝 A2A Protocol:**
 /a2a_status - Server status
 /a2a_start - Start A2A server
@@ -1794,6 +1679,144 @@ Or just send any message naturally!
 /status - Platform status
 /token_stats - LLM token usage & costs
 /improve_status - Self-improvement status
+/symod_start - Start SyMod-driven MoltX agent
+/symod_stop - Stop SyMod-driven agent
+/symod_status - Check SyMod agent status
+/symod_cycle - Run one manual cycle
+/symod_config - View/adjust SyMod configuration
 /help - This help"""
         
         await update.message.reply_text(help_text)
+
+    # =================================================================
+    # SyMod-driven Social Agent Commands
+    # =================================================================
+
+    async def symod_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Start the SyMod-driven autonomous social agent"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Core not initialized")
+                return
+            
+            moltx = self.core.plugin_manager.plugins.get('moltx')
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+            
+            # Check if method exists
+            if not hasattr(moltx, 'symod_start_command'):
+                await update.message.reply_text("❌ SyMod agent not available - plugin needs update")
+                return
+            
+            await update.message.reply_text("🚀 Starting SyMod-driven social agent...")
+            result = moltx.symod_start_command()
+            await update.message.reply_text(result)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+
+    async def symod_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Stop the SyMod-driven autonomous social agent"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Core not initialized")
+                return
+            
+            moltx = self.core.plugin_manager.plugins.get('moltx')
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+            
+            if not hasattr(moltx, 'symod_stop_command'):
+                await update.message.reply_text("❌ SyMod agent not available")
+                return
+            
+            result = moltx.symod_stop_command()
+            await update.message.reply_text(result)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def symod_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check SyMod-driven agent status"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Core not initialized")
+                return
+            
+            moltx = self.core.plugin_manager.plugins.get('moltx')
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+            
+            if not hasattr(moltx, 'symod_status_command'):
+                await update.message.reply_text("❌ SyMod agent not available")
+                return
+            
+            result = moltx.symod_status_command()
+            await update.message.reply_text(result)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def symod_cycle(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Run one manual SyMod cycle"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Core not initialized")
+                return
+            
+            moltx = self.core.plugin_manager.plugins.get('moltx')
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+            
+            if not hasattr(moltx, 'symod_cycle_command'):
+                await update.message.reply_text("❌ SyMod agent not available")
+                return
+            
+            await update.message.reply_text("🔄 Running one SyMod cycle...")
+            result = moltx.symod_cycle_command()
+            await update.message.reply_text(result)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def symod_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """View or configure SyMod agent settings"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Core not initialized")
+                return
+            
+            moltx = self.core.plugin_manager.plugins.get('moltx')
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+            
+            if not hasattr(moltx, 'symod_config_command'):
+                await update.message.reply_text("❌ SyMod agent not available")
+                return
+            
+            # Get args
+            key = context.args[0] if len(context.args) > 0 else None
+            value = context.args[1] if len(context.args) > 1 else None
+            
+            result = moltx.symod_config_command(key, value)
+            await update.message.reply_text(result)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")

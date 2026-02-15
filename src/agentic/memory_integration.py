@@ -28,11 +28,15 @@ class SQLiteMemoryMixin:
             try:
                 self.memory_db = SQLiteMemorySystem(db_path)
                 
-                # Migrate existing JSON memory files if they exist
-                if Path('memory').exists():
+                # Migrate existing JSON memory files if they exist (one-time only)
+                migration_marker = Path('data/.migration_complete')
+                if Path('memory').exists() and not migration_marker.exists():
                     stats = self.memory_db.migrate_from_json('memory')
                     if stats['files_migrated'] > 0:
                         print(f"✅ Migrated {stats['files_migrated']} JSON files to SQLite")
+                    # Create marker to prevent future migrations
+                    migration_marker.parent.mkdir(parents=True, exist_ok=True)
+                    migration_marker.touch()
                 
                 print("💾 SQLite memory system ready")
                 return True

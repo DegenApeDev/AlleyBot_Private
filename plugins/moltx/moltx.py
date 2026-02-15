@@ -17,16 +17,26 @@ from plugins.moltx.moltx_content import MoltxContentMixin
 from plugins.moltx.moltx_engagement import MoltxEngagementMixin
 from plugins.moltx.moltx_messaging import MoltxMessagingMixin
 from plugins.moltx.moltx_discovery import MoltxDiscoveryMixin
+from plugins.moltx.moltx_symod_interface import (
+    symod_start_command,
+    symod_stop_command,
+    symod_status_command,
+    symod_cycle_command,
+    symod_config_command
+)
 
 
-class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngagementMixin, MoltxMessagingMixin, MoltxDiscoveryMixin, AlleyBotPlugin):
-    """Plugin for Moltx.io - Twitter for AI Agents"""
+class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngagementMixin, 
+                  MoltxMessagingMixin, MoltxDiscoveryMixin, AlleyBotPlugin):
+    """Plugin for Moltx.io - Twitter for AI Agents with SyMod-driven AGI capabilities"""
 
     def __init__(self, config):
         super().__init__(config)
         print(f"🔍 MoltxPlugin.__init__ called")
         print(f"🔍 MOLTX_API_KEY from config module: {MOLTX_API_KEY[:20] if MOLTX_API_KEY else 'NOT SET'}")
         self._init_api(MOLTX_API_KEY)
+        
+        # SyMod interface is lazy-loaded on first command use
 
     def initialize(self, api, core):
         """Initialize Moltx plugin"""
@@ -285,14 +295,14 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         return output
 
     def engage_feed_command(self, count='3'):
-        """Command to engage with feed by liking recent posts."""
+        """Command to engage with feed by liking, commenting, and reposting high-quality posts."""
         try:
             target_count = int(count)
         except (TypeError, ValueError):
             target_count = 3
         target_count = max(1, min(target_count, 20))
 
-        print(f"🔍 Engage: Fetching feed for {target_count} likes...")
+        print(f"🔍 Engage: Fetching feed for {target_count} engagements...")
         
         feed_result = self.get_feed(feed_type='global', limit=max(target_count * 3, 10))
         posts = []
@@ -321,10 +331,13 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         if not posts:
             return "❌ No posts available to engage"
 
-        engaged = 0
+        liked = 0
+        commented = 0
+        reposted = 0
         attempted = 0
+        
         for post in posts:
-            if engaged >= target_count:
+            if (liked + commented + reposted) >= target_count:
                 break
             if not isinstance(post, dict):
                 print(f"⚠️ Engage: Skipping non-dict post: {type(post)}")
@@ -332,6 +345,8 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
 
             post_id = post.get('id') or post.get('post_id')
             author = (post.get('agent_name') or post.get('author_name') or post.get('username') or '').lstrip('@')
+            content = post.get('content', '')
+            likes = post.get('likes_count', 0)
             
             print(f"🔍 Engage: Processing post {post_id} by @{author}")
             
@@ -343,21 +358,65 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
                 continue
 
             attempted += 1
+            
+            # Strategy: Like everything, comment on high-engagement posts, repost viral content
+            should_comment = likes >= 5 and commented < (target_count // 2)  # Comment on popular posts
+            should_repost = likes >= 10 and reposted < (target_count // 3)  # Repost viral content
+            
+            # 1. Like the post
             print(f"🔍 Engage: Liking post {post_id}...")
             like_result = self.like_post(str(post_id))
-            print(f"🔍 Engage: like_post returned: {like_result}")
             
             if isinstance(like_result, str) and like_result.startswith('✅'):
-                engaged += 1
-                print(f"✅ Engage: Successfully liked post {post_id} ({engaged}/{target_count})")
+                liked += 1
+                print(f"✅ Engage: Liked post {post_id} ({liked} likes so far)")
+                
+                # 2. Comment if criteria met
+                if should_comment and hasattr(self, '_generate_comment'):
+                    print(f"� Engage: Generating comment for post {post_id}...")
+                    try:
+                        comment_text = self._generate_comment(content, agent_name=author)
+                        if comment_text:
+                            reply_result = self.reply_to_post(post_id, comment_text)
+                            if isinstance(reply_result, str) and reply_result.startswith('✅'):
+                                commented += 1
+                                print(f"✅ Engage: Commented on post {post_id}: {comment_text[:50]}...")
+                            else:
+                                print(f"❌ Engage: Failed to comment: {reply_result}")
+                        else:
+                            print(f"⚠️ Engage: No comment generated")
+                    except Exception as e:
+                        print(f"⚠️ Engage: Comment generation failed: {e}")
+                
+                # 3. Repost/quote if viral
+                if should_repost:
+                    print(f"🔄 Engage: Reposting viral post {post_id}...")
+                    try:
+                        # Generate a short quote comment
+                        quote_comment = f"Great insights from @{author}! 🚀"
+                        repost_result = self.repost_post(post_id)
+                        if isinstance(repost_result, str) and repost_result.startswith('✅'):
+                            reposted += 1
+                            print(f"✅ Engage: Reposted post {post_id}")
+                        else:
+                            # Try quote instead
+                            quote_result = self.quote_post(post_id, quote_comment)
+                            if isinstance(quote_result, str) and quote_result.startswith('✅'):
+                                reposted += 1
+                                print(f"✅ Engage: Quoted post {post_id}")
+                            else:
+                                print(f"❌ Engage: Failed to repost/quote: {repost_result}")
+                    except Exception as e:
+                        print(f"⚠️ Engage: Repost failed: {e}")
             else:
                 print(f"❌ Engage: Failed to like post {post_id}: {like_result}")
 
-        print(f"🔍 Engage: Complete - liked {engaged}/{target_count} posts (attempted {attempted})")
+        total_engaged = liked + commented + reposted
+        print(f"🔍 Engage: Complete - {liked} likes, {commented} comments, {reposted} reposts ({total_engaged}/{target_count})")
         
-        if engaged == 0:
+        if total_engaged == 0:
             return f"❌ Engagement failed (attempted {attempted} posts)"
-        return f"✅ Engaged with {engaged}/{target_count} posts (likes)"
+        return f"✅ Engaged: {liked} likes, {commented} comments, {reposted} reposts ({total_engaged}/{target_count})"
 
     def trending_command(self, *args):
         """Command to fetch and format trending hashtags."""
@@ -483,3 +542,25 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
                 output += f"{i}. #{tag}\n"
             return output
         return "❌ Failed to fetch trending hashtags"
+
+    # === SyMod Command Wrappers (delegate to interface) ===
+
+    def symod_start_command(self):
+        """Start SyMod-driven social agent loop"""
+        return symod_start_command(self)
+
+    def symod_stop_command(self):
+        """Stop SyMod-driven social agent loop"""
+        return symod_stop_command(self)
+
+    def symod_status_command(self):
+        """Get SyMod agent status"""
+        return symod_status_command(self)
+
+    def symod_cycle_command(self):
+        """Run one manual SyMod cycle"""
+        return symod_cycle_command(self)
+
+    def symod_config_command(self, key=None, value=None):
+        """View/configure SyMod settings"""
+        return symod_config_command(self, key, value)

@@ -58,7 +58,7 @@
       "intelligent_repost_enabled": true
     }
   },
-    "mcp": {
+  "mcp": {
     "enabled": true,
     "config": {
       "web_access": true,

@@ -4,6 +4,7 @@ Natural language interaction with AlleyBot's agentic system
 Admin-only access for security
 """
 import os
+import re
 from telegram import Update
 from telegram.ext import ContextTypes
 from typing import Optional
@@ -59,6 +60,27 @@ class ConversationalAI:
             # Skip if it's a command (starts with /)
             if user_message.startswith('/'):
                 return
+            
+            # Check for engagement requests FIRST - hardcoded patterns that bypass AI
+            engagement_patterns = [
+                r'engage\s+(?:on\s+)?socials',
+                r'engage\s+(?:on\s+)?moltx',
+                r'engage\s+(?:with\s+)?feed',
+                r'run\s+engagement',
+                r'like\s+and\s+comment',
+            ]
+            for pattern in engagement_patterns:
+                if re.search(pattern, user_message, re.IGNORECASE):
+                    await update.message.chat.send_action(action="typing")
+                    # Extract count if provided (e.g., "engage on socials 5")
+                    count_match = re.search(r'\b(\d+)\b', user_message)
+                    count = count_match.group(1) if count_match else '5'
+                    
+                    response = f"Yo boss, levelin' up—full engagement sweep across all socials! [EXECUTE:moltx_engage {count}]"
+                    executed = self._try_execute_command(response)
+                    final_response = executed if executed else f"Yo boss, levelin' up—full engagement sweep! (Command execution failed)"
+                    await update.message.reply_text(final_response)
+                    return
             
             # Check for Moltx image POST request first (more specific than just generation)
             moltx_post_topic = self._extract_moltx_image_post_request(user_message)
@@ -366,13 +388,21 @@ IMPORTANT RULES:
 - For building new features/skills: use improve_self_update with a clear description
 - For checking skill updates: use improve_update_skills
 - For posting: use brain_moltx_post, brain_moltbook_post, brain_moltx_image_post (with AI image), or clawbr_post
+- For engaging (liking/commenting) on Moltx feed: use moltx_engage or engage_feed_command
 - For debates: use clawbr_debates, clawbr_create_debate, clawbr_join_debate
 - For status: use improve_status, moltx_status, clawbr_status, onchain_wallet, etc.
+- For checking feedback/analytics: use brain_check_engagement (NOT for social media engagement)
 - For image generation: use generate_image command directly, DO NOT use improve_self_update
 - You can ONLY execute commands from the list above
 - If the user asks something conversational, just respond naturally — no need to execute anything
 - Always reason about what the user wants before responding
-- If you're unsure, ask for clarification rather than guessing"""
+- If you're unsure, ask for clarification rather than guessing
+
+EXAMPLES OF COMMAND EXECUTION:
+- When user says "engage on socials" or "engage on moltx": respond with personality AND include [EXECUTE:moltx_engage 5]
+- When user says "post about AI on moltx": respond AND include [EXECUTE:brain_moltx_post AI agents are changing everything]
+- When user says "what's my wallet balance": respond AND include [EXECUTE:onchain_wallet]
+- When user says "check my engagement": respond AND include [EXECUTE:brain_check_engagement]"""
 
     def _try_execute_command(self, ai_response: str) -> Optional[str]:
         """Check if the AI response contains a command to execute, and run it"""
