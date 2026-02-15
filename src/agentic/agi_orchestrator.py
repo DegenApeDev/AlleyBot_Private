@@ -306,7 +306,7 @@ class AGIOrchestrator:
                     })
             
             # Get attribution for recent engagement
-            attribution = self.causal.get_impact_attribution('engagement', hours=24)
+            attribution = self.causal.get_impact_attribution('engagement', time_window_hours=24)
             
             output = {
                 'insights': insights,
@@ -454,17 +454,42 @@ class AGIOrchestrator:
         try:
             # Predict community reaction to proposed content
             content = creative_output.get('recommended_content', {}).get('title', '')
+            
+            if not content:
+                # No content to analyze
+                return PhaseResult(
+                    phase=Phase.SOCIAL_INTELLIGENCE,
+                    success=True,
+                    output={
+                        'predicted_reaction': {},
+                        'risk_assessment': 'unknown',
+                        'entities_tracked': 0,
+                        'proceed_recommended': False
+                    },
+                    confidence=0.5,
+                    duration_seconds=(datetime.now() - start).total_seconds(),
+                    triggered_phases=[Phase.METACOGNITION]
+                )
+            
             reaction = self.social.simulate_community_reaction(content)
             
             # Check for high-risk deception patterns in recent interactions
             social_summary = self.social.get_social_summary()
             
-            output = {
-                'predicted_reaction': reaction,
-                'risk_assessment': 'low' if reaction.get('predicted_sentiment') == 'positive' else 'medium',
-                'entities_tracked': social_summary.get('entities_modeled', 0),
-                'proceed_recommended': reaction.get('predicted_sentiment') in ['positive', 'neutral']
-            }
+            if reaction:
+                output = {
+                    'predicted_reaction': reaction,
+                    'risk_assessment': 'low' if reaction.get('predicted_sentiment') == 'positive' else 'medium',
+                    'entities_tracked': social_summary.get('entities_modeled', 0),
+                    'proceed_recommended': reaction.get('predicted_sentiment') in ['positive', 'neutral']
+                }
+            else:
+                output = {
+                    'predicted_reaction': {},
+                    'risk_assessment': 'medium',
+                    'entities_tracked': social_summary.get('entities_modeled', 0),
+                    'proceed_recommended': True  # Proceed with caution
+                }
             
             return PhaseResult(
                 phase=Phase.SOCIAL_INTELLIGENCE,
