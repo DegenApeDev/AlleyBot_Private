@@ -107,7 +107,7 @@ class AGIOrchestrator:
     - Goal → Plan → Research → Creative → Social → Execute → Reflect → Evolve
     """
     
-    def __init__(self):
+    def __init__(self, core=None):
         # Initialize all phase engines
         self.inference = get_inference_engine()
         self.causal = get_causal_engine()
@@ -120,6 +120,16 @@ class AGIOrchestrator:
         self.action_logger = get_action_logger()
         self.strategy_evolver = get_strategy_evolver()
         self.world_state = get_world_state_manager()
+        
+        # Core reference for plugin access
+        self.core = core
+        
+        # Safety controls
+        self.last_post_time: Optional[datetime] = None
+        self.min_post_interval_minutes = 30  # Don't post more than every 30 min
+        self.daily_post_count = 0
+        self.max_daily_posts = 10
+        self.last_post_date = datetime.now().date()
         
         # Cross-phase memory
         self.recent_insights: List[Dict] = []
@@ -574,25 +584,104 @@ class AGIOrchestrator:
                 triggered_phases=[]
             )
     
+    def _check_safety_limits(self) -> Dict[str, Any]:
+        """Check if it's safe to post (rate limits, daily caps)"""
+        now = datetime.now()
+        current_date = now.date()
+        
+        # Reset daily count if it's a new day
+        if current_date != self.last_post_date:
+            self.daily_post_count = 0
+            self.last_post_date = current_date
+        
+        # Check daily cap
+        if self.daily_post_count >= self.max_daily_posts:
+            return {'safe': False, 'reason': f'Daily post cap reached ({self.max_daily_posts})'}
+        
+        # Check rate limit
+        if self.last_post_time:
+            minutes_since_last = (now - self.last_post_time).total_seconds() / 60
+            if minutes_since_last < self.min_post_interval_minutes:
+                return {
+                    'safe': False, 
+                    'reason': f'Rate limit: {self.min_post_interval_minutes - minutes_since_last:.0f} min remaining'
+                }
+        
+        return {'safe': True, 'reason': 'Within limits'}
+    
     def _execute_plan(self, plan: Dict) -> Dict[str, Any]:
-        """Execute the generated plan (Phase 0)"""
+        """Execute the generated plan - ACTUALLY posts to platforms"""
         execution = {
             'executed_at': datetime.now().isoformat(),
             'steps_completed': 0,
             'action_taken': None,
-            'result': None
+            'result': None,
+            'platform_response': None
         }
         
-        # For now, just log what would be executed
-        # In production, this would actually post content, etc.
+        # Check safety limits first
+        safety = self._check_safety_limits()
+        if not safety['safe']:
+            execution['action_taken'] = 'blocked_by_safety'
+            execution['result'] = 'safety_blocked'
+            execution['reason'] = safety['reason']
+            logger.warning(f"🚫 AGI execution blocked: {safety['reason']}")
+            return execution
+        
+        # Get content to post
         content = plan.get('plan_steps', [{}])[0].get('details', {})
+        content_text = content.get('title', '') or content.get('content', '')
         
-        execution['action_taken'] = 'content_prepared'
-        execution['content_preview'] = content.get('title', 'No content')[:100]
+        if not content_text:
+            execution['action_taken'] = 'no_content'
+            execution['result'] = 'failed'
+            return execution
+        
+        # Try to post to Moltx if available
+        if self.core and 'moltx' in getattr(self.core, 'plugins', {}):
+            try:
+                moltx = self.core.plugins['moltx']
+                
+                # Generate full content using creative engine
+                styled_content = self.creative.transfer_style(
+                    content_text, 
+                    target_style='casual'
+                )
+                final_text = styled_content.get('transformed', content_text)
+                
+                # Actually post
+                result = moltx.create_post(final_text)
+                
+                if result and result.get('success'):
+                    execution['action_taken'] = 'posted_to_moltx'
+                    execution['result'] = 'success'
+                    execution['platform_response'] = result.get('data', {})
+                    execution['content_posted'] = final_text[:100]
+                    
+                    # Update safety tracking
+                    self.last_post_time = datetime.now()
+                    self.daily_post_count += 1
+                    
+                    logger.info(f"✅ AGI posted to Moltx: {final_text[:50]}...")
+                else:
+                    execution['action_taken'] = 'moltx_post_failed'
+                    execution['result'] = 'failed'
+                    execution['error'] = result.get('error', 'Unknown error')
+                    logger.error(f"❌ Moltx post failed: {result}")
+                    
+            except Exception as e:
+                execution['action_taken'] = 'exception'
+                execution['result'] = 'failed'
+                execution['error'] = str(e)
+                logger.error(f"❌ Error posting to Moltx: {e}")
+        else:
+            # No Moltx available, just prepare
+            execution['action_taken'] = 'prepared_only'
+            execution['result'] = 'no_platform'
+            execution['content_preview'] = content_text[:100]
+            logger.info(f"🔧 Prepared content (no platform): {content_text[:50]}...")
+        
         execution['steps_completed'] = len(plan.get('plan_steps', []))
-        execution['result'] = 'prepared_for_review'
-        
-        logger.info(f"🔧 Executed: {execution['action_taken']}")
         
         return execution
     
@@ -626,7 +715,7 @@ class AGIOrchestrator:
             self.metacognition.record_strategy_outcome(
                 strategy='agi_cycle',
                 context_type='autonomous',
-                success=execution.get('result') == 'prepared_for_review',
+                success=execution.get('result') == 'success',
                 confidence=0.8
             )
             
@@ -674,9 +763,12 @@ class AGIOrchestrator:
 _orchestrator_instance: Optional[AGIOrchestrator] = None
 
 
-def get_agi_orchestrator() -> AGIOrchestrator:
+def get_agi_orchestrator(core=None) -> AGIOrchestrator:
     """Get or create AGI Orchestrator singleton"""
     global _orchestrator_instance
     if _orchestrator_instance is None:
-        _orchestrator_instance = AGIOrchestrator()
+        _orchestrator_instance = AGIOrchestrator(core=core)
+    elif core is not None:
+        # Update core reference if provided
+        _orchestrator_instance.core = core
     return _orchestrator_instance
