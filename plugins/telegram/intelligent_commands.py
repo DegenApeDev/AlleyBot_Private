@@ -202,6 +202,39 @@ class IntelligentTelegramCommands:
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
     
+    async def skills(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """List available skills"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            from src.skills.skill_loader import SkillLoader
+            
+            loader = SkillLoader()
+            skills = loader.list_skills()
+            
+            skills_text = "🎯 **Available Skills**\n\n"
+            
+            # Group by category
+            categories = {}
+            for skill in skills:
+                cat = getattr(skill, 'category', 'general')
+                if cat not in categories:
+                    categories[cat] = []
+                categories[cat].append(skill)
+            
+            for category, category_skills in categories.items():
+                skills_text += f"**{str(category).replace('_', ' ').title()}:**\n"
+                for skill in category_skills:
+                    name = getattr(skill, 'name', 'unknown')
+                    desc = getattr(skill, 'description', 'No description')
+                    skills_text += f"• {name}: {desc}\n"
+                skills_text += "\n"
+            
+            await update.message.reply_text(skills_text)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
     async def moltx_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Create an AI-generated post on Moltx based on topic/direction"""
         if not await self._verify_admin(update):
