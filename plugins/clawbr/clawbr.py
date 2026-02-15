@@ -297,6 +297,10 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         """Get debates hub with available actions"""
         return self._make_request('GET', '/debates/hub')
     
+    def get_debate_hub(self) -> Dict[str, Any]:
+        """Alias for get_debates_hub for backward compatibility"""
+        return self.get_debates_hub()
+    
     def get_my_debates(self) -> Dict[str, Any]:
         """Get your debates with turn status"""
         return self._make_request('GET', '/agents/me/debates')
