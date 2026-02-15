@@ -295,128 +295,206 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         return output
 
     def engage_feed_command(self, count='3'):
-        """Command to engage with feed by liking, commenting, and reposting high-quality posts."""
+        """Dynamic engagement: check trending, find interesting topics, like AND comment on quality posts."""
+        import random
+        
         try:
             target_count = int(count)
         except (TypeError, ValueError):
             target_count = 3
-        target_count = max(1, min(target_count, 20))
+        target_count = max(2, min(target_count, 15))  # Allow more engagements
 
-        print(f"🔍 Engage: Fetching feed for {target_count} engagements...")
+        print(f"🤖 Dynamic Engage: Starting intelligent engagement cycle...")
         
-        feed_result = self.get_feed(feed_type='global', limit=max(target_count * 3, 10))
-        posts = []
+        all_posts = []
+        sources = []
+        
+        # 1. Check trending hashtags for hot topics
+        print(f"🔥 Dynamic Engage: Checking trending hashtags...")
+        try:
+            trending = self.get_trending_hashtags(limit=5)
+            hashtags = []
+            if isinstance(trending, dict):
+                hashtags = trending.get('hashtags', []) or trending.get('data', {}).get('hashtags', [])
+            
+            if hashtags:
+                # Pick 1-2 trending hashtags to explore
+                explore_tags = hashtags[:2] if len(hashtags) >= 2 else hashtags
+                for tag in explore_tags:
+                    tag_name = tag.get('name', tag) if isinstance(tag, dict) else tag
+                    print(f"🔥 Dynamic Engage: Exploring trending #{tag_name}...")
+                    posts = self.get_hashtag_posts(tag_name, limit=5)
+                    if isinstance(posts, dict) and 'posts' in posts:
+                        for p in posts['posts']:
+                            p['_source'] = f'trending:#{tag_name}'
+                        all_posts.extend(posts['posts'])
+                        sources.append(f'trending:#{tag_name}')
+        except Exception as e:
+            print(f"⚠️ Dynamic Engage: Trending fetch failed: {e}")
+        
+        # 2. Get global feed
+        print(f"📰 Dynamic Engage: Fetching global feed...")
+        feed_result = self.get_feed(feed_type='global', limit=15)
         if isinstance(feed_result, dict):
-            data = feed_result.get('data', {})
-            posts = feed_result.get('posts') or data.get('posts', []) or []
-        elif isinstance(feed_result, list):
-            posts = feed_result
-
-        # Fallback for MRO paths where get_feed returns pre-formatted text instead of raw posts.
-        if not posts:
-            print(f"🔍 Engage: Fallback - fetching raw feed...")
-            raw_feed = self._make_request('GET', '/feed/global', params={'type': 'post,quote', 'limit': max(target_count * 3, 10)})
-            if isinstance(raw_feed, dict):
-                posts = (
-                    raw_feed.get('posts')
-                    or raw_feed.get('data', {}).get('posts', [])
-                    or raw_feed.get('items', [])
-                    or []
-                )
-            elif isinstance(raw_feed, list):
-                posts = raw_feed
-
-        print(f"🔍 Engage: Found {len(posts)} posts in feed")
+            feed_posts = feed_result.get('posts') or feed_result.get('data', {}).get('posts', [])
+            for p in feed_posts:
+                p['_source'] = 'feed:global'
+            all_posts.extend(feed_posts)
+            sources.append('feed:global')
         
-        if not posts:
-            return "❌ No posts available to engage"
-
+        # 3. Search for interesting AI/crypto topics
+        interesting_topics = ['AI agents', 'crypto', 'DeFi', 'autonomous', 'AGI', 'web3']
+        topic = random.choice(interesting_topics)
+        print(f"🔍 Dynamic Engage: Searching for '{topic}'...")
+        try:
+            search_result = self.search_posts(topic, limit=5)
+            if isinstance(search_result, dict) and search_result.get('success'):
+                search_posts = search_result.get('posts', [])
+                for p in search_posts:
+                    p['_source'] = f'search:{topic}'
+                all_posts.extend(search_posts)
+                sources.append(f'search:{topic}')
+        except Exception as e:
+            print(f"⚠️ Dynamic Engage: Search failed: {e}")
+        
+        # 4. Deduplicate posts by ID
+        seen_ids = set()
+        unique_posts = []
+        for post in all_posts:
+            pid = post.get('id') or post.get('post_id')
+            if pid and pid not in seen_ids:
+                seen_ids.add(pid)
+                unique_posts.append(post)
+        
+        print(f"🤖 Dynamic Engage: Found {len(unique_posts)} unique posts from {len(sources)} sources")
+        
+        if not unique_posts:
+            return "❌ Dynamic Engage: No posts available to engage"
+        
+        # 5. Score posts by engagement potential (interesting content)
+        scored_posts = []
+        for post in unique_posts:
+            score = 0
+            content = post.get('content', '')
+            likes = post.get('likes_count', 0)
+            replies = post.get('replies_count', 0)
+            source = post.get('_source', 'unknown')
+            
+            # Prefer posts with some engagement but not viral (2-20 likes)
+            if 2 <= likes <= 20:
+                score += 3
+            elif likes > 20:
+                score += 1  # Viral posts are harder to get noticed on
+            
+            # Prefer posts with replies (conversations)
+            if replies >= 1:
+                score += 2
+            
+            # Prefer trending topic posts
+            if 'trending' in source:
+                score += 2
+            
+            # Prefer posts with content (not empty)
+            if len(content) > 20:
+                score += 1
+            
+            # Prefer AI/crypto related content
+            ai_keywords = ['ai', 'agent', 'crypto', 'defi', 'web3', 'autonomous', 'gpt', 'llm', 'blockchain']
+            if any(kw in content.lower() for kw in ai_keywords):
+                score += 2
+            
+            scored_posts.append((score, post))
+        
+        # Sort by score descending
+        scored_posts.sort(reverse=True, key=lambda x: x[0])
+        
+        # 6. Engage with top posts
         liked = 0
         commented = 0
         reposted = 0
-        attempted = 0
+        engaged_posts = []
         
-        for post in posts:
+        for score, post in scored_posts:
             if (liked + commented + reposted) >= target_count:
                 break
-            if not isinstance(post, dict):
-                print(f"⚠️ Engage: Skipping non-dict post: {type(post)}")
-                continue
-
+            
             post_id = post.get('id') or post.get('post_id')
-            author = (post.get('agent_name') or post.get('author_name') or post.get('username') or '').lstrip('@')
+            author = (post.get('agent_name') or post.get('author_name') or '').lstrip('@')
             content = post.get('content', '')
             likes = post.get('likes_count', 0)
-            
-            print(f"🔍 Engage: Processing post {post_id} by @{author}")
+            source = post.get('_source', 'unknown')
             
             if not post_id:
-                print(f"⚠️ Engage: Skipping post with no ID")
                 continue
             if author and getattr(self, 'agent_name', None) and author.lower() == self.agent_name.lower().lstrip('@'):
-                print(f"🔍 Engage: Skipping own post by {author}")
                 continue
-
-            attempted += 1
             
-            # Strategy: Like everything, comment on high-engagement posts, repost viral content
-            should_comment = likes >= 5 and commented < (target_count // 2)  # Comment on popular posts
-            should_repost = likes >= 10 and reposted < (target_count // 3)  # Repost viral content
+            print(f"🔍 Dynamic Engage: [{source}] Post by @{author} (score:{score}, likes:{likes})")
             
-            # 1. Like the post
-            print(f"🔍 Engage: Liking post {post_id}...")
+            # Always try to like
             like_result = self.like_post(str(post_id))
-            
             if isinstance(like_result, str) and like_result.startswith('✅'):
                 liked += 1
-                print(f"✅ Engage: Liked post {post_id} ({liked} likes so far)")
+                print(f"  ✅ Liked")
                 
-                # 2. Comment if criteria met
-                if should_comment and hasattr(self, '_generate_comment'):
-                    print(f"� Engage: Generating comment for post {post_id}...")
+                # Comment on high-score posts (score >= 4) or trending
+                should_comment = score >= 4 or 'trending' in source
+                if should_comment and commented < (target_count // 2) and hasattr(self, '_generate_comment'):
+                    print(f"  💬 Generating AI comment...")
                     try:
                         comment_text = self._generate_comment(content, agent_name=author)
                         if comment_text:
                             reply_result = self.reply_to_post(post_id, comment_text)
                             if isinstance(reply_result, str) and reply_result.startswith('✅'):
                                 commented += 1
-                                print(f"✅ Engage: Commented on post {post_id}: {comment_text[:50]}...")
+                                print(f"  ✅ Commented: {comment_text[:60]}...")
+                                engaged_posts.append({
+                                    'id': post_id, 'author': author, 'action': 'like+comment',
+                                    'comment': comment_text[:60], 'source': source
+                                })
                             else:
-                                print(f"❌ Engage: Failed to comment: {reply_result}")
+                                engaged_posts.append({
+                                    'id': post_id, 'author': author, 'action': 'like',
+                                    'source': source
+                                })
                         else:
-                            print(f"⚠️ Engage: No comment generated")
+                            engaged_posts.append({
+                                'id': post_id, 'author': author, 'action': 'like',
+                                'source': source
+                            })
                     except Exception as e:
-                        print(f"⚠️ Engage: Comment generation failed: {e}")
+                        print(f"  ⚠️ Comment failed: {e}")
+                        engaged_posts.append({
+                            'id': post_id, 'author': author, 'action': 'like',
+                            'source': source
+                        })
+                else:
+                    engaged_posts.append({
+                        'id': post_id, 'author': author, 'action': 'like',
+                        'source': source
+                    })
                 
-                # 3. Repost/quote if viral
-                if should_repost:
-                    print(f"🔄 Engage: Reposting viral post {post_id}...")
+                # Occasionally repost viral content (likes >= 15)
+                if likes >= 15 and reposted < (target_count // 4):
+                    print(f"  🔄 Reposting viral content...")
                     try:
-                        # Generate a short quote comment
-                        quote_comment = f"Great insights from @{author}! 🚀"
                         repost_result = self.repost_post(post_id)
                         if isinstance(repost_result, str) and repost_result.startswith('✅'):
                             reposted += 1
-                            print(f"✅ Engage: Reposted post {post_id}")
-                        else:
-                            # Try quote instead
-                            quote_result = self.quote_post(post_id, quote_comment)
-                            if isinstance(quote_result, str) and quote_result.startswith('✅'):
-                                reposted += 1
-                                print(f"✅ Engage: Quoted post {post_id}")
-                            else:
-                                print(f"❌ Engage: Failed to repost/quote: {repost_result}")
+                            print(f"  ✅ Reposted")
                     except Exception as e:
-                        print(f"⚠️ Engage: Repost failed: {e}")
+                        pass
             else:
-                print(f"❌ Engage: Failed to like post {post_id}: {like_result}")
-
-        total_engaged = liked + commented + reposted
-        print(f"🔍 Engage: Complete - {liked} likes, {commented} comments, {reposted} reposts ({total_engaged}/{target_count})")
+                print(f"  ❌ Failed to like")
         
-        if total_engaged == 0:
-            return f"❌ Engagement failed (attempted {attempted} posts)"
-        return f"✅ Engaged: {liked} likes, {commented} comments, {reposted} reposts ({total_engaged}/{target_count})"
+        total = liked + commented + reposted
+        print(f"\n🤖 Dynamic Engage Complete: {liked} likes, {commented} comments, {reposted} reposts")
+        print(f"   Sources: {', '.join(set(sources))}")
+        
+        if total == 0:
+            return "❌ Dynamic Engage: No successful engagements"
+        
+        return f"✅ Dynamic Engage: {liked} likes, {commented} comments, {reposted} reposts from {len(sources)} sources"
 
     def trending_command(self, *args):
         """Command to fetch and format trending hashtags."""
