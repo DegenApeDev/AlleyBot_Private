@@ -304,3 +304,87 @@ class IntelligenceCommands:
         except Exception as e:
             logger.error(f"Error in sentiment: {e}")
             await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def patterns(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Show cross-platform patterns.
+        
+        Usage: /patterns [hours]
+        """
+        if not self._is_owner(update):
+            await update.message.reply_text("⛔ Owner only")
+            return
+        
+        hours = 48
+        if context.args:
+            try:
+                hours = int(context.args[0])
+            except ValueError:
+                pass
+        
+        try:
+            engine = self._get_inference_engine()
+            patterns = engine.find_cross_platform_patterns(hours=hours)
+            
+            if not patterns:
+                await update.message.reply_text(
+                    f"🌐 No cross-platform patterns detected in last {hours}h\n\n"
+                    "Need data from multiple platforms to detect patterns."
+                )
+                return
+            
+            msg = f"🌐 **Cross-Platform Patterns (Last {hours}h)**\n\n"
+            
+            for i, pattern in enumerate(patterns[:10], 1):
+                strength = getattr(pattern, 'strength', 0.5)
+                strength_bars = '█' * int(strength * 10)
+                
+                msg += f"{i}. **{getattr(pattern, 'pattern_type', 'Unknown').upper()}**\n"
+                msg += f"   {strength_bars} {strength:.0%}\n"
+                msg += f"   {getattr(pattern, 'description', 'No description')}\n"
+                platforms = getattr(pattern, 'platforms', [])
+                if platforms:
+                    msg += f"   Platforms: {', '.join(platforms)}\n"
+                msg += "\n"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+        except Exception as e:
+            logger.error(f"Error in patterns: {e}")
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def intel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Quick intelligence briefing.
+        
+        Usage: /intel
+        """
+        if not self._is_owner(update):
+            await update.message.reply_text("⛔ Owner only")
+            return
+        
+        try:
+            engine = self._get_inference_engine()
+            
+            # Get various intelligence data
+            trends = engine.detect_trends(hours=24, top_n=5)
+            anomalies = engine.detect_anomalies(hours=24)
+            
+            msg = "🧠 **Intelligence Briefing**\n\n"
+            
+            msg += "📈 **Current Trends:**\n"
+            if trends:
+                for trend in trends[:5]:
+                    topic = getattr(trend, 'topic', 'Unknown')
+                    msg += f"• {topic}\n"
+            else:
+                msg += "• No major trends\n"
+            
+            msg += f"\n🚨 **Anomalies:** {len(anomalies) if anomalies else 0} active\n"
+            msg += f"🌐 **Status:** Systems operational\n"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+        except Exception as e:
+            logger.error(f"Error in intel: {e}")
+            await update.message.reply_text(f"❌ Error: {e}")
