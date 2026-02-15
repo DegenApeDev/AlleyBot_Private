@@ -233,21 +233,26 @@ class InferenceEngine:
         with sqlite3.connect(self.world_state.db_path) as conn:
             conn.row_factory = sqlite3.Row
             
-            # Get posts/interactions from facts table
+            # Get posts/interactions from facts table using 'content' attribute
             rows = conn.execute('''
                 SELECT * FROM facts 
-                WHERE fact_type = 'interaction' 
+                WHERE attribute IN ('content', 'post', 'interaction') 
                 AND timestamp > ?
                 ORDER BY timestamp DESC
             ''', (cutoff.isoformat(),)).fetchall()
             
             for row in rows:
-                data = json.loads(row['data'])
+                # Parse the value field as JSON or use directly
+                try:
+                    value_data = json.loads(row['value'])
+                except:
+                    value_data = {'content': row['value']}
+                
                 interactions.append({
                     'entity_id': row['entity_id'],
-                    'content': data.get('content', ''),
+                    'content': value_data.get('content', row['value']),
                     'timestamp': datetime.fromisoformat(row['timestamp']),
-                    'platform': data.get('platform', 'unknown')
+                    'platform': value_data.get('platform', 'unknown')
                 })
         
         return interactions
@@ -547,26 +552,14 @@ class InferenceEngine:
         
         return prediction
     
-    def _get_author_metrics(self, author_id: str) -> Dict[str, float]:
-        """Get historical metrics for an author"""
-        cutoff = datetime.now() - timedelta(days=7)
-        
-        with sqlite3.connect(self.world_state.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute('''
-                SELECT * FROM facts 
-                WHERE entity_id = ? 
-                AND fact_type = 'engagement'
-                AND timestamp > ?
-            ''', (author_id, cutoff.isoformat())).fetchall()
-        
-        if not rows:
-            return {'avg_engagement': 10}
         
         engagements = []
         for row in rows:
-            data = json.loads(row['data'])
-            total = data.get('likes', 0) + data.get('replies', 0) + data.get('reposts', 0)
+            try:
+                value_data = json.loads(row['value'])
+                total = value_data.get('likes', 0) + value_data.get('replies', 0) + value_data.get('reposts', 0)
+            except:
+                total = 0
             engagements.append(total)
         
         return {
@@ -681,18 +674,21 @@ class InferenceEngine:
             conn.row_factory = sqlite3.Row
             rows = conn.execute('''
                 SELECT * FROM facts 
-                WHERE fact_type = 'interaction'
+                WHERE attribute IN ('content', 'post', 'interaction')
                 AND timestamp > ?
             ''', (cutoff.isoformat(),)).fetchall()
         
         for row in rows:
-            data = json.loads(row['data'])
-            content = data.get('content', '').lower()
+            try:
+                value_data = json.loads(row['value'])
+                content = value_data.get('content', row['value']).lower()
+            except:
+                content = row['value'].lower()
             
             if f'#{topic_lower}' in content or topic_lower in content:
                 mentions.append({
                     'entity_id': row['entity_id'],
-                    'content': data.get('content', ''),
+                    'content': content,
                     'timestamp': datetime.fromisoformat(row['timestamp'])
                 })
         
@@ -732,16 +728,19 @@ class InferenceEngine:
             conn.row_factory = sqlite3.Row
             rows = conn.execute('''
                 SELECT * FROM facts 
-                WHERE fact_type = 'interaction'
+                WHERE attribute IN ('content', 'post', 'interaction')
                 AND timestamp > ?
             ''', (cutoff.isoformat(),)).fetchall()
         
         for row in rows:
-            data = json.loads(row['data'])
-            platform = data.get('platform', 'unknown')
+            try:
+                value_data = json.loads(row['value'])
+                platform = value_data.get('platform', 'unknown')
+            except:
+                platform = 'unknown'
             
             platform_interactions[platform].append({
-                'content': data.get('content', ''),
+                'content': value_data.get('content', row['value']),
                 'timestamp': datetime.fromisoformat(row['timestamp']),
                 'entity_id': row['entity_id']
             })
@@ -893,17 +892,16 @@ class InferenceEngine:
         sentiments = []
         
         for row in rows:
-            data = json.loads(row['data'])
-            entities.add(row['entity_id'])
+            try:
+                value_data = json.loads(row['value'])
+                engagement = value_data.get('likes', 0) + value_data.get('replies', 0) + value_data.get('reposts', 0)
+                sentiments.append(self._estimate_sentiment(value_data.get('content', row['value'])))
+            except:
+                engagement = 0
             
-            # Sum engagement metrics
-            engagement = data.get('likes', 0) + data.get('replies', 0) + data.get('reposts', 0)
+            entities.add(row['entity_id'])
             engagements.append(engagement)
             entity_engagement[row['entity_id']] += engagement
-            
-            # Estimate sentiment if content available
-            if 'content' in data:
-                sentiments.append(self._estimate_sentiment(data['content']))
         
         # Sort by engagement
         top_entities = sorted(entity_engagement.items(), key=lambda x: x[1], reverse=True)
