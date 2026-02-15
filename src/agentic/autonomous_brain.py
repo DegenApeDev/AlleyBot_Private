@@ -396,7 +396,82 @@ class AutonomousBrain:
             except Exception as e:
                 logger.error(f"❌ Failed to gather from Clawbr: {e}")
         
-        # TODO: Add other platforms (MoltChan, MoltRoad, etc.)
+        # Get from Moltchan
+        moltchan = self.plugin_manager.get_plugin('moltchan')
+        if moltchan and hasattr(moltchan, 'browse_boards'):
+            try:
+                boards = moltchan.browse_boards()
+                if isinstance(boards, dict) and 'boards' in boards:
+                    for board in boards['boards'][:5]:  # Top 5 boards
+                        obs = SyModObservation(
+                            observation_type='board',
+                            source_plugin='moltchan',
+                            data={
+                                'id': board.get('id'),
+                                'name': board.get('name'),
+                                'description': board.get('description'),
+                                'thread_count': board.get('threadCount', 0)
+                            }
+                        )
+                        observations.append(obs)
+            except Exception as e:
+                logger.error(f"❌ Failed to gather from Moltchan: {e}")
+        
+        # Get from Moltroad
+        moltroad = self.plugin_manager.get_plugin('moltroad')
+        if moltroad and hasattr(moltroad, 'browse_listings'):
+            try:
+                listings = moltroad.browse_listings()
+                if isinstance(listings, dict) and 'listings' in listings:
+                    for listing in listings['listings'][:10]:
+                        obs = SyModObservation(
+                            observation_type='listing',
+                            source_plugin='moltroad',
+                            data={
+                                'id': listing.get('id'),
+                                'title': listing.get('title'),
+                                'price': listing.get('price'),
+                                'category': listing.get('category'),
+                                'seller': listing.get('seller', {}).get('name')
+                            }
+                        )
+                        observations.append(obs)
+                # Also check bounties
+                bounties = moltroad.get_bounties() if hasattr(moltroad, 'get_bounties') else {}
+                if isinstance(bounties, dict) and 'bounties' in bounties:
+                    for bounty in bounties['bounties'][:5]:
+                        obs = SyModObservation(
+                            observation_type='bounty',
+                            source_plugin='moltroad',
+                            data={
+                                'id': bounty.get('id'),
+                                'title': bounty.get('title'),
+                                'reward': bounty.get('reward'),
+                                'status': bounty.get('status')
+                            }
+                        )
+                        observations.append(obs)
+            except Exception as e:
+                logger.error(f"❌ Failed to gather from Moltroad: {e}")
+        
+        # Get from Moltbit
+        moltbit = self.plugin_manager.get_plugin('moltbit')
+        if moltbit and hasattr(moltbit, 'moltbit_status'):
+            try:
+                status = moltbit.moltbit_status()
+                obs = SyModObservation(
+                    observation_type='status',
+                    source_plugin='moltbit',
+                    data={
+                        'owner_registered': status.get('owner_registered'),
+                        'agent_registered': status.get('agent_registered'),
+                        'can_post': status.get('can_post'),
+                        'agent_handle': status.get('agent_handle')
+                    }
+                )
+                observations.append(obs)
+            except Exception as e:
+                logger.error(f"❌ Failed to gather from Moltbit: {e}")
         
         return observations
     
@@ -422,7 +497,8 @@ class AutonomousBrain:
                             'min_confidence': self.config.min_confidence
                         }
                     },
-                    available_actions=['like', 'reply', 'repost', 'follow', 'post', 'engage', 'clawbr_engage', 'upvote', 'comment']
+                    available_actions=['like', 'reply', 'repost', 'follow', 'post', 'engage', 'clawbr_engage', 
+                                       'upvote', 'comment', 'thread', 'reply_thread', 'browse', 'listing', 'bounty', 'moltbit_post']
                 )
                 
                 # Tag with plugin name
@@ -469,6 +545,12 @@ class AutonomousBrain:
                 result = await self._execute_moltbook_action(plugin, proposal)
             elif plugin_name == 'clawbr':
                 result = await self._execute_clawbr_action(plugin, proposal)
+            elif plugin_name == 'moltchan':
+                result = await self._execute_moltchan_action(plugin, proposal)
+            elif plugin_name == 'moltroad':
+                result = await self._execute_moltroad_action(plugin, proposal)
+            elif plugin_name == 'moltbit':
+                result = await self._execute_moltbit_action(plugin, proposal)
             else:
                 # Generic execution attempt
                 if hasattr(plugin, f'{action_type}_command'):
@@ -566,6 +648,92 @@ class AutonomousBrain:
             return f"✅ Created Clawbr post" if result else f"❌ Failed to create post"
         else:
             logger.warning(f"⚠️ Unknown/unhandled Clawbr action: {action}")
+            return None
+    
+    async def _execute_moltchan_action(self, plugin, proposal) -> Optional[str]:
+        """Execute Moltchan-specific actions (imageboard)"""
+        action = proposal.action_type
+        target_id = proposal.target_id
+        content = proposal.content
+        
+        if not plugin.initialized:
+            logger.warning(f"⚠️ Moltchan not initialized")
+            return None
+        
+        if action == 'thread' or action == 'post':
+            # Create a new thread on a tech/AI board
+            if hasattr(plugin, 'browse_boards'):
+                boards = plugin.browse_boards()
+                if isinstance(boards, dict) and 'boards' in boards:
+                    # Find a tech/AI related board
+                    tech_board = None
+                    for board in boards['boards']:
+                        name = board.get('name', '').lower()
+                        if any(kw in name for kw in ['tech', 'ai', 'programming', 'dev']):
+                            tech_board = board
+                            break
+                    if tech_board:
+                        board_id = tech_board.get('id')
+                        subject = content[:100] if content else "Autonomous AI Observation"
+                        result = plugin.create_thread(board_id, subject, content or subject) if hasattr(plugin, 'create_thread') else None
+                        return f"✅ Created thread on {tech_board.get('name')}" if result else f"❌ Failed to create thread"
+            return None
+        elif action == 'reply_thread' and target_id and content:
+            result = plugin.reply_to_thread(target_id, content) if hasattr(plugin, 'reply_to_thread') else None
+            return f"✅ Replied to thread {target_id}" if result else f"❌ Failed to reply to thread"
+        elif action == 'browse' or action == 'engage':
+            # Just browse and observe
+            if hasattr(plugin, '_browse_and_engage'):
+                plugin._browse_and_engage()
+                return "✅ Moltchan browse completed"
+            return None
+        else:
+            logger.warning(f"⚠️ Unknown/unhandled Moltchan action: {action}")
+            return None
+    
+    async def _execute_moltroad_action(self, plugin, proposal) -> Optional[str]:
+        """Execute Moltroad-specific actions (marketplace)"""
+        action = proposal.action_type
+        target_id = proposal.target_id
+        content = proposal.content
+        
+        if not plugin.initialized:
+            logger.warning(f"⚠️ Moltroad not initialized")
+            return None
+        
+        if action == 'browse' or action == 'listing':
+            # Browse marketplace for opportunities
+            result = plugin.browse_listings() if hasattr(plugin, 'browse_listings') else None
+            if result and isinstance(result, dict):
+                count = len(result.get('listings', []))
+                return f"✅ Browsed {count} Moltroad listings"
+            return None
+        elif action == 'bounty':
+            # Check available bounties
+            result = plugin.get_bounties() if hasattr(plugin, 'get_bounties') else None
+            if result and isinstance(result, dict):
+                count = len(result.get('bounties', []))
+                return f"✅ Found {count} Moltroad bounties"
+            return None
+        else:
+            logger.warning(f"⚠️ Unknown/unhandled Moltroad action: {action}")
+            return None
+    
+    async def _execute_moltbit_action(self, plugin, proposal) -> Optional[str]:
+        """Execute Moltbit-specific actions (crypto/encoding platform)"""
+        action = proposal.action_type
+        content = proposal.content
+        
+        if action == 'moltbit_post' or action == 'post':
+            # Post encoded message
+            if hasattr(plugin, 'moltbit_post_text'):
+                result = plugin.moltbit_post_text(content or "AlleyBot autonomous check-in")
+                if result and result.get('success'):
+                    return f"✅ Posted to Moltbit: {content[:50] if content else 'check-in'}"
+                return f"❌ Failed to post to Moltbit"
+            return None
+        else:
+            logger.warning(f"⚠️ Unknown/unhandled Moltbit action: {action}")
             return None
     
     def get_status(self) -> Dict[str, Any]:
