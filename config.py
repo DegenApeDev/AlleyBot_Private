@@ -3,6 +3,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Bot Identity - configurable name for users of this framework
+BOT_NAME = os.getenv('BOT_NAME', 'AlleyBot')
+
 API_KEY = os.getenv('MOLTBOOK_API_KEY')
 MOLTCHAN_API_KEY = os.getenv('MOLTCHAN_API_KEY')
 MOLTROAD_API_KEY = os.getenv('MOLTROAD_API_KEY')

@@ -25,12 +25,15 @@ try:
 except ImportError:
     SQLITE_MEMORY_AVAILABLE = False
 
+# Bot Identity - configurable name for users of this framework
+from config import BOT_NAME
+
 class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
     """Minimal core that orchestrates plugins with SQLite memory"""
     
     def __init__(self, config_dir='config'):
         # Main tagline - show immediately at startup
-        print("🦞 AlleyBot - Extensible AI Agent & Automation Platform")
+        print(f"🦞 {BOT_NAME} - Extensible AI Agent & Automation Platform")
         print("=" * 60)
         
         self.config_dir = Path(config_dir)
@@ -71,7 +74,7 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
         )
 
         print(f"\n{'='*60}")
-        print(f"🤖 ALLEYBOT CORE - Extensible AI Agent")
+        print(f"🤖 {BOT_NAME.upper()} CORE - Extensible AI Agent")
         print(f"{'='*60}")
         print(f"📦 Plugins loaded: {len(self.plugin_manager.plugins)}")
         print(f"🔧 Active tasks: {len(self.plugin_manager.tasks)}")
@@ -82,7 +85,7 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
         """Load core configuration"""
         config_file = self.config_dir / 'core.json'
         default_config = {
-            'agent_name': 'AlleyBot',
+            'agent_name': BOT_NAME,
             'debug': False,
             'log_level': 'INFO',
             'schedule_interval': 60  # seconds
@@ -398,12 +401,12 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
     
     def run_interactive(self):
         """Run interactive mode"""
-        print("\n🎮 AlleyBot Interactive Mode")
+        print(f"\n🎮 {BOT_NAME} Interactive Mode")
         print("Type 'help' for commands or 'exit' to quit\n")
         
         while True:
             try:
-                command = input("AlleyBot> ").strip().lower()
+                command = input(f"{BOT_NAME}> ").strip().lower()
                 
                 if command == 'exit' or command == 'quit':
                     break
@@ -416,7 +419,7 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
                 elif command == 'plugins':
                     self.list_plugins()
                 elif command == 'status':
-                    print(f"\n📊 AlleyBot Status:")
+                    print(f"\n📊 {BOT_NAME} Status:")
                     print(f"  Agent: {self.config['agent_name']}")
                     print(f"  Plugins: {len(self.plugin_manager.plugins)}")
                     print(f"  Tasks: {len(self.plugin_manager.tasks)}")
@@ -475,11 +478,11 @@ if __name__ == "__main__":
                 if result:
                     print(result)
         else:
-            print("🤖 AlleyBot Core")
+            print(f"🤖 {BOT_NAME} Core")
             print("Usage:")
             print("  python alleybot_core.py autonomous   - Run autonomous mode (recommended)")
             print("  python alleybot_core.py interactive  - Run interactive mode")
             print("  python alleybot_core.py <command>    - Run specific command")
-            print("\n💡 Then send /brain_start in Telegram to activate the autonomous brain")
+            print(f"\n💡 Then send /brain_start in Telegram to activate the autonomous brain")
     finally:
         core.cleanup()

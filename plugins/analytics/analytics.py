@@ -13,6 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from plugin_manager import AlleyBotPlugin
 from plugins.analytics.platform_aggregator import PlatformStatsAggregator
 from plugins.analytics.agent_card import AgentCardGenerator
+from config import BOT_NAME
 
 class AnalyticsPlugin(AlleyBotPlugin):
     """Analytics and dashboard plugin"""
@@ -459,7 +460,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
             
             # Wallet & Identity
             base_wallet = os.getenv('BASE_WALLET_PUBLIC_ADDRESS', os.getenv('BASE_WALLET', '0x...'))
-            agent_id = os.getenv('AGENT_ID', 'AlleyBot')
+            agent_id = os.getenv('AGENT_ID', BOT_NAME)
             token_address = os.getenv('ALYBOT_TOKEN_ADDRESS', '0x08a18FE29158B1de5704F99cA396Ad9B2B6a58F3')
             
             # Count active platforms
@@ -864,7 +865,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 BTC_WALLET, ETH_WALLET, BASE_WALLET, SOL_WALLET
             )
             
-            output = "💰 AlleyBot's Wallets:\n\n"
+            output = f"💰 {BOT_NAME}'s Wallets:\n\n"
             output += f"🟠 Bitcoin (BTC):\n  {BTC_WALLET}\n\n"
             output += f"🔷 Ethereum (ETH):\n  {ETH_WALLET}\n\n"
             output += f"🔵 Base L2:\n  {BASE_WALLET}\n\n"
