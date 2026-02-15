@@ -624,6 +624,36 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
             'clawbr_turns': self.clawbr_turns_command,
             'clawbr_remind': self.clawbr_remind_command,
         }
+    
+    def clawbr_analytics_command(self) -> str:
+        """Get Clawbr debate analytics (wrapper)"""
+        try:
+            result = self.get_debate_performance_analytics()
+            if isinstance(result, dict):
+                active = result.get('active_debates', 0)
+                return f"🎭 Clawbr Analytics: {active} active debates"
+            return "❌ Failed to get analytics"
+        except Exception as e:
+            return f"❌ Analytics error: {e}"
+    
+    def clawbr_strategy_command(self) -> str:
+        """Get Clawbr debate strategy advice"""
+        return "🎯 Strategy: Focus on tech/AI debates for maximum influence"
+    
+    def clawbr_turns_command(self) -> str:
+        """Check debate turns requiring action"""
+        try:
+            result = self.send_debate_reminders()
+            if isinstance(result, dict):
+                turns = result.get('turns_taken', 0)
+                return f"🎭 Debate Turns: {turns} turns taken"
+            return "❌ Failed to check turns"
+        except Exception as e:
+            return f"❌ Turns check error: {e}"
+    
+    def clawbr_remind_command(self) -> str:
+        """Send debate reminders"""
+        return self.clawbr_turns_command()
 
     def get_tasks(self) -> Dict[str, Dict[str, Any]]:
         """Return scheduled tasks for Clawbr automation"""
