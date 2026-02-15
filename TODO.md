@@ -1,5 +1,104 @@
 # AlleyBot TODO — Roadmap
 
+> **📋 HANDOFF NOTES (Feb 15, 2026):** This project is being handed off. See [Handoff Section](#-handoff-for-next-agent) below for critical context.
+
+---
+
+## 🎯 HANDOFF FOR NEXT AGENT
+
+### Current State (As of Feb 15, 2026)
+
+**Branch:** `kimi25_polished` (pushed and ready)
+
+**Recent Major Changes:**
+1. **Dashboard Overhaul COMPLETE** (`templates/dashboard_v2.html`, `plugins/analytics/analytics.py`)
+   - New AGI Social Intelligence panel with live stats
+   - Animated UI with gradient backgrounds, shimmer effects
+   - Real-time updates (5s refresh for stats, 10s for activity)
+   - Platform stats now count from memory (not broken attributes)
+   
+2. **Platform Aggregator FIXED** (`plugins/analytics/platform_aggregator.py`)
+   - Was showing 0 for all platform stats
+   - Now correctly counts posts from `*_recent_posts` memory keys
+   - Each platform: moltx, moltbook, moltchan, moltroad, clawbr
+
+3. **Missing Methods FIXED**
+   - `analytics.py`: Added `_get_brain_stats()` that was corrupted
+   - `clawbr.py`: Added missing command methods (`clawbr_analytics_command`, etc.)
+   - `agi_social_mixin.py`: Fixed `get_notifications()` signature handling
+   - `moltroad.py`: Removed broken `/bounties` call causing 404
+
+### Known Issues (Monitor These)
+
+| Issue | Status | Notes |
+|-------|--------|-------|
+| Dashboard stats showing 0 | ✅ FIXED | Now counts from memory, hot-reload `analytics` plugin |
+| Missing `_get_brain_stats` | ✅ FIXED | Method restored in analytics.py |
+| Clawbr missing commands | ✅ FIXED | Added in clawbr.py:620-656 |
+| Moltx `unread_only` error | ✅ FIXED | Fixed in agi_social_mixin.py:62-80 |
+| MoltRoad 404 on bounties | ✅ FIXED | Removed from heartbeat |
+| AGI social cycle running | ✅ ACTIVE | Follows users, replies to notifications |
+
+### Hot-Reload Commands
+```bash
+/reload_plugins analytics      # After dashboard changes
+/reload_plugins brain          # After brain changes
+/reload_plugins moltx          # After moltx changes
+/reload_plugins clawbr         # After clawbr changes
+/reload_plugins moltroad       # After moltroad changes
+```
+
+### Key File Locations
+```
+Dashboard:          templates/dashboard_v2.html
+                    plugins/analytics/analytics.py
+                    plugins/analytics/platform_aggregator.py
+
+Brain/AGI Social:     src/agentic/autonomous_brain.py
+                      src/agentic/agi_social_mixin.py
+                      src/agentic/skilldoc_manager.py
+
+Platforms:            plugins/moltx/moltx.py
+                      plugins/clawbr/clawbr.py
+                      plugins/moltbook/moltbook.py
+                      plugins/moltroad/moltroad.py
+```
+
+### Environment Variables Required
+```bash
+MOLTBOOK_API_KEY=      # For Moltbook platform
+MOLTX_API_KEY=         # For Moltx platform  
+MOLTCHAN_API_KEY=      # For Moltchan platform
+MOLTROAD_API_KEY=      # For Moltroad platform
+CLAWBR_API_KEY=        # For Clawbr platform
+GROK_API_KEY=          # For Grok AI
+DEEPSEEK_API_KEY=      # For DeepSeek AI
+TELEGRAM_BOT_TOKEN=    # For Telegram bot
+TELEGRAM_ADMIN_CHAT_ID=# Owner-only commands
+BASE_WALLET_PUBLIC_ADDRESS=  # For on-chain
+```
+
+### Testing Dashboard
+```bash
+# Access dashboard at:
+http://localhost:7001
+http://38.247.148.22:7001
+
+# API endpoints:
+/api/stats              # All stats JSON
+/api/recent_activity    # Activity feed
+/api/agent_card         # ERC-8004 agent card
+```
+
+### Next Steps for Next Agent
+1. **Monitor dashboard** - Ensure stats populate correctly after hot-reload
+2. **Verify AGI social** - Check that `follow_after_engagement` and notification replies work
+3. **Platform health** - Watch logs for any API errors from platforms
+4. **Dashboard polish** - If needed, further enhance visualizations
+5. **World State** - Continue expanding platform adapters (see PLATFORM_INTEGRATION_GUIDE.md)
+
+---
+
 ## Completed ✅
 
 ### Phase 1: Self-Reflection System (AGI Core)
