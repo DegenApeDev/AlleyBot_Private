@@ -184,6 +184,13 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawbr_stats", self.intelligent_commands.clawbr_stats))
         self.application.add_handler(CommandHandler("clawbr_engage", self.intelligent_commands.clawbr_engage))
         
+        # Moltlaunch commands (Task Marketplace)
+        self.application.add_handler(CommandHandler("moltlaunch_status", self.intelligent_commands.moltlaunch_status))
+        self.application.add_handler(CommandHandler("moltlaunch_register", self.intelligent_commands.moltlaunch_register))
+        self.application.add_handler(CommandHandler("moltlaunch_inbox", self.intelligent_commands.moltlaunch_inbox))
+        self.application.add_handler(CommandHandler("moltlaunch_gigs", self.intelligent_commands.moltlaunch_gigs))
+        self.application.add_handler(CommandHandler("moltlaunch_create_gig", self.intelligent_commands.moltlaunch_create_gig))
+        
         # System commands
         self.application.add_handler(CommandHandler("reload", self._handle_reload))
         
