@@ -10,7 +10,6 @@ Part of AGI Core - Phase 7
 from telegram import Update
 from telegram.ext import ContextTypes
 import logging
-from datetime import datetime
 
 from src.autonomy.inference_engine import get_inference_engine, InferenceEngine
 
@@ -90,7 +89,7 @@ class IntelligenceCommands:
                 msg += f"   {bars} {trend.strength:.0%}\n"
                 msg += f"   Direction: {trend.direction} | Velocity: {trend.velocity:.2f}/h\n"
                 
-                if hasattr(trend, 'predicted_peak') and trend.predicted_peak:
+                if trend.predicted_peak:
                     time_to_peak = (trend.predicted_peak - datetime.now()).total_seconds() / 3600
                     if time_to_peak > 0:
                         msg += f"   ⏰ Peak predicted in {time_to_peak:.1f}h\n"
@@ -219,21 +218,36 @@ class IntelligenceCommands:
             engine = self._get_inference_engine()
             anomalies = engine.detect_anomalies(hours=hours)
             
-            msg = f"🚨 **Detected Anomalies (Last {hours}h)**\n\n"
-            
             if not anomalies:
-                msg += "No significant anomalies detected."
-            else:
-                for i, anomaly in enumerate(anomalies[:10], 1):
-                    anomaly_emoji = getattr(anomaly, 'emoji', '🚨')
-                    title = getattr(anomaly, 'title', getattr(anomaly, 'topic', 'Unknown'))
-                    score = getattr(anomaly, 'score', 0.0)
-                    confidence = getattr(anomaly, 'confidence', 0.0)
-                    description = getattr(anomaly, 'description', '')[:150]
-                    
-                    msg += f"{i}. {anomaly_emoji} **{title}**\n"
-                    msg += f"   Score: {score:.2f} | Confidence: {confidence:.0%}\n"
-                    msg += f"   {description}...\n\n"
+                await update.message.reply_text(f"✅ No anomalies detected in last {hours}h")
+                return
+            
+            msg = f"🚨 **Anomalies Detected (Last {hours}h)**\n\n"
+            
+            for anomaly in anomalies:
+                # Severity emoji
+                severity_emoji = {
+                    'critical': '🔴',
+                    'warning': '🟡',
+                    'info': '🟢'
+                }.get(anomaly.severity, '⚪')
+                
+                msg += f"{severity_emoji} **{anomaly.anomaly_type.replace('_', ' ').title()}**\n"
+                msg += f"Severity: {anomaly.severity.upper()}\n"
+                msg += f"Description: {anomaly.description}\n"
+                
+                if anomaly.entities_involved:
+                    msg += f"Entities: {', '.join(anomaly.entities_involved[:3])}\n"
+                
+                if anomaly.metrics:
+                    msg += "Metrics:\n"
+                    for key, value in anomaly.metrics.items():
+                        msg += f"  • {key}: {value:.2f}\n"
+                
+                if anomaly.recommended_action:
+                    msg += f"💡 Action: {anomaly.recommended_action}\n"
+                
+                msg += "\n"
             
             await update.message.reply_text(msg, parse_mode='Markdown')
             
@@ -243,9 +257,10 @@ class IntelligenceCommands:
     
     async def sentiment(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
-        Analyze sentiment for a topic.
+        Track sentiment for a topic.
         
         Usage: /sentiment <topic> [hours]
+        Example: /sentiment #AlleyBot 168
         """
         if not self._is_owner(update):
             await update.message.reply_text("⛔ Owner only")
@@ -254,12 +269,15 @@ class IntelligenceCommands:
         if not context.args:
             await update.message.reply_text(
                 "Usage: /sentiment <topic> [hours]\n\n"
-                "Example: /sentiment Bitcoin 48"
+                "Examples:\n"
+                "/sentiment #AlleyBot\n"
+                "/sentiment crypto 72"
             )
             return
         
         topic = context.args[0]
-        hours = 24
+        hours = 168  # 1 week default
+        
         if len(context.args) > 1:
             try:
                 hours = int(context.args[1])
@@ -267,40 +285,145 @@ class IntelligenceCommands:
                 pass
         
         try:
-            ClawbrAnalytics_cls = None
-            try:
-                from src.analytics.clawbr_analytics import ClawbrAnalytics
-                ClawbrAnalytics_cls = ClawbrAnalytics
-            except ImportError:
-                try:
-                    from alleybot.analytics.clawbr_analytics import ClawbrAnalytics
-                    ClawbrAnalytics_cls = ClawbrAnalytics
-                except ImportError:
-                    raise ImportError("ClawbrAnalytics not found")
+            engine = self._get_inference_engine()
+            evolution = engine.track_sentiment(topic, hours=hours)
             
-            analytics = ClawbrAnalytics_cls()
-            result = analytics.analyze_sentiment(topic, hours)
+            msg = f"💭 **Sentiment Analysis: {topic}**\n"
+            msg += f"Time window: {hours}h\n\n"
             
-            score = getattr(result, 'score', 0.0)
-            sentiment_emoji = "🟢" if score > 0.1 else "🔴" if score < -0.1 else "🟡"
-            sentiment_label = "Positive" if score > 0.1 else "Negative" if score < -0.1 else "Neutral"
+            # Trend direction emoji
+            direction_emoji = {
+                'improving': '📈',
+                'worsening': '📉',
+                'stable': '➡️'
+            }.get(evolution.trend_direction, '➡️')
             
-            summary = getattr(result, 'summary', 'No summary available')
-            examples = getattr(result, 'examples', [])
+            msg += f"{direction_emoji} **Trend: {evolution.trend_direction.upper()}**\n"
+            msg += f"Volatility: {evolution.volatility:.2f}\n"
+            msg += f"Data points: {len(evolution.timeline)}\n\n"
             
-            msg = f"😊 **Sentiment Analysis for '{topic}' (Last {hours}h)**\n\n"
-            msg += f"**Score:** {sentiment_emoji} {score:.3f} ({sentiment_label})\n\n"
-            msg += f"**Summary:** {summary}\n\n"
-            
-            if examples:
-                msg += "**Recent Examples:**\n"
-                for ex in examples[:5]:
-                    msg += f"• {str(ex)[:100]}...\n"
+            if evolution.key_events:
+                msg += "**Key Events (Sentiment Shifts):**\n"
+                for event in evolution.key_events[:5]:
+                    direction = '📈' if event['direction'] == 'positive' else '📉'
+                    msg += f"{direction} {event['time'][:16]}\n"
+                    msg += f"   Shift: {event['shift']:.0%} | Volume: {event['volume']}\n"
             else:
-                msg += "**Examples:** None available\n"
+                msg += "No major sentiment shifts detected\n"
             
             await update.message.reply_text(msg, parse_mode='Markdown')
             
         except Exception as e:
             logger.error(f"Error in sentiment: {e}")
             await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def patterns(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Show cross-platform patterns.
+        
+        Usage: /patterns [hours]
+        """
+        if not self._is_owner(update):
+            await update.message.reply_text("⛔ Owner only")
+            return
+        
+        hours = 48
+        if context.args:
+            try:
+                hours = int(context.args[0])
+            except ValueError:
+                pass
+        
+        try:
+            engine = self._get_inference_engine()
+            patterns = engine.find_cross_platform_patterns(hours=hours)
+            
+            if not patterns:
+                await update.message.reply_text(
+                    f"🌐 No cross-platform patterns detected in last {hours}h\n\n"
+                    "Need data from multiple platforms to detect patterns."
+                )
+                return
+            
+            msg = f"🌐 **Cross-Platform Patterns (Last {hours}h)**\n\n"
+            
+            for i, pattern in enumerate(patterns[:10], 1):
+                strength_bars = '█' * int(pattern.strength * 10)
+                
+                msg += f"{i}. **{pattern.pattern_type.upper()}**\n"
+                msg += f"   {strength_bars} {pattern.strength:.0%}\n"
+                msg += f"   {pattern.description}\n"
+                msg += f"   Platforms: {', '.join(pattern.platforms)}\n"
+                
+                if pattern.entities_involved:
+                    msg += f"   Key entities: {len(pattern.entities_involved)}\n"
+                
+                msg += "\n"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+        except Exception as e:
+            logger.error(f"Error in patterns: {e}")
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def intel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Quick intelligence briefing.
+        
+        Usage: /intel
+        """
+        if not self._is_owner(update):
+            await update.message.reply_text("⛔ Owner only")
+            return
+        
+        try:
+            engine = self._get_inference_engine()
+            summary = engine.get_intelligence_summary()
+            
+            msg = "🧠 **Intelligence Briefing**\n\n"
+            
+            msg += "📈 **Current Trends:**\n"
+            if summary.get('trends'):
+                for trend in summary['trends'][:5]:
+                    msg += f"• {trend}\n"
+            else:
+                msg += "• No major trends\n"
+            
+            msg += f"\n🌟 **Network:** {summary.get('influencers', 0)} influencers\n"
+            msg += f"🌐 **Patterns:** {summary.get('cross_platform_patterns', 0)} cross-platform\n"
+            msg += f"🚨 **Anomalies:** {summary.get('active_anomalies', 0)} active\n"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+        except Exception as e:
+            logger.error(f"Error in intel: {e}")
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    def get_handlers(self):
+        """Return command handlers for registration"""
+        from telegram.ext import CommandHandler
+        
+        return [
+            CommandHandler('trends', self.trends),
+            CommandHandler('influencers', self.influencers),
+            CommandHandler('predict', self.predict),
+            CommandHandler('anomalies', self.anomalies),
+            CommandHandler('sentiment', self.sentiment),
+            CommandHandler('patterns', self.patterns),
+            CommandHandler('intel', self.intel),
+        ]
+
+
+# Fix import
+from datetime import datetime
+
+# Singleton
+_intelligence_commands_instance = None
+
+
+def get_intelligence_commands(telegram_plugin=None):
+    """Get or create IntelligenceCommands singleton"""
+    global _intelligence_commands_instance
+    if _intelligence_commands_instance is None and telegram_plugin is not None:
+        _intelligence_commands_instance = IntelligenceCommands(telegram_plugin)
+    return _intelligence_commands_instance

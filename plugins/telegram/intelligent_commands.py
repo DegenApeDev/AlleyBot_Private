@@ -84,6 +84,124 @@ class IntelligentTelegramCommands:
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
     
+    def _get_inference_engine(self):
+        """Get or create inference engine for AGI commands"""
+        from src.autonomy.inference_engine import get_inference_engine
+        return get_inference_engine(core=self.core)
+    
+    async def trends(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Cross-platform trend analysis"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            engine = self._get_inference_engine()
+            trends_data = engine.detect_cross_platform_trends()
+            
+            msg = "📊 **Cross-Platform Trends**\n\n"
+            if trends_data:
+                for trend in trends_data[:5]:
+                    msg += f"• {trend.get('topic', 'Unknown')}\n"
+                    msg += f"  Platforms: {', '.join(trend.get('platforms', []))}\n"
+                    msg += f"  Strength: {trend.get('strength', 0):.0%}\n\n"
+            else:
+                msg += "No significant trends detected."
+            
+            await update.message.reply_text(msg)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def predict(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Predict future trends"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            hours = int(context.args[0]) if context.args else 24
+            engine = self._get_inference_engine()
+            predictions = engine.predict_trends(hours=hours)
+            
+            msg = f"🔮 **Trend Predictions (Next {hours}h)**\n\n"
+            if predictions:
+                for pred in predictions[:5]:
+                    msg += f"• {pred.get('topic', 'Unknown')}\n"
+                    msg += f"  Confidence: {pred.get('confidence', 0):.0%}\n"
+                    msg += f"  Expected: {pred.get('direction', 'unknown')}\n\n"
+            else:
+                msg += "No predictions available."
+            
+            await update.message.reply_text(msg)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def anomalies(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Detect anomalies across platforms"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            hours = int(context.args[0]) if context.args else 24
+            engine = self._get_inference_engine()
+            anomalies = engine.detect_anomalies(hours=hours)
+            
+            msg = f"🚨 **Anomalies (Last {hours}h)**\n\n"
+            if anomalies:
+                for anomaly in anomalies[:5]:
+                    msg += f"• {anomaly.get('type', 'Unknown')}\n"
+                    msg += f"  Severity: {anomaly.get('severity', 'unknown')}\n"
+                    msg += f"  Description: {anomaly.get('description', 'N/A')[:100]}\n\n"
+            else:
+                msg += "No anomalies detected."
+            
+            await update.message.reply_text(msg)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def sentiment(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Analyze sentiment for a topic"""
+        if not await self._verify_admin(update):
+            return
+        
+        if not context.args:
+            await update.message.reply_text(
+                "Usage: /sentiment <topic> [hours]\n\n"
+                "Examples:\n"
+                "/sentiment #AlleyBot\n"
+                "/sentiment crypto 72"
+            )
+            return
+        
+        topic = context.args[0]
+        hours = 24
+        
+        if len(context.args) > 1:
+            try:
+                hours = int(context.args[1])
+            except ValueError:
+                pass
+        
+        try:
+            engine = self._get_inference_engine()
+            result = engine.analyze_sentiment(topic, hours=hours)
+            
+            score = result.get('score', 0.0)
+            sentiment_emoji = "🟢" if score > 0.1 else "🔴" if score < -0.1 else "🟡"
+            sentiment_label = "Positive" if score > 0.1 else "Negative" if score < -0.1 else "Neutral"
+            
+            msg = f"😊 **Sentiment for '{topic}' (Last {hours}h)**\n\n"
+            msg += f"**Score:** {sentiment_emoji} {score:.3f} ({sentiment_label})\n\n"
+            
+            if result.get('summary'):
+                msg += f"**Summary:** {result['summary']}\n\n"
+            
+            if result.get('platforms'):
+                msg += "**By Platform:**\n"
+                for platform, data in result['platforms'].items():
+                    p_score = data.get('score', 0)
+                    p_emoji = "🟢" if p_score > 0.1 else "🔴" if p_score < -0.1 else "🟡"
+                    msg += f"• {platform}: {p_emoji} {p_score:.3f}\n"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
     async def moltx_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Create an AI-generated post on Moltx based on topic/direction"""
         if not await self._verify_admin(update):
@@ -611,21 +729,6 @@ Generate only the title (no explanations):"""
                 # Production mode info
                 status_text += "\n🚀 **Production Mode**\n"
                 status_text += "• Event-driven architecture: ✅\n"
-                status_text += "• Model routing: ✅ DeepSeek/Grok\n"
-                status_text += "• Skills loaded: ✅\n"
-                status_text += "• Session persistence: ✅\n"
-            
-            await update.message.reply_text(status_text)
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
-    
-    async def skills(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """List available skills"""
-        if not await self._verify_admin(update):
-            return
-        try:
-            from src.skills.skill_loader import SkillLoader
             
             loader = SkillLoader()
             skills = loader.list_skills()
