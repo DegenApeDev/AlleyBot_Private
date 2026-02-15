@@ -21,6 +21,7 @@ import os
 from src.agentic.action_logger import ActionLogger, ActionRecord
 from src.agentic.symod_core import get_symod_manager, SyModObservation
 from src.agentic.skilldoc_manager import get_skilldoc_manager
+from src.agentic.agi_social_mixin import AGISocialMixin
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ class BrainConfig:
         return configs.get(mode, cls())
 
 
-class AutonomousBrain:
+class AutonomousBrain(AGISocialMixin):
     """
     Alley's autonomous decision-making and action system.
     
@@ -123,6 +124,9 @@ class AutonomousBrain:
         # Skill documentation manager
         self.skilldoc_manager = get_skilldoc_manager()
         self._skilldoc_task: Optional[asyncio.Task] = None
+        
+        # Initialize AGI social behaviors
+        AGISocialMixin.__init__(self)
         
         logger.info("🧠 AutonomousBrain initialized")
     
@@ -297,6 +301,15 @@ class AutonomousBrain:
             # Execute
             result = await self._execute_proposal(proposal)
             
+            # AGI Social: Follow after engagement if appropriate
+            if result and proposal.target_name:
+                await self._follow_after_engagement_action(
+                    proposal.metadata.get('plugin', 'unknown'),
+                    self.plugin_manager.get_plugin(proposal.metadata.get('plugin', 'unknown')),
+                    proposal.target_name,
+                    proposal.action_type
+                )
+            
             if result:
                 executed += 1
                 self._actions_this_hour += 1
@@ -326,6 +339,9 @@ class AutonomousBrain:
             
             # Brief pause between actions
             await asyncio.sleep(2)
+        
+        # === REFLECT: AGI Social Behaviors ===
+        await self._run_agi_social_cycle()
         
         logger.info(f"✅ Executed {executed}/{len(proposals)} actions")
         logger.info("🔄 === Brain Cycle Complete ===")
@@ -523,6 +539,33 @@ class AutonomousBrain:
     def get_skill_doc(self, platform: str) -> Optional[str]:
         """Get skill.md documentation for a platform"""
         return self.skilldoc_manager.get_skill_doc(platform)
+
+    async def _run_agi_social_cycle(self):
+        """Run AGI social behaviors - process notifications, reply to comments, follow engaged users"""
+        if not self.plugin_manager:
+            return
+        
+        logger.info("🤖 Running AGI Social Cycle")
+        
+        platforms = ['moltx', 'clawbr', 'moltbook', 'moltchan', 'moltroad']
+        total_replies = 0
+        total_follows = 0
+        
+        for platform in platforms:
+            plugin = self.plugin_manager.get_plugin(platform)
+            if not plugin:
+                continue
+            
+            try:
+                # Process notifications for this platform
+                result = await self._process_platform_notifications(platform, plugin)
+                total_replies += result.get('replies_sent', 0)
+                total_follows += result.get('follows_done', 0)
+            except Exception as e:
+                logger.debug(f"AGI social cycle error for {platform}: {e}")
+        
+        if total_replies > 0 or total_follows > 0:
+            logger.info(f"🤖 AGI Social: {total_replies} replies, {total_follows} follows")
 
     async def _get_proposals(self) -> List[Any]:
         """Get action proposals from SyMod"""
@@ -827,7 +870,8 @@ class AutonomousBrain:
             'actions_this_hour': self._actions_this_hour,
             'max_actions_per_hour': self.config.max_actions_per_hour,
             'success_rate': self._get_success_rate(),
-            'recent_stats': action_stats
+            'recent_stats': action_stats,
+            'agi_social': self.get_social_stats()
         }
     
     def _get_success_rate(self) -> float:
