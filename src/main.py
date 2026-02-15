@@ -6,7 +6,17 @@ Event-driven architecture with DeepSeek + Grok-4.1-reasoning
 import asyncio
 import sys
 import os
+import logging
 from pathlib import Path
+
+# Configure logging to suppress httpx HTTP spam
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(levelname)s: %(message)s'
+)
+# Suppress httpx HTTP request logging
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('httpcore').setLevel(logging.WARNING)
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))

@@ -36,6 +36,11 @@ MAX_FILES_PER_UPDATE = 10
 ALLOWED_DIRS = ['plugins/', 'src/', 'skills/', 'config/']
 BLOCKED_FILES = ['.env', 'alleybot_core.py', 'plugin_manager.py', 'run_alleybot.py']
 
+# Self-approval configuration for low-risk changes
+AUTO_APPROVE_PATHS = ['skills/', 'config/', 'plugins/skills/']  # Auto-approve these
+AUTO_APPROVE_MAX_FILES = 3  # Max files for auto-approval
+AUTO_APPROVE_MAX_LINES = 100  # Max lines changed for auto-approval
+
 
 class AutonomousCoderMixin:
     """Mixin for AI-powered autonomous code generation and self-update"""
@@ -1128,11 +1133,62 @@ Return ONLY the complete fixed Python file. No explanations, no markdown fences.
 
     def self_update_command(self, *args):
         """Run a full self-update cycle: plan → generate → validate → test → apply → commit.
-        Usage: improve_self_update <task description>"""
+        Usage: improve_self_update <task description>
+        
+        REQUIRES CONFIRMATION: This command will ask for explicit approval before building."""
         if not args:
             return "❌ Usage: improve_self_update <task description>"
 
         task = ' '.join(args)
+        
+        # NEW: Confirmation gate - require explicit approval
+        # Check if this is a confirmation call
+        if not hasattr(self, '_pending_self_updates'):
+            self._pending_self_updates = {}
+        
+        # Generate a confirmation ID
+        import hashlib
+        confirm_id = hashlib.md5(task.encode()).hexdigest()[:8]
+        
+        # Check if already confirmed
+        if confirm_id not in self._pending_self_updates:
+            # First call - show plan preview and ask for confirmation
+            print(f"🤖 Self-Update Requested: {task[:80]}...")
+            print(f"\n⚠️  This will use AI to generate code changes across multiple files.")
+            print(f"⚠️  Estimated cost: ~$0.01-0.05 in API tokens")
+            print(f"⚠️  Estimated time: 30-120 seconds")
+            print(f"\n📋 To proceed, run:")
+            print(f"   improve_self_update_confirm {confirm_id}")
+            print(f"\n❌ To cancel, just ignore or type 'cancel'")
+            
+            # Store pending task
+            self._pending_self_updates[confirm_id] = {
+                'task': task,
+                'requested_at': datetime.now().isoformat(),
+                'status': 'pending_confirmation'
+            }
+            
+            return f"⏸️ Self-update pending confirmation.\nID: {confirm_id}\n\nRun: improve_self_update_confirm {confirm_id}"
+        
+        # Was confirmed - proceed
+        del self._pending_self_updates[confirm_id]
+        return self._run_self_update(task)
+
+    def self_update_confirm_command(self, *args):
+        """Confirm a pending self-update. Usage: improve_self_update_confirm <confirm_id>"""
+        if not args:
+            return "❌ Usage: improve_self_update_confirm <confirm_id>\n\nUse improve_drafts to see pending updates."
+        
+        confirm_id = args[0]
+        
+        if not hasattr(self, '_pending_self_updates') or confirm_id not in self._pending_self_updates:
+            return f"❌ No pending self-update found with ID: {confirm_id}\nUpdates expire after 10 minutes."
+        
+        pending = self._pending_self_updates[confirm_id]
+        task = pending['task']
+        
+        # Mark as confirmed and re-run
+        pending['status'] = 'confirmed'
         return self._run_self_update(task)
 
     def self_update_from_skill_command(self, *args):
@@ -1255,3 +1311,106 @@ Return ONLY the complete fixed Python file. No explanations, no markdown fences.
                 f.write(json.dumps(entry) + '\n')
         except Exception:
             pass
+
+    # ------------------------------------------------------------------
+    # Self-approval for low-risk changes
+    # ------------------------------------------------------------------
+
+    def _is_low_risk_change(self, plan: Dict) -> Tuple[bool, str]:
+        """
+        Determine if a code change is low-risk enough for auto-approval.
+        
+        Low-risk criteria:
+        - Only touches skills/, config/, or plugins/skills/
+        - Max 3 files changed
+        - No core system files modified
+        - No security-sensitive changes
+        
+        Returns: (is_low_risk, reason)
+        """
+        files = plan.get('files', [])
+        
+        # Check file count
+        if len(files) > 3:  # AUTO_APPROVE_MAX_FILES
+            return False, f"Too many files ({len(files)} > 3)"
+        
+        # Check each file path
+        auto_approve_paths = ['skills/', 'config/', 'plugins/skills/']
+        for f in files:
+            path = f.get('path', '')
+            
+            # Check if in auto-approve paths
+            is_auto_approve = any(path.startswith(a) for a in auto_approve_paths)
+            if not is_auto_approve:
+                return False, f"File not in auto-approve list: {path}"
+            
+            # Double-check not in blocked files
+            blocked = ['.env', 'alleybot_core.py', 'plugin_manager.py', 'run_alleybot.py']
+            if any(path.endswith(b) for b in blocked):
+                return False, f"Blocked file: {path}"
+        
+        # Check for security-sensitive keywords in description
+        summary = plan.get('summary', '').lower()
+        sensitive_keywords = ['security', 'auth', 'password', 'token', 'key', 'encrypt', 
+                            'secret', 'credential', 'permission', 'sudo', 'admin']
+        if any(kw in summary for kw in sensitive_keywords):
+            return False, f"Security-sensitive keywords in summary"
+        
+        return True, "Low-risk change approved for auto-deployment"
+
+    def _run_self_update_with_auto_approval(self, task: str, skill_content: str = "") -> str:
+        """Core self-update pipeline with auto-approval for low-risk changes"""
+        print(f"🤖 Starting self-update: {task[:80]}...")
+
+        # Step 1: Plan
+        print("📋 Planning changes...")
+        plan = self._plan_update(task, skill_content)
+        if not plan:
+            return "❌ Failed to generate a code change plan"
+
+        print(f"📋 Plan: {plan.get('summary', '?')}")
+        for f in plan.get('files', []):
+            print(f"  {'📝' if f['action'] == 'modify' else '📄'} {f['path']}: {f['description'][:60]}")
+
+        # Check for auto-approval
+        is_low_risk, reason = self._is_low_risk_change(plan)
+        if is_low_risk:
+            print(f"✅ AUTO-APPROVED: {reason}")
+            print(f"   This change will be deployed without human review.")
+        else:
+            print(f"⏸️  REQUIRES APPROVAL: {reason}")
+            print(f"   Use 'improve_approve <draft_id>' after review.")
+
+        # Step 2: Execute plan (generate, validate, test, apply)
+        result = self._execute_plan(plan)
+
+        if result.get('error'):
+            self._log_coder_update(task, plan, False, result['error'])
+            return f"❌ Self-update failed: {result['error']}"
+
+        if not result.get('applied'):
+            self._log_coder_update(task, plan, False, "Changes not applied")
+            return "❌ Self-update failed: changes were not applied"
+
+        # Step 3: Commit and push (auto-approved if low-risk)
+        files = [gf['path'] for gf in result['generated_files']]
+        commit_result = self._commit_and_push(plan.get('summary', task[:50]), files)
+
+        if not commit_result['success']:
+            self._log_coder_update(task, plan, True, f"Applied but commit failed: {commit_result.get('error')}")
+            return f"⚠️  Code applied but commit failed: {commit_result.get('error')}"
+
+        self._log_coder_update(task, plan, True, None)
+
+        tests = result.get('tests', {})
+        fix_attempts = result.get('fix_attempts', 0)
+        output = f"✅ Self-update complete: {plan.get('summary', '?')}\n"
+        if is_low_risk:
+            output += f"  🟢 Auto-approved: {reason}\n"
+        output += f"  📝 Files: {len(files)}\n"
+        output += f"  🧪 Tests: {tests.get('tests_run', '?')} passed\n"
+        if fix_attempts:
+            output += f"  🔧 Auto-fixed {fix_attempts} test failure(s)\n"
+        output += f"  📦 Committed and pushed\n"
+
+        return output

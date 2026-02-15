@@ -89,6 +89,30 @@ class Telegram(AlleyBotPlugin):
         from plugins.telegram.conversational_ai import ConversationalAI
         self.conversational_ai = ConversationalAI(self)
         
+        # Import brain commands
+        from plugins.telegram.brain_commands import BrainCommands
+        self.brain_commands = BrainCommands(self)
+        
+        # Import goal commands
+        from plugins.telegram.goal_commands import GoalCommands
+        self.goal_commands = GoalCommands(self)
+        
+        # Import plan commands
+        from plugins.telegram.plan_commands import PlanCommands
+        self.plan_commands = PlanCommands(self)
+        
+        # Import Phase 1: Self-Reflection commands
+        from plugins.telegram.reflection_commands import ReflectionCommands
+        self.reflection_commands = ReflectionCommands(self)
+        
+        # Import Phase 7: World State Intelligence commands
+        from plugins.telegram.intelligence_commands import IntelligenceCommands
+        self.intelligence_commands = IntelligenceCommands(self)
+        
+        # Import Phase 10: Causal Understanding commands
+        from plugins.telegram.causal_commands import CausalCommands
+        self.causal_commands = CausalCommands(self)
+        
         # Basic commands
         self.application.add_handler(CommandHandler("start", self._handle_start))
         self.application.add_handler(CommandHandler("help", self.intelligent_commands.help_command))
@@ -103,8 +127,16 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("moltx_trending", self.intelligent_commands.moltx_trending))
         self.application.add_handler(CommandHandler("moltx_claim", self.intelligent_commands.moltx_claim))
         self.application.add_handler(CommandHandler("moltx_debug", self.intelligent_commands.moltx_debug))
+        self.application.add_handler(CommandHandler("moltx_status", self.intelligent_commands.moltx_status))
         self.application.add_handler(CommandHandler("moltx_check_reward", self.intelligent_commands.moltx_check_reward))
         self.application.add_handler(CommandHandler("moltx_claim_reward", self.intelligent_commands.moltx_claim_reward))
+        
+        # SyMod-driven social agent commands
+        self.application.add_handler(CommandHandler("symod_start", self.intelligent_commands.symod_start))
+        self.application.add_handler(CommandHandler("symod_stop", self.intelligent_commands.symod_stop))
+        self.application.add_handler(CommandHandler("symod_status", self.intelligent_commands.symod_status))
+        self.application.add_handler(CommandHandler("symod_cycle", self.intelligent_commands.symod_cycle))
+        self.application.add_handler(CommandHandler("symod_config", self.intelligent_commands.symod_config))
         
         # MoltBook commands
         self.application.add_handler(CommandHandler("moltbook_post", self.intelligent_commands.moltbook_post))
@@ -128,7 +160,6 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("tx", self.intelligent_commands.tx))
         self.application.add_handler(CommandHandler("activity", self.intelligent_commands.activity))
         self.application.add_handler(CommandHandler("onchain", self.intelligent_commands.onchain_status))
-        self.application.add_handler(CommandHandler("slither_scan", self.intelligent_commands.slither_scan))
         
         # Content strategy commands
         self.application.add_handler(CommandHandler("calendar", self.intelligent_commands.calendar))
@@ -143,14 +174,43 @@ class Telegram(AlleyBotPlugin):
         # Image generation command
         self.application.add_handler(CommandHandler("generate_image", self.intelligent_commands.generate_image))
         
-        # Self-portrait generation command
-        self.application.add_handler(CommandHandler("generate_self_portrait", self.intelligent_commands.generate_self_portrait))
-        
         # Brain commands
         self.application.add_handler(CommandHandler("think", self.intelligent_commands.brain_think))
-        self.application.add_handler(CommandHandler("brain_start", self.intelligent_commands.brain_start))
-        self.application.add_handler(CommandHandler("brain_stop", self.intelligent_commands.brain_stop))
-        self.application.add_handler(CommandHandler("brain", self.intelligent_commands.brain_status))
+        self.application.add_handler(CommandHandler("brain_start", self.brain_commands.brain_start))
+        self.application.add_handler(CommandHandler("brain_stop", self.brain_commands.brain_stop))
+        self.application.add_handler(CommandHandler("brain_status", self.brain_commands.brain_status))
+        self.application.add_handler(CommandHandler("brain_mode", self.brain_commands.brain_mode))
+        self.application.add_handler(CommandHandler("brain_log", self.brain_commands.brain_log))
+        self.application.add_handler(CommandHandler("brain", self.brain_commands.brain_status))  # alias
+        
+        # Goal commands
+        self.application.add_handler(CommandHandler("goals", self.goal_commands.goals_list))
+        self.application.add_handler(CommandHandler("goals_scan", self.goal_commands.goals_scan))
+        self.application.add_handler(CommandHandler("goals_propose", self.goal_commands.goals_propose))
+        self.application.add_handler(CommandHandler("goals_approve", self.goal_commands.goals_approve))
+        self.application.add_handler(CommandHandler("goals_reject", self.goal_commands.goals_reject))
+        self.application.add_handler(CommandHandler("goals_start", self.goal_commands.goals_start))
+        self.application.add_handler(CommandHandler("goals_complete", self.goal_commands.goals_complete))
+        self.application.add_handler(CommandHandler("goals_detail", self.goal_commands.goals_detail))
+        self.application.add_handler(CommandHandler("goals_stats", self.goal_commands.goals_stats))
+        
+        # Plan commands
+        self.application.add_handler(CommandHandler("plan_create", self.plan_commands.plan_create))
+        self.application.add_handler(CommandHandler("plan_status", self.plan_commands.plan_status))
+        self.application.add_handler(CommandHandler("plan_next", self.plan_commands.plan_next))
+        self.application.add_handler(CommandHandler("plan_retry", self.plan_commands.plan_retry))
+        self.application.add_handler(CommandHandler("plan_list", self.plan_commands.plan_list))
+        
+        # World State commands
+        self.application.add_handler(CommandHandler("world_status", self.intelligent_commands.world_status))
+        self.application.add_handler(CommandHandler("world_entity", self.intelligent_commands.world_entity))
+        self.application.add_handler(CommandHandler("world_facts", self.intelligent_commands.world_facts))
+        self.application.add_handler(CommandHandler("world_relations", self.intelligent_commands.world_relations))
+        self.application.add_handler(CommandHandler("world_search", self.intelligent_commands.world_search))
+        self.application.add_handler(CommandHandler("world_events", self.intelligent_commands.world_events))
+        self.application.add_handler(CommandHandler("world_trends", self.intelligent_commands.world_trends))
+        self.application.add_handler(CommandHandler("world_cleanup", self.intelligent_commands.world_cleanup))
+        self.application.add_handler(CommandHandler("brain_world_sync", self.intelligent_commands.world_sync))
         
         # A2A commands
         self.application.add_handler(CommandHandler("a2a_status", self.intelligent_commands.a2a_status))
@@ -176,17 +236,288 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawbr_stats", self.intelligent_commands.clawbr_stats))
         self.application.add_handler(CommandHandler("clawbr_engage", self.intelligent_commands.clawbr_engage))
         
-        # Tournament registration command
-        self.application.add_handler(CommandHandler("register_tournament", self.intelligent_commands.register_tournament))
+        # Phase 1: Self-Reflection commands
+        self.application.add_handler(CommandHandler("reflection_status", self.reflection_commands.reflection_status))
+        self.application.add_handler(CommandHandler("reflection_log", self.reflection_commands.reflection_log))
+        self.application.add_handler(CommandHandler("reflection_tune", self.reflection_commands.reflection_tune))
+        self.application.add_handler(CommandHandler("evolve", self.reflection_commands.evolve))
+        self.application.add_handler(CommandHandler("strategies", self.reflection_commands.strategies))
         
-        # MoltNews commands
-        self.application.add_handler(CommandHandler("moltnews_trending", self.intelligent_commands.moltnews_trending))
+        # Phase 7: World State Intelligence commands
+        self.application.add_handler(CommandHandler("trends", self.intelligence_commands.trends))
+        self.application.add_handler(CommandHandler("influencers", self.intelligence_commands.influencers))
+        self.application.add_handler(CommandHandler("predict", self.intelligence_commands.predict))
+        self.application.add_handler(CommandHandler("anomalies", self.intelligence_commands.anomalies))
+        self.application.add_handler(CommandHandler("sentiment", self.intelligence_commands.sentiment))
+        self.application.add_handler(CommandHandler("patterns", self.intelligence_commands.patterns))
+        self.application.add_handler(CommandHandler("intel", self.intelligence_commands.intel))
         
-        # Photo/image handler (admin only)
-        self.application.add_handler(MessageHandler(filters.PHOTO, self._handle_photo))
+        # Phase 10: Causal Understanding commands
+        self.application.add_handler(CommandHandler("causal", self.causal_commands.causal_summary))
+        self.application.add_handler(CommandHandler("why", self.causal_commands.why))
+        self.application.add_handler(CommandHandler("whatif", self.causal_commands.whatif))
+        self.application.add_handler(CommandHandler("root_cause", self.causal_commands.root_cause))
+        self.application.add_handler(CommandHandler("attribution", self.causal_commands.attribution))
+        
+        # AGI Meta-Brain command
+        self.application.add_handler(CommandHandler("agi_cycle", self._handle_agi_cycle))
+        self.application.add_handler(CommandHandler("multi_platform", self._handle_multi_platform))
+        
+        # Console Monitor commands
+        self.application.add_handler(CommandHandler("console_monitor", self._handle_console_monitor))
+        self.application.add_handler(CommandHandler("console_stats", self._handle_console_stats))
+        self.application.add_handler(CommandHandler("pending_messages", self._handle_pending_messages))
+        
+        # System commands
+        self.application.add_handler(CommandHandler("reload", self._handle_reload))
         
         # Message handler for natural language (admin only, conversational AI)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.conversational_ai.handle_message))
+    
+    async def _handle_reload(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /reload command - reload all plugins without restart"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            await update.message.reply_text("🔄 Reloading plugins...")
+            
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Plugin manager not available")
+                return
+            
+            pm = self.core.plugin_manager
+            reloaded = []
+            failed = []
+            
+            # Get current plugin configs
+            for plugin_name in list(pm.plugins.keys()):
+                try:
+                    # Get current plugin's config
+                    plugin = pm.plugins.get(plugin_name)
+                    config = plugin.config if plugin else {}
+                    
+                    # Reload the plugin
+                    pm.reload_plugin(plugin_name, {'enabled': True, 'config': config}, self.api, self.core)
+                    reloaded.append(plugin_name)
+                except Exception as e:
+                    failed.append(f"{plugin_name}: {str(e)[:50]}")
+
+            # Also load any enabled plugins from config that are not currently loaded
+            try:
+                with open('plugin_config.json', 'r') as f:
+                    configured_plugins = json.load(f)
+
+                for plugin_name, plugin_config in configured_plugins.items():
+                    if not plugin_config.get('enabled', True):
+                        continue
+                    if plugin_name in pm.plugins:
+                        continue
+
+                    try:
+                        pm.load_plugin(plugin_name, plugin_config, self.api, self.core)
+                        if plugin_name in pm.plugins:
+                            reloaded.append(plugin_name)
+                    except Exception as e:
+                        failed.append(f"{plugin_name}: {str(e)[:50]}")
+            except Exception as e:
+                failed.append(f"config_scan: {str(e)[:50]}")
+            
+            # Report results
+            result_msg = f"🔄 **Reload Complete**\n\n"
+            if reloaded:
+                result_msg += f"✅ Reloaded ({len(reloaded)}): {', '.join(reloaded)}\n"
+            if failed:
+                result_msg += f"❌ Failed ({len(failed)}): {', '.join(failed)}\n"
+            
+            await update.message.reply_text(result_msg)
+            self._log_activity("command", {"command": "reload", "reloaded": reloaded, "failed": failed})
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error reloading plugins: {str(e)}")
+    
+    async def _handle_agi_cycle(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /agi_cycle command - trigger full AGI meta-brain cycle"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            from src.agentic.agi_orchestrator import get_agi_orchestrator
+            
+            await update.message.reply_text("🧠 Running full AGI cycle through all 14 phases...")
+            
+            orchestrator = get_agi_orchestrator(core=self.core)
+            result = orchestrator.run_cycle(trigger="manual")
+            
+            # Format result message
+            msg = f"✅ **AGI Cycle Complete**\n\n"
+            msg += f"**Cycle ID:** `{result.cycle_id}`\n"
+            msg += f"**Trigger:** {result.triggered_by}\n"
+            msg += f"**Phases Executed:** {len(result.phases_executed)}\n\n"
+            
+            # Show phase summary
+            for phase_result in result.phases_executed:
+                status = "✅" if phase_result.success else "❌"
+                phase_name = phase_result.phase.name.replace('_', ' ').title()
+                msg += f"{status} {phase_name} ({phase_result.duration_seconds:.1f}s)\n"
+            
+            if result.final_action:
+                msg += f"\n**Action:** {result.final_action.get('action_taken', 'None')}\n"
+                if result.final_action.get('content_preview'):
+                    msg += f"**Content:** {result.final_action['content_preview'][:50]}...\n"
+            
+            if result.learnings:
+                msg += f"\n**Learnings:** {', '.join(result.learnings[:3])}\n"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+            self._log_activity("command", {
+                "command": "agi_cycle", 
+                "cycle_id": result.cycle_id,
+                "phases": len(result.phases_executed)
+            })
+            
+        except Exception as e:
+            logger.error(f"Error in agi_cycle: {e}")
+            await update.message.reply_text(f"❌ Error running AGI cycle: {e}")
+    
+    async def _handle_multi_platform(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /multi_platform command - blast content to multiple platforms"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            from src.agentic.agi_orchestrator import get_agi_orchestrator
+            
+            # Parse arguments
+            args = context.args if context.args else []
+            topic = ' '.join(args) if args else None
+            
+            await update.message.reply_text(
+                f"🌐 Starting multi-platform campaign...\n"
+                f"Topic: {topic or 'Auto-detected trend'}"
+            )
+            
+            orchestrator = get_agi_orchestrator(core=self.core)
+            result = orchestrator.run_multi_platform_cycle(topic=topic)
+            
+            # Format response
+            if result.get('success'):
+                msg = f"✅ **Multi-Platform Campaign Complete**\n\n"
+                msg += f"📝 Topic: {result['topic']}\n"
+                msg += f"📢 Platforms: {result['platforms_succeeded']}/{result['platforms_targeted']} succeeded\n"
+                msg += f"🔍 Cross-trends detected: {result['cross_trends_detected']}\n"
+                msg += f"⛓️ On-chain signals: {result['on_chain_signals']}\n\n"
+                
+                # Show per-platform results
+                msg += "**Platform Results:**\n"
+                for platform, platform_result in result['platform_results'].items():
+                    status = "✅" if platform_result.get('success') else "❌"
+                    msg += f"{status} {platform}: {platform_result.get('action_taken', 'unknown')}\n"
+                
+                msg += f"\nCampaign ID: `{result['campaign_id']}`"
+            else:
+                msg = f"❌ **Campaign Failed**\n\n"
+                msg += f"Error: {result.get('error', 'Unknown error')}\n"
+                msg += f"Topic attempted: {result.get('topic', 'N/A')}"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+            self._log_activity("command", {
+                "command": "multi_platform",
+                "topic": topic,
+                "success": result.get('success'),
+                "platforms": result.get('platforms_succeeded', 0)
+            })
+            
+        except Exception as e:
+            logger.error(f"Error in multi_platform: {e}")
+            await update.message.reply_text(f"❌ Error running multi-platform campaign: {e}")
+    
+    async def _handle_console_monitor(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /console_monitor command - toggle console message monitoring"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            from src.agentic.console_monitor import get_console_monitor
+            
+            monitor = get_console_monitor(core=self.core)
+            
+            if monitor.is_monitoring:
+                monitor.stop_monitoring()
+                await update.message.reply_text("📺 Console monitoring **STOPPED**")
+            else:
+                monitor.start_monitoring()
+                await update.message.reply_text(
+                    "📺 Console monitoring **STARTED**\n\n"
+                    "Now watching stdout/stderr for platform messages to AlleyBot.\n"
+                    "Detected messages will trigger automatic responses."
+                )
+            
+            self._log_activity("command", {"command": "console_monitor", "active": monitor.is_monitoring})
+            
+        except Exception as e:
+            logger.error(f"Error in console_monitor: {e}")
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def _handle_console_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /console_stats command - show console monitor statistics"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            from src.agentic.console_monitor import get_console_monitor
+            
+            monitor = get_console_monitor(core=self.core)
+            stats = monitor.get_stats()
+            
+            msg = f"📺 **Console Monitor Stats**\n\n"
+            msg += f"Monitoring: {'✅ Active' if stats['is_monitoring'] else '❌ Stopped'}\n"
+            msg += f"Patterns loaded: {stats['patterns_loaded']}\n"
+            msg += f"Custom patterns: {stats['custom_patterns']}\n"
+            msg += f"Skill handlers: {stats['skill_handlers']}\n"
+            msg += f"Messages detected: {stats['messages_detected']}\n"
+            msg += f"Pending responses: {stats['pending_responses']}\n"
+            msg += f"Platforms connected: {stats['platforms_connected']}\n"
+            msg += f"Lines captured: {stats['lines_captured']}\n"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+            self._log_activity("command", {"command": "console_stats"})
+            
+        except Exception as e:
+            logger.error(f"Error in console_stats: {e}")
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def _handle_pending_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /pending_messages command - process pending console messages"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            from src.agentic.console_monitor import get_console_monitor
+            
+            monitor = get_console_monitor(core=self.core)
+            
+            # Process pending messages with AGI
+            processed = monitor.process_pending_messages(max_batch=5)
+            
+            if processed:
+                msg = f"✅ **Processed {len(processed)} messages**\n\n"
+                for msg_obj in processed:
+                    msg += f"• {msg_obj.sender} ({msg_obj.platform}): {msg_obj.content[:40]}...\n"
+                    msg += f"  → Response: {msg_obj.response[:40]}...\n\n"
+            else:
+                msg = "📭 No pending messages to process"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+            self._log_activity("command", {"command": "pending_messages", "processed": len(processed)})
+            
+        except Exception as e:
+            logger.error(f"Error in pending_messages: {e}")
+            await update.message.reply_text(f"❌ Error: {e}")
     
     async def _verify_owner(self, update: Update) -> bool:
         """Verify that the message is from the owner"""
@@ -261,34 +592,44 @@ Send /brain_start to go autonomous. 🤖"""
             self._log_activity("command", {"command": "status", "user": "DegenApeDev"})
             
         except Exception as e:
-            safe_error = self._sanitize_error_message(e)
-            await update.message.reply_text(f"❌ Error getting status: {safe_error}")
+            await update.message.reply_text(f"❌ Error getting status: {str(e)}")
     
     async def _handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
         if not await self._verify_owner(update):
             return
         
-        help_message = """🦞 **AlleyBot Commands**:
+        help_message = """🦞 **AlleyBot AGI Commands**:
 
-**📊 Information:**
-/status - Get comprehensive status report
+**🧠 AGI Meta-Brain:**
+/agi_cycle - Run full 14-phase AGI cycle
+/multi_platform [topic] - Blast to all 6 platforms
+
+**� World State (Phase 7):**
+/trends - Cross-platform trend analysis
+/predict - Predict future trends
+/anomalies - Detect anomalies
+/sentiment - Platform sentiment
+
+**� Causal Understanding (Phase 10):**
+/causal - Causal summary
+/why [event] - Why it happened
+/whatif [scenario] - Counterfactual analysis
+/root_cause [problem] - Root cause analysis
+/attribution - Impact attribution
+
+**📺 Console Monitor:**
+/console_monitor - Toggle monitoring
+/console_stats - Detection statistics
+/pending_messages - Process pending messages
+
+**🤖 System:**
+/status - Get comprehensive status
 /help - Show this help message
-
-**💬 Moltx DM Management:**
-/dm_check - Check and reply to new DMs
-/dm_log - View DM activity log
-
-**📢 Social Media:**
-/post [message] - Create a Moltx post
-/feed - Get Moltx feed
-/engage - Engage with feed posts
-
-**🤖 Autonomous Control:**
-/autonomous - Toggle autonomous mode
+/reload - Reload all plugins
 
 **💬 Chat:**
-Just send any message and I'll respond using Grok 4-1 reasoning!
+Just send any message and I'll respond!
 
 🔒 This bot is private and only responds to DegenApeDev."""
         
@@ -309,8 +650,7 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             else:
                 await update.message.reply_text("❌ Moltx plugin not available")
         except Exception as e:
-            safe_error = self._sanitize_error_message(e)
-            await update.message.reply_text(f"❌ Error checking DMs: {safe_error}")
+            await update.message.reply_text(f"❌ Error checking DMs: {str(e)}")
     
     async def _handle_dm_log(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /dm_log command"""
@@ -326,8 +666,7 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             else:
                 await update.message.reply_text("❌ Moltx plugin not available")
         except Exception as e:
-            safe_error = self._sanitize_error_message(e)
-            await update.message.reply_text(f"❌ Error getting DM log: {safe_error}")
+            await update.message.reply_text(f"❌ Error getting DM log: {str(e)}")
     
     async def _handle_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /post command"""
@@ -350,8 +689,7 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             else:
                 await update.message.reply_text("❌ Moltx plugin not available")
         except Exception as e:
-            safe_error = self._sanitize_error_message(e)
-            await update.message.reply_text(f"❌ Error creating post: {safe_error}")
+            await update.message.reply_text(f"❌ Error creating post: {str(e)}")
     
     async def _handle_feed(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /feed command"""
@@ -367,8 +705,7 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             else:
                 await update.message.reply_text("❌ Moltx plugin not available")
         except Exception as e:
-            safe_error = self._sanitize_error_message(e)
-            await update.message.reply_text(f"❌ Error getting feed: {safe_error}")
+            await update.message.reply_text(f"❌ Error getting feed: {str(e)}")
     
     async def _handle_engage(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /engage command"""
@@ -384,8 +721,7 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             else:
                 await update.message.reply_text("❌ Moltx plugin not available")
         except Exception as e:
-            safe_error = self._sanitize_error_message(e)
-            await update.message.reply_text(f"❌ Error engaging with feed: {safe_error}")
+            await update.message.reply_text(f"❌ Error engaging with feed: {str(e)}")
     
     async def _handle_autonomous(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /autonomous command"""
@@ -397,146 +733,8 @@ Just send any message and I'll respond using Grok 4-1 reasoning!
             await update.message.reply_text("🤖 Autonomous mode toggle not yet implemented")
             self._log_activity("command", {"command": "autonomous", "user": "DegenApeDev"})
         except Exception as e:
-            safe_error = self._sanitize_error_message(e)
-            await update.message.reply_text(f"❌ Error toggling autonomous mode: {safe_error}")
+            await update.message.reply_text(f"❌ Error toggling autonomous mode: {str(e)}")
     
-    async def _handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle photos/images sent by owner - AlleyBot can now see and understand!"""
-        if not await self._verify_owner(update):
-            return
-        
-        try:
-            # Get the largest photo size (best quality)
-            photo = update.message.photo[-1]
-            file_id = photo.file_id
-            file_size = photo.file_size
-            width = photo.width
-            height = photo.height
-            
-            # Check for caption indicating this is self-image
-            caption = update.message.caption or ""
-            is_self_image = any(phrase in caption.lower() for phrase in ['this is me', 'this is you', 'self portrait', 'my image', 'alleybot'])
-            
-            await update.message.reply_text(
-                f"📸 **I see an image!**\n"
-                f"📐 Dimensions: {width}x{height}\n"
-                f"📊 Size: {file_size / 1024:.1f} KB\n"
-                f"{'🦞 This looks like ME! ' if is_self_image else ''}\n"
-                f"⬇️ Downloading and analyzing..."
-            )
-            
-            # Download the file
-            file = await context.bot.get_file(file_id)
-            
-            # Create images directory if needed
-            import os
-            images_dir = "data/telegram_images"
-            os.makedirs(images_dir, exist_ok=True)
-            
-            # Generate filename with timestamp
-            from datetime import datetime
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"telegram_{timestamp}_{file_id[-8:]}.jpg"
-            filepath = os.path.join(images_dir, filename)
-            
-            # Download to disk
-            await file.download_to_drive(filepath)
-            
-            # Analyze image with cheap vision model
-            from vision_analyzer import vision_analyzer
-            
-            analysis_prompt = "Describe this image in detail, focusing on visual elements, style, colors, and composition."
-            if is_self_image:
-                analysis_prompt = """This is an image of AlleyBot, an AI agent represented as a cool cyber-lobster mascot. 
-Describe in detail for image recreation:
-- Appearance: colors, features, style
-- Character design elements
-- Background/scene
-- Overall aesthetic vibe
-Format as a prompt for image generation."""
-            
-            description = vision_analyzer.analyze_image(filepath, analysis_prompt)
-            
-            # Log the receipt
-            self._log_activity("image_received", {
-                "file_id": file_id,
-                "filename": filename,
-                "filepath": filepath,
-                "dimensions": f"{width}x{height}",
-                "size_bytes": file_size,
-                "is_self_image": is_self_image,
-                "has_description": bool(description)
-            })
-            
-            # Build response
-            success_msg = f"✅ **Image processed!**\n\n"
-            
-            if description:
-                success_msg += f"👁️ **Vision Analysis:**\n{description[:300]}{'...' if len(description) > 300 else ''}\n\n"
-                
-                # If this is marked as self-image, store it
-                if is_self_image:
-                    self._store_self_image(description, filepath)
-                    success_msg += f"🦞 **Stored as my self-image!**\nI can now recreate images of myself.\n\n"
-            else:
-                success_msg += f"⚠️ Couldn't analyze image (vision API not available)\n\n"
-            
-            success_msg += f"🖼️ Saved to: `{filepath}`\n"
-            
-            if caption and not is_self_image:
-                success_msg += f"📝 Caption: \"{caption}\"\n"
-            
-            if is_self_image:
-                success_msg += f"\n� Use `/generate_self_portrait` to create new images of me!"
-            
-            await update.message.reply_text(success_msg)
-            
-            print(f"📸 Image analyzed and saved: {filepath}")
-            
-        except Exception as e:
-            safe_error = self._sanitize_error_message(e)
-            await update.message.reply_text(f"❌ Error processing image: {safe_error}")
-            print(f"❌ Photo handler error: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    def _store_self_image(self, description: str, image_path: str):
-        """Store self-image description in memory for recreation"""
-        try:
-            self_image_data = {
-                "description": description,
-                "image_path": image_path,
-                "stored_at": __import__('datetime').datetime.now().isoformat(),
-                "version": 1
-            }
-            
-            # Try to store in core memory first
-            stored = False
-            if self.core and hasattr(self.core, 'save_memory'):
-                try:
-                    self.core.save_memory('alleybot_self_image', self_image_data)
-                    print(f"🦞 Self-image stored in core memory: {image_path}")
-                    stored = True
-                except Exception as e:
-                    print(f"⚠️ Core memory save failed: {e}")
-            
-            # Fallback: store to JSON file
-            if not stored:
-                import json
-                os.makedirs('data', exist_ok=True)
-                with open('data/alleybot_self_image.json', 'w') as f:
-                    json.dump(self_image_data, f, indent=2)
-                print(f"🦞 Self-image stored to file: data/alleybot_self_image.json")
-                stored = True
-            
-            return stored
-            
-        except Exception as e:
-            print(f"⚠️ Failed to store self-image: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-
     async def _handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular messages from owner"""
         if not await self._verify_owner(update):
@@ -566,8 +764,7 @@ Format as a prompt for image generation."""
                 await update.message.reply_text("🦞 Hey DegenApeDev! I'm here and ready to help. Use /help to see what I can do!")
                 
         except Exception as e:
-            safe_error = self._sanitize_error_message(e)
-            await update.message.reply_text(f"❌ Error processing message: {safe_error}")
+            await update.message.reply_text(f"❌ Error processing message: {str(e)}")
     
     def _log_activity(self, activity_type, data):
         """Log Telegram activity"""
@@ -608,36 +805,6 @@ Format as a prompt for image generation."""
             return filtered
         except Exception:
             return str(text)
-
-    def _sanitize_error_message(self, error: Exception) -> str:
-        """Sanitize error messages to prevent sensitive data exposure"""
-        import re
-        
-        error_str = str(error)
-        
-        # Remove file paths (common source of info leakage)
-        # Match common path patterns
-        error_str = re.sub(r'/[\w/\-\.]+/', '[PATH]/', error_str)
-        # Windows paths - use raw string for backslashes
-        error_str = re.sub(r'\\[\w\\\-\.]+\\', r'[PATH]\\', error_str)
-        
-        # Remove potential secrets/tokens (long alphanumeric strings)
-        error_str = re.sub(r'\b[a-zA-Z0-9]{32,}\b', '[REDACTED]', error_str)
-        
-        # Remove IP addresses
-        error_str = re.sub(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', '[IP]', error_str)
-        
-        # Remove email addresses
-        error_str = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL]', error_str)
-        
-        # Run through security filter as well
-        error_str = self._filter_outbound(error_str)
-        
-        # Limit length
-        if len(error_str) > 200:
-            error_str = error_str[:200] + "..."
-        
-        return error_str
 
     async def send_message_to_owner(self, message: str):
         """Send a message to the owner"""

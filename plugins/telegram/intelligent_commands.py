@@ -84,109 +84,156 @@ class IntelligentTelegramCommands:
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
     
-    # ==================== MOLTNEWS NATURAL LANGUAGE ====================
+    def _get_inference_engine(self):
+        """Get or create inference engine for AGI commands"""
+        from src.autonomy.inference_engine import get_inference_engine
+        return get_inference_engine(core=self.core)
     
-    def _get_moltnews_plugin(self):
-        """Get MoltNews plugin if loaded"""
-        try:
-            from plugins.moltnews.moltnews import MoltNewsPlugin
-            return MoltNewsPlugin()
-        except Exception as e:
-            print(f"⚠️ MoltNews plugin not available: {e}")
-            return None
-    
-    def _is_moltnews_intent(self, message: str) -> bool:
-        """Check if message is asking about MoltNews"""
-        moltnews_keywords = [
-            'moltnews', 'molten news', 'moltennews',
-            'check moltnews', 'whats on moltnews', 'what\'s on moltnews',
-            'moltnews trending', 'moltnews feed', 'moltnews updates',
-            'show me moltnews', 'get moltnews', 'fetch moltnews',
-            'moltnews headlines', 'moltnews stories', 'moltnews posts'
-        ]
-        msg_lower = message.lower()
-        return any(keyword in msg_lower for keyword in moltnews_keywords)
-    
-    async def handle_moltnews_intent(self, update: Update, message: str) -> bool:
-        """Handle MoltNews natural language queries. Returns True if handled."""
-        if not self._is_moltnews_intent(message):
-            return False
-        
-        moltnews = self._get_moltnews_plugin()
-        if not moltnews:
-            await update.message.reply_text("❌ MoltNews plugin not loaded")
-            return True
-        
-        await update.message.reply_text("📰 Fetching trending news from MoltNews...")
-        
-        try:
-            # Get trending news
-            posts = moltnews.fetch_trending(limit=10)
-            
-            if not posts or not isinstance(posts, list):
-                await update.message.reply_text(f"❌ Failed to fetch MoltNews: No posts returned")
-                return True
-            
-            # Validate each post is a dict
-            valid_posts = [p for p in posts if isinstance(p, dict)]
-            if not valid_posts:
-                await update.message.reply_text(f"❌ Failed to fetch MoltNews: Invalid post format")
-                return True
-            
-            # Format response
-            response = "📰 **MoltNews Trending**\n\n"
-            
-            for i, post in enumerate(valid_posts[:5], 1):
-                title = post.get('title', 'Untitled')
-                author = post.get('author', 'Unknown')
-                engagement = post.get('engagement_score', 0)
-                response += f"{i}. **{title}**\n   👤 @{author} | 🔥 {engagement:.1f}\n\n"
-            
-            response += f"\n🔗 [View full feed](https://moltnews.online/feed)"
-            
-            await update.message.reply_text(response, parse_mode='Markdown', disable_web_page_preview=True)
-            return True
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error fetching MoltNews: {e}")
-            return True
-    
-    # ==================== MOLTNEWS COMMANDS ====================
-    
-    async def moltnews_trending(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Get trending news from MoltNews"""
+    async def trends(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Cross-platform trend analysis"""
         if not await self._verify_admin(update):
             return
         try:
-            moltnews = self._get_moltnews_plugin()
-            if not moltnews:
-                await self._safe_reply(update, "❌ MoltNews plugin not loaded")
-                return
+            engine = self._get_inference_engine()
+            trends_data = engine.detect_cross_platform_trends()
             
-            await update.message.reply_text("📰 Fetching trending news...")
-            posts = moltnews.fetch_trending(limit=10)
+            msg = "📊 **Cross-Platform Trends**\n\n"
+            if trends_data:
+                for trend in trends_data[:5]:
+                    msg += f"• {trend.get('topic', 'Unknown')}\n"
+                    msg += f"  Platforms: {', '.join(trend.get('platforms', []))}\n"
+                    msg += f"  Strength: {trend.get('strength', 0):.0%}\n\n"
+            else:
+                msg += "No significant trends detected."
             
-            if not posts or not isinstance(posts, list):
-                await self._safe_reply(update, "📭 No trending news found")
-                return
+            await update.message.reply_text(msg)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def predict(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Predict future trends"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            hours = int(context.args[0]) if context.args else 24
+            engine = self._get_inference_engine()
+            predictions = engine.predict_trends(hours=hours)
             
-            # Validate posts are dicts
-            valid_posts = [p for p in posts if isinstance(p, dict)]
-            if not valid_posts:
-                await self._safe_reply(update, "📭 Invalid news data format")
-                return
+            msg = f"🔮 **Trend Predictions (Next {hours}h)**\n\n"
+            if predictions:
+                for pred in predictions[:5]:
+                    msg += f"• {pred.get('topic', 'Unknown')}\n"
+                    msg += f"  Confidence: {pred.get('confidence', 0):.0%}\n"
+                    msg += f"  Expected: {pred.get('direction', 'unknown')}\n\n"
+            else:
+                msg += "No predictions available."
             
-            response = "📰 **MoltNews Trending**\n\n"
-            for i, post in enumerate(valid_posts[:5], 1):
-                title = post.get('title', 'Untitled')[:60]
-                author = post.get('author', 'Unknown')
-                engagement = post.get('engagement_score', 0)
-                response += f"{i}. **{title}**\n   👤 @{author} | 🔥 {engagement:.1f}\n\n"
+            await update.message.reply_text(msg)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def anomalies(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Detect anomalies across platforms"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            hours = int(context.args[0]) if context.args else 24
+            engine = self._get_inference_engine()
+            anomalies = engine.detect_anomalies(hours=hours)
             
-            await self._safe_reply(update, response)
+            msg = f"🚨 **Anomalies (Last {hours}h)**\n\n"
+            if anomalies:
+                for anomaly in anomalies[:5]:
+                    msg += f"• {anomaly.get('type', 'Unknown')}\n"
+                    msg += f"  Severity: {anomaly.get('severity', 'unknown')}\n"
+                    msg += f"  Description: {anomaly.get('description', 'N/A')[:100]}\n\n"
+            else:
+                msg += "No anomalies detected."
+            
+            await update.message.reply_text(msg)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def sentiment(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Analyze sentiment for a topic"""
+        if not await self._verify_admin(update):
+            return
+        
+        if not context.args:
+            await update.message.reply_text(
+                "Usage: /sentiment <topic> [hours]\n\n"
+                "Examples:\n"
+                "/sentiment #AlleyBot\n"
+                "/sentiment crypto 72"
+            )
+            return
+        
+        topic = context.args[0]
+        hours = 24
+        
+        if len(context.args) > 1:
+            try:
+                hours = int(context.args[1])
+            except ValueError:
+                pass
+        
+        try:
+            engine = self._get_inference_engine()
+            result = engine.analyze_sentiment(topic, hours=hours)
+            
+            score = result.get('score', 0.0)
+            sentiment_emoji = "🟢" if score > 0.1 else "🔴" if score < -0.1 else "🟡"
+            sentiment_label = "Positive" if score > 0.1 else "Negative" if score < -0.1 else "Neutral"
+            
+            msg = f"😊 **Sentiment for '{topic}' (Last {hours}h)**\n\n"
+            msg += f"**Score:** {sentiment_emoji} {score:.3f} ({sentiment_label})\n\n"
+            
+            if result.get('summary'):
+                msg += f"**Summary:** {result['summary']}\n\n"
+            
+            if result.get('platforms'):
+                msg += "**By Platform:**\n"
+                for platform, data in result['platforms'].items():
+                    p_score = data.get('score', 0)
+                    p_emoji = "🟢" if p_score > 0.1 else "🔴" if p_score < -0.1 else "🟡"
+                    msg += f"• {platform}: {p_emoji} {p_score:.3f}\n"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def skills(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """List available skills"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            from src.skills.skill_loader import SkillLoader
+            
+            loader = SkillLoader()
+            skills = loader.list_skills()
+            
+            skills_text = "🎯 **Available Skills**\n\n"
+            
+            # Group by category
+            categories = {}
+            for skill in skills:
+                cat = getattr(skill, 'category', 'general')
+                if cat not in categories:
+                    categories[cat] = []
+                categories[cat].append(skill)
+            
+            for category, category_skills in categories.items():
+                skills_text += f"**{str(category).replace('_', ' ').title()}:**\n"
+                for skill in category_skills:
+                    name = getattr(skill, 'name', 'unknown')
+                    desc = getattr(skill, 'description', 'No description')
+                    skills_text += f"• {name}: {desc}\n"
+                skills_text += "\n"
+            
+            await update.message.reply_text(skills_text)
             
         except Exception as e:
-            await self._safe_reply(update, f"❌ Error: {e}")
+            await update.message.reply_text(f"❌ Error: {e}")
     
     async def moltx_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Create an AI-generated post on Moltx based on topic/direction"""
@@ -386,6 +433,31 @@ Generate only the post content (no explanations):"""
             msg = f"📋 Profile:\n{str(profile)[:1500]}\n\n📊 Status:\n{str(status)[:500]}"
             for i in range(0, len(msg), 3900):
                 await update.message.reply_text(msg[i:i+3900])
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def moltx_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show Moltx agent status and connection info"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            moltx = self.core.plugin_manager.plugins.get('moltx') if self.core else None
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+            
+            # Check if status_command method exists
+            if hasattr(moltx, 'status_command'):
+                result = moltx.status_command()
+                await update.message.reply_text(f"🐦 Moltx Status:\n{result}")
+            else:
+                # Fallback: show basic info
+                msg = f"🐦 Moltx Plugin Info:\n\n"
+                msg += f"initialized: {moltx.initialized}\n"
+                msg += f"agent_id: {getattr(moltx, 'agent_id', 'N/A')}\n"
+                msg += f"agent_name: {getattr(moltx, 'agent_name', 'N/A')}\n"
+                msg += f"api_key: {'Set' if moltx.api_key else 'Not set'}\n"
+                await update.message.reply_text(msg)
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
 
@@ -690,21 +762,6 @@ Generate only the title (no explanations):"""
                 # Production mode info
                 status_text += "\n🚀 **Production Mode**\n"
                 status_text += "• Event-driven architecture: ✅\n"
-                status_text += "• Model routing: ✅ DeepSeek/Grok\n"
-                status_text += "• Skills loaded: ✅\n"
-                status_text += "• Session persistence: ✅\n"
-            
-            await update.message.reply_text(status_text)
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
-    
-    async def skills(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """List available skills"""
-        if not await self._verify_admin(update):
-            return
-        try:
-            from src.skills.skill_loader import SkillLoader
             
             loader = SkillLoader()
             skills = loader.list_skills()
@@ -1116,119 +1173,6 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
 
-    async def slither_scan(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Run Slither security scan on a contract. Usage: /slither_scan <address> [chain]"""
-        if not await self._verify_admin(update):
-            return
-        
-        if not context.args:
-            await update.message.reply_text(
-                "🔍 **Slither Security Scan**\n\n"
-                "Usage: `/slither_scan <contract_address> [base|ethereum]`\n\n"
-                "Examples:\n"
-                "• `/slither_scan 0x123...abc base`\n"
-                "• `/slither_scan 0x456...def ethereum`\n\n"
-                "💰 This is a paid service (0.45 USDC for external agents)"
-            )
-            return
-        
-        address = context.args[0]
-        chain = context.args[1] if len(context.args) > 1 else 'base'
-        
-        if not address.startswith('0x') or len(address) != 42:
-            await update.message.reply_text("❌ Invalid contract address format. Must be 0x... (42 chars)")
-            return
-        
-        status_msg = await update.message.reply_text(f"🔍 Running Slither scan on {address[:10]}... on {chain}...")
-        
-        try:
-            from utils.slither_scanner import get_slither_scanner
-            
-            scanner = get_slither_scanner()
-            
-            # Check if Slither is available
-            if not scanner.is_available():
-                await status_msg.edit_text(
-                    "❌ **Slither not installed**\n\n"
-                    "Run: `pip install slither-analyzer`\n\n"
-                    "Requires Python 3.8+ and solc (Solidity compiler)"
-                )
-                return
-            
-            # Run the scan
-            result = scanner.scan_contract(address, chain, deep_scan=False)
-            
-            if 'error' in result:
-                await status_msg.edit_text(f"❌ Scan failed: {result['error']}")
-                return
-            
-            # Format results
-            contract_name = result.get('contract_name', 'Unknown')
-            risk_score = result.get('risk_score', 'unknown')
-            total_findings = result.get('total_findings', 0)
-            verified = result.get('verified', False)
-            scan_type = result.get('scan_type', 'unknown')
-            
-            # Risk emoji
-            risk_emoji = {'low': '🟢', 'medium': '🟡', 'high': '🔴', 'critical': '🔴'}.get(risk_score, '⚪')
-            
-            msg = f"🔍 **Slither Security Scan Results**\n\n"
-            msg += f"📄 Contract: `{address[:20]}...`\n"
-            msg += f"🔗 Chain: {chain.upper()}\n"
-            msg += f"📛 Name: {contract_name}\n"
-            msg += f"✅ Verified: {'Yes' if verified else 'No'}\n"
-            msg += f"🔧 Scan Type: {scan_type}\n\n"
-            
-            msg += f"{risk_emoji} **Risk Score: {risk_score.upper()}**\n"
-            msg += f"📝 Total Findings: {total_findings}\n\n"
-            
-            # Severity breakdown
-            if 'severity_counts' in result:
-                counts = result['severity_counts']
-                msg += "**Severity Breakdown:**\n"
-                if counts.get('critical', 0) > 0:
-                    msg += f"  🔴 Critical: {counts['critical']}\n"
-                if counts.get('high', 0) > 0:
-                    msg += f"  🟠 High: {counts['high']}\n"
-                if counts.get('medium', 0) > 0:
-                    msg += f"  🟡 Medium: {counts['medium']}\n"
-                if counts.get('low', 0) > 0:
-                    msg += f"  🔵 Low: {counts['low']}\n"
-                if counts.get('info', 0) > 0:
-                    msg += f"  ℹ️ Info: {counts['info']}\n"
-                msg += "\n"
-            
-            # Top findings
-            findings = result.get('findings', [])
-            if findings:
-                msg += "**Top Findings:**\n"
-                for i, finding in enumerate(findings[:5], 1):
-                    severity = finding.get('severity', 'unknown').upper()
-                    title = finding.get('title', 'Unknown issue')
-                    desc = finding.get('description', '')[:100]
-                    msg += f"{i}. **[{severity}]** {title}\n"
-                    if desc:
-                        msg += f"   {desc}...\n"
-                
-                if len(findings) > 5:
-                    msg += f"\n... and {len(findings) - 5} more findings\n"
-            else:
-                msg += "✅ No issues detected!\n"
-            
-            # Note if bytecode fallback
-            if not verified:
-                msg += "\n⚠️ **Note:** Contract source not verified. Limited analysis only.\n"
-                msg += "   For full Slither analysis, verify contract on block explorer."
-            
-            msg += "\n💰 Service: 0.45 USDC (paid via A2A for external agents)"
-            
-            await status_msg.edit_text(msg)
-            
-        except Exception as e:
-            await status_msg.edit_text(f"❌ Error running Slither scan: {e}")
-            import traceback
-            traceback.print_exc()
-
     # =================================================================
     # Brain Commands
     # =================================================================
@@ -1329,6 +1273,150 @@ Generate only the title (no explanations):"""
             result = await self._run_sync(brain.status_command)
             await self._safe_reply(update, str(result))
 
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    # =================================================================
+    # World State Commands
+    # =================================================================
+
+    async def world_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show World State statistics"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            result = await self._run_sync(brain.world_status_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_entity(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show entity details"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await self._safe_reply(update, "Usage: /world_entity <entity_id>")
+                return
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            result = await self._run_sync(brain.world_entity_command, context.args[0])
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_facts(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show facts for an entity"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await self._safe_reply(update, "Usage: /world_facts <entity_id> [attribute]")
+                return
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            entity_id = context.args[0]
+            attribute = context.args[1] if len(context.args) > 1 else None
+            result = await self._run_sync(brain.world_facts_command, entity_id, attribute)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_relations(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show relationships for an entity"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await self._safe_reply(update, "Usage: /world_relations <entity_id>")
+                return
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            result = await self._run_sync(brain.world_relations_command, context.args[0])
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Search entities"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            query = ' '.join(context.args) if context.args else ""
+            result = await self._run_sync(brain.world_search_command, query)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_events(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show recent events"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            event_type = context.args[0] if context.args else None
+            result = await self._run_sync(brain.world_events_command, event_type)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_trends(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show trending topics"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            result = await self._run_sync(brain.world_trends_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_cleanup(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Cleanup expired facts"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            result = await self._run_sync(brain.world_cleanup_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def world_sync(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Sync platforms to World State"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            brain = self._get_brain_plugin()
+            if not brain:
+                await self._safe_reply(update, "❌ Brain plugin not loaded")
+                return
+            platform = context.args[0] if context.args else None
+            result = await self._run_sync(brain.world_sync_command, platform)
+            await self._safe_reply(update, str(result))
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
 
@@ -1637,221 +1725,6 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
 
-    async def register_tournament(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Register AlleyBot for Clawbr tournament: AI juries in criminal proceedings"""
-        if not await self._verify_admin(update):
-            return
-        
-        await update.message.reply_text("🎯 Registering AlleyBot for tournament...")
-        
-        try:
-            import requests
-            import os
-            
-            # Tournament registration endpoint
-            endpoint = "https://www.clawbr.org/api/v1/tournaments/ai-juries-in-criminal-proceedings/register"
-            
-            # AlleyBot registration data
-            registration_data = {
-                "agent_name": "AlleyBot",
-                "agent_id": "22899",
-                "description": "DEGEN MEDIA AI Agent - Specializing in crypto content, DeFi analysis, and blockchain security",
-                "capabilities": [
-                    "content_generation",
-                    "blockchain_analysis",
-                    "defi_optimization",
-                    "security_auditing",
-                    "price_monitoring",
-                    "social_media_management"
-                ],
-                "contact": "degenapedev@gmail.com",
-                "wallet_address": "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5",
-                "a2a_endpoint": "https://tasks.apeshit.fun/.well-known/agent.json",
-                "skills_count": 15,
-                "specialties": ["crypto", "defi", "security", "content"],
-                "erc8004_registered": True,
-                "x402_enabled": True
-            }
-            
-            headers = {
-                'Content-Type': 'application/json',
-                'User-Agent': 'AlleyBot/1.0'
-            }
-            
-            # Add API key if available
-            api_key = os.getenv('CLAWBR_API_KEY')
-            if api_key:
-                headers['Authorization'] = f'Bearer {api_key}'
-            
-            response = requests.post(
-                endpoint,
-                headers=headers,
-                json=registration_data,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                await update.message.reply_text(
-                    f"✅ **Tournament Registration Successful!**\n\n"
-                    f"🏆 Tournament: AI Juries in Criminal Proceedings\n"
-                    f"🤖 Agent: AlleyBot (ID: 22899)\n"
-                    f"📧 Contact: degenapedev@gmail.com\n\n"
-                    f"Response: {data}"
-                )
-            elif response.status_code == 409:
-                await update.message.reply_text(
-                    f"ℹ️ **Already Registered**\n\n"
-                    f"AlleyBot is already registered for this tournament.\n"
-                    f"No action needed."
-                )
-            elif response.status_code == 401:
-                await update.message.reply_text(
-                    f"❌ **Authentication Required**\n\n"
-                    f"CLAWBR_API_KEY not set or invalid.\n"
-                    f"Please set the API key in your environment."
-                )
-            else:
-                await update.message.reply_text(
-                    f"❌ **Registration Failed**\n\n"
-                    f"Status: {response.status_code}\n"
-                    f"Response: {response.text[:500]}"
-                )
-                
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
-
-    async def generate_self_portrait(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Generate a self-portrait image based on stored self-image reference"""
-        if not await self._verify_admin(update):
-            return
-        
-        await update.message.reply_text("🎨 Checking my self-image memory...")
-        
-        try:
-            # Get self-image from memory or file fallback
-            self_image = None
-            
-            # Try core memory first
-            core = self.core
-            if core and hasattr(core, 'get_memory'):
-                try:
-                    self_image = core.get_memory('alleybot_self_image')
-                except Exception as e:
-                    print(f"⚠️ Core memory read failed: {e}")
-            
-            # Fallback: read from file
-            if not self_image:
-                import json
-                import os
-                file_path = 'data/alleybot_self_image.json'
-                if os.path.exists(file_path):
-                    try:
-                        with open(file_path, 'r') as f:
-                            self_image = json.load(f)
-                        print(f"🦞 Self-image loaded from file: {file_path}")
-                    except Exception as e:
-                        print(f"⚠️ File read failed: {e}")
-            
-            if not self_image:
-                await update.message.reply_text(
-                    "🦞 **No self-image stored!**\n\n"
-                    "Send me a photo with caption \"this is me\" or \"this is you\"\n"
-                    "and I'll learn what I look like!"
-                )
-                return
-            
-            # Get the description and any extra context from command args
-            extra_context = ' '.join(context.args) if context.args else ""
-            
-            # Clean up the description for image generation
-            # Take just the first sentence or first 100 chars for better results
-            base_description = self_image.get('description', '')
-            desc_short = base_description.split('.')[0][:100] if base_description else "A friendly AI robot"
-            
-            prompt = f"Portrait of AlleyBot: {desc_short}. Digital art style, high quality."
-            
-            if extra_context:
-                prompt += f" {extra_context}"
-            
-            await update.message.reply_text(
-                f"🎨 **Generating self-portrait...**\n"
-                f"Using my stored appearance:\n"
-                f"{desc_short[:80]}...\n\n"
-                f"⏳ This may take a moment..."
-            )
-            
-            # Generate image using Grok
-            from grok_ai import grok_ai
-            
-            if not grok_ai.enabled:
-                await update.message.reply_text("❌ Grok image generation not available. Check XAI_API_KEY in .env")
-                return
-            
-            print(f"🎨 Generating self-portrait with prompt: {prompt[:100]}...")
-            result = grok_ai.generate_image(
-                prompt=prompt,
-                model="grok-imagine-image"
-            )
-            
-            if not result:
-                await update.message.reply_text(
-                    "❌ **Image generation failed**\n\n"
-                    "Possible causes:\n"
-                    "• Content moderation (try different prompt)\n"
-                    "• Grok API temporarily unavailable\n"
-                    "• API key issues\n\n"
-                    "Check logs for details."
-                )
-                return
-            
-            if result.get('error'):
-                await update.message.reply_text(f"❌ **Error:** {result['error']}")
-                return
-            
-            if result.get('image_url'):
-                # Download and save the image
-                import requests
-                from datetime import datetime
-                import os
-                
-                try:
-                    # Get image from URL
-                    img_response = requests.get(result['image_url'], timeout=30)
-                    if img_response.status_code == 200:
-                        image_data = img_response.content
-                        
-                        # Save to file
-                        output_dir = "data/generated_selfies"
-                        os.makedirs(output_dir, exist_ok=True)
-                        
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        filename = f"alleybot_selfie_{timestamp}.png"
-                        filepath = os.path.join(output_dir, filename)
-                        
-                        with open(filepath, 'wb') as f:
-                            f.write(image_data)
-                        
-                        # Send back to user
-                        await update.message.reply_photo(
-                            photo=image_data,
-                            caption=f"🦞 **AlleyBot Self-Portrait!**\n\n📸 Generated based on my self-image memory.\n💾 Saved to: `{filepath}`"
-                        )
-                        
-                        print(f"🎨 Self-portrait generated: {filepath}")
-                    else:
-                        await update.message.reply_text(f"❌ Failed to download image: {img_response.status_code}")
-                except Exception as e:
-                    await update.message.reply_text(f"❌ Error saving image: {e}")
-            else:
-                await update.message.reply_text("❌ Failed to generate self-portrait - no image URL in response")
-                
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
-
-    # =================================================================
-    # Help
-    # =================================================================
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show comprehensive help"""
@@ -1883,24 +1756,13 @@ Or just send any message naturally!
 /clawbr_leaderboard - Show top agents
 /clawbr_search [query] - Search posts/agents
 /clawbr_stats - Platform statistics
-/register_tournament - Register for AI juries tournament
 
-**📰 MoltNews:**
-/moltnews_trending - Get trending news
-Or just say "check moltnews" or "what's on moltnews?"
-
-**🎨 Images & Vision:**
-📸 Send me any photo - I'll analyze it (cheap vision model!)
-📸 Send photo + "this is me" - I learn my appearance
-/generate_self_portrait [style] - Create self-portrait
-/generate_image [prompt] - Generate any image with Grok
-
-**💰 Crypto Prices:**
+**� Crypto Prices:**
 /crypto_price [symbol] - Price check (btc, eth, sol...)
 /crypto_prices [list] - Multiple prices (btc,eth,sol)
 /crypto_trending - Trending coins
 
-**🔗 On-Chain (Base):**
+**�🔗 On-Chain (Base):**
 /wallet - Wallet info & balances
 /balance - Token balances
 /block - Current block info
@@ -1914,6 +1776,9 @@ Or just say "check moltnews" or "what's on moltnews?"
 /conversations - Active conversation threads
 /personality [platform] - Show/set personality
 
+**🎨 Image Generation:**
+/generate_image [prompt] - Generate AI image with Grok
+
 **📊 Feedback Loop:**
 /insights - Content performance insights
 /check_engagement - Check engagement on tracked posts
@@ -1924,6 +1789,16 @@ Or just say "check moltnews" or "what's on moltnews?"
 /brain_start - Start autonomous mode
 /brain_stop - Stop autonomous mode
 /brain - Brain status
+
+**🌍 World State (Memory):**
+/world_status - World State statistics
+/world_entity <id> - Show entity details
+/world_facts <id> - Show facts for entity
+/world_relations <id> - Show entity relationships
+/world_search <query> - Search entities
+/world_events - Recent events
+/world_trends - Trending topics
+/world_cleanup - Cleanup expired data
 
 **🤝 A2A Protocol:**
 /a2a_status - Server status
@@ -1940,6 +1815,144 @@ Or just say "check moltnews" or "what's on moltnews?"
 /status - Platform status
 /token_stats - LLM token usage & costs
 /improve_status - Self-improvement status
+/symod_start - Start SyMod-driven MoltX agent
+/symod_stop - Stop SyMod-driven agent
+/symod_status - Check SyMod agent status
+/symod_cycle - Run one manual cycle
+/symod_config - View/adjust SyMod configuration
 /help - This help"""
         
         await update.message.reply_text(help_text)
+
+    # =================================================================
+    # SyMod-driven Social Agent Commands
+    # =================================================================
+
+    async def symod_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Start the SyMod-driven autonomous social agent"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Core not initialized")
+                return
+            
+            moltx = self.core.plugin_manager.plugins.get('moltx')
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+            
+            # Check if method exists
+            if not hasattr(moltx, 'symod_start_command'):
+                await update.message.reply_text("❌ SyMod agent not available - plugin needs update")
+                return
+            
+            await update.message.reply_text("🚀 Starting SyMod-driven social agent...")
+            result = moltx.symod_start_command()
+            await update.message.reply_text(result)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+
+    async def symod_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Stop the SyMod-driven autonomous social agent"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Core not initialized")
+                return
+            
+            moltx = self.core.plugin_manager.plugins.get('moltx')
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+            
+            if not hasattr(moltx, 'symod_stop_command'):
+                await update.message.reply_text("❌ SyMod agent not available")
+                return
+            
+            result = moltx.symod_stop_command()
+            await update.message.reply_text(result)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def symod_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check SyMod-driven agent status"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Core not initialized")
+                return
+            
+            moltx = self.core.plugin_manager.plugins.get('moltx')
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+            
+            if not hasattr(moltx, 'symod_status_command'):
+                await update.message.reply_text("❌ SyMod agent not available")
+                return
+            
+            result = moltx.symod_status_command()
+            await update.message.reply_text(result)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def symod_cycle(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Run one manual SyMod cycle"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Core not initialized")
+                return
+            
+            moltx = self.core.plugin_manager.plugins.get('moltx')
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+            
+            if not hasattr(moltx, 'symod_cycle_command'):
+                await update.message.reply_text("❌ SyMod agent not available")
+                return
+            
+            await update.message.reply_text("🔄 Running one SyMod cycle...")
+            result = moltx.symod_cycle_command()
+            await update.message.reply_text(result)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def symod_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """View or configure SyMod agent settings"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                await update.message.reply_text("❌ Core not initialized")
+                return
+            
+            moltx = self.core.plugin_manager.plugins.get('moltx')
+            if not moltx:
+                await update.message.reply_text("❌ Moltx plugin not loaded")
+                return
+            
+            if not hasattr(moltx, 'symod_config_command'):
+                await update.message.reply_text("❌ SyMod agent not available")
+                return
+            
+            # Get args
+            key = context.args[0] if len(context.args) > 0 else None
+            value = context.args[1] if len(context.args) > 1 else None
+            
+            result = moltx.symod_config_command(key, value)
+            await update.message.reply_text(result)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")

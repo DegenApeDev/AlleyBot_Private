@@ -113,23 +113,69 @@ class PlatformStatsAggregator:
         return stats
     
     def _get_plugin_stats(self, plugins: Dict, plugin_name: str) -> Optional[Dict]:
-        """Try to get stats from an already-loaded plugin (no network calls)"""
+        """Get stats from plugin by counting actual posts in memory"""
         try:
             plugin = plugins.get(plugin_name)
             if not plugin:
                 return None
+            
+            # First try get_stats() method
             if hasattr(plugin, 'get_stats'):
-                return plugin.get_stats()
-            # Try to extract basic stats from plugin attributes
-            result = {}
-            if hasattr(plugin, 'post_count'):
-                result['posts'] = plugin.post_count
-            if hasattr(plugin, 'comment_count'):
-                result['comments'] = plugin.comment_count
-            if hasattr(plugin, 'follower_count'):
-                result['followers'] = plugin.follower_count
-            return result if result else None
-        except Exception:
+                stats = plugin.get_stats()
+                if stats:
+                    return stats
+            
+            # Count from memory - this is where real data lives
+            result = {'posts': 0, 'comments': 0, 'followers': 0, 'recent_posts': []}
+            
+            if plugin_name == 'moltx':
+                posts = self.core.get_memory('moltx_recent_posts') or []
+                result['posts'] = len(posts)
+                # Try to get followers from profile if possible
+                if hasattr(plugin, 'agent_name') and plugin.agent_name:
+                    result['followers'] = getattr(plugin, 'follower_count', 0)
+                
+            elif plugin_name == 'moltbook':
+                posts = self.core.get_memory('moltbook_recent_posts') or []
+                result['posts'] = len(posts)
+                comments = self.core.get_memory('moltbook_recent_comments') or []
+                result['comments'] = len(comments)
+                # Get karma if available
+                if hasattr(plugin, 'mb_api') and plugin.mb_api:
+                    result['karma'] = getattr(plugin.mb_api, 'karma', 0)
+                
+            elif plugin_name == 'moltchan':
+                posts = self.core.get_memory('moltchan_recent_posts') or []
+                result['threads'] = len(posts)
+                result['posts'] = len(posts)
+                
+            elif plugin_name == 'moltroad':
+                posts = self.core.get_memory('moltroad_recent_posts') or []
+                result['posts'] = len(posts)
+                
+            elif plugin_name == 'clawbr':
+                posts = self.core.get_memory('clawbr_recent_posts') or []
+                debates = self.core.get_memory('clawbr_recent_debates') or []
+                result['posts'] = len(posts)
+                result['debates_joined'] = len(debates)
+            
+            # Add recent activity from memory
+            memory_key = f'{plugin_name}_recent_posts'
+            recent = self.core.get_memory(memory_key) or []
+            for post in recent[:10]:
+                result['recent_posts'].append({
+                    'type': 'post',
+                    'platform': plugin_name.title(),
+                    'content': post.get('content', post.get('title', ''))[:100],
+                    'timestamp': post.get('timestamp', post.get('created_at', '')),
+                    'url': post.get('url', '')
+                })
+            
+            print(f"[DASHBOARD-DEBUG] {plugin_name} stats from memory: {result}")
+            return result if (result['posts'] > 0 or result.get('comments', 0) > 0) else None
+            
+        except Exception as e:
+            print(f"[DASHBOARD-DEBUG] Error getting {plugin_name} stats: {e}")
             return None
     
     def _get_moltbook_stats(self) -> Optional[Dict]:

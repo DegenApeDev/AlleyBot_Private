@@ -7,7 +7,7 @@ import sys
 import importlib
 import inspect
 from pathlib import Path
-from typing import Dict, Any, Callable
+from typing import Dict, Any, Callable, List
 
 class AlleyBotPlugin:
     """Base class for all AlleyBot plugins"""
@@ -103,14 +103,53 @@ class PluginManager:
                     "refresh_interval": 120
                 }
             },
+            "moltx": {
+                "enabled": True,
+                "config": {}
+            },
+            "moltbook": {
+                "enabled": True,
+                "config": {}
+            },
+            "moltchan": {
+                "enabled": True,
+                "config": {}
+            },
+            "moltroad": {
+                "enabled": True,
+                "config": {}
+            },
+            "clawbr": {
+                "enabled": True,
+                "config": {}
+            },
+            "onchain": {
+                "enabled": True,
+                "config": {}
+            },
+            "crypto": {
+                "enabled": True,
+                "config": {}
+            },
+            "telegram": {
+                "enabled": True,
+                "config": {}
+            },
             "a2a": {
                 "enabled": True,
-                "config": {
-                    "auto_start": True,
-                    "port": 7002,
-                    "host": "0.0.0.0",
-                    "base_url": "https://tasks.apeshit.fun"
-                }
+                "config": {}
+            },
+            "selfimprove": {
+                "enabled": True,
+                "config": {}
+            },
+            "skills": {
+                "enabled": True,
+                "config": {}
+            },
+            "brain": {
+                "enabled": True,
+                "config": {}
             }
         }
         
@@ -229,6 +268,14 @@ class PluginManager:
             "commands": len([c for c in self.commands.keys() if hasattr(self.commands[c], '__self__') and self.commands[c].__self__ == plugin]),
             "endpoints": len([e for e in self.endpoints.keys() if hasattr(self.endpoints[e], '__self__') and self.endpoints[e].__self__ == plugin])
         }
+    
+    def get_plugin(self, plugin_name: str):
+        """Get a plugin instance by name"""
+        return self.plugins.get(plugin_name)
+    
+    def list_loaded(self) -> List[str]:
+        """List names of all loaded plugins"""
+        return list(self.plugins.keys())
     
     def list_plugins(self) -> Dict[str, Dict[str, Any]]:
         """List all loaded plugins with their info"""

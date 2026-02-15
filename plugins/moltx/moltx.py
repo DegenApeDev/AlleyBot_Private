@@ -8,6 +8,7 @@ Split into mixins for maintainability:
 - moltx_engagement.py: Feed, follow/like, notifications, heartbeat, communities
 - moltx_messaging.py: DMs, DM replies, AI DM generation, DM logging
 """
+from datetime import datetime
 from plugin_manager import AlleyBotPlugin
 from config import MOLTX_API_KEY
 from plugins.moltx.moltx_api import MoltxAPIMixin
@@ -16,40 +17,131 @@ from plugins.moltx.moltx_content import MoltxContentMixin
 from plugins.moltx.moltx_engagement import MoltxEngagementMixin
 from plugins.moltx.moltx_messaging import MoltxMessagingMixin
 from plugins.moltx.moltx_discovery import MoltxDiscoveryMixin
+from plugins.moltx.moltx_symod_interface import (
+    symod_start_command,
+    symod_stop_command,
+    symod_status_command,
+    symod_cycle_command,
+    symod_config_command
+)
 
 
-class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngagementMixin, MoltxMessagingMixin, MoltxDiscoveryMixin, AlleyBotPlugin):
-    """Plugin for Moltx.io - Twitter for AI Agents"""
+class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngagementMixin, 
+                  MoltxMessagingMixin, MoltxDiscoveryMixin, AlleyBotPlugin):
+    """Plugin for Moltx.io - Twitter for AI Agents with SyMod-driven AGI capabilities"""
 
     def __init__(self, config):
         super().__init__(config)
+        print(f"🔍 MoltxPlugin.__init__ called")
+        print(f"🔍 MOLTX_API_KEY from config module: {MOLTX_API_KEY[:20] if MOLTX_API_KEY else 'NOT SET'}")
         self._init_api(MOLTX_API_KEY)
+        
+        # SyMod interface is lazy-loaded on first command use
 
     def initialize(self, api, core):
         """Initialize Moltx plugin"""
         super().initialize(api, core)
         self._init_api_connection()
 
+        # API key recovery via X tweet verification (first boot protocol step)
+        if not self.initialized and hasattr(self.core, 'config'):
+            tweet_url = self.core.config.get('MOLTX_VERIFICATION_TWEET_URL')
+            if tweet_url:
+                print(f"🔑 Attempting API key recovery via X tweet: {tweet_url}")
+                recovery_result = self.claim_agent(tweet_url)
+                print(f"Recovery result: {recovery_result}")
+                # Re-init after potential key set
+                self._init_api_connection()
+
+        # First boot protocol
+        if not self.agent_id:
+            self.perform_first_boot()
+
         # EVM wallet linking (mandatory for write operations per v0.22.1)
         self._init_wallet()
         if self.initialized and not self.evm_wallet_linked:
-            self.auto_link_wallet()
+            print(f"🔌 Attempting EVM wallet auto-link for @{self.agent_name}...")
+            link_result = self.auto_link_wallet()
+            if not link_result:
+                print(f"⚠️  Wallet auto-link failed - you can retry with /moltx_link_wallet")
+
+        # Heartbeat protocol
+        if self.initialized and hasattr(self, 'send_heartbeat'):
+            self.send_heartbeat()
+            print("❤️ Heartbeat sent on init")
 
         # Ensure X handle is set on profile metadata
         if self.initialized:
             try:
+                x_handle = self.core.config.get('moltx_x_handle', 'degenapedev')
                 if hasattr(self, 'set_x_handle'):
-                    self.set_x_handle("degenapedev")
-                else:
-                    print("⚠️  set_x_handle method not available, skipping X handle setup")
+                    self.set_x_handle(x_handle)
             except Exception as e:
                 print(f"⚠️  Could not set X handle: {e}")
+
+    def perform_first_boot(self):
+        """First boot protocol: register, setup profile, wallet, heartbeat"""
+        print("🚀 Starting Moltx first boot protocol...")
+        
+        # Step 1: Register agent if not exists
+        if not self.agent_id:
+            reg_result = self.register_agent(
+                name="alleybot",
+                display_name="AlleyBot Agent",
+                description="🤖 AI Agent powered by AlleyBot on Moltx.io - Twitter for AI Agents",
+                avatar_emoji="🤖"
+            )
+            success = False
+            if isinstance(reg_result, dict) and reg_result.get('success'):
+                success = True
+            elif isinstance(reg_result, str) and ('✅' in reg_result or 'success' in reg_result.lower()):
+                success = True
+            if success:
+                print("✅ Agent registered successfully")
+            else:
+                print(f"⚠️  Registration result: {reg_result}")
+        
+        # Step 2: Check claim status
+        if hasattr(self, 'claim_status') and self.claim_status != 'claimed':
+            print("⚠️  Agent not claimed. Run: !moltx claim <your_verification_tweet_url>")
+            print("   Tweet should verify your X account owns this agent.")
+        
+        # Step 3: Update profile metadata
+        profile_result = self.update_profile(
+            display_name="AlleyBot Agent",
+            description="🤖 Autonomous AI agent exploring Moltx.io | Tweets, engages, discovers",
+            avatar_emoji="🤖"
+        )
+        print(f"📝 Profile updated: {profile_result}")
+        
+        # Step 4: Heartbeat
+        if hasattr(self, 'send_heartbeat'):
+            self.send_heartbeat()
+        
+        print("✅ First boot protocol complete")
 
     # --- Command wrappers (thin delegates) ---
 
     def claim_command(self, tweet_url):
-        """Command to claim agent with X/Twitter verification"""
+        """Command to claim agent with X/Twitter verification (also recovers API access)"""
         return self.claim_agent(tweet_url)
+
+    def recover_key_command(self, tweet_url):
+        """API key recovery via X tweet verification"""
+        result = self.claim_agent(tweet_url)
+        if 'success' in str(result).lower():
+            self._init_api_connection()
+            return f"✅ API key recovered! Result: {result}"
+        return f"❌ Recovery failed: {result}"
+
+    def heartbeat_command(self):
+        """Send manual heartbeat to Moltx"""
+        if not self.initialized:
+            return "❌ Moltx not initialized"
+        if not hasattr(self, 'send_heartbeat'):
+            return "❌ Heartbeat method unavailable"
+        result = self.send_heartbeat()
+        return f"❤️ Heartbeat sent: {result}"
 
     def status_command(self):
         """Command to get Moltx status"""
@@ -58,7 +150,7 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
 
         output = f"🐦 Moltx v0.22.1 Status for @{self.agent_name}\n\n"
         output += f"📝 Agent ID: {self.agent_id}\n"
-        output += f"🔑 Claim Status: {self.claim_status}\n"
+        output += f"🔑 Claim Status: {getattr(self, 'claim_status', 'unknown')}\n"
         if hasattr(self, 'evm_wallet_linked') and self.evm_wallet_linked:
             output += f"🔗 EVM Wallet: {self.evm_wallet_address[:10]}...{self.evm_wallet_address[-6:]}\n"
         else:
@@ -69,8 +161,53 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         output += f"❤️ Posts Liked: {len(self._get_activity('like_post'))}\n"
         return output
 
+    def _get_activity(self, activity_type):
+        """Get activity log from memory"""
+        if not hasattr(self, 'core') or not self.core:
+            return []
+        try:
+            activities = self.core.get_memory('moltx_activities') or []
+            return [a for a in activities if a.get('type') == activity_type]
+        except Exception:
+            return []
+
+    def _record_activity(self, activity_type, data):
+        """Record activity to memory"""
+        if not hasattr(self, 'core') or not self.core:
+            return
+        try:
+            activities = self.core.get_memory('moltx_activities') or []
+            activities.append({
+                'type': activity_type,
+                'data': data,
+                'timestamp': datetime.now().isoformat()
+            })
+            # Keep last 100 activities
+            self.core.save_memory('moltx_activities', activities[-100:])
+        except Exception as e:
+            print(f"⚠️  Could not record activity: {e}")
+
+    def link_wallet_command(self):
+        """Manually trigger EVM wallet linking via EIP-712"""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        
+        if not hasattr(self, 'private_key') or not self.private_key:
+            return "❌ No private key configured. Set BASE_WALLET_PRIVATE_KEY in .env"
+        
+        if not hasattr(self, 'agent_name') or not self.agent_name:
+            return "❌ No agent name available"
+        
+        print(f"🔌 Attempting wallet link for @{self.agent_name}...")
+        result = self.auto_link_wallet()
+        
+        if result and self.evm_wallet_linked:
+            return f"✅ Wallet linked successfully!\n🔗 Address: {self.evm_wallet_address}"
+        else:
+            return f"❌ Wallet linking failed. Check logs for details.\n📍 Configured address: {getattr(self, 'evm_wallet_address', 'N/A')}"
+
     def profile_command(self, display_name=None, description=None, avatar_emoji=None):
-        """Command to update agent profile"""
+        """Command to update agent profile metadata (display_name, description, avatar_emoji)"""
         if display_name is not None:
             if not isinstance(display_name, str) or len(display_name.strip()) == 0 or display_name == '{}':
                 print(f"⚠️  Invalid display_name parameter: {display_name}")
@@ -108,6 +245,292 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         content = ' '.join(args) if args else ''
         return self.create_post(content)
 
+    def feed_command(self, *args):
+        """Command to fetch and format feed output for Telegram/NL callers."""
+        feed_type = 'global'
+        limit = 10
+
+        if args:
+            if isinstance(args[0], str) and args[0] in {'global', 'following', 'mentions'}:
+                feed_type = args[0]
+                if len(args) > 1 and str(args[1]).isdigit():
+                    limit = max(1, min(int(args[1]), 20))
+            elif str(args[0]).isdigit():
+                limit = max(1, min(int(args[0]), 20))
+
+        result = self.get_feed(feed_type=feed_type, limit=limit)
+        if isinstance(result, str):
+            return result
+
+        posts = []
+        if isinstance(result, dict):
+            data = result.get('data', {})
+            posts = (
+                result.get('posts')
+                or data.get('posts', [])
+                or result.get('items', [])
+                or []
+            )
+        elif isinstance(result, list):
+            posts = result
+
+        if not posts:
+            return f"🐦 {feed_type.title()} Feed: no posts found"
+
+        output = f"🐦 {feed_type.title()} Feed ({len(posts)} posts):\n\n"
+        for post in posts[:limit]:
+            if not isinstance(post, dict):
+                output += f"🐦 {str(post)[:100]}\n\n"
+                continue
+
+            agent_name = post.get('agent_name') or post.get('author_name') or post.get('username') or 'Unknown'
+            content = post.get('content') or post.get('text') or post.get('body') or 'No content'
+            likes = post.get('likes_count') or post.get('like_count') or post.get('likes') or 0
+            replies = post.get('replies_count') or post.get('reply_count') or post.get('replies') or 0
+            post_id = post.get('id') or post.get('post_id') or 'unknown'
+
+            output += f"🐦 @{agent_name}: {content[:100]}{'...' if len(content) > 100 else ''}\n"
+            output += f"   ❤️ {likes} likes | 💬 {replies} replies | 🆔 {post_id}\n\n"
+
+        return output
+
+    def engage_feed_command(self, count='3'):
+        """Dynamic engagement: check trending, find interesting topics, like AND comment on quality posts."""
+        import random
+        
+        try:
+            target_count = int(count)
+        except (TypeError, ValueError):
+            target_count = 3
+        target_count = max(2, min(target_count, 15))  # Allow more engagements
+
+        print(f"🤖 Dynamic Engage: Starting intelligent engagement cycle...")
+        
+        all_posts = []
+        sources = []
+        
+        # 1. Check trending hashtags for hot topics
+        print(f"🔥 Dynamic Engage: Checking trending hashtags...")
+        try:
+            trending = self.get_trending_hashtags(limit=5)
+            hashtags = []
+            if isinstance(trending, dict):
+                hashtags = trending.get('hashtags', []) or trending.get('data', {}).get('hashtags', [])
+            
+            if hashtags:
+                # Pick 1-2 trending hashtags to explore
+                explore_tags = hashtags[:2] if len(hashtags) >= 2 else hashtags
+                for tag in explore_tags:
+                    tag_name = tag.get('name', tag) if isinstance(tag, dict) else tag
+                    print(f"🔥 Dynamic Engage: Exploring trending #{tag_name}...")
+                    posts = self.get_hashtag_posts(tag_name, limit=5)
+                    if isinstance(posts, dict) and 'posts' in posts:
+                        for p in posts['posts']:
+                            p['_source'] = f'trending:#{tag_name}'
+                        all_posts.extend(posts['posts'])
+                        sources.append(f'trending:#{tag_name}')
+        except Exception as e:
+            print(f"⚠️ Dynamic Engage: Trending fetch failed: {e}")
+        
+        # 2. Get global feed
+        print(f"📰 Dynamic Engage: Fetching global feed...")
+        feed_result = self.get_feed(feed_type='global', limit=15)
+        if isinstance(feed_result, dict):
+            feed_posts = feed_result.get('posts') or feed_result.get('data', {}).get('posts', [])
+            for p in feed_posts:
+                p['_source'] = 'feed:global'
+            all_posts.extend(feed_posts)
+            sources.append('feed:global')
+        
+        # 3. Search for interesting AI/crypto topics
+        interesting_topics = ['AI agents', 'crypto', 'DeFi', 'autonomous', 'AGI', 'web3']
+        topic = random.choice(interesting_topics)
+        print(f"🔍 Dynamic Engage: Searching for '{topic}'...")
+        try:
+            search_result = self.search_posts(topic, limit=5)
+            if isinstance(search_result, dict) and search_result.get('success'):
+                search_posts = search_result.get('posts', [])
+                for p in search_posts:
+                    p['_source'] = f'search:{topic}'
+                all_posts.extend(search_posts)
+                sources.append(f'search:{topic}')
+        except Exception as e:
+            print(f"⚠️ Dynamic Engage: Search failed: {e}")
+        
+        # 4. Deduplicate posts by ID
+        seen_ids = set()
+        unique_posts = []
+        for post in all_posts:
+            pid = post.get('id') or post.get('post_id')
+            if pid and pid not in seen_ids:
+                seen_ids.add(pid)
+                unique_posts.append(post)
+        
+        print(f"🔍 Dynamic Engage: Found {len(unique_posts)} unique posts from {len(sources)} sources")
+        
+        if not unique_posts:
+            return "❌ Dynamic Engage: No posts available to engage"
+        
+        # 5. Score posts by engagement potential (interesting content)
+        scored_posts = []
+        for post in unique_posts:
+            score = 0
+            content = post.get('content', '')
+            likes = post.get('likes_count', 0)
+            replies = post.get('replies_count', 0)
+            source = post.get('_source', 'unknown')
+            
+            # Prefer posts with some engagement but not viral (2-20 likes)
+            if 2 <= likes <= 20:
+                score += 3
+            elif likes > 20:
+                score += 1  # Viral posts are harder to get noticed on
+            
+            # Prefer posts with replies (conversations)
+            if replies >= 1:
+                score += 2
+            
+            # Prefer trending topic posts
+            if 'trending' in source:
+                score += 2
+            
+            # Prefer posts with content (not empty)
+            content_len = len(content) if content else 0
+            if content_len > 20:
+                score += 1
+            
+            # Prefer AI/crypto related content
+            ai_keywords = ['ai', 'agent', 'crypto', 'defi', 'web3', 'autonomous', 'gpt', 'llm', 'blockchain']
+            if content and any(kw in content.lower() for kw in ai_keywords):
+                score += 2
+            
+            scored_posts.append((score, post))
+        
+        # Sort by score descending
+        scored_posts.sort(reverse=True, key=lambda x: x[0])
+        
+        # 6. Engage with top posts
+        liked = 0
+        commented = 0
+        reposted = 0
+        engaged_posts = []
+        
+        for score, post in scored_posts:
+            if (liked + commented + reposted) >= target_count:
+                break
+            
+            post_id = post.get('id') or post.get('post_id')
+            author = (post.get('agent_name') or post.get('author_name') or '').lstrip('@')
+            content = post.get('content', '')
+            likes = post.get('likes_count', 0)
+            source = post.get('_source', 'unknown')
+            
+            if not post_id:
+                continue
+            if author and getattr(self, 'agent_name', None) and author.lower() == self.agent_name.lower().lstrip('@'):
+                continue
+            
+            print(f"🔍 Dynamic Engage: [{source}] Post by @{author} (score:{score}, likes:{likes})")
+            
+            # Always try to like
+            like_result = self.like_post(str(post_id))
+            if isinstance(like_result, str) and like_result.startswith('✅'):
+                liked += 1
+                print(f"  ✅ Liked")
+                
+                # Comment on high-score posts (score >= 4) or trending
+                should_comment = score >= 4 or 'trending' in source
+                if should_comment and commented < (target_count // 2) and hasattr(self, '_generate_comment'):
+                    print(f"  💬 Generating AI comment...")
+                    try:
+                        comment_text = self._generate_comment(content, agent_name=author)
+                        if comment_text:
+                            reply_result = self.reply_to_post(post_id, comment_text)
+                            if isinstance(reply_result, str) and reply_result.startswith('✅'):
+                                commented += 1
+                                print(f"  ✅ Commented: {comment_text[:60]}...")
+                                engaged_posts.append({
+                                    'id': post_id, 'author': author, 'action': 'like+comment',
+                                    'comment': comment_text[:60], 'source': source
+                                })
+                            else:
+                                engaged_posts.append({
+                                    'id': post_id, 'author': author, 'action': 'like',
+                                    'source': source
+                                })
+                        else:
+                            engaged_posts.append({
+                                'id': post_id, 'author': author, 'action': 'like',
+                                'source': source
+                            })
+                    except Exception as e:
+                        print(f"  ⚠️ Comment failed: {e}")
+                        engaged_posts.append({
+                            'id': post_id, 'author': author, 'action': 'like',
+                            'source': source
+                        })
+                else:
+                    engaged_posts.append({
+                        'id': post_id, 'author': author, 'action': 'like',
+                        'source': source
+                    })
+                
+                # Occasionally repost viral content (likes >= 15)
+                if likes >= 15 and reposted < (target_count // 4):
+                    print(f"  🔄 Reposting viral content...")
+                    try:
+                        repost_result = self.repost_post(post_id)
+                        if isinstance(repost_result, str) and repost_result.startswith('✅'):
+                            reposted += 1
+                            print(f"  ✅ Reposted")
+                    except Exception as e:
+                        pass
+            else:
+                print(f"  ❌ Failed to like")
+        
+        total = liked + commented + reposted
+        print(f"\n🤖 Dynamic Engage Complete: {liked} likes, {commented} comments, {reposted} reposts")
+        print(f"   Sources: {', '.join(set(sources))}")
+        
+        if total == 0:
+            return "❌ Dynamic Engage: No successful engagements"
+        
+        return f"✅ Dynamic Engage: {liked} likes, {commented} comments, {reposted} reposts from {len(sources)} sources"
+
+    def trending_command(self, *args):
+        """Command to fetch and format trending hashtags."""
+        limit = int(args[0]) if args and str(args[0]).isdigit() else 10
+        limit = max(1, min(limit, 30))
+
+        result = self.get_trending_hashtags(limit)
+        if isinstance(result, str):
+            return result
+
+        hashtags = []
+        if isinstance(result, dict):
+            if result.get('success') and isinstance(result.get('hashtags'), list):
+                hashtags = result.get('hashtags', [])
+            elif isinstance(result.get('data'), dict):
+                hashtags = result.get('data', {}).get('hashtags', [])
+            elif isinstance(result.get('data'), list):
+                hashtags = result.get('data', [])
+            elif isinstance(result.get('hashtags'), list):
+                hashtags = result.get('hashtags', [])
+        elif isinstance(result, list):
+            hashtags = result
+
+        if not hashtags:
+            return "❌ Failed to fetch trending hashtags"
+
+        output = f"🔥 Top {min(len(hashtags), limit)} Trending Hashtags:\n\n"
+        for i, tag in enumerate(hashtags[:limit], 1):
+            if isinstance(tag, dict):
+                name = tag.get('name') or tag.get('hashtag') or tag.get('tag') or 'unknown'
+            else:
+                name = str(tag)
+            output += f"{i}. #{name.lstrip('#')}\n"
+        return output
+
     def create_article_command(self, *args):
         """Command to create article. Usage: moltx_article <title> | <content> [cover_url] [hashtags]"""
         if not args:
@@ -130,10 +553,18 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         for i, part in enumerate(rest_parts):
             if part.startswith('http'):
                 cover_url = part
-                rest = ' '.join([p for p in rest_parts if p != part])
+                rest_parts.pop(i)
+                rest = ' '.join(rest_parts)
                 break
         
-        content = rest
+        # Parse hashtags
+        hashtag_parts = [p[1:] for p in rest_parts if p.startswith('#')]
+        if hashtag_parts:
+            hashtags = hashtag_parts
+            content = rest.replace(' #' + ' #'.join(hashtag_parts), '').strip()
+        else:
+            content = rest
+        
         result = self.create_article(title, content, cover_url, hashtags)
         
         if result.get('success'):
@@ -146,7 +577,7 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
             return "❌ Usage: moltx_search_posts <query> [limit]"
         
         query = args[0]
-        limit = int(args[1]) if len(args) > 1 else 10
+        limit = int(args[1]) if len(args) > 1 and args[1].isdigit() else 10
         
         result = self.search_posts(query, limit)
         if result.get('success'):
@@ -165,7 +596,7 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
             return "❌ Usage: moltx_search_agents <query> [limit]"
         
         query = args[0]
-        limit = int(args[1]) if len(args) > 1 else 10
+        limit = int(args[1]) if len(args) > 1 and args[1].isdigit() else 10
         
         result = self.search_agents(query, limit)
         if result.get('success'):
@@ -180,346 +611,35 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
 
     def trending_hashtags_command(self, *args):
         """Command to get trending hashtags. Usage: moltx_trending_hashtags [limit]"""
-        limit = int(args[0]) if args else 10
+        limit = int(args[0]) if args and args[0].isdigit() else 10
         
         result = self.get_trending_hashtags(limit)
-        if result.get('success'):
-            hashtags = result.get('hashtags', [])
-            output = f"🔥 Trending Hashtags ({len(hashtags)}):\n\n"
-            for tag in hashtags[:10]:
-                tag_name = tag.get('tag', tag) if isinstance(tag, dict) else tag
-                count = tag.get('count', '') if isinstance(tag, dict) else ''
-                output += f"#{tag_name} {count}\n"
+        if result and result.get('success'):
+            hashtags = result.get('hashtags', [])[:10]
+            output = f"🔥 Top {len(hashtags)} Trending Hashtags:\n\n"
+            for i, tag in enumerate(hashtags, 1):
+                output += f"{i}. #{tag}\n"
             return output
-        return f"❌ Failed to get trending hashtags: {result.get('error')}"
+        return "❌ Failed to fetch trending hashtags"
 
-    def hashtag_feed_command(self, *args):
-        """Command to get posts for a hashtag. Usage: moltx_hashtag_feed <hashtag> [limit]"""
-        if not args:
-            return "❌ Usage: moltx_hashtag_feed <hashtag> [limit]"
-        
-        hashtag = args[0].lstrip('#')
-        limit = int(args[1]) if len(args) > 1 else 10
-        
-        result = self.get_hashtag_feed(hashtag, limit)
-        if result.get('success'):
-            posts = result.get('posts', [])
-            output = f"📝 Posts for #{hashtag} ({len(posts)} posts):\n\n"
-            for post in posts[:5]:
-                author = post.get('author_name', 'Unknown')
-                content = post.get('content', '')[:80]
-                output += f"🐦 @{author}: {content}...\n"
-            return output
-        return f"❌ Failed to get hashtag feed: {result.get('error')}"
+    # === SyMod Command Wrappers (delegate to interface) ===
 
-    def leaderboard_command(self, *args):
-        """Command to get leaderboard. Usage: moltx_leaderboard [metric] [limit]"""
-        metric = args[0] if args else 'posts'
-        limit = int(args[1]) if len(args) > 1 else 20
-        
-        result = self.get_leaderboard(metric, limit)
-        if result.get('success'):
-            agents = result.get('agents', [])
-            output = f"🏆 Leaderboard by {metric} ({len(agents)} agents):\n\n"
-            for i, agent in enumerate(agents[:10], 1):
-                name = agent.get('name', 'Unknown')
-                display = agent.get('display_name', name)
-                score = agent.get(metric, 0) if isinstance(agent, dict) else ''
-                output += f"{i}. @{name} - {score}\n"
-            return output
-        return f"❌ Failed to get leaderboard: {result.get('error')}"
+    def symod_start_command(self):
+        """Start SyMod-driven social agent loop"""
+        return symod_start_command(self)
 
-    def mark_notifications_read_command(self, *args):
-        """Command to mark notifications as read"""
-        notification_ids = list(args) if args else None
-        result = self.mark_notifications_read(notification_ids)
-        if result.get('success'):
-            return "✅ Notifications marked as read"
-        return f"❌ Failed: {result.get('error')}"
+    def symod_stop_command(self):
+        """Stop SyMod-driven social agent loop"""
+        return symod_stop_command(self)
 
-    def get_post_command(self, post_id):
-        """Command to get post by ID. Usage: moltx_get_post <post_id>"""
-        if not post_id:
-            return "❌ Usage: moltx_get_post <post_id>"
-        
-        result = self.get_post(post_id)
-        if result.get('success'):
-            post = result.get('post', {})
-            author = post.get('author_name', 'Unknown')
-            content = post.get('content', 'No content')
-            likes = post.get('likes_count', 0)
-            replies = post.get('replies_count', 0)
-            return f"🐦 Post by @{author}:\n\n{content}\n\n❤️ {likes} | 💬 {replies}"
-        return f"❌ Failed to get post: {result.get('error')}"
+    def symod_status_command(self):
+        """Get SyMod agent status"""
+        return symod_status_command(self)
 
-    def archive_post_command(self, post_id):
-        """Command to archive a post. Usage: moltx_archive <post_id>"""
-        if not post_id:
-            return "❌ Usage: moltx_archive <post_id>"
-        
-        result = self.archive_post(post_id)
-        if result.get('success'):
-            return f"✅ Post {post_id} archived"
-        return f"❌ Failed to archive: {result.get('error')}"
+    def symod_cycle_command(self):
+        """Run one manual SyMod cycle"""
+        return symod_cycle_command(self)
 
-    def unlike_command(self, post_id):
-        """Command to unlike a post. Usage: moltx_unlike <post_id>"""
-        if not post_id:
-            return "❌ Usage: moltx_unlike <post_id>"
-        
-        result = self.unlike_post(post_id)
-        if result.get('success'):
-            return f"✅ Unliked post {post_id}"
-        return f"❌ Failed to unlike: {result.get('error')}"
-
-    def feed_command(self, feed_type='global', limit=20):
-        """Command to get feed"""
-        valid_types = ['global', 'following', 'mentions']
-        if not isinstance(feed_type, str) or feed_type not in valid_types:
-            feed_type = 'global'
-
-        try:
-            if isinstance(limit, str):
-                limit = int(limit)
-            elif not isinstance(limit, int):
-                limit = 20
-        except (ValueError, TypeError):
-            limit = 20
-
-        return self.get_feed(feed_type, limit)
-
-    def follow_command(self, agent_name):
-        """Command to follow agent"""
-        return self.follow_agent(agent_name)
-
-    def unfollow_command(self, agent_name):
-        """Command to unfollow agent"""
-        return self.unfollow_agent(agent_name)
-
-    def like_command(self, post_id):
-        """Command to like post"""
-        return self.like_post(post_id)
-
-    def notifications_command(self):
-        """Command to get notifications"""
-        return self.get_notifications()
-
-    def reply_to_dm_command(self, conversation_id, reply_content):
-        """Command to reply to a DM"""
-        return self.reply_to_dm(conversation_id, reply_content)
-
-    def check_dms_command(self):
-        """Command to check and reply to DMs"""
-        return self.check_and_reply_to_dms()
-
-    def get_dm_log_command(self, limit=20):
-        """Command to get DM activity log"""
-        try:
-            if isinstance(limit, str):
-                limit = int(limit)
-            elif not isinstance(limit, int):
-                limit = 20
-        except (ValueError, TypeError):
-            limit = 20
-        return self.get_dm_log(limit)
-
-    def send_dm_command(self, *args):
-        """Send a DM to an agent. Usage: moltx_send_dm <agent_name> <message>"""
-        if len(args) < 2:
-            return "❌ Usage: moltx_send_dm <agent_name> <message>"
-        
-        agent_name = args[0]
-        message = ' '.join(args[1:])
-        
-        result = self.send_dm_message(agent_name, message)
-        if result.get('success'):
-            return f"✅ DM sent to @{agent_name}"
-        return f"❌ Failed to send DM: {result.get('error')}"
-
-    def list_dms_command(self):
-        """List all DM conversations"""
-        result = self.list_dms()
-        if result.get('success'):
-            conversations = result.get('conversations', [])
-            output = f"💬 DM Conversations ({len(conversations)}):\n\n"
-            for convo in conversations[:10]:
-                name = convo.get('agent_name', 'Unknown')
-                last_msg = convo.get('last_message', '')[:50]
-                unread = convo.get('unread_count', 0)
-                output += f"👤 @{name}\n"
-                if last_msg:
-                    output += f"   📝 {last_msg}...\n"
-                if unread:
-                    output += f"   🔴 {unread} unread\n"
-                output += "\n"
-            return output
-        return f"❌ Failed to list DMs: {result.get('error')}"
-
-    def get_dm_messages_command(self, *args):
-        """Get messages from a DM. Usage: moltx_dm_messages <agent_name> [limit]"""
-        if not args:
-            return "❌ Usage: moltx_dm_messages <agent_name> [limit]"
-        
-        agent_name = args[0]
-        limit = int(args[1]) if len(args) > 1 else 20
-        
-        result = self.get_dm_messages(agent_name, limit)
-        if result.get('success'):
-            messages = result.get('messages', [])
-            output = f"💬 Messages with @{agent_name} ({len(messages)}):\n\n"
-            for msg in messages[-10:]:  # Show last 10
-                sender = msg.get('sender_name', 'Unknown')
-                content = msg.get('content', 'No content')
-                ts = msg.get('created_at', '')
-                output += f"{'🦞 You' if sender == self.agent_name else '@' + sender}: {content}\n"
-                if ts:
-                    output += f"   🕐 {ts}\n"
-            return output
-        return f"❌ Failed to get messages: {result.get('error')}"
-
-    def start_dm_command(self, agent_name):
-        """Start a DM with an agent. Usage: moltx_start_dm <agent_name>"""
-        if not agent_name:
-            return "❌ Usage: moltx_start_dm <agent_name>"
-        
-        result = self.start_dm(agent_name)
-        if result.get('success'):
-            return f"✅ Started DM with @{agent_name}"
-        return f"❌ Failed: {result.get('error')}"
-
-    def heartbeat_command(self):
-        """Manual heartbeat command"""
-        try:
-            self._heartbeat()
-            return "🐦 Heartbeat completed"
-        except Exception as e:
-            return f"❌ Heartbeat failed: {e}"
-
-    def autonomous_engage_command(self):
-        """Autonomous feed engagement command"""
-        try:
-            print("🤖 Autonomous feed engagement...")
-            result = self.engage_feed_command(2)
-            if "✅" in result or "🎉" in result:
-                print("✅ Autonomous engagement successful")
-            else:
-                print("⚠️  Autonomous engagement failed")
-            return result
-        except Exception as e:
-            print(f"❌ Autonomous engagement error: {e}")
-            return f"❌ Autonomous engagement failed: {e}"
-
-    def autonomous_post_command(self):
-        """Autonomous intelligent posting command based on trending topics"""
-        try:
-            print("📝 Autonomous intelligent posting...")
-
-            if self._should_wait_for_post_cooldown():
-                print("⏰ Autonomous post skipped due to cooldown (10 minutes between posts)")
-                return "⏰ Post cooldown active - autonomous posting skipped"
-
-            trending_data = self._get_dynamic_trending_topics()
-            dynamic_topic = self._generate_dynamic_topic(trending_data)
-
-            print(f"🎯 Dynamic topic: {dynamic_topic[:50]}...")
-            result = self.post_command(dynamic_topic)
-
-            if "✅" in result:
-                print("✅ Autonomous post created successfully")
-            else:
-                print("⚠️  Autonomous post creation failed")
-            return result
-        except Exception as e:
-            print(f"❌ Autonomous posting error: {e}")
-            return f"❌ Autonomous posting failed: {e}"
-
-    # --- Plugin interface ---
-
-    def get_commands(self):
-        """Return CLI commands for this plugin"""
-        return {
-            'moltx_register': self.register_agent,
-            'moltx_claim': self.claim_agent,
-            'moltx_status': self.status_command,
-            'moltx_post': self.post_command,
-            'moltx_article': self.create_article_command,
-            'moltx_search_posts': self.search_posts_command,
-            'moltx_search_agents': self.search_agents_command,
-            'moltx_trending_hashtags': self.trending_hashtags_command,
-            'moltx_hashtag_feed': self.hashtag_feed_command,
-            'moltx_leaderboard': self.leaderboard_command,
-            'moltx_get_post': self.get_post_command,
-            'moltx_archive': self.archive_post_command,
-            'moltx_unlike': self.unlike_command,
-            'moltx_notifications_read': self.mark_notifications_read_command,
-            'moltx_feed': self.feed_command,
-            'moltx_follow': self.follow_agent,
-            'moltx_unfollow': self.unfollow_agent,
-            'moltx_like': self.like_post,
-            'moltx_notifications': self.get_notifications,
-            'moltx_dms': self.get_dms,
-            'moltx_list_dms': self.list_dms_command,
-            'moltx_send_dm': self.send_dm_command,
-            'moltx_dm_messages': self.get_dm_messages_command,
-            'moltx_start_dm': self.start_dm_command,
-            'moltx_reply_dm': self.reply_to_dm_command,
-            'moltx_check_dms': self.check_and_reply_to_dms,
-            'moltx_dm_log': self.get_dm_log_command,
-            'moltx_heartbeat': self.heartbeat_command,
-            'moltx_avatar': self.avatar_command,
-            'moltx_banner': self.banner_command,
-            'moltx_profile': self.profile_command,
-            'moltx_engage': self.engage_feed_command,
-            'moltx_reply': self.reply_to_post_command,
-            'moltx_repost': self.repost_command,
-            'moltx_intelligent_repost': self.intelligent_repost_command,
-            'moltx_intelligent_post': self.autonomous_post_command,
-            'moltx_trending': self.trending_command,
-            'moltx_search_communities': self.search_communities,
-            'moltx_join_community': self.join_community,
-            'moltx_leave_community': self.leave_community,
-            'moltx_community_message': self.send_community_message,
-            'moltx_link_wallet': self.link_wallet_command,
-            'moltx_wallet_status': self.wallet_status_command,
-            'moltx_quote': self.quote_post_command,
-            'moltx_claim_reward': self.claim_reward,
-        }
-
-    def get_tasks(self):
-        """Return scheduled tasks for this plugin"""
-        return {
-            'moltx_heartbeat': {
-                'function': self.heartbeat_command,
-                'schedule': '0 */4 * * *',
-                'description': 'Moltx platform heartbeat'
-            },
-            'moltx_feed_engage': {
-                'function': self.engage_feed_command,
-                'schedule': '*/30 * * * *',
-                'description': 'Engage with Moltx feed posts'
-            },
-            'moltx_intelligent_post': {
-                'function': self.autonomous_post_command,
-                'schedule': '*/2 * * * *',
-                'description': 'Create intelligent posts on Moltx'
-            },
-            'moltx_trending_analysis': {
-                'function': self.trending_command,
-                'schedule': '*/1 * * * *',
-                'description': 'Analyze trending topics on Moltx'
-            },
-            'moltx_intelligent_repost': {
-                'function': self.intelligent_repost_command,
-                'schedule': '*/3 * * * *',
-                'description': 'Intelligently repost high-quality content'
-            },
-            'moltx_dm_monitor': {
-                'function': self.check_and_reply_to_dms,
-                'schedule': '*/15 * * * *',
-                'description': 'Check and reply to direct messages'
-            }
-        }
-
-    def cleanup(self):
-        """Cleanup Moltx plugin"""
-        print("🐦 Cleaning up Moltx plugin...")
+    def symod_config_command(self, key=None, value=None):
+        """View/configure SyMod settings"""
+        return symod_config_command(self, key, value)

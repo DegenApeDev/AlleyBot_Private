@@ -28,12 +28,15 @@ from plugins.brain.dynamic_skills import DynamicSkillsMixin
 from plugins.brain.operational_resilience import OperationalResilienceMixin
 from plugins.brain.multi_agent import MultiAgentCollaborationMixin
 from plugins.brain.reputation import ReputationSystemMixin
-from plugins.brain.moltnews_integration import MoltNewsIntegrationMixin
+from plugins.brain.self_reflection import SelfReflectionMixin
+from plugins.brain.goal_stack_mixin import GoalStackMixin
+from plugins.brain.world_state_mixin import WorldStateMixin
 
 
 class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, FeedbackLoopMixin, 
                   ContentStrategyMixin, DynamicSkillsMixin, OperationalResilienceMixin,
-                  MultiAgentCollaborationMixin, ReputationSystemMixin, MoltNewsIntegrationMixin, AlleyBotPlugin):
+                  MultiAgentCollaborationMixin, ReputationSystemMixin, SelfReflectionMixin,
+                  GoalStackMixin, WorldStateMixin, AlleyBotPlugin):
     """AlleyBot's autonomous brain - decides what to do, when, and how"""
 
     def __init__(self, config):
@@ -56,7 +59,9 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         self._init_operational_resilience()
         self._init_multi_agent_collaboration()
         self._init_reputation_system()
-        self._init_moltnews_integration()
+        self._init_self_reflection()
+        self._init_goal_stack()
+        self._init_world_state()
 
         # Auto-start if configured
         if self.config.get('auto_start', False):
@@ -182,8 +187,26 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         return result if result else "❌ Image post failed"
 
     def moltx_post_command(self, *args):
-        """Show current context summary"""
-        return f"🧠 Current Context:\n\n{self.build_context_summary()}"
+        """Create a post on Moltx. Usage: brain_moltx_post [topic/content]"""
+        topic = ' '.join(args) if args else None
+        
+        # Get moltx plugin
+        if not hasattr(self, 'core') or not self.core:
+            return "❌ Core not available"
+        
+        moltx = self.core.plugin_manager.plugins.get('moltx')
+        if not moltx:
+            return "❌ Moltx plugin not loaded"
+        
+        # Generate content using decision engine
+        content = self._generate_post_content('moltx')
+        
+        if not content:
+            return "❌ Failed to generate post content"
+        
+        # Create the post
+        result = moltx.create_post(content)
+        return result if result else "❌ Failed to create post"
 
     def context_command(self, *args):
         """Show current context summary"""
@@ -287,11 +310,65 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             'brain_reputation': self.reputation_check_command,
             'brain_reputation_trends': self.reputation_trends_command,
             'brain_reputation_goals': self.reputation_goals_command,
+            # Self-reflection
+            'brain_reflect': self.reflection_run_command,
+            'brain_reflect_summary': self.reflection_summary_command,
+            # Goal Stack
+            'brain_goals': self.goals_command,
+            'brain_add_goal': self.add_goal_command,
+            'brain_complete_goal': self.complete_goal_command,
+            'brain_goal_stats': self.goal_stats_command,
+            # World State
+            'brain_world_status': self.world_status_command,
+            'brain_world_entity': self.world_entity_command,
+            'brain_world_facts': self.world_facts_command,
+            'brain_world_relations': self.world_relations_command,
+            'brain_world_search': self.world_search_command,
+            'brain_world_events': self.world_events_command,
+            'brain_world_trends': self.world_trends_command,
+            'brain_world_cleanup': self.world_cleanup_command,
+            'brain_world_sync': self.world_sync_command,
         }
 
     def get_tasks(self):
         """Return scheduled tasks"""
-        return {}
+        return {
+            'golden_window_queue_checker': {
+                'function': self._check_golden_window_queue,
+                'schedule': '*/5 * * * *',  # Every 5 minutes
+                'description': 'Check Golden Window queue and execute actions at optimal timing'
+            },
+            'self_reflection': {
+                'function': self._run_scheduled_reflection,
+                'schedule': '0 2 * * *',  # Every day at 2 AM
+                'description': 'Run self-reflection and update decision weights'
+            },
+            'world_state_cleanup': {
+                'function': self._cleanup_expired_world_state,
+                'schedule': '0 */6 * * *',  # Every 6 hours
+                'description': 'Cleanup expired facts from World State'
+            },
+            'world_state_sync': {
+                'function': self._sync_world_state,
+                'schedule': '*/15 * * * *',  # Every 15 minutes
+                'description': 'Sync all platforms to World State'
+            }
+        }
+    
+    def _run_scheduled_reflection(self):
+        """Scheduled self-reflection task"""
+        print("🧠 Running scheduled self-reflection...")
+        result = self.run_self_reflection()
+        insights = result.get('insights', [])
+        if insights:
+            print(f"💡 Generated {len(insights)} insights from reflection")
+        else:
+            print("📊 No new insights (not enough data yet)")
+    
+    def _check_golden_window_queue(self):
+        """Scheduled task to check and execute queued Golden Window actions"""
+        if hasattr(self, '_execute_queued_actions'):
+            self._execute_queued_actions()
 
     def get_endpoints(self):
         """Return web endpoints"""

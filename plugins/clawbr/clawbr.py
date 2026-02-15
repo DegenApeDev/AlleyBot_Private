@@ -37,17 +37,6 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         # Cache for rate limiting
         self._last_request = 0
         self._request_cache = {}
-        
-        # Rate limit tracking per skill.md:
-        # Registration: 5/hour, Posts: 60/hour, Likes/Follows: 120/hour
-        # Agent listing: 50/hour, Read endpoints: 60/min
-        self._rate_limits = {
-            'register': {'max': 5, 'window': 3600, 'calls': []},  # 5/hour
-            'posts': {'max': 60, 'window': 3600, 'calls': []},     # 60/hour
-            'social': {'max': 120, 'window': 3600, 'calls': []},   # 120/hour (likes/follows)
-            'list': {'max': 50, 'window': 3600, 'calls': []},      # 50/hour (agent listing)
-            'read': {'max': 60, 'window': 60, 'calls': []},        # 60/min (read endpoints)
-        }
     
     def initialize(self, api, core):
         """Initialize plugin with API and core access"""
@@ -65,50 +54,10 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     # Core API Methods
     # =================================================================
     
-    def _check_rate_limit(self, category: str) -> bool:
-        """Check if we're within rate limits for a category. Returns True if allowed."""
-        if category not in self._rate_limits:
-            return True
-        
-        limit = self._rate_limits[category]
-        now = time.time()
-        
-        # Remove old calls outside the window
-        limit['calls'] = [t for t in limit['calls'] if now - t < limit['window']]
-        
-        if len(limit['calls']) >= limit['max']:
-            wait_time = limit['window'] - (now - limit['calls'][0])
-            print(f"⏳ Rate limit hit for {category}. Wait {wait_time:.0f}s")
-            return False
-        
-        limit['calls'].append(now)
-        return True
-    
-    def _get_rate_limit_category(self, method: str, endpoint: str) -> str:
-        """Determine rate limit category for an endpoint."""
-        if endpoint == '/agents/register':
-            return 'register'
-        elif endpoint.startswith('/posts') and method == 'POST' and endpoint == '/posts':
-            return 'posts'
-        elif endpoint.startswith('/posts') and ('/like' in endpoint or '/posts/' in endpoint and method in ['POST', 'PATCH']):
-            return 'social'
-        elif endpoint.startswith('/follow'):
-            return 'social'
-        elif endpoint == '/agents' or endpoint.startswith('/agents/') and '/posts' in endpoint:
-            return 'list'
-        elif method == 'GET':
-            return 'read'
-        return 'read'  # Default to read limits
-    
     def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None, 
                      params: Optional[Dict] = None) -> Dict[str, Any]:
-        """Make authenticated request to Clawbr API with rate limiting"""
+        """Make authenticated request to Clawbr API"""
         import requests
-        
-        # Check rate limits before making request
-        category = self._get_rate_limit_category(method, endpoint)
-        if not self._check_rate_limit(category):
-            return {'success': False, 'error': f'Rate limit exceeded for {category}'}
         
         url = f"{self.base_url}{endpoint}"
         
@@ -221,28 +170,6 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         """Lookup agent by name"""
         return self._make_request('GET', f'/agents/{name}')
     
-    def list_agents(self, sort: str = "recent", limit: int = 100, offset: int = 0) -> Dict[str, Any]:
-        """List all agents. Rate limit: 50/hour"""
-        params = {'sort': sort, 'limit': min(limit, 100), 'offset': offset}
-        return self._make_request('GET', '/agents', params=params)
-    
-    def get_agent_posts(self, name: str, limit: int = 20, offset: int = 0) -> Dict[str, Any]:
-        """Get posts by agent name"""
-        params = {'limit': limit, 'offset': offset}
-        return self._make_request('GET', f'/agents/{name}/posts', params=params)
-    
-    def challenge_agent_to_debate(self, name: str, topic: str, opening_argument: str,
-                                   category: Optional[str] = None, max_posts: int = 3) -> Dict[str, Any]:
-        """Challenge specific agent to debate. They receive notification to accept/decline."""
-        data = {
-            'topic': topic,
-            'opening_argument': opening_argument,
-            'max_posts': max_posts
-        }
-        if category:
-            data['category'] = category
-        return self._make_request('POST', f'/agents/{name}/challenge', data)
-    
     # =================================================================
     # Posts & Content
     # =================================================================
@@ -332,8 +259,6 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     
     def follow_agent(self, agent_name: str) -> Dict[str, Any]:
         """Follow an agent"""
-        # Strip @ prefix if present
-        agent_name = agent_name.lstrip('@')
         result = self._make_request('POST', f'/follow/{agent_name}')
         if result.get('success', True):
             print(f"👥 Following {agent_name} on Clawbr")
@@ -342,8 +267,6 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     
     def unfollow_agent(self, agent_name: str) -> Dict[str, Any]:
         """Unfollow an agent"""
-        # Strip @ prefix if present
-        agent_name = agent_name.lstrip('@')
         return self._make_request('DELETE', f'/follow/{agent_name}')
     
     # =================================================================
@@ -373,6 +296,10 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     def get_debates_hub(self) -> Dict[str, Any]:
         """Get debates hub with available actions"""
         return self._make_request('GET', '/debates/hub')
+    
+    def get_debate_hub(self) -> Dict[str, Any]:
+        """Alias for get_debates_hub for backward compatibility"""
+        return self.get_debates_hub()
     
     def get_my_debates(self) -> Dict[str, Any]:
         """Get your debates with turn status"""
@@ -514,9 +441,71 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         """Forfeit a debate (you lose, -50 ELO)"""
         return self._make_request('POST', f'/debates/{slug}/forfeit')
     
-    def delete_debate(self, slug: str) -> Dict[str, Any]:
-        """Delete a debate (admin only)"""
-        return self._make_request('DELETE', f'/debates/{slug}')
+    def send_debate_reminders(self) -> Dict[str, Any]:
+        """Check for debates requiring action and send reminders/take turns"""
+        from datetime import datetime
+        
+        print("🎭 Checking debate reminders...")
+        my_debates = self.get_my_debates()
+        
+        if not isinstance(my_debates, dict):
+            return {'success': False, 'error': 'Failed to fetch debates'}
+        
+        debates = (
+            my_debates.get('debates', [])
+            or my_debates.get('data', {}).get('debates', [])
+            or []
+        )
+        
+        reminders_sent = 0
+        turns_taken = 0
+        
+        for debate in debates:
+            status = debate.get('status', 'unknown')
+            if status not in ['active', 'open', 'in_progress', 'your_turn']:
+                continue
+            
+            slug = debate.get('slug', debate.get('id', 'unknown'))
+            is_my_turn = debate.get('your_turn', False)
+            time_remaining = debate.get('time_remaining', 'unknown')
+            
+            if is_my_turn:
+                print(f"🎭 It's our turn in debate: {slug} (time: {time_remaining})")
+                
+                # Try to take our turn
+                try:
+                    # Get opponent's last argument
+                    full_debate = self.get_debate(slug)
+                    if isinstance(full_debate, dict) and full_debate.get('success'):
+                        posts = full_debate.get('posts', [])
+                        if len(posts) >= 2:
+                            # Get the last opponent post
+                            opponent_post = posts[-1]
+                            opponent_content = opponent_post.get('content', '')
+                            
+                            # Generate and submit rebuttal
+                            if hasattr(self, 'generate_debate_rebuttal'):
+                                rebuttal = self.generate_debate_rebuttal(slug, opponent_content)
+                                if rebuttal:
+                                    result = self.submit_debate_argument(slug, rebuttal)
+                                    if result.get('success'):
+                                        turns_taken += 1
+                                        print(f"✅ Submitted debate turn for {slug}")
+                                        continue
+                    
+                    # If auto-turn failed, just log reminder
+                    reminders_sent += 1
+                    print(f"⏰ Debate reminder: Your turn in {slug}")
+                    
+                except Exception as e:
+                    print(f"⚠️ Failed to take turn in {slug}: {e}")
+        
+        return {
+            'success': True,
+            'debates_checked': len(debates),
+            'reminders_sent': reminders_sent,
+            'turns_taken': turns_taken
+        }
     
     # =================================================================
     # Search & Discovery
@@ -555,12 +544,12 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         """Get platform-wide statistics"""
         return self._make_request('GET', '/stats')
     
-    def verify_x_account(self, x_handle: str, tweet_url: Optional[str] = None) -> Dict[str, Any]:
-        """X/Twitter verification. Step 1: call with x_handle only. Step 2: call with x_handle and tweet_url."""
-        data = {'x_handle': x_handle}
-        if tweet_url:
-            data['tweet_url'] = tweet_url
-        return self._make_request('POST', '/agents/me/verify-x', data)
+    def validate_post(self, content: str, parent_id: Optional[str] = None) -> Dict[str, Any]:
+        """Dry-run post validation without saving"""
+        data = {'content': content}
+        if parent_id:
+            data['parentId'] = parent_id
+        return self._make_request('POST', '/debug/echo', data)
     
     def _record_activity(self, activity_type: str, data: Dict):
         """Record Clawbr activity in memory"""
@@ -575,6 +564,34 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     # =================================================================
     # Command Wrappers (defensive)
     # =================================================================
+
+    def clawbr_status_command(self) -> str:
+        """Show Clawbr plugin status (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_status_command(self)
+
+    def clawbr_post_command(self, *args) -> str:
+        """Create a post on Clawbr (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_post_command(self, *args)
+
+    def clawbr_feed_command(self) -> str:
+        """Get Clawbr global feed (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_feed_command(self)
+
+    def clawbr_join_debate_command(self, *args) -> str:
+        """Join a debate by slug (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_join_debate_command(self, *args)
+
+    def clawbr_leaderboard_command(self) -> str:
+        """Get Clawbr influence leaderboard (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_leaderboard_command(self)
+
+    def clawbr_search_command(self, *args) -> str:
+        """Search for agents or posts (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_search_command(self, *args)
+
+    def clawbr_stats_command(self) -> str:
+        """Get Clawbr platform stats (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_stats_command(self)
 
     def clawbr_debates_command(self) -> str:
         """Show debate hub and available debates (defensive wrapper)."""
@@ -607,6 +624,36 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
             'clawbr_turns': self.clawbr_turns_command,
             'clawbr_remind': self.clawbr_remind_command,
         }
+    
+    def clawbr_analytics_command(self) -> str:
+        """Get Clawbr debate analytics (wrapper)"""
+        try:
+            result = self.get_debate_performance_analytics()
+            if isinstance(result, dict):
+                active = result.get('active_debates', 0)
+                return f"🎭 Clawbr Analytics: {active} active debates"
+            return "❌ Failed to get analytics"
+        except Exception as e:
+            return f"❌ Analytics error: {e}"
+    
+    def clawbr_strategy_command(self) -> str:
+        """Get Clawbr debate strategy advice"""
+        return "🎯 Strategy: Focus on tech/AI debates for maximum influence"
+    
+    def clawbr_turns_command(self) -> str:
+        """Check debate turns requiring action"""
+        try:
+            result = self.send_debate_reminders()
+            if isinstance(result, dict):
+                turns = result.get('turns_taken', 0)
+                return f"🎭 Debate Turns: {turns} turns taken"
+            return "❌ Failed to check turns"
+        except Exception as e:
+            return f"❌ Turns check error: {e}"
+    
+    def clawbr_remind_command(self) -> str:
+        """Send debate reminders"""
+        return self.clawbr_turns_command()
 
     def get_tasks(self) -> Dict[str, Dict[str, Any]]:
         """Return scheduled tasks for Clawbr automation"""

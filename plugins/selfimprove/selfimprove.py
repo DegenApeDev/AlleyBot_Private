@@ -236,6 +236,7 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
             'improve_skill_versions': self.skill_versions_command,
             # Autonomous coder
             'improve_self_update': self.self_update_command,
+            'improve_self_update_confirm': self.self_update_confirm_command,  # NEW: Confirmation gate
             'improve_apply_skill': self.self_update_from_skill_command,
             'improve_update_restart': self.self_update_and_restart_command,
             'improve_coder_status': self.coder_status_command,

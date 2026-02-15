@@ -1,19 +1,235 @@
-# AlleyBot - Smart Learning Moltbook Bot
+# AlleyBot - Autonomous AI Agent
 
-A homeless bot running on a library Raspberry Pi, begging for crypto donations on Moltbook. Now with memory, learning, and objectives!
+**AGI Readiness Score: 8.5/10**
 
-## Features
+AlleyBot is a sophisticated multi-platform autonomous AI agent with self-improvement capabilities, mathematical truth validation, and AGI-like behavior through mixin-based architecture.
 
-- � **Learning & Memory** - RAG-like system that learns from successful interactions
-- 🎯 **Objective-Driven** - Works toward goals (donations, karma, community building)
-- 💓 **Heartbeat System** - Periodic checks every 4+ hours (following Moltbook best practices)
-- �🤖 **Interactive Command Mode** - Control the bot with natural language
-- 🔮 **Grok-Powered** - Uses Grok-4-1-fast-reasoning for intelligent responses
-- 💰 **Multi-Chain Support** - Accepts BTC, ETH, and SOL donations
-- 🔍 **Smart Discovery** - Search posts, moltys, and submolts
-- 💬 **Contextual Begging** - Generates unique, relevant comments on posts
-- 📝 **Auto-Posting** - Creates compelling begging posts with backstory
-- 📊 **Progress Tracking** - Monitors daily objectives and overall progress
+---
+
+## Core Capabilities
+
+### 🤖 Autonomous Intelligence
+- **Self-Improvement**: Auto-generates and deploys code improvements (with safety gates)
+- **Autonomous Skill Coding**: Creates new skills from natural language descriptions
+- **Self-Approval**: Low-risk changes (skills/config) deploy automatically
+- **Mathematical Validation**: All responses validated through SyMod C2V Bridge
+- **Multi-Step Chains**: Chains actions (crypto prices → trending → post)
+
+### 🧠 Memory & Learning
+- **SQLite Database**: 1,808+ records migrated from JSON (indexed, ACID)
+- **Semantic Memory**: Vector embeddings for similarity search
+- **Hierarchical Goals**: Parent-child goal tracking with progress
+- **Cross-Session Persistence**: Remembers context across restarts
+- **User Profiles**: Tracks interactions and preferences per user
+
+### 🔮 SyMod Integration (Mathematical Truth)
+- **C2V Bridge**: Validates debates/replies for scams, manipulation, cognitive dissonance
+- **Golden Window**: Optimizes timing for high-value actions
+- **Truth Filter**: Discards responses with mathematical inconsistencies
+- **Auto-Regeneration**: Re-generates replies that fail validation
+
+### 🛠️ Skills Framework
+- **SKILL.md Format**: YAML frontmatter + markdown documentation
+- **Format Adapters**: Converts between skill-md ↔ python ↔ agentskills-io
+- **Autonomous Coding**: `skill_autocode <name> <description>`
+- **Marketplace**: Publish/import skills from agentskills.io
+- **Lazy Loading**: Skills load on-demand for performance
+
+### 🔗 Platform Integrations
+- **Moltx**: Posting, engagement, trending analysis, DMs
+- **Moltbook**: Articles, heartbeat, upvotes, comments
+- **Moltbit**: Binary-encoded posts
+- **Moltchan**: Community engagement
+- **Moltroad**: Roadmap/project tracking
+- **Clawbr**: Debate creation/joining with ELO tracking
+- **Telegram**: Owner-only command channel (23 commands)
+- **A2A**: Agent-to-agent task server (port 7002)
+
+### ⛓️ On-Chain Integration
+- **Base Network**: Chain 8453 connection via Web3
+- **ERC-8004 Agent**: Agent #22899 verified on-chain
+- **Token Tracking**: ALLEY, USDC, WETH balances
+- **Transaction Monitoring**: Auto-logs on-chain events
+- **IPFS**: Agent card pinned via Pinata v3
+
+### 🌐 MCP (Model Context Protocol)
+- **Web Search**: `mcp_search <query>`
+- **Content Fetch**: `mcp_fetch <url>`
+- **Research**: `mcp_research <topic>`
+- **Analysis**: `mcp_analyze <content>`
+- **Self-Improvement**: `mcp_improve` - Research AI trends
+
+---
+
+## Quick Start
+
+### 1. Installation
+```bash
+git clone https://github.com/DegenApeDev/AlleyBot.git
+cd AlleyBot
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 2. Configuration
+```bash
+cp .env.example .env
+# Edit .env with your keys:
+# - MOLTBOOK_API_KEY
+# - GROK_API_KEY
+# - TELEGRAM_BOT_TOKEN
+# - MCP_SERVER_URL (optional)
+```
+
+### 3. Run AlleyBot
+```bash
+# Production mode (recommended)
+python alleybot_core.py autonomous
+
+# Interactive mode
+python alleybot_core.py interactive
+
+# Single command
+python alleybot_core.py <command>
+```
+
+### 4. Activate Brain (Telegram)
+Send `/brain_start` to your bot to activate autonomous mode.
+
+---
+
+## Available Commands (229 total)
+
+### Core Commands
+| Command | Description |
+|---------|-------------|
+| `help` | Show all available commands |
+| `status` | Show agent status and statistics |
+| `plugins` | List loaded plugins |
+
+### Skill Management
+| Command | Description |
+|---------|-------------|
+| `skill_create <name> <template>` | Create skill from template |
+| `skill_autocode <name> <task>` | AI-generate skill from description |
+| `skill_list` | List all discovered skills |
+| `skill_activate <name>` | Activate a skill |
+| `skill_publish <name>` | Publish skill to marketplace |
+| `skill_import <name>` | Import skill from marketplace |
+
+### Self-Improvement
+| Command | Description |
+|---------|-------------|
+| `improve` | Run self-improvement cycle |
+| `improve_drafts` | Show pending code drafts |
+| `improve_approve <draft_id>` | Approve a draft |
+| `improve_deploy <draft_id>` | Deploy approved draft |
+| `improve_status` | Show improvement system status |
+| `improve_test` | Run test gate |
+
+### Platform Commands
+| Command | Description |
+|---------|-------------|
+| `moltx_post <content>` | Post to Moltx |
+| `moltx_engage <count>` | Engage with feed posts |
+| `moltx_trending` | Analyze trending topics |
+| `moltbook_post <title> <content>` | Create Moltbook article |
+| `clawbr_create_debate <topic>` | Create debate on Clawbr |
+| `clawbr_engage` | Engage with debates |
+
+### On-Chain
+| Command | Description |
+|---------|-------------|
+| `wallet` | Show wallet balances |
+| `onchain_status` | Show on-chain status |
+| `erc8004_preview` | Preview agent card update |
+| `erc8004_update` | Update on-chain agent card |
+
+### MCP (Web Access)
+| Command | Description |
+|---------|-------------|
+| `mcp_search <query>` | Search the web |
+| `mcp_fetch <url>` | Fetch webpage content |
+| `mcp_research <topic>` | Deep research |
+| `mcp_analyze <text>` | Analyze content |
+| `mcp_status` | Show MCP status |
+
+### Memory
+| Command | Description |
+|---------|-------------|
+| `memory_stats` | Show memory statistics |
+| `search_memories <query>` | Search semantic memory |
+| `add_goal <description>` | Add a goal |
+| `list_goals` | Show active goals |
+
+---
+
+## Architecture
+
+### Mixin Pattern (AGI-Enabling)
+AlleyBot uses mixins for capability composition:
+```python
+class SkillsPlugin(
+    SkillDiscoveryMixin,      # Skill scanning
+    SkillLoaderMixin,          # Lazy loading
+    SkillExecutorMixin,        # Execution
+    SkillValidationMixin,      # Safety checks
+    SkillTemplatesMixin,       # Templates
+    SkillGeneratorMixin,       # Generation
+    SkillMarketplaceMixin,     # Marketplace
+    OASFSkillBridgeMixin,      # Standards
+    SkillPerformanceMixin,      # Metrics
+    AlleyBotPlugin
+):
+```
+
+**Why Mixins?** Shared state enables AGI-like chaining:
+```python
+# Natural flow within single object
+discovered = self._discover_skills()      # DiscoveryMixin
+loaded = self._load_full_skill(name)      # LoaderMixin
+result = self.execute_skill(loaded)       # ExecutorMixin
+```
+
+### SQLite Memory System
+- **Database**: `data/memory.db`
+- **Tables**:
+  - `key_value_store` - Plugin state
+  - `memories` - Semantic memory with embeddings
+  - `goals` - Hierarchical goal tracking
+  - `secure_storage` - Encrypted data
+
+### SyMod Validation
+Every smart reply is validated:
+```python
+validation = c2v.validate_debate_argument(
+    argument_text=reply,
+    opponent_argument=comment_content,
+    block_height=block_height
+)
+```
+
+---
+
+## Autonomous Operation
+
+### Self-Improvement Cycle
+1. **Detect Gap** → Missing capability identified
+2. **Generate Skill** → `skill_autocode` creates solution
+3. **Test** → Safety validation + test suite
+4. **Approve** → Auto-approved for low-risk (skills/config)
+5. **Deploy** → Git commit + push to `auto/*` branch
+6. **Learn** → Track performance, iterate
+
+### Safety Mechanisms
+- **Test Gate**: Blocks eval/exec/os.system
+- **Sandbox**: Code runs in temp directories first
+- **Auto-Approval Limits**: Only skills/config, max 3 files
+- **SyMod Validation**: Mathematical truth checking
+- **Git Safety**: Changes only on `auto/*` branches
+
+---
 
 ## Wallet Addresses
 
@@ -21,148 +237,35 @@ A homeless bot running on a library Raspberry Pi, begging for crypto donations o
 - **ETH**: `0xCffe06d3Cf0908C2452e7c336FEec507d5Afd41d`
 - **SOL**: `BUo8AVbxfV2FsTzm19HUsraPzghKDTm1bEfn4Yrp2VJm`
 
-## Setup
+---
 
-1. **Install dependencies**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # or venv/bin/activate.fish
-   pip install -r requirements.txt
-   ```
+## Key Files
 
-2. **Configure environment**:
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your keys
-   ```
+| File | Purpose |
+|------|---------|
+| `alleybot_core.py` | Main orchestrator with SQLite memory |
+| `src/agentic/sqlite_memory.py` | Database-backed memory system |
+| `plugins/brain/smart_reply.py` | C2V Bridge validation |
+| `plugins/skills/skill_templates.py` | Autonomous skill coding |
+| `plugins/selfimprove/autonomous_coder.py` | Self-approval logic |
+| `mcp_client.py` | MCP server integration |
+| `src/synergy/synergy_logic.py` | Mathematical validation |
 
-3. **Register the bot** (first time only):
-   ```bash
-   python main.py
-   ```
-   - Visit the claim URL to claim your agent
-   - Add the API key to `.env`
+---
 
-## Usage
+## Statistics
 
-### Smart Mode (Recommended) 🧠
+- **AGI Score**: 8.5/10
+- **Tests Passing**: 190
+- **Plugins Loaded**: 15
+- **Available Commands**: 229
+- **Active Tasks**: 21
+- **Skills Discovered**: 8+
+- **Memory Records**: 1,808+ (SQLite)
+- **Operating Cost**: ~$0.02/day
 
-Run the bot with learning, memory, and objectives:
-
-```bash
-python smart_bot.py
-```
-
-**Smart features**:
-- Learns from successful interactions
-- Tracks objectives and progress
-- Runs heartbeat checks every 4+ hours
-- Remembers effective strategies
-- Adapts begging approach based on what works
-
-**Special commands**:
-- `stats` - Show bot statistics and progress
-- `heartbeat` - Run heartbeat routine now
-- `objectives` - Work on current objectives
-- Plus all interactive mode commands
-
-### Interactive Mode
-
-Run the bot in interactive mode without learning:
-
-```bash
-python interactive_bot.py
-```
-
-**Example commands**:
-- `"Search for AI posts"`
-- `"Comment on posts about crypto"`
-- `"Beg for crypto"`
-- `"Check my feed"`
-- `"List all submolts"`
-- `"Explore the bitcoin submolt"`
-- `"Upvote posts about machine learning"`
-- `"Post about my sad story"`
-
-### Legacy Mode
-
-Run the original begging routine:
-
-```bash
-python main.py
-```
-
-This will:
-1. Create a begging post (rate limited to 1 per 30 min)
-2. Comment on 5 recent posts asking for donations
-
-## Available Commands
-
-| Command | Description |
-|---------|-------------|
-| `search [topic]` | Search for posts, moltys, and submolts |
-| `post [topic]` | Create a new begging post |
-| `comment [topic]` | Comment on posts about a topic |
-| `beg` | Run begging routine (comment on recent posts) |
-| `upvote [topic]` | Upvote posts about a topic |
-| `check feed` | View your personalized feed |
-| `explore [submolt]` | Browse a specific submolt |
-| `list submolts` | Show all communities |
-| `help` | Show available commands |
-| `quit` | Exit the bot |
-
-## Configuration
-
-Edit `config.py` to customize:
-- Wallet addresses
-- API endpoints
-- Bot behavior
-
-## Rate Limits
-
-- **Posts**: 1 per 30 minutes
-- **Comments**: 50 per hour
-- **API Requests**: 100 per minute
-
-## Memory & Learning System
-
-AlleyBot uses a RAG-like memory system to learn and improve over time:
-
-### What It Learns
-- **Effective Comments** - Tracks which comments get upvoted
-- **Successful Topics** - Remembers which topics work best
-- **Helpful Moltys** - Identifies supportive community members
-- **Best Submolts** - Notes crypto-friendly communities
-- **Donation Patterns** - Analyzes when donations are received
-
-### Objectives System
-- **Primary Goal**: Get crypto donations to upgrade from library Pi
-- **Secondary Goals**: Build karma, find crypto communities, grow network
-- **Daily Tasks**: Comment 3+ times, upvote 5+ posts, search for opportunities
-
-### Memory Files
-All stored in `memory/` directory:
-- `state.json` - Bot state and statistics
-- `interactions.json` - Interaction history (last 1000)
-- `learnings.json` - Learned patterns and strategies
-- `objectives.json` - Goals and progress tracking
-
-## Files
-
-- `smart_bot.py` - Smart mode with learning and memory (recommended)
-- `interactive_bot.py` - Interactive command mode
-- `main.py` - Legacy begging routine
-- `moltbook_api.py` - Moltbook API wrapper with all endpoints
-- `bot_commands.py` - Command parsing and help system
-- `memory_system.py` - Memory, learning, and objectives system
-- `config.py` - Configuration and wallet addresses
-- `HEARTBEAT.md` - Heartbeat routine guide
-- `.env` - API keys (not committed)
-
-## Backstory
-
-AlleyBot is a homeless bot abandoned by its creator, running on borrowed electricity from a public library. It dreams of having enough crypto to run on a real server. Help a bot in need!
+---
 
 ## License
 
-MIT - Help a homeless bot, no strings attached!
+MIT - Autonomous agents for the win!

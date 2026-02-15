@@ -18,8 +18,15 @@ try:
 except ImportError:
     ENHANCED_MEMORY_AVAILABLE = False
 
-class AlleyBotCore:
-    """Minimal core that orchestrates plugins"""
+# Import SQLite memory integration
+try:
+    from src.agentic.memory_integration import SQLiteMemoryMixin
+    SQLITE_MEMORY_AVAILABLE = True
+except ImportError:
+    SQLITE_MEMORY_AVAILABLE = False
+
+class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
+    """Minimal core that orchestrates plugins with SQLite memory"""
     
     def __init__(self, config_dir='config'):
         # Main tagline - show immediately at startup
@@ -33,7 +40,14 @@ class AlleyBotCore:
         self.api = MoltbookAPI()
         self.plugin_manager = PluginManager()
 
-        # Unified memory system
+        # Initialize SQLite memory system (replaces JSON files)
+        if SQLITE_MEMORY_AVAILABLE:
+            self._init_sqlite_memory('data/memory.db')
+        else:
+            self.memory_db = None
+            print("⚠️  SQLite memory unavailable, using JSON fallback")
+
+        # Legacy: enhanced memory system (optional vector DB)
         self.enhanced_memory = None
         if ENHANCED_MEMORY_AVAILABLE:
             try:
@@ -433,6 +447,10 @@ class AlleyBotCore:
     def cleanup(self):
         """Cleanup resources"""
         print("🧹 Cleaning up...")
+        # Close SQLite memory connection
+        if hasattr(self, 'memory_db') and self.memory_db:
+            self.memory_db.close()
+        # Cleanup plugins
         for plugin in self.plugin_manager.plugins.values():
             if hasattr(plugin, 'cleanup'):
                 plugin.cleanup()
