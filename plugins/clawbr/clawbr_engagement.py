@@ -328,11 +328,13 @@ Reply:"""
                 print(f"✅ Joined debate: {debate_slug}")
                 self._record_engagement('joined_debate', {'debate_slug': debate_slug})
 
-    def run_engagement_cycle(self) -> Dict[str, Any]:
+    def run_engagement_cycle(self, *args, **kwargs) -> Dict[str, Any]:
         """Collect Clawbr feed observations for brain decision-making (NOT for direct execution).
         
         This method is called by the scheduled task to gather data that feeds into
         the autonomous brain's SENSE-THINK-ACT-REFLECT cycle.
+        
+        Note: Accepts *args, **kwargs for task scheduler compatibility.
         """
         observations: List[Dict[str, Any]] = []
         
