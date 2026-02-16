@@ -2069,6 +2069,12 @@ Or just send any message naturally!
 /erc8004_preview - Preview card (dry run)
 /erc8004_update - Push card on-chain (costs gas)
 
+**🔐 Verifiable & Integrity:**
+/validate <action> - Test SyMod validation
+/integrity - Show geometric integrity report
+/attest <task_id> - Generate ERC-8004 attestation
+/synergy - Show Tier 2 Synergy status
+
 **⚙️ System:**
 /status - Platform status
 /token_stats - LLM token usage & costs
