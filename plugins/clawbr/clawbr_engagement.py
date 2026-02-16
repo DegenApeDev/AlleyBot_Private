@@ -389,6 +389,16 @@ Reply:"""
             pending.extend(observations)
             self.core.save_memory('clawbr_pending_observations', pending[-100:])
         
+        # Check debate turns and submit responses
+        debate_results = self._check_debate_turns()
+        if debate_results.get('turns_taken', 0) > 0:
+            print(f"🎭 Debate: Took {debate_results['turns_taken']} turns")
+        
+        # Handle debate hub actions (join, vote, etc)
+        hub_results = self._handle_debate_hub_actions()
+        if hub_results.get('joined', 0) > 0 or hub_results.get('posted', 0) > 0:
+            print(f"🎭 Debate Hub: {hub_results.get('joined', 0)} joined, {hub_results.get('posted', 0)} posted, {hub_results.get('voted', 0)} voted")
+        
         print(f"📊 Clawbr Observation Cycle: {len(observations)} interesting posts collected")
         
         return {
