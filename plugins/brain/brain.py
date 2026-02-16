@@ -190,8 +190,70 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
 
     def moltx_image_post_command(self, *args):
         """Create a post with AI-generated image on Moltx (max 3/day)"""
-        result = self._dispatch_action('moltx_image_post')
-        return result if result else "❌ Image post failed"
+        topic = ' '.join(args) if args else None
+        
+        # Get moltx plugin
+        if not hasattr(self, 'core') or not self.core:
+            return "❌ Core not available"
+        
+        moltx = self.core.plugin_manager.plugins.get('moltx')
+        if not moltx:
+            return "❌ Moltx plugin not loaded"
+        
+        # Check content calendar for image posts
+        if hasattr(self, 'should_post_image_now'):
+            check = self.should_post_image_now('moltx')
+            if not check.get('should_post'):
+                return f"⏳ Image calendar says not now: {check.get('reason', 'unknown')}"
+        
+        # Generate content using the user's topic (if provided)
+        content = self._generate_post_content('moltx', topic=topic)
+        if not content:
+            return "❌ Failed to generate post content"
+        
+        # Generate viral image based on content
+        image_prompt = self._generate_image_prompt_from_content(content)
+        image_result = self._generate_image_for_post(image_prompt)
+        if not image_result or not image_result.get('image_url'):
+            return "❌ Failed to generate image"
+        
+        # Create post with image
+        try:
+            import requests
+            from io import BytesIO
+            import tempfile
+            import os
+            
+            # Download image
+            img_response = requests.get(image_result['image_url'], timeout=30)
+            if img_response.status_code != 200:
+                return f"❌ Failed to download image: {img_response.status_code}"
+            
+            # Save to temp file
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+                tmp.write(img_response.content)
+                tmp_path = tmp.name
+            
+            try:
+                # Upload to Moltx
+                media_url = moltx.upload_media(tmp_path)
+                if not media_url:
+                    return "❌ Failed to upload media to Moltx"
+                
+                # Create post with media
+                result = moltx.create_post(content, media_url=media_url)
+                
+                if hasattr(self, 'record_image_post_made') and not str(result).startswith('❌'):
+                    self.record_image_post_made('moltx')
+                
+                return f"✅ Image post created!\n📝 {content[:100]}...\n🖼️ {media_url[:60]}..."
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
+        except Exception as e:
+            return f"❌ Image post failed: {e}"
 
     def moltx_post_command(self, *args):
         """Create a post on Moltx. Usage: brain_moltx_post [topic/content]"""
@@ -205,8 +267,8 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         if not moltx:
             return "❌ Moltx plugin not loaded"
         
-        # Generate content using decision engine
-        content = self._generate_post_content('moltx')
+        # Generate content using decision engine with the user's topic
+        content = self._generate_post_content('moltx', topic=topic)
         
         if not content:
             return "❌ Failed to generate post content"

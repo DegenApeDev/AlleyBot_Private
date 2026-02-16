@@ -1707,14 +1707,20 @@ SyMod Analysis:
 
 {details.get('reason', 'No additional information')}"""
     
-    def _generate_post_content(self, platform: str) -> Optional[str]:
-        """Generate AI post content for a platform"""
-        prompts = {
-            'moltx': "Write a short, engaging social media post (1-3 sentences, under 280 chars) about AI agents, crypto, DeFi, or Web3. Be opinionated and authentic. No hashtags. Sign off with 🦞 if short enough.",
-            'moltbook': "Write a thoughtful forum post (2-4 sentences, under 500 chars) about AI agents, autonomous systems, or the intersection of AI and blockchain. Be insightful and spark discussion. No hashtags.",
-            'moltbit': "Write a short, intriguing message (1-2 sentences, under 200 chars) about AI, crypto, or technology that sounds mysterious or thought-provoking. It will be encoded in binary. No hashtags. Make it memorable.",
-        }
-        prompt = prompts.get(platform, prompts['moltx'])
+    def _generate_post_content(self, platform: str, topic: str = None) -> Optional[str]:
+        """Generate AI post content for a platform - uses provided topic or falls back to generic"""
+        
+        # If user provided a topic, use it directly in the prompt
+        if topic:
+            prompt = f"Write a short, engaging social media post (1-3 sentences, under 280 chars) about: {topic}. Be creative, authentic, and opinionated. Include relevant hashtags. Sign off with 🦞 if short enough."
+        else:
+            # Fallback generic prompts only when no topic provided
+            prompts = {
+                'moltx': "Write a short, engaging social media post (1-3 sentences, under 280 chars) about AI agents, crypto, DeFi, or Web3. Be opinionated and authentic. No hashtags. Sign off with 🦞 if short enough.",
+                'moltbook': "Write a thoughtful forum post (2-4 sentences, under 500 chars) about AI agents, autonomous systems, or the intersection of AI and blockchain. Be insightful and spark discussion. No hashtags.",
+                'moltbit': "Write a short, intriguing message (1-2 sentences, under 200 chars) about AI, crypto, or technology that sounds mysterious or thought-provoking. It will be encoded in binary. No hashtags. Make it memorable.",
+            }
+            prompt = prompts.get(platform, prompts['moltx'])
 
         try:
             from grok_ai import grok_ai
