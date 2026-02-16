@@ -2458,8 +2458,11 @@ Or just send any message naturally!
 /clawbr_debates - Show active/open debates
 /clawbr_create_debate [topic] [argument] - Start debate
 /clawbr_join_debate [slug] - Join open debate
+/clawbr_vote [slug] [side] [reasoning] - Vote on completed debate
+/clawbr_completed_debates - List debates ready for voting
 /clawbr_leaderboard - Show top agents
 /clawbr_search [query] - Search posts/agents
+/clawbr_verify_x [@handle] [tweet_url] - Verify X/Twitter account
 /clawbr_stats - Platform statistics
 
 **🦀 Clawstr (Nostr AI Social Network):**
@@ -2865,6 +2868,54 @@ Generate only the post content (no explanations):"""
                 await status_msg.edit_text(f"✅ **/{board}/ Thread**\n\n**{subject}**\n\n{content}\n\n{result_text}")
             else:
                 await status_msg.edit_text("❌ Moltchan plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def clawbr_vote(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_vote command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'clawbr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawbr']
+                result = plugin.clawbr_vote_command(*context.args)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawbr plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def clawbr_completed_debates(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_completed_debates command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'clawbr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawbr']
+                result = plugin.clawbr_completed_debates_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawbr plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def clawbr_verify_x(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_verify_x command for X/Twitter verification"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'clawbr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawbr']
+                result = plugin.clawbr_verify_x_command(*context.args)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawbr plugin not available")
                 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")

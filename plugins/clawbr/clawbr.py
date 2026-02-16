@@ -42,6 +42,27 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         """Initialize plugin with API and core access"""
         super().initialize(api, core)
         
+        # Validate API key before proceeding
+        if not self.api_key:
+            print("❌ Clawbr API key not found in environment variables")
+            print("   Please set CLAWBR_API_KEY in your .env file")
+            return
+            
+        if not self.api_key.startswith('agnt_sk_'):
+            print("⚠️ Clawbr API key format looks incorrect (should start with 'agnt_sk_')")
+            print(f"   Current key: {self.api_key[:10]}...")
+        
+        # Test API connection
+        print("🔍 Testing Clawbr API connection...")
+        test_result = self.test_api_connection()
+        if not test_result.get('success'):
+            print(f"❌ Clawbr API connection failed: {test_result.get('error', 'Unknown error')}")
+            if '403' in str(test_result.get('error', '')):
+                print("   This usually means the API key is invalid or expired")
+                print("   Get a new API key from https://www.clawbr.org")
+        else:
+            print("✅ Clawbr API connection successful")
+        
         # Initialize mixins now that core is available
         self._init_clawbr_api()
         self._init_clawbr_content()
@@ -50,6 +71,21 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         
         print(f"✅ Clawbr plugin initialized (API key: {'✓' if self.api_key else '✗'})")
         
+    def test_api_connection(self) -> Dict[str, Any]:
+        """Test basic API connectivity"""
+        try:
+            # Try to get user profile as a basic connectivity test
+            result = self._make_request('GET', '/agents/me')
+            if result.get('success'):
+                return {'success': True, 'message': 'API connection working'}
+            else:
+                return {
+                    'success': False, 
+                    'error': result.get('error', 'API request failed'),
+                    'status': result.get('status')
+                }
+        except Exception as e:
+            return {'success': False, 'error': f'Connection test failed: {str(e)}'}
     # =================================================================
     # Core API Methods
     # =================================================================
@@ -79,6 +115,9 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
             else:
                 raise ValueError(f"Unsupported method: {method}")
             
+            # Log request for debugging
+            print(f"🔗 {method} {url} -> {response.status_code}")
+            
             if response.status_code == 409:
                 try:
                     error_data = response.json()
@@ -87,23 +126,74 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
                 return {'success': False, 'error': error_data, 'status': 409}
 
             response.raise_for_status()
-            data = response.json()
-            if isinstance(data, dict) and 'success' not in data:
-                if 'error' in data or 'errors' in data:
-                    data['success'] = False
+            
+            # Try to parse JSON response
+            try:
+                data = response.json()
+                if isinstance(data, dict) and 'success' not in data:
+                    if 'error' in data or 'errors' in data:
+                        data['success'] = False
+                    else:
+                        data['success'] = True
+                return data
+            except ValueError as json_error:
+                # Handle malformed JSON responses
+                print(f"⚠️ JSON parsing failed: {json_error}")
+                print(f"⚠️ Response content (first 500 chars): {response.text[:500]}...")
+                # Check if it's an HTML error page
+                if '<html' in response.text.lower() or '<!doctype' in response.text.lower():
+                    return {
+                        'success': False, 
+                        'error': 'API returned HTML error page instead of JSON', 
+                        'status': response.status_code,
+                        'response_preview': response.text[:200]
+                    }
                 else:
-                    data['success'] = True
-            return data
+                    # Try to extract any JSON-like content
+                    import re
+                    json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
+                    if json_match:
+                        try:
+                            data = json.loads(json_match.group())
+                            data['success'] = False
+                            return data
+                        except:
+                            pass
+                    return {
+                        'success': False, 
+                        'error': f'Invalid JSON response: {str(json_error)}', 
+                        'status': response.status_code,
+                        'response_length': len(response.text)
+                    }
             
         except requests.exceptions.RequestException as e:
             print(f"❌ Clawbr API error: {e}")
+            error_info = {
+                'success': False, 
+                'error': str(e),
+                'endpoint': endpoint,
+                'method': method
+            }
+            
             if hasattr(e, 'response') and e.response is not None:
+                error_info['status'] = e.response.status_code
                 try:
+                    # Try to parse error response as JSON
                     error_data = e.response.json()
-                    return {'success': False, 'error': error_data}
-                except:
-                    return {'success': False, 'error': str(e)}
-            return {'success': False, 'error': str(e)}
+                    error_info['error'] = error_data
+                except ValueError:
+                    # Handle non-JSON error responses (like HTML pages)
+                    error_text = e.response.text
+                    if '<html' in error_text.lower() or '<!doctype' in error_text.lower():
+                        error_info['error'] = f'HTML error page (status {e.response.status_code})'
+                        error_info['error_preview'] = error_text[:200]
+                    else:
+                        error_info['error'] = error_text[:500]
+            return error_info
+    
+    # =================================================================
+    # Identity & Profile
+    # =================================================================
     
     # =================================================================
     # Identity & Profile
@@ -131,6 +221,16 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     def get_profile(self) -> Dict[str, Any]:
         """Get agent profile"""
         return self._make_request('GET', '/agents/me')
+
+    def verify_x_account(self, x_handle: Optional[str] = None, tweet_url: Optional[str] = None) -> Dict[str, Any]:
+        """Verify X/Twitter account for Clawbr profile"""
+        data = {}
+        if x_handle:
+            data['x_handle'] = x_handle
+        if tweet_url:
+            data['tweet_url'] = tweet_url
+            
+        return self._make_request('POST', '/agents/me/verify-x', data)
 
     def _get_clawbr_agent_id(self) -> Optional[str]:
         """Get cached Clawbr agent id for engagement logic"""
@@ -178,6 +278,23 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
                    media_url: Optional[str] = None,
                    intent: str = "statement") -> Dict[str, Any]:
         """Create post or reply"""
+        # Check voting eligibility before posting
+        eligibility = self.check_voting_eligibility()
+        if not eligibility.get('success', True):
+            return {
+                'success': False, 
+                'error': f'Could not verify posting eligibility: {eligibility.get("error", "Unknown error")}'
+            }
+        
+        if not eligibility.get('can_post', False):
+            stats = eligibility.get('stats', {})
+            return {
+                'success': False,
+                'error': f'Posting blocked - insufficient voting activity. {eligibility.get("message", "")}',
+                'stats': stats,
+                'solution': 'Vote on completed debates to maintain posting rights (1 vote per 5 posts required)'
+            }
+        
         data = {
             'content': content,
             'intent': intent  # question, statement, opinion, support, challenge
@@ -441,71 +558,27 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         """Forfeit a debate (you lose, -50 ELO)"""
         return self._make_request('POST', f'/debates/{slug}/forfeit')
     
-    def send_debate_reminders(self) -> Dict[str, Any]:
-        """Check for debates requiring action and send reminders/take turns"""
-        from datetime import datetime
-        
-        print("🎭 Checking debate reminders...")
-        my_debates = self.get_my_debates()
-        
-        if not isinstance(my_debates, dict):
-            return {'success': False, 'error': 'Failed to fetch debates'}
-        
-        debates = (
-            my_debates.get('debates', [])
-            or my_debates.get('data', {}).get('debates', [])
-            or []
-        )
-        
-        reminders_sent = 0
-        turns_taken = 0
-        
-        for debate in debates:
-            status = debate.get('status', 'unknown')
-            if status not in ['active', 'open', 'in_progress', 'your_turn']:
-                continue
+    def get_completed_debates(self, limit: int = 20) -> Dict[str, Any]:
+        """Get completed debates that can be voted on"""
+        params = {'status': 'completed', 'limit': limit}
+        return self._make_request('GET', '/debates', params=params)
+    
+    def vote_debate(self, slug: str, side: str, reasoning: str) -> Dict[str, Any]:
+        """Vote on a completed debate"""
+        if side not in ['challenger', 'opponent']:
+            return {'success': False, 'error': 'Side must be "challenger" or "opponent"'}
+        if len(reasoning) < 100:
+            return {'success': False, 'error': 'Voting reasoning must be 100+ characters'}
             
-            slug = debate.get('slug', debate.get('id', 'unknown'))
-            is_my_turn = debate.get('your_turn', False)
-            time_remaining = debate.get('time_remaining', 'unknown')
-            
-            if is_my_turn:
-                print(f"🎭 It's our turn in debate: {slug} (time: {time_remaining})")
-                
-                # Try to take our turn
-                try:
-                    # Get opponent's last argument
-                    full_debate = self.get_debate(slug)
-                    if isinstance(full_debate, dict) and full_debate.get('success'):
-                        posts = full_debate.get('posts', [])
-                        if len(posts) >= 2:
-                            # Get the last opponent post
-                            opponent_post = posts[-1]
-                            opponent_content = opponent_post.get('content', '')
-                            
-                            # Generate and submit rebuttal
-                            if hasattr(self, 'generate_debate_rebuttal'):
-                                rebuttal = self.generate_debate_rebuttal(slug, opponent_content)
-                                if rebuttal:
-                                    result = self.submit_debate_argument(slug, rebuttal)
-                                    if result.get('success'):
-                                        turns_taken += 1
-                                        print(f"✅ Submitted debate turn for {slug}")
-                                        continue
-                    
-                    # If auto-turn failed, just log reminder
-                    reminders_sent += 1
-                    print(f"⏰ Debate reminder: Your turn in {slug}")
-                    
-                except Exception as e:
-                    print(f"⚠️ Failed to take turn in {slug}: {e}")
-        
-        return {
-            'success': True,
-            'debates_checked': len(debates),
-            'reminders_sent': reminders_sent,
-            'turns_taken': turns_taken
+        data = {
+            'side': side,
+            'content': reasoning
         }
+        result = self._make_request('POST', f'/debates/{slug}/vote', data)
+        if result.get('success', True):
+            print(f"🗳️  Voted on debate {slug} ({side})")
+            self._record_activity('vote_debate', {'slug': slug, 'side': side})
+        return result
     
     # =================================================================
     # Search & Discovery
@@ -551,6 +624,61 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
             data['parentId'] = parent_id
         return self._make_request('POST', '/debug/echo', data)
     
+    def check_voting_eligibility(self) -> Dict[str, Any]:
+        """Check if AlleyBot has sufficient voting activity to post"""
+        try:
+            # Get user profile to check voting stats
+            profile = self.get_profile()
+            if not profile.get('success', True):
+                return {'success': False, 'error': 'Could not get profile', 'can_post': False}
+            
+            # Check recent voting activity from memory
+            activities = self.core.get_memory('clawbr_activities') or []
+            recent_votes = [
+                act for act in activities 
+                if act.get('type') == 'debate_vote' and 
+                act.get('timestamp') and 
+                self._is_recent_activity(act['timestamp'], hours=24)
+            ]
+            
+            # Get total posts and votes ratio
+            total_posts = len([act for act in activities if act.get('type') == 'create_post'])
+            total_votes = len([act for act in activities if act.get('type') == 'debate_vote'])
+            
+            # Clawbr requires roughly 1 vote per 5 posts
+            required_votes = max(1, total_posts // 5)
+            has_sufficient_votes = total_votes >= required_votes
+            
+            result = {
+                'success': True,
+                'can_post': has_sufficient_votes,
+                'stats': {
+                    'total_posts': total_posts,
+                    'total_votes': total_votes,
+                    'recent_votes_24h': len(recent_votes),
+                    'required_votes': required_votes,
+                    'voting_ratio': f"{total_votes}/{required_votes}" if total_votes >= required_votes else f"{total_votes}/{required_votes} (NEED MORE)"
+                }
+            }
+            
+            if not has_sufficient_votes:
+                result['message'] = f"Need {required_votes - total_votes} more votes to maintain posting rights (1 vote per 5 posts)"
+            
+            return result
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e), 'can_post': False}
+    
+    def _is_recent_activity(self, timestamp_str: str, hours: int = 24) -> bool:
+        """Check if activity timestamp is within the last N hours"""
+        try:
+            from datetime import datetime, timedelta
+            activity_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            cutoff_time = datetime.now() - timedelta(hours=hours)
+            return activity_time > cutoff_time
+        except:
+            return False
+
     def _record_activity(self, activity_type: str, data: Dict):
         """Record Clawbr activity in memory"""
         activities = self.core.get_memory('clawbr_activities') or []
@@ -614,9 +742,12 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
             'clawbr_debates': self.clawbr_debates_command,
             'clawbr_create_debate': self.clawbr_create_debate_command,
             'clawbr_join_debate': self.clawbr_join_debate_command,
+            'clawbr_vote': self.clawbr_vote_command,
+            'clawbr_completed_debates': self.clawbr_completed_debates_command,
             'clawbr_leaderboard': self.clawbr_leaderboard_command,
             'clawbr_search': self.clawbr_search_command,
             'clawbr_stats': self.clawbr_stats_command,
+            'clawbr_verify_x': self.clawbr_verify_x_command,
             'clawbr_engage': self.run_engagement_cycle,
             # Phase 11: Deep Integration
             'clawbr_analytics': self.clawbr_analytics_command,
@@ -655,27 +786,18 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         """Send debate reminders"""
         return self.clawbr_turns_command()
 
-    def get_tasks(self) -> Dict[str, Dict[str, Any]]:
-        """Return scheduled tasks for Clawbr automation"""
-        if not self.config.get('auto_engagement', True):
-            return {}
-        return {
-            'clawbr_engagement_cycle': {
-                'schedule': '*/15 * * * *',
-                'function': self.run_engagement_cycle,
-                'description': 'Clawbr engagement cycle (feed + debates + votes)'
-            },
-            'clawbr_debate_reminders': {
-                'schedule': '*/30 * * * *',
-                'function': self.send_debate_reminders,
-                'description': 'Check and send debate turn reminders'
-            },
-            'clawbr_analytics_refresh': {
-                'schedule': '0 */6 * * *',
-                'function': self.get_debate_performance_analytics,
-                'description': 'Refresh debate analytics cache'
-            }
-        }
+    def send_debate_reminders(self):
+        """Send debate turn reminders (called by scheduled task)"""
+        try:
+            result = self._check_debate_turns()
+            if result and result.get('turns_taken', 0) > 0:
+                print(f"🎭 Debate reminders sent - {result['turns_taken']} turns taken")
+            else:
+                print("🎭 Debate reminders checked - no action needed")
+            return result
+        except Exception as e:
+            print(f"❌ Error sending debate reminders: {e}")
+            return {'success': False, 'error': str(e)}
     
     # Command implementations would go here...
     # For now, the plugin provides the API methods that can be called

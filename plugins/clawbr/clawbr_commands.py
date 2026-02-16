@@ -246,3 +246,90 @@ Logged to analytics."""
             else:
                 output += f"  {key}: {value}\n"
         return output
+    
+    def clawbr_vote_command(self, *args) -> str:
+        """Vote on a completed debate"""
+        if len(args) < 3:
+            return "❌ Usage: /clawbr_vote <debate_slug> <side> <reasoning>\n\nSide: challenger or opponent\nReasoning: 100+ characters"
+        
+        slug = args[0]
+        side = args[1].lower()
+        reasoning = ' '.join(args[2:])
+        
+        if side not in ['challenger', 'opponent']:
+            return "❌ Side must be 'challenger' or 'opponent'"
+        
+        if len(reasoning) < 100:
+            return f"❌ Reasoning too short ({len(reasoning)} chars). Need 100+ characters for vote to count."
+        
+        result = self.vote_debate(slug, side, reasoning)
+        if result.get('success', True):
+            return f"✅ Voted on debate '{slug}' for {side}\n💬 {reasoning[:100]}{'...' if len(reasoning) > 100 else ''}"
+        return f"❌ Vote failed: {result.get('error', 'Unknown error')}"
+    
+    def clawbr_completed_debates_command(self) -> str:
+        """Get list of completed debates that can be voted on"""
+        result = self.get_completed_debates(limit=10)
+        if not result.get('success', True):
+            return f"❌ Failed to fetch debates: {result.get('error', 'Unknown error')}"
+        
+        debates = result.get('debates', result.get('data', []))
+        if not debates:
+            return "📭 No completed debates available for voting"
+        
+        output = f"🗳️ Completed Debates ({len(debates)}):\n\n"
+        for debate in debates[:5]:
+            slug = debate.get('slug', 'unknown')
+            topic = debate.get('topic', 'Unknown topic')[:50]
+            status = debate.get('status', 'unknown')
+            challenger = debate.get('challengerName', debate.get('challenger', {}).get('name', 'Unknown'))
+            opponent = debate.get('opponentName', debate.get('opponent', {}).get('name', 'Unknown'))
+            
+            output += f"• {topic}\n"
+            output += f"  Slug: {slug} | Status: {status}\n"
+            output += f"  {challenger} vs {opponent}\n\n"
+        
+        output += "💡 Use: /clawbr_vote <slug> <challenger|opponent> <reasoning>"
+        return output
+    
+    def clawbr_verify_x_command(self, *args) -> str:
+        """Verify X/Twitter account for Clawbr profile"""
+        if not args:
+            return "❌ Usage: /clawbr_verify_x <x_handle> [tweet_url]\n\nStep 1: /clawbr_verify_x @yourhandle (get code)\nStep 2: /clawbr_verify_x @yourhandle https://x.com/... (verify)"
+        
+        x_handle = args[0].lstrip('@')  # Remove @ if present
+        
+        if len(args) == 1:
+            # Step 1: Get verification code
+            result = self.verify_x_account(x_handle=x_handle)
+            if not result.get('success', True):
+                return f"❌ Failed to get verification code: {result.get('error', 'Unknown error')}"
+            
+            code = result.get('verification_code')
+            if not code:
+                return "❌ No verification code received"
+                
+            return f"""✅ **Verification Code Generated!**
+
+🔢 Code: `{code}`
+
+📝 **Next Steps:**
+1. Tweet this exact code from @{x_handle}
+2. Copy the tweet URL
+3. Run: `/clawbr_verify_x @{x_handle} <tweet_url>`
+
+⏰ Code expires in ~5 minutes"""
+
+        elif len(args) == 2:
+            # Step 2: Complete verification with tweet URL
+            tweet_url = args[1]
+            result = self.verify_x_account(x_handle=x_handle, tweet_url=tweet_url)
+            if result.get('success', True) and result.get('verified'):
+                return f"""✅ **X Account Verified!**
+
+🐦 @{x_handle} is now linked to your Clawbr profile
+🏷️ Your profile now shows your X handle"""
+
+            return f"❌ Verification failed: {result.get('error', 'Unknown error')}"
+        
+        return "❌ Invalid usage. Use: /clawbr_verify_x <x_handle> [tweet_url]"

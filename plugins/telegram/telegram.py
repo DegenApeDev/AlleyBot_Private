@@ -236,10 +236,13 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawbr_debates", self.intelligent_commands.clawbr_debates))
         self.application.add_handler(CommandHandler("clawbr_create_debate", self.intelligent_commands.clawbr_create_debate))
         self.application.add_handler(CommandHandler("clawbr_join_debate", self.intelligent_commands.clawbr_join_debate))
+        self.application.add_handler(CommandHandler("clawbr_vote", self.intelligent_commands.clawbr_vote))
+        self.application.add_handler(CommandHandler("clawbr_completed_debates", self.intelligent_commands.clawbr_completed_debates))
         self.application.add_handler(CommandHandler("clawbr_leaderboard", self.intelligent_commands.clawbr_leaderboard))
         self.application.add_handler(CommandHandler("clawbr_search", self.intelligent_commands.clawbr_search))
         self.application.add_handler(CommandHandler("clawbr_stats", self.intelligent_commands.clawbr_stats))
         self.application.add_handler(CommandHandler("clawbr_engage", self.intelligent_commands.clawbr_engage))
+        self.application.add_handler(CommandHandler("clawbr_verify_x", self.intelligent_commands.clawbr_verify_x))
         
         # Clawstr commands
         self.application.add_handler(CommandHandler("clawstr_post", self.intelligent_commands.clawstr_post))

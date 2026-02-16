@@ -22,6 +22,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
         self.app = None
         self.dashboard_port = config.get('dashboard_port', 7001)
         self.refresh_interval = config.get('refresh_interval', 120)
+        self.debug_mode = config.get('debug', False)  # Add debug flag
         self.aggregator = None
     
     def initialize(self, api, core):
@@ -103,7 +104,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 data['last_check'] = social.get('last_notification_check')
                 data['engagement_breakdown'] = social.get('engagement_breakdown', {})
         except Exception as e:
-            print(f"[DASHBOARD-DEBUG] AGI social stats error: {e}")
+            if self.debug_mode: print(f"[DASHBOARD-DEBUG] AGI social stats error: {e}")
         return data
 
     def _get_brain_status_detailed(self):
@@ -137,7 +138,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
                     data['running'] = getattr(brain, 'autonomous_running', False)
                     data['cycles'] = getattr(brain, 'cycle_count', 0)
         except Exception as e:
-            print(f"[DASHBOARD-DEBUG] Brain status error: {e}")
+            if self.debug_mode: print(f"[DASHBOARD-DEBUG] Brain status error: {e}")
         return data
 
     def _get_brain_stats(self):
@@ -325,7 +326,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
                         if d in day_map:
                             day_map[d] += 1
             except Exception as e:
-                print(f"[DASHBOARD-DEBUG] Error reading {memory_key}: {e}")
+                if self.debug_mode: print(f"[DASHBOARD-DEBUG] Error reading {memory_key}: {e}")
 
         # Source 2: brain action history (as backup for actions taken)
         try:
@@ -347,10 +348,10 @@ class AnalyticsPlugin(AlleyBotPlugin):
                         if success and ('post' in action or 'engage' in action):
                             day_map[d] += 1
         except Exception as e:
-            print(f"[DASHBOARD-DEBUG] Error reading brain action history: {e}")
+            if self.debug_mode: print(f"[DASHBOARD-DEBUG] Error reading brain action history: {e}")
 
         counts = list(day_map.values())
-        print(f"[DASHBOARD-DEBUG] 7-day activity: {days} -> {counts}")
+        if self.debug_mode: print(f"[DASHBOARD-DEBUG] 7-day activity: {days} -> {counts}")
         return days, counts
 
     def _get_posts_today(self):

@@ -72,7 +72,9 @@ class SynergyCommands:
             return
         
         # Run validation
-        await update.message.reply_text(f"🔐 Validating: _{action_desc[:50]}..._", parse_mode='Markdown')
+        # Escape underscores in action_desc to prevent Markdown parsing errors
+        safe_action_desc = action_desc[:50].replace('_', '\\_')
+        await update.message.reply_text(f"🔐 Validating: _{safe_action_desc}..._", parse_mode='Markdown')
         
         try:
             can_execute, reason, result = validate_action({

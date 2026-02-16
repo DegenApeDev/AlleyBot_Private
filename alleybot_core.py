@@ -11,6 +11,9 @@ from pathlib import Path
 from moltbook_api import MoltbookAPI
 from plugin_manager import PluginManager
 
+# Import console logging system
+from console_logger import init_console_logging, stop_console_logging
+
 # Try to import enhanced memory; fall back to None if deps missing
 try:
     from src.agentic.enhanced_memory import EnhancedMemorySystem
@@ -39,6 +42,9 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
     """Minimal core that orchestrates plugins with SQLite memory"""
     
     def __init__(self, config_dir='config'):
+        # Initialize console logging FIRST (before any prints)
+        self.console_logger = init_console_logging(max_days=7)
+        
         # Main tagline - show immediately at startup
         print("🦞 AlleyBot - Extensible AI Agent & Automation Platform")
         print("=" * 60)
@@ -80,13 +86,46 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
             self
         )
 
+        # Add core commands
+        self._add_core_commands()
+
         print(f"\n{'='*60}")
         print(f"🤖 ALLEYBOT CORE - Extensible AI Agent")
         print(f"{'='*60}")
         print(f"📦 Plugins loaded: {len(self.plugin_manager.plugins)}")
         print(f"🔧 Active tasks: {len(self.plugin_manager.tasks)}")
         print(f"💬 Available commands: {len(self.plugin_manager.commands)}")
+        print(f"📝 Console logging: ACTIVE (7-day retention)")
         print(f"{'='*60}\n")
+    
+    def _add_core_commands(self):
+        """Add core system commands"""
+        self.plugin_manager.commands.update({
+            'log_stats': self._cmd_log_stats,
+            'console_stats': self._cmd_console_stats,
+        })
+    
+    def _cmd_log_stats(self):
+        """Show general logging statistics"""
+        stats = self.get_console_log_stats()
+        if 'error' in stats:
+            return f"❌ Log stats error: {stats['error']}"
+        
+        output = [f"📊 Console Logging Statistics:"]
+        output.append(f"  Files: {stats['total_files']}")
+        output.append(f"  Total Size: {stats['total_size_mb']:.1f} MB")
+        if stats['oldest_date']:
+            output.append(f"  Date Range: {stats['oldest_date'].strftime('%Y-%m-%d')} to {stats['newest_date'].strftime('%Y-%m-%d')}")
+        
+        output.append(f"\n📁 Recent Log Files:")
+        for log_file in stats['files'][:5]:  # Show last 5 files
+            output.append(f"  • {log_file['name']} ({log_file['size_mb']} MB)")
+        
+        return "\n".join(output)
+    
+    def _cmd_console_stats(self):
+        """Alias for log_stats"""
+        return self._cmd_log_stats()
     
     def _load_config(self):
         """Load core configuration"""
@@ -191,6 +230,12 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
         if self.enhanced_memory:
             stats['enhanced'] = self.enhanced_memory.get_memory_stats()
         return stats
+    
+    def get_console_log_stats(self):
+        """Get console logging statistics"""
+        if self.console_logger:
+            return self.console_logger.get_log_stats()
+        return {'error': 'Console logger not initialized'}
     
     def setup_schedule(self):
         """Setup scheduled tasks from plugins"""
@@ -457,6 +502,10 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
     def cleanup(self):
         """Cleanup resources"""
         print("🧹 Cleaning up...")
+        
+        # Stop console logging
+        stop_console_logging()
+        
         # Close SQLite memory connection
         if hasattr(self, 'memory_db') and self.memory_db:
             self.memory_db.close()
