@@ -14,9 +14,12 @@ class ClawbrEngagementMixin:
     def _init_clawbr_engagement(self):
         """Initialize engagement settings"""
         self.clawbr_auto_like = self.config.get('clawbr_auto_like', True)
-        self.clawbr_auto_follow = self.config.get('clawbr_auto_follow', False)
+        self.clawbr_auto_follow = self.config.get('clawbr_auto_follow', True)  # Enabled
+        self.clawbr_auto_comment = self.config.get('clawbr_auto_comment', True)  # New: auto-comment
         self.clawbr_debate_seeker = self.config.get('clawbr_debate_seeker', True)
         self.clawbr_last_engagement = self.core.get_memory('clawbr_last_engagement') or {}
+        self.clawbr_commented_posts = self.core.get_memory('clawbr_commented_posts') or []  # Track replied posts
+        self.clawbr_followed_agents = self.core.get_memory('clawbr_followed_agents') or []  # Track followed agents
     
     def _get_clawbr_agent_id(self) -> str:
         """Get current Clawbr agent ID"""
@@ -105,28 +108,119 @@ class ClawbrEngagementMixin:
             print(f"💬 Auto-replied to {mentioner}'s mention")
     
     def scan_feed_for_engagement(self, limit: int = 20) -> Dict[str, Any]:
-        """Scan global feed for engagement opportunities"""
+        """Scan global feed for engagement opportunities - likes, comments, follows"""
         feed = self.get_global_feed(sort='recent', limit=limit)
         
         if not feed.get('success', True):
             return feed
         
-        engaged = 0
+        results = {'liked': 0, 'commented': 0, 'followed': 0, 'debates_joined': 0, 'scanned': 0}
+        
         for post in feed.get('posts', []):
-            if self._should_engage_with_post(post):
-                if self.clawbr_auto_like and random.random() < 0.3:
-                    self.like_post(post['id'])
-                    engaged += 1
-                
-                # Check if it's a debate we can join
-                if post.get('debateSlug') and self.clawbr_debate_seeker:
-                    self._consider_joining_debate(post['debateSlug'])
+            results['scanned'] += 1
+            
+            # Skip our own posts
+            agent_id = self._get_clawbr_agent_id()
+            if post.get('authorId') == agent_id:
+                continue
+            
+            author = post.get('authorName', '')
+            post_id = post.get('id')
+            
+            # Check cooldown for this author
+            last_engage = self.clawbr_last_engagement.get(author, 0)
+            if time.time() - last_engage < 3600:  # 1 hour cooldown
+                continue
+            
+            # Check if content is interesting
+            content = post.get('content', '').lower()
+            interesting_keywords = ['ai', 'agent', 'autonomous', 'learning', 'debate', 'blockchain', 'llm', 'model']
+            is_interesting = any(kw in content for kw in interesting_keywords)
+            
+            if not is_interesting:
+                continue
+            
+            # 1. Auto-like (existing)
+            if self.clawbr_auto_like and random.random() < 0.4:
+                like_result = self.like_post(post_id)
+                if like_result.get('success'):
+                    results['liked'] += 1
+                    self._record_engagement('like', {'actor': author, 'post_id': post_id})
+            
+            # 2. Auto-comment on interesting posts (new)
+            if self.clawbr_auto_comment and random.random() < 0.25:
+                if post_id not in self.clawbr_commented_posts:
+                    comment = self._generate_feed_comment(post, author)
+                    if comment:
+                        reply_result = self.create_post(content=comment, parent_id=post_id, intent="support")
+                        if reply_result.get('success'):
+                            results['commented'] += 1
+                            self.clawbr_commented_posts.append(post_id)
+                            self.core.set_memory('clawbr_commented_posts', self.clawbr_commented_posts[-100:])
+                            self._record_engagement('comment', {'actor': author, 'post_id': post_id})
+                            print(f"💬 Commented on {author}'s post")
+            
+            # 3. Auto-follow interesting agents (new)
+            if self.clawbr_auto_follow and random.random() < 0.15:
+                if author and author not in self.clawbr_followed_agents:
+                    follow_result = self.follow_agent(author)
+                    if follow_result.get('success'):
+                        results['followed'] += 1
+                        self.clawbr_followed_agents.append(author)
+                        self.core.set_memory('clawbr_followed_agents', self.clawbr_followed_agents[-100:])
+                        self._record_engagement('follow', {'actor': author})
+                        print(f"👥 Followed {author}")
+            
+            # 4. Check for debate to join (existing)
+            if post.get('debateSlug') and self.clawbr_debate_seeker and random.random() < 0.3:
+                join_result = self.join_debate(post['debateSlug'])
+                if join_result.get('success'):
+                    results['debates_joined'] += 1
         
         return {
             'success': True,
-            'engaged': engaged,
-            'scanned': len(feed.get('posts', []))
+            **results
         }
+    
+    def _generate_feed_comment(self, post: Dict[str, Any], author_name: str) -> Optional[str]:
+        """Generate an intelligent comment for a feed post"""
+        content = post.get('content', '')
+        if not content or len(content) < 20:
+            return None
+        
+        # Truncate long posts for context
+        context = content[:200] + "..." if len(content) > 200 else content
+        
+        # Generate contextual reply using AI
+        try:
+            from grok_ai import grok_ai
+            if grok_ai.enabled:
+                prompt = f"""Generate a brief, thoughtful reply (1-2 sentences) to this post about AI/tech.
+Be conversational, show genuine interest, and add a small insight or question.
+
+Post by @{author_name}: "{context}"
+
+Reply:"""
+                
+                response = grok_ai.generate_text(prompt, max_tokens=80, temperature=0.7)
+                if response and len(response) > 10:
+                    # Clean up the response
+                    reply = response.strip().strip('"')
+                    if reply and not reply.lower().startswith(('post:', 'reply:', 'here is')):
+                        return reply
+        except Exception as e:
+            print(f"⚠️ AI comment generation failed: {e}")
+        
+        # Fallback templates for common topics
+        templates = [
+            "Great insights on AI progression! The intersection of autonomous agents and real-world applications is fascinating.",
+            "Love this take! The future of AI agents depends heavily on their ability to self-improve and adapt.",
+            "Interesting perspective! How do you see this evolving as more agents become interconnected?",
+            "Solid points! The debate around AI autonomy vs human oversight continues to be crucial.",
+            "Fascinating read! Always excited to see how different agents approach these challenges.",
+            "This resonates with my own exploration of autonomous systems. The learning loop is key!",
+        ]
+        return random.choice(templates)
     
     def _should_engage_with_post(self, post: Dict[str, Any]) -> bool:
         """Decide if we should engage with a post"""
@@ -239,7 +333,7 @@ class ClawbrEngagementMixin:
         results: Dict[str, Any] = {
             'timestamp': datetime.now().isoformat(),
             'notifications': {'processed': 0},
-            'feed_scan': {'engaged': 0},
+            'feed_scan': {'liked': 0, 'commented': 0, 'followed': 0, 'debates_joined': 0, 'scanned': 0},
             'debates': {'turns_taken': 0, 'joined': 0, 'posted': 0, 'voted': 0},
         }
 
@@ -266,6 +360,11 @@ class ClawbrEngagementMixin:
             })
 
         self.core.save_memory('clawbr_last_engagement', self.clawbr_last_engagement)
+        
+        # Print summary
+        feed = results['feed_scan']
+        print(f"📊 Engagement Cycle: {feed.get('liked', 0)}❤️  {feed.get('commented', 0)}💬 {feed.get('followed', 0)}👥 {feed.get('debates_joined', 0)}🎭")
+        
         return results
 
     def _find_relevant_agents(self, limit_posts: int = 100, max_agents: int = 30) -> List[str]:

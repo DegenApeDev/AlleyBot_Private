@@ -578,10 +578,38 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             result['output'] = f"Error: {e}"
             print(f"❌ Brain action failed: {e}")
 
-        # Phase 9: Record API errors for health monitoring
+        # Record API errors for health monitoring
         if not result['success'] and hasattr(self, 'record_api_error'):
             platform = action.get('platform', 'unknown')
             self.record_api_error(platform, result.get('output', ''), action_id)
+        
+        # Self-Improvement Hook: Detect failures and trigger improvement drafts
+        if not result['success']:
+            try:
+                if hasattr(self, '_self_improvement_hooks') and self._self_improvement_hooks:
+                    draft = self._self_improvement_hooks.on_action_failure(
+                        action_id=action_id,
+                        action_type=action_id,  # Use full action_id as type
+                        error_output=result.get('output', ''),
+                        platform=action.get('platform', 'unknown')
+                    )
+                    if draft:
+                        result['self_improvement_draft'] = draft.get('draft_id')
+                        result['output'] += f"\n🔄 Self-improvement draft created: {draft.get('draft_id')}"
+            except Exception as e:
+                print(f"⚠️ Self-improvement hook error: {e}")
+        else:
+            # Log successful action metrics
+            try:
+                if hasattr(self, '_self_improvement_hooks') and self._self_improvement_hooks:
+                    self._self_improvement_hooks.on_action_success(
+                        action_id=action_id,
+                        action_type=action_id,
+                        platform=action.get('platform', 'unknown'),
+                        engagement_metrics=None  # Could extract from output
+                    )
+            except Exception as e:
+                pass  # Don't fail on metrics logging
         if not result['success'] and hasattr(self, 'detect_capability_gap'):
             gap = self.detect_capability_gap(action_id, result.get('output', ''))
             if gap:

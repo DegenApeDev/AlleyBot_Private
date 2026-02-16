@@ -61,7 +61,7 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
         return self.build_skill_command(*args)
 
     def drafts_command(self, *args):
-        """Show pending code drafts from autonomous coder"""
+        """Show pending code drafts from autonomous coder with risk levels"""
         if not self.autonomous_coder:
             return "❌ Autonomous coder not available"
 
@@ -71,9 +71,30 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
 
         output = f"📋 Pending Drafts ({len(drafts)})\n\n"
         for d in drafts[:10]:
-            output += f"  📝 {d['draft_id']} - {d['task'][:50]}\n"
-            output += f"     Status: {d['status']} | Files: {len(d.get('files', []))}\n"
-            output += f"     Created: {d['timestamp'][:16]}\n\n"
+            # Get risk level if available (from self-improvement hooks)
+            risk_level = d.get('risk_level', 'unknown')
+            risk_icon = {'low': '🟢', 'medium': '🟡', 'high': '🔴', 'unknown': '⚪'}.get(risk_level, '⚪')
+            
+            output += f"  📝 {d['draft_id']} - {d.get('task', 'Auto-fix')[:50]}\n"
+            output += f"     Status: {d.get('status', 'PENDING')} | Files: {len(d.get('files', []))}\n"
+            output += f"     Risk: {risk_icon} {risk_level.upper()}"
+            
+            # Show root cause if auto-generated fix
+            if d.get('root_cause'):
+                output += f" | Cause: {d['root_cause'][:30]}"
+            output += "\n"
+            
+            # Show framework validation status
+            validation = d.get('framework_validation', {})
+            if validation:
+                if validation.get('valid'):
+                    output += f"     ✅ Framework checks passed\n"
+                else:
+                    output += f"     ❌ Framework errors: {len(validation.get('errors', []))}\n"
+            
+            output += f"     Created: {d.get('timestamp', '')[:16]}\n\n"
+        
+        output += "\nUsage: /improve_approve <draft_id> to deploy (requires human approval for medium/high risk)"
         return output
 
     def approve_draft_command(self, *args):
@@ -184,6 +205,61 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
 
         return output
 
+    def metrics_command(self, *args):
+        """Show self-improvement action metrics. Usage: improve_metrics"""
+        output = "📊 Self-Improvement Metrics\n\n"
+        
+        # Get metrics from brain hooks if available
+        metrics = []
+        if self.core:
+            try:
+                metrics = self.core.get_memory('action_metrics') or []
+            except:
+                pass
+        
+        if not metrics:
+            return "📊 No action metrics recorded yet.\n\nMetrics are collected when actions succeed or fail."
+        
+        # Calculate summary statistics
+        total = len(metrics)
+        successful = sum(1 for m in metrics if m.get('success'))
+        failed = total - successful
+        success_rate = (successful / total * 100) if total > 0 else 0
+        
+        output += f"Summary (last {min(total, 1000)} actions):\n"
+        output += f"  Total: {total}\n"
+        output += f"  ✅ Success: {successful} ({success_rate:.1f}%)\n"
+        output += f"  ❌ Failed: {failed}\n\n"
+        
+        # By platform
+        by_platform = {}
+        for m in metrics:
+            plat = m.get('platform', 'unknown')
+            if plat not in by_platform:
+                by_platform[plat] = {'total': 0, 'success': 0}
+            by_platform[plat]['total'] += 1
+            if m.get('success'):
+                by_platform[plat]['success'] += 1
+        
+        if by_platform:
+            output += "By Platform:\n"
+            for plat, stats in sorted(by_platform.items(), key=lambda x: x[1]['total'], reverse=True):
+                rate = (stats['success'] / stats['total'] * 100) if stats['total'] > 0 else 0
+                icon = "✅" if rate >= 80 else "⚠️" if rate >= 50 else "❌"
+                output += f"  {icon} {plat:12} {stats['success']}/{stats['total']} ({rate:.0f}%)\n"
+        
+        # Recent failures
+        recent_failures = [m for m in metrics[-50:] if not m.get('success')]
+        if recent_failures:
+            output += f"\nRecent Failures (last 50 actions):\n"
+            for m in recent_failures[-5:]:
+                ts = m.get('timestamp', '')[:16]
+                action = m.get('action_type', 'unknown')
+                error = m.get('error_code', 'unknown')
+                output += f"  {ts} {action:20} Error: {error}\n"
+        
+        return output
+
     def get_tasks(self):
         """Return scheduled tasks"""
         tasks = {}
@@ -225,6 +301,8 @@ class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, 
             'improve_drafts': self.drafts_command,
             'improve_approve': self.approve_draft_command,
             'improve_deploy': self.deploy_draft_command,
+            # Metrics
+            'improve_metrics': self.metrics_command,
             # Marketplace
             'improve_market': self.marketplace_list_command,
             'improve_publish': self.marketplace_publish_command,

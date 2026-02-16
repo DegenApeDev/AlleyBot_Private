@@ -1420,9 +1420,21 @@ Generate only the title (no explanations):"""
     # =================================================================
 
     def _get_brain_plugin(self):
-        """Get the brain plugin from core"""
+        """Get the brain plugin from core - supports both v1 and v2 brain"""
         if self.core and hasattr(self.core, 'plugin_manager'):
-            return self.core.plugin_manager.plugins.get('brain')
+            # Try v1 brain name
+            brain = self.core.plugin_manager.plugins.get('brain')
+            if brain:
+                return brain
+            # Try v2 brain names
+            for name in ['brain_v2', 'autonomous_brain', 'agentic_brain', 'decision_engine']:
+                brain = self.core.plugin_manager.plugins.get(name)
+                if brain:
+                    return brain
+            # Try to find any plugin with 'brain' in the name
+            for key, plugin in self.core.plugin_manager.plugins.items():
+                if 'brain' in key.lower():
+                    return plugin
         return None
 
     async def _run_sync(self, func, *args):

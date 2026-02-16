@@ -32,6 +32,7 @@ from plugins.brain.self_reflection import SelfReflectionMixin
 from plugins.brain.goal_stack_mixin import GoalStackMixin
 from plugins.brain.world_state_mixin import WorldStateMixin
 from plugins.brain.cross_platform_engagement import CrossPlatformEngagementMixin
+from plugins.brain.self_improvement_hooks import install_self_improvement_hooks
 
 
 class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, FeedbackLoopMixin, 
@@ -64,6 +65,9 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         self._init_goal_stack()
         self._init_world_state()
         self._init_cross_platform_engagement()
+        
+        # Install self-improvement hooks
+        install_self_improvement_hooks(self)
 
         # Auto-start if configured
         if self.config.get('auto_start', False):
