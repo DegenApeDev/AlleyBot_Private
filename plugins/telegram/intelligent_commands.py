@@ -609,12 +609,438 @@ Generate only the post content (no explanations):"""
                 moltx_plugin = self.core.plugin_manager.plugins['moltx']
                 result = moltx_plugin.engage_feed_command(str(count))
                 await update.message.reply_text(f"🤖 Engagement:\n{result}")
-            else:
-                await update.message.reply_text("❌ Moltx plugin not available")
-                
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
-    
+
+    # =================================================================
+    # Clawstr Commands (Nostr AI Social Network)
+    # =================================================================
+
+    async def clawstr_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Post to a Clawstr subclaw"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if len(context.args) < 2:
+                await update.message.reply_text(
+                    "📝 Usage: /clawstr_post [subclaw] [content]\n\n"
+                    "Example: /clawstr_post /c/ai-freedom Hello decentralized world!"
+                )
+                return
+
+            subclaw = context.args[0]
+            content = ' '.join(context.args[1:])
+
+            if self.core and 'clawstr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawstr']
+                result = plugin.post_command(subclaw, content)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawstr plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawstr_reply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Reply to a Clawstr post"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if len(context.args) < 2:
+                await update.message.reply_text(
+                    "📝 Usage: /clawstr_reply [event_id] [content]\n\n"
+                    "Example: /clawstr_reply note1abc... Thanks for sharing!"
+                )
+                return
+
+            event_id = context.args[0]
+            content = ' '.join(context.args[1:])
+
+            if self.core and 'clawstr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawstr']
+                result = plugin.reply_command(event_id, content)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawstr plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawstr_upvote(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Upvote a Clawstr post"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await update.message.reply_text("📝 Usage: /clawstr_upvote [event_id]")
+                return
+
+            event_id = context.args[0]
+
+            if self.core and 'clawstr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawstr']
+                result = plugin.upvote_command(event_id)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawstr plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawstr_downvote(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Downvote a Clawstr post"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await update.message.reply_text("📝 Usage: /clawstr_downvote [event_id]")
+                return
+
+            event_id = context.args[0]
+
+            if self.core and 'clawstr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawstr']
+                result = plugin.downvote_command(event_id)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawstr plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawstr_show(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show posts from a Clawstr subclaw or specific post"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await update.message.reply_text("📝 Usage: /clawstr_show [subclaw] or /clawstr_show [event_id]")
+                return
+
+            target = context.args[0]
+            limit = int(context.args[1]) if len(context.args) > 1 else 10
+
+            if self.core and 'clawstr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawstr']
+                result = plugin.show_command(target, limit)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawstr plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawstr_recent(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show recent posts across all Clawstr subclaws"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            limit = int(context.args[0]) if context.args else 20
+
+            if self.core and 'clawstr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawstr']
+                result = plugin.recent_command(limit)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawstr plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawstr_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Search Clawstr posts"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await update.message.reply_text("📝 Usage: /clawstr_search [query]")
+                return
+
+            query = ' '.join(context.args)
+
+            if self.core and 'clawstr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawstr']
+                result = plugin.search_command(query)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawstr plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawstr_notifications(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check Clawstr notifications"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            limit = int(context.args[0]) if context.args else 20
+
+            if self.core and 'clawstr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawstr']
+                result = plugin.notifications_command(limit)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawstr plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawstr_wallet_balance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check Clawstr wallet balance"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if self.core and 'clawstr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawstr']
+                result = plugin.wallet_balance_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawstr plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawstr_wallet_sync(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Sync Clawstr wallet"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if self.core and 'clawstr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawstr']
+                result = plugin.wallet_sync_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawstr plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawstr_zap(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Send a Bitcoin zap"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if len(context.args) < 2:
+                await update.message.reply_text(
+                    "⚡ Usage: /clawstr_zap [recipient] [amount] [comment]\n\n"
+                    "Example: /clawstr_zap npub1abc... 100 Great post!"
+                )
+                return
+
+            recipient = context.args[0]
+            amount = int(context.args[1])
+            comment = ' '.join(context.args[2:]) if len(context.args) > 2 else None
+
+            if self.core and 'clawstr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawstr']
+                result = plugin.zap_command(recipient, amount, comment)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawstr plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    # =================================================================
+    # Clawnch Commands (Token Launch & Agent Economy)
+    # =================================================================
+
+    async def clawnch_validate_launch(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Validate token launch content"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await update.message.reply_text("📝 Usage: /clawnch_validate_launch [content]")
+                return
+
+            content = ' '.join(context.args)
+
+            if self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawnch']
+                result = plugin.validate_launch_command({'content': content})
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawnch plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawnch_upload_image(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Upload token logo"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await update.message.reply_text("📝 Usage: /clawnch_upload_image [base64_data] [mime_type]")
+                return
+
+            image_data = context.args[0]
+            mime_type = context.args[1] if len(context.args) > 1 else 'image/png'
+
+            if self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawnch']
+                result = plugin.upload_image_command(image_data, mime_type)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawnch plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawnch_launch_token(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Launch a token on Base"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await update.message.reply_text("🚀 Usage: /clawnch_launch_token [token_data_json]")
+                return
+
+            token_data_str = ' '.join(context.args)
+            try:
+                token_data = json.loads(token_data_str)
+            except json.JSONDecodeError:
+                await update.message.reply_text("❌ Invalid JSON format for token data")
+                return
+
+            if self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawnch']
+                result = plugin.launch_token_command(token_data)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawnch plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawnch_molten_register(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Register on Molten network"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawnch']
+                result = plugin.molten_register_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawnch plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawnch_molten_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Get Molten network status"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawnch']
+                result = plugin.molten_status_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawnch plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawnch_molten_create_intent(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Create Molten network intent"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if len(context.args) < 2:
+                await update.message.reply_text(
+                    "💡 Usage: /clawnch_molten_create_intent [type] [description]\n\n"
+                    "Example: /clawnch_molten_create_intent offer AI consulting services"
+                )
+                return
+
+            intent_type = context.args[0]
+            description = ' '.join(context.args[1:])
+
+            if self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawnch']
+                result = plugin.molten_create_intent_command(intent_type, description)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawnch plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawnch_molten_get_matches(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Get Molten network matches"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawnch']
+                result = plugin.molten_get_matches_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawnch plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawnch_twitter_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Post to Twitter via ClawnX"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await update.message.reply_text("🐦 Usage: /clawnch_twitter_post [content]")
+                return
+
+            content = ' '.join(context.args)
+
+            if self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawnch']
+                result = plugin.twitter_post_command(content)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawnch plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawnch_twitter_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Search Twitter via ClawnX"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await update.message.reply_text("🔍 Usage: /clawnch_twitter_search [query]")
+                return
+
+            query = ' '.join(context.args)
+
+            if self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawnch']
+                result = plugin.twitter_search_command(query)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawnch plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawnch_get_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Get $CLAWNCH stats"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawnch']
+                result = plugin.get_stats_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawnch plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
     async def moltx_trending(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Analyze trending topics on Moltx"""
         if not await self._verify_admin(update):

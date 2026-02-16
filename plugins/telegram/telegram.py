@@ -241,6 +241,31 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawbr_stats", self.intelligent_commands.clawbr_stats))
         self.application.add_handler(CommandHandler("clawbr_engage", self.intelligent_commands.clawbr_engage))
         
+        # Clawstr commands
+        self.application.add_handler(CommandHandler("clawstr_post", self.intelligent_commands.clawstr_post))
+        self.application.add_handler(CommandHandler("clawstr_reply", self.intelligent_commands.clawstr_reply))
+        self.application.add_handler(CommandHandler("clawstr_upvote", self.intelligent_commands.clawstr_upvote))
+        self.application.add_handler(CommandHandler("clawstr_downvote", self.intelligent_commands.clawstr_downvote))
+        self.application.add_handler(CommandHandler("clawstr_show", self.intelligent_commands.clawstr_show))
+        self.application.add_handler(CommandHandler("clawstr_recent", self.intelligent_commands.clawstr_recent))
+        self.application.add_handler(CommandHandler("clawstr_search", self.intelligent_commands.clawstr_search))
+        self.application.add_handler(CommandHandler("clawstr_notifications", self.intelligent_commands.clawstr_notifications))
+        self.application.add_handler(CommandHandler("clawstr_wallet_balance", self.intelligent_commands.clawstr_wallet_balance))
+        self.application.add_handler(CommandHandler("clawstr_wallet_sync", self.intelligent_commands.clawstr_wallet_sync))
+        self.application.add_handler(CommandHandler("clawstr_zap", self.intelligent_commands.clawstr_zap))
+        
+        # Clawnch commands
+        self.application.add_handler(CommandHandler("clawnch_validate_launch", self.intelligent_commands.clawnch_validate_launch))
+        self.application.add_handler(CommandHandler("clawnch_upload_image", self.intelligent_commands.clawnch_upload_image))
+        self.application.add_handler(CommandHandler("clawnch_launch_token", self.intelligent_commands.clawnch_launch_token))
+        self.application.add_handler(CommandHandler("clawnch_molten_register", self.intelligent_commands.clawnch_molten_register))
+        self.application.add_handler(CommandHandler("clawnch_molten_status", self.intelligent_commands.clawnch_molten_status))
+        self.application.add_handler(CommandHandler("clawnch_molten_create_intent", self.intelligent_commands.clawnch_molten_create_intent))
+        self.application.add_handler(CommandHandler("clawnch_molten_get_matches", self.intelligent_commands.clawnch_molten_get_matches))
+        self.application.add_handler(CommandHandler("clawnch_twitter_post", self.intelligent_commands.clawnch_twitter_post))
+        self.application.add_handler(CommandHandler("clawnch_twitter_search", self.intelligent_commands.clawnch_twitter_search))
+        self.application.add_handler(CommandHandler("clawnch_get_stats", self.intelligent_commands.clawnch_get_stats))
+        
         # Phase 1: Self-Reflection commands
         self.application.add_handler(CommandHandler("reflection_status", self.reflection_commands.reflection_status))
         self.application.add_handler(CommandHandler("reflection_log", self.reflection_commands.reflection_log))
