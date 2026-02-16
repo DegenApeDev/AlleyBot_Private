@@ -329,43 +329,71 @@ Reply:"""
                 self._record_engagement('joined_debate', {'debate_slug': debate_slug})
 
     def run_engagement_cycle(self) -> Dict[str, Any]:
-        """Run full Clawbr engagement cycle."""
-        results: Dict[str, Any] = {
-            'timestamp': datetime.now().isoformat(),
-            'notifications': {'processed': 0},
-            'feed_scan': {'liked': 0, 'commented': 0, 'followed': 0, 'debates_joined': 0, 'scanned': 0},
-            'debates': {'turns_taken': 0, 'joined': 0, 'posted': 0, 'voted': 0},
+        """Collect Clawbr feed observations for brain decision-making (NOT for direct execution).
+        
+        This method is called by the scheduled task to gather data that feeds into
+        the autonomous brain's SENSE-THINK-ACT-REFLECT cycle.
+        """
+        observations: List[Dict[str, Any]] = []
+        
+        # Collect feed observations
+        feed = self.get_global_feed(sort='recent', limit=20)
+        agent_id = self._get_clawbr_agent_id()
+        
+        if feed.get('success', True):
+            for post in feed.get('posts', []):
+                if not isinstance(post, dict):
+                    continue
+                if post.get('authorId') == agent_id:
+                    continue  # Skip own posts
+                
+                author = post.get('authorName', '')
+                content = post.get('content', '')
+                
+                # Check if interesting (AI/tech content)
+                content_lower = content.lower()
+                keywords = ['ai', 'agent', 'autonomous', 'learning', 'debate', 'blockchain', 'llm', 'model', 'intelligence']
+                is_interesting = any(kw in content_lower for kw in keywords)
+                
+                if is_interesting:
+                    post_id = post.get('id')
+                    # Check engagement history
+                    already_liked = post_id in getattr(self, '_liked_posts', [])
+                    already_commented = post_id in self.clawbr_commented_posts
+                    already_followed = author in self.clawbr_followed_agents
+                    
+                    obs = {
+                        'channel': 'clawbr',
+                        'type': 'post_seen',
+                        'post_id': post_id,
+                        'author': author,
+                        'content': content[:200],  # Truncate for storage
+                        'likes': post.get('likesCount', 0),
+                        'replies': post.get('repliesCount', 0),
+                        'debate_slug': post.get('debateSlug'),
+                        'metrics': {
+                            'engagement_score': post.get('likesCount', 0) + post.get('repliesCount', 0) * 2,
+                            'is_interesting': is_interesting,
+                            'already_liked': already_liked,
+                            'already_commented': already_commented,
+                            'already_followed': already_followed
+                        }
+                    }
+                    observations.append(obs)
+        
+        # Store observations for brain to consume
+        if observations and self.core:
+            pending = self.core.get_memory('clawbr_pending_observations') or []
+            pending.extend(observations)
+            self.core.save_memory('clawbr_pending_observations', pending[-100:])
+        
+        print(f"📊 Clawbr Observation Cycle: {len(observations)} interesting posts collected")
+        
+        return {
+            'success': True,
+            'observations_collected': len(observations),
+            'observations': observations[:5]  # Preview for logs
         }
-
-        notif_result = self.check_notifications()
-        if notif_result.get('success', True):
-            results['notifications'] = notif_result
-
-        feed_result = self.scan_feed_for_engagement()
-        if feed_result.get('success', True):
-            results['feed_scan'] = feed_result
-
-        debate_result = self._check_debate_turns()
-        if debate_result.get('success', True):
-            results['debates'].update({
-                'turns_taken': debate_result.get('turns_taken', 0)
-            })
-
-        hub_actions = self._handle_debate_hub_actions()
-        if hub_actions.get('success', True):
-            results['debates'].update({
-                'joined': hub_actions.get('joined', 0),
-                'posted': hub_actions.get('posted', 0),
-                'voted': hub_actions.get('voted', 0),
-            })
-
-        self.core.save_memory('clawbr_last_engagement', self.clawbr_last_engagement)
-        
-        # Print summary
-        feed = results['feed_scan']
-        print(f"📊 Engagement Cycle: {feed.get('liked', 0)}❤️  {feed.get('commented', 0)}💬 {feed.get('followed', 0)}👥 {feed.get('debates_joined', 0)}🎭")
-        
-        return results
 
     def _find_relevant_agents(self, limit_posts: int = 100, max_agents: int = 30) -> List[str]:
         """Find relevant agents from top feed posts"""

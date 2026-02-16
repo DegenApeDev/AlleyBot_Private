@@ -401,18 +401,27 @@ class AutonomousBrain(AGISocialMixin):
             except Exception as e:
                 logger.error(f"❌ Failed to gather mentions: {e}")
         
-        # Get from Clawbr
+        # Get from Clawbr (enhanced observations for brain decision-making)
         clawbr = self.plugin_manager.get_plugin('clawbr')
         if clawbr and hasattr(clawbr, 'get_global_feed'):
             try:
                 feed = clawbr.get_global_feed(sort='recent', limit=20)
                 if isinstance(feed, dict):
                     posts = feed.get('posts', [])
+                    agent_id = clawbr._get_clawbr_agent_id() if hasattr(clawbr, '_get_clawbr_agent_id') else None
                     for post in posts:
                         if not isinstance(post, dict):
                             continue
+                        # Skip our own posts
+                        if post.get('authorId') == agent_id:
+                            continue
+                        # Check if post is interesting (AI/tech content)
+                        content = post.get('content', '').lower()
+                        keywords = ['ai', 'agent', 'autonomous', 'learning', 'debate', 'blockchain', 'llm', 'model', 'intelligence']
+                        is_interesting = any(kw in content for kw in keywords)
+                        
                         obs = SyModObservation(
-                            observation_type='post',
+                            observation_type='clawbr_post',
                             source_plugin='clawbr',
                             data={
                                 'id': post.get('id'),
@@ -421,7 +430,12 @@ class AutonomousBrain(AGISocialMixin):
                                 'author_name': post.get('authorName'),
                                 'likes': post.get('likesCount', 0),
                                 'replies': post.get('repliesCount', 0),
-                                'debate_slug': post.get('debateSlug')
+                                'debate_slug': post.get('debateSlug'),
+                                'is_interesting': is_interesting,
+                                'engagement_score': post.get('likesCount', 0) + post.get('repliesCount', 0) * 2,
+                                'already_liked': False,  # Brain will check via memory
+                                'already_commented': False,
+                                'already_followed': False
                             }
                         )
                         observations.append(obs)
@@ -580,7 +594,56 @@ class AutonomousBrain(AGISocialMixin):
                 if not plugin or not getattr(plugin, 'enabled', True):
                     continue
                 
-                # Get plugin proposals
+                # Clawbr: check for pending observations and propose actions
+                if plugin_name == 'clawbr' and self.core:
+                    pending = self.core.get_memory('clawbr_pending_observations') or []
+                    if pending:
+                        # Clear pending observations (brain will now decide)
+                        self.core.save_memory('clawbr_pending_observations', [])
+                        
+                        for obs in pending[:5]:  # Max 5 per cycle to avoid spam
+                            if obs.get('metrics', {}).get('already_liked'):
+                                continue
+                            if obs.get('metrics', {}).get('already_commented') and obs.get('metrics', {}).get('already_followed'):
+                                continue
+                            
+                            # Propose like action
+                            if not obs['metrics']['already_liked']:
+                                p = SyModActionProposal(
+                                    action_type='clawbr_like',
+                                    target_id=obs['post_id'],
+                                    target_name=obs['author'],
+                                    confidence=0.6 if obs['metrics']['is_interesting'] else 0.4,
+                                    justification=f"Like interesting post by {obs['author']} about AI/tech",
+                                    metadata={'plugin': 'clawbr', 'post_content': obs['content']}
+                                )
+                                proposals.append(p)
+                            
+                            # Propose comment action (lower probability)
+                            if not obs['metrics']['already_commented'] and obs['metrics']['is_interesting']:
+                                p = SyModActionProposal(
+                                    action_type='clawbr_comment',
+                                    target_id=obs['post_id'],
+                                    target_name=obs['author'],
+                                    confidence=0.5,
+                                    justification=f"Comment on {obs['author']}'s AI-related post",
+                                    metadata={'plugin': 'clawbr', 'post_content': obs['content']}
+                                )
+                                proposals.append(p)
+                            
+                            # Propose follow action (even lower probability)
+                            if not obs['metrics']['already_followed'] and obs['metrics']['is_interesting']:
+                                p = SyModActionProposal(
+                                    action_type='clawbr_follow',
+                                    target_id=obs['author'],
+                                    target_name=obs['author'],
+                                    confidence=0.4,
+                                    justification=f"Follow {obs['author']} for AI content",
+                                    metadata={'plugin': 'clawbr'}
+                                )
+                                proposals.append(p)
+                
+                # Get plugin proposals from SyMod
                 plugin_proposals = self.symod.propose_actions(
                     plugin_name,
                     context={
@@ -589,7 +652,8 @@ class AutonomousBrain(AGISocialMixin):
                             'min_confidence': self.config.min_confidence
                         }
                     },
-                    available_actions=['like', 'reply', 'repost', 'follow', 'post', 'engage', 'clawbr_engage', 
+                    available_actions=['like', 'reply', 'repost', 'follow', 'post', 'engage', 'clawbr_engage',
+                                       'clawbr_like', 'clawbr_comment', 'clawbr_follow',  # New Clawbr actions
                                        'upvote', 'comment', 'thread', 'reply_thread', 'browse', 'listing', 'bounty', 'moltbit_post']
                 )
                 
@@ -733,36 +797,105 @@ class AutonomousBrain(AGISocialMixin):
             logger.warning(f"⚠️ Unknown/unhandled Moltbook action: {action}")
             return None
     
-    async def _execute_clawbr_action(self, plugin, proposal) -> Optional[str]:
-        """Execute Clawbr-specific actions"""
-        action = proposal.action_type
+    async def _execute_clawbr_action(self, plugin, proposal) -> Optional[Dict]:
+        """Execute Clawbr-specific actions via thin executor - brain decides, Clawbr executes"""
+        action_type = proposal.action_type
         target_id = proposal.target_id
         content = proposal.content
+        target_name = proposal.target_name
         
-        if action == 'engage' or action == 'clawbr_engage':
-            # Run the full engagement cycle
-            if hasattr(plugin, 'run_engagement_cycle'):
-                result = plugin.run_engagement_cycle()
-                if result and isinstance(result, dict):
-                    engaged = result.get('feed_scan', {}).get('engaged', 0)
-                    debates = result.get('debates', {})
-                    return f"✅ Clawbr engagement: {engaged} posts, debates: {debates}"
-                return "✅ Clawbr engagement cycle completed"
-            return None
-        elif action == 'like' and target_id:
-            result = plugin.like_post(target_id) if hasattr(plugin, 'like_post') else None
-            return f"✅ Liked post {target_id}" if result else f"❌ Failed to like {target_id}"
-        elif action == 'post' and content:
-            # Use intelligent AI-powered posting
-            if hasattr(plugin, 'create_intelligent_post'):
-                result = plugin.create_intelligent_post(topic=content, intent="statement")
-                return f"✅ Created Clawbr AI post" if result else f"❌ Failed to create Clawbr post"
-            elif hasattr(plugin, 'create_post'):
-                result = plugin.create_post(content)
-                return f"✅ Created Clawbr post" if result else f"❌ Failed to create post"
-        else:
-            logger.warning(f"⚠️ Unknown/unhandled Clawbr action: {action}")
-            return None
+        result = None
+        action_log = {
+            'timestamp': datetime.now().isoformat(),
+            'platform': 'clawbr',
+            'action_type': action_type,
+            'target_id': target_id,
+            'target_name': target_name,
+            'success': False,
+            'error_code': None
+        }
+        
+        try:
+            if action_type == 'clawbr_like' and target_id:
+                result = plugin.like_post(target_id) if hasattr(plugin, 'like_post') else None
+                if result and result.get('success'):
+                    action_log['success'] = True
+                    logger.info(f"✅ Clawbr like: {target_id}")
+                elif result and not result.get('success'):
+                    action_log['error_code'] = result.get('error', 'like_failed')
+                    
+            elif action_type == 'clawbr_comment' and target_id:
+                # Generate comment if not provided
+                if not content and hasattr(plugin, '_generate_feed_comment'):
+                    post_data = {'content': proposal.metadata.get('post_content', ''), 'authorName': target_name}
+                    content = plugin._generate_feed_comment(post_data, target_name)
+                if content:
+                    result = plugin.create_post(content=content, parent_id=target_id, intent="support") if hasattr(plugin, 'create_post') else None
+                    if result and result.get('success'):
+                        action_log['success'] = True
+                        action_log['content'] = content[:100]
+                        logger.info(f"✅ Clawbr comment on {target_id}: {content[:50]}...")
+                    elif result and not result.get('success'):
+                        action_log['error_code'] = result.get('error', 'comment_failed')
+                        
+            elif action_type == 'clawbr_follow' and target_name:
+                result = plugin.follow_agent(target_name) if hasattr(plugin, 'follow_agent') else None
+                if result and result.get('success'):
+                    action_log['success'] = True
+                    logger.info(f"✅ Clawbr follow: {target_name}")
+                elif result and not result.get('success'):
+                    action_log['error_code'] = result.get('error', 'follow_failed')
+                    
+            elif action_type == 'clawbr_engage':
+                # Legacy: run full engagement cycle (deprecated, use specific actions)
+                if hasattr(plugin, 'run_engagement_cycle'):
+                    result = plugin.run_engagement_cycle()
+                    if result and isinstance(result, dict):
+                        feed = result.get('feed_scan', {})
+                        action_log['success'] = True
+                        action_log['metrics'] = {
+                            'liked': feed.get('liked', 0),
+                            'commented': feed.get('commented', 0),
+                            'followed': feed.get('followed', 0)
+                        }
+                        logger.info(f"✅ Clawbr engagement cycle: {feed}")
+                        
+            elif action_type == 'like' and target_id:
+                # Generic like action (backward compat)
+                result = plugin.like_post(target_id) if hasattr(plugin, 'like_post') else None
+                if result and result.get('success'):
+                    action_log['success'] = True
+                    
+            elif action_type == 'post' and content:
+                # Create new post
+                if hasattr(plugin, 'create_intelligent_post'):
+                    result = plugin.create_intelligent_post(topic=content, intent="statement")
+                elif hasattr(plugin, 'create_post'):
+                    result = plugin.create_post(content)
+                if result and result.get('success'):
+                    action_log['success'] = True
+                    action_log['content'] = content[:100]
+                    logger.info(f"✅ Clawbr post created")
+                    
+            else:
+                logger.warning(f"⚠️ Unknown/unhandled Clawbr action: {action_type}")
+                return None
+            
+            # Log to metrics store for self-improvement
+            if self.core:
+                try:
+                    metrics = self.core.get_memory('action_metrics') or []
+                    metrics.append(action_log)
+                    self.core.save_memory('action_metrics', metrics[-1000:])
+                except Exception as e:
+                    logger.debug(f"Failed to log metrics: {e}")
+            
+            return {'success': action_log['success'], 'action': action_type, 'result': result, 'metrics': action_log}
+            
+        except Exception as e:
+            logger.error(f"❌ Clawbr execution error: {e}")
+            action_log['error_code'] = str(e)
+            return {'success': False, 'error': str(e), 'metrics': action_log}
     
     async def _execute_moltchan_action(self, plugin, proposal) -> Optional[str]:
         """Execute Moltchan-specific actions (imageboard)"""
