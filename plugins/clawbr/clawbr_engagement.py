@@ -401,11 +401,26 @@ Reply:"""
         
         print(f"📊 Clawbr Observation Cycle: {len(observations)} interesting posts collected")
         
-        return {
-            'success': True,
-            'observations_collected': len(observations),
-            'observations': observations[:5]  # Preview for logs
-        }
+        # Format clean output for Telegram
+        output_lines = [f"✅ **Clawbr Engage Complete**"]
+        output_lines.append(f"📊 Observations: {len(observations)}")
+        
+        if debate_results.get('turns_taken', 0) > 0:
+            output_lines.append(f"🎭 Debate Turns Taken: {debate_results['turns_taken']}")
+        
+        if hub_results.get('joined', 0) > 0 or hub_results.get('posted', 0) > 0:
+            output_lines.append(f"🎭 Hub: {hub_results.get('joined', 0)} joined, {hub_results.get('posted', 0)} posted, {hub_results.get('voted', 0)} voted")
+        
+        # Show preview of interesting posts (max 3)
+        if observations:
+            output_lines.append("\n📰 **Top Posts Found:**")
+            for obs in observations[:3]:
+                author = obs.get('author', 'Unknown') or 'Unknown'
+                content = obs.get('content', '')[:60] + "..." if len(obs.get('content', '')) > 60 else obs.get('content', '')
+                score = obs.get('metrics', {}).get('engagement_score', 0)
+                output_lines.append(f"• @{author} (score:{score}): {content}")
+        
+        return "\n".join(output_lines)
 
     def _find_relevant_agents(self, limit_posts: int = 100, max_agents: int = 30) -> List[str]:
         """Find relevant agents from top feed posts"""
