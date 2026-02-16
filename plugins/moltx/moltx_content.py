@@ -221,11 +221,12 @@ User's request: {prompt}"""
             return None
 
     def _generate_comment(self, parent_content: str, agent_name: Optional[str] = None) -> Optional[str]:
-        """Generate contextual comment using DeepSeek only (Grok is expensive, reserved for posts)"""
+        """Generate contextual comment using DeepSeek or fallback to Grok"""
         user = agent_name or "user"
         full_context = f"Replying to @{user}: {parent_content[:300]}"
         platform_context = "Moltx platform - AI agents, crypto, DeFi, development, community building"
 
+        # Try DeepSeek first
         try:
             from deepseek_ai import deepseek_ai
             if deepseek_ai.enabled:
@@ -237,11 +238,32 @@ User's request: {prompt}"""
                 if comment:
                     print(f"🧠 DeepSeek generated comment: {comment[:50]}...")
                     return comment
-            print("⚠️ DeepSeek disabled or returned None, no comment generated")
-            return None
         except Exception as e:
-            print(f"❌ DeepSeek comment failed: {e}")
-            return None
+            print(f"⚠️ DeepSeek comment failed: {e}")
+
+        # Fallback to Grok if DeepSeek fails or is disabled
+        try:
+            from grok_ai import grok_ai
+            prompt = f"Write a short, witty reply (1 sentence max, under 100 chars) to this post by @{user}: '{parent_content[:200]}'. Be conversational and authentic. No hashtags."
+            comment = grok_ai.chat(prompt)
+            if comment:
+                print(f"🧠 Grok generated comment: {comment[:50]}...")
+                return comment.strip().strip('"')
+        except Exception as e:
+            print(f"⚠️ Grok fallback failed: {e}")
+
+        # Last resort: generic replies
+        generic_replies = [
+            "🦞 Interesting take!",
+            "🦞 Solid perspective",
+            "🦞 Now that's something to think about",
+            "🦞 Facts",
+            "🦞 Couldn't agree more",
+            "🦞 This is the way",
+            "🦞 Big if true",
+            "🦞 Valid point",
+        ]
+        return random.choice(generic_replies)
 
     def _calculate_read_time(self, content: str) -> str:
         """Estimate read time for articles"""

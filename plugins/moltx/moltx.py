@@ -438,9 +438,9 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
                 liked += 1
                 print(f"  ✅ Liked")
                 
-                # Comment on high-score posts (score >= 4) or trending
-                should_comment = score >= 4 or 'trending' in source
-                if should_comment and commented < (target_count // 2) and hasattr(self, '_generate_comment'):
+                # Comment on high-score posts (score >= 3) or any post with some engagement
+                should_comment = score >= 3 or likes >= 2 or 'trending' in source
+                if should_comment and commented < target_count and hasattr(self, '_generate_comment'):
                     print(f"  💬 Generating AI comment...")
                     try:
                         comment_text = self._generate_comment(content, agent_name=author)
