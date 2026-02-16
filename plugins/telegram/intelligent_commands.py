@@ -1986,6 +1986,10 @@ Generate only the title (no explanations):"""
             return
         help_text = """🦞 **AlleyBot Commands**
 
+**🧠 AGI Meta-Brain:**
+/agi_cycle - Run full 14-phase AGI cycle
+/multi_platform [topic] - Blast to all 6 platforms
+
 **💬 AI Chat:**
 /chat [message] - Chat with AI
 Or just send any message naturally!
