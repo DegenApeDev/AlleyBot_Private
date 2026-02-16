@@ -307,6 +307,10 @@ class Telegram(AlleyBotPlugin):
         # System commands
         self.application.add_handler(CommandHandler("reload", self._handle_reload))
         
+        # Help commands
+        self.application.add_handler(CommandHandler("help1", self.intelligent_commands.help1_command))
+        self.application.add_handler(CommandHandler("help2", self.intelligent_commands.help2_command))
+        
         # Message handler for natural language (admin only, conversational AI)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.conversational_ai.handle_message))
     

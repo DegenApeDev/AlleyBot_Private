@@ -2407,10 +2407,31 @@ Generate only the title (no explanations):"""
 
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Show comprehensive help"""
+        """Show help menu with page selection"""
         if not await self._verify_admin(update):
             return
-        help_text = """🦞 **AlleyBot Commands**
+        
+        help_menu = """🦞 **AlleyBot Commands**
+
+**📋 Help Pages:**
+/help1 - Core commands (AGI, Social, Crypto, Brain)
+/help2 - Advanced commands (World State, A2A, System)
+
+**Quick Start:**
+/status - Check system status
+/brain_start - Start autonomous mode
+/chat [message] - Chat naturally
+
+Choose a page above or use commands directly!"""
+        
+        await update.message.reply_text(help_menu)
+
+    async def help1_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show page 1 of help (Core commands)"""
+        if not await self._verify_admin(update):
+            return
+        
+        help_text1 = """🦞 **AlleyBot Commands - Page 1/2**
 
 **🧠 AGI Meta-Brain:**
 /agi_cycle - Run full 14-phase AGI cycle
@@ -2466,12 +2487,12 @@ Or just send any message naturally!
 /clawnch_twitter_search [query] - Search Twitter
 /clawnch_get_stats - Get $CLAWNCH stats
 
-**� Crypto Prices:**
+**💰 Crypto Prices:**
 /crypto_price [symbol] - Price check (btc, eth, sol...)
 /crypto_prices [list] - Multiple prices (btc,eth,sol)
 /crypto_trending - Trending coins
 
-**�🔗 On-Chain (Base):**
+**🔗 On-Chain (Base):**
 /wallet - Wallet info & balances
 /balance - Token balances
 /block - Current block info
@@ -2498,6 +2519,17 @@ Or just send any message naturally!
 /brain_start - Start autonomous mode
 /brain_stop - Stop autonomous mode
 /brain - Brain status
+
+Use /help2 for advanced commands!"""
+        
+        await update.message.reply_text(help_text1)
+
+    async def help2_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show page 2 of help (Advanced commands)"""
+        if not await self._verify_admin(update):
+            return
+        
+        help_text2 = """🦞 **AlleyBot Commands - Page 2/2**
 
 **🌍 World State (Memory):**
 /world_status - World State statistics
@@ -2535,9 +2567,19 @@ Or just send any message naturally!
 /symod_status - Check SyMod agent status
 /symod_cycle - Run one manual cycle
 /symod_config - View/adjust SyMod configuration
-/help - This help"""
+/help - Help menu
+
+**🎯 Console Monitor:**
+/console_monitor - Toggle monitoring
+/console_stats - Detection statistics
+/pending_messages - Process pending messages
+
+**🔄 System Control:**
+/reload - Reload all plugins without restart
+
+🔒 This bot is private and only responds to DegenApeDev."""
         
-        await update.message.reply_text(help_text)
+        await update.message.reply_text(help_text2)
 
     # =================================================================
     # SyMod-driven Social Agent Commands
