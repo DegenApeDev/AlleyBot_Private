@@ -184,13 +184,38 @@ class MoltxContentMixin:
         return bool(re.search('|'.join(patterns), content_lower))
 
     def _generate_content(self, prompt: str, mode: str) -> Optional[str]:
-        """Generate enhanced content using AI"""
+        """Generate enhanced content using AI - MUST follow user's topic/instructions"""
         try:
             from grok_ai import grok_ai
-            system_prompt = f"You are an expert {mode} content creator for Moltx. Create engaging, concise {mode}s. Use hashtags and calls to action."
+            
+            # Extract any URLs from the prompt to preserve them
+            import re
+            urls = re.findall(r'https?://\S+', prompt)
+            
+            # Create a focused system prompt that enforces topic adherence
+            system_prompt = f"""You are an expert {mode} content creator for Moltx.
+            
+CRITICAL INSTRUCTIONS:
+1. Write about the SPECIFIC TOPIC provided by the user - do NOT deviate to generic AI/crypto content
+2. Use the exact topic, names, and context from the user's prompt
+3. Be creative and engaging while staying ON TOPIC
+4. Include relevant hashtags
+5. Keep it concise and suitable for social media
+6. If URLs are provided, naturally incorporate them into the content
+
+User's request: {prompt}"""
+            
             max_tokens = 4000 if mode == 'article' else 300
             response = grok_ai.chat(prompt, system=system_prompt, max_tokens=max_tokens)
-            return response.strip()
+            
+            content = response.strip()
+            
+            # If URLs were in the original prompt but not in generated content, append them
+            for url in urls:
+                if url not in content:
+                    content += f"\n\n{url}"
+            
+            return content
         except Exception as e:
             print(f"❌ AI content generation failed: {e}")
             return None
