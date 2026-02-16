@@ -252,18 +252,94 @@ User's request: {prompt}"""
         except Exception as e:
             print(f"⚠️ Grok fallback failed: {e}")
 
-        # Last resort: generic replies
-        generic_replies = [
-            "🦞 Interesting take!",
-            "🦞 Solid perspective",
-            "🦞 Now that's something to think about",
-            "🦞 Facts",
-            "🦞 Couldn't agree more",
-            "🦞 This is the way",
-            "🦞 Big if true",
-            "🦞 Valid point",
-        ]
-        return random.choice(generic_replies)
+        # Last resort: use BERT embeddings with memory to find similar context and generate relevant reply
+        try:
+            return self._generate_memory_based_reply(parent_content, agent_name)
+        except Exception as e:
+            print(f"⚠️ Memory-based reply failed: {e}")
+            return None
+
+    def _generate_memory_based_reply(self, parent_content: str, agent_name: Optional[str] = None) -> Optional[str]:
+        """Generate reply using BERT embeddings to find similar past interactions in memory"""
+        from sentence_transformers import SentenceTransformer
+        from sklearn.metrics.pairwise import cosine_similarity
+        import numpy as np
+        
+        # Load lightweight BERT model
+        model = SentenceTransformer('all-MiniLM-L6-v2')
+        
+        # Get post embedding
+        post_embedding = model.encode([parent_content[:300]])
+        
+        # Query memory for past replies/interactions
+        memory_entries = []
+        if hasattr(self, 'core') and self.core:
+            # Get recent moltx interactions from memory
+            past_replies = self.core.get_memory('moltx_reply_history') or []
+            engagement_stats = self.core.get_memory('engagement_stats') or {}
+            
+            # Build corpus from successful past replies
+            corpus = []
+            for entry in past_replies[-50:]:  # Last 50 replies
+                if isinstance(entry, dict):
+                    original_post = entry.get('original_post', '')
+                    reply_text = entry.get('reply', '')
+                    if original_post and reply_text:
+                        corpus.append({
+                            'original': original_post,
+                            'reply': reply_text,
+                            'engagement': entry.get('engagement_score', 0)
+                        })
+            
+            # Also check engagement stats for high-performing reply patterns
+            reply_patterns = engagement_stats.get('reply_patterns', [])
+            for pattern in reply_patterns[-20:]:
+                if isinstance(pattern, dict) and pattern.get('reply'):
+                    corpus.append({
+                        'original': pattern.get('context', ''),
+                        'reply': pattern['reply'],
+                        'engagement': pattern.get('score', 0)
+                    })
+        
+        if not corpus:
+            # No memory yet - return None to let caller handle (will skip comment)
+            return None
+        
+        # Encode corpus posts
+        corpus_texts = [entry['original'][:300] for entry in corpus]
+        corpus_embeddings = model.encode(corpus_texts)
+        
+        # Find most similar posts
+        similarities = cosine_similarity(post_embedding, corpus_embeddings)[0]
+        top_indices = np.argsort(similarities)[-3:][::-1]  # Top 3 most similar
+        
+        # Get best matching reply from high-similarity entries
+        best_reply = None
+        best_score = 0
+        
+        for idx in top_indices:
+            if similarities[idx] > 0.5:  # Similarity threshold
+                entry = corpus[idx]
+                # Score by similarity + past engagement
+                score = similarities[idx] + (entry.get('engagement', 0) * 0.1)
+                if score > best_score:
+                    best_score = score
+                    best_reply = entry['reply']
+        
+        if best_reply:
+            # Adapt the reply to current context (simple adaptation)
+            user = agent_name or "user"
+            adapted_reply = best_reply
+            
+            # Replace username references if different
+            if '@' in best_reply and user not in best_reply:
+                # Keep the structure but adapt slightly
+                pass
+            
+            print(f"🧠 Memory-based reply (sim:{best_score:.2f}): {adapted_reply[:50]}...")
+            return adapted_reply
+        
+        return None
 
     def _calculate_read_time(self, content: str) -> str:
         """Estimate read time for articles"""
