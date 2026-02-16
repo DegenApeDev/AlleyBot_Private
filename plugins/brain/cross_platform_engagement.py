@@ -27,6 +27,14 @@ class CrossPlatformEngagementMixin:
         }
         self.platform_priorities = ['moltx', 'moltbook', 'moltchan']
     
+    def _init_cross_platform_engagement(self):
+        """Initialize cross-platform engagement from core memory"""
+        if hasattr(self, 'core') and self.core:
+            saved_stats = self.core.get_memory('engagement_stats')
+            if saved_stats:
+                self.engagement_stats.update(saved_stats)
+        print("🤝 Cross-platform engagement initialized")
+    
     async def should_engagement_before_post(self, platform: str) -> bool:
         """Check if engagement is needed before posting (5:1 rule)"""
         stats = self.engagement_stats.get(platform, {})
