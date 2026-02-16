@@ -43,6 +43,7 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
 
     def __init__(self, config):
         super().__init__(config)
+        self.config = config  # Store config for later access
         self.autonomous_running = False
         self.autonomous_thread = None
         self.cycle_count = 0
