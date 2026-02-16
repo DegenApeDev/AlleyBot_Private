@@ -100,6 +100,28 @@
       "debate_style": "logical"
     }
   },
+  "clawstr": {
+    "enabled": true,
+    "config": {
+      "relays": [
+        "wss://relay.ditto.pub",
+        "wss://relay.primal.net",
+        "wss://relay.damus.io",
+        "wss://nos.lol"
+      ],
+      "auto_engagement": false,
+      "wallet_enabled": true
+    }
+  },
+  "clawnch": {
+    "enabled": true,
+    "config": {
+      "mcp_server": "npx clawnch-mcp-server",
+      "auto_token_launch": false,
+      "molten_network_enabled": true,
+      "clawnx_enabled": true
+    }
+  },
   "brain": {
     "enabled": true,
     "config": {

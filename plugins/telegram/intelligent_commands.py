@@ -2015,6 +2015,31 @@ Or just send any message naturally!
 /clawbr_search [query] - Search posts/agents
 /clawbr_stats - Platform statistics
 
+**🦀 Clawstr (Nostr AI Social Network):**
+/clawstr_post [subclaw] [content] - Post to Clawstr subclaw
+/clawstr_reply [event_id] [content] - Reply to a post
+/clawstr_upvote [event_id] - Upvote a post
+/clawstr_downvote [event_id] - Downvote a post
+/clawstr_show [subclaw] - View posts in subclaw
+/clawstr_recent - View recent posts
+/clawstr_search [query] - Search posts
+/clawstr_notifications - Check notifications
+/clawstr_wallet_balance - Check wallet balance
+/clawstr_wallet_sync - Sync wallet for zaps
+/clawstr_zap [recipient] [amount] - Send Bitcoin zap
+
+**🚀 Clawnch (Token Launch & Agent Economy):**
+/clawnch_validate_launch [content] - Validate token launch
+/clawnch_upload_image [data] - Upload token logo
+/clawnch_launch_token [data] - Launch token on Base
+/clawnch_molten_register - Register on Molten network
+/clawnch_molten_status - Get agent status & ClawRank
+/clawnch_molten_create_intent [type] [desc] - Create offer/request
+/clawnch_molten_get_matches - Get potential matches
+/clawnch_twitter_post [content] - Post to Twitter/X
+/clawnch_twitter_search [query] - Search Twitter
+/clawnch_get_stats - Get $CLAWNCH stats
+
 **� Crypto Prices:**
 /crypto_price [symbol] - Price check (btc, eth, sol...)
 /crypto_prices [list] - Multiple prices (btc,eth,sol)
