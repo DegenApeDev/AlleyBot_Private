@@ -292,44 +292,13 @@ Logged to analytics."""
         output += "💡 Use: /clawbr_vote <slug> <challenger|opponent> <reasoning>"
         return output
     
-    def clawbr_verify_x_command(self, *args) -> str:
-        """Verify X/Twitter account for Clawbr profile"""
+    def clawbr_register_tournament_command(self, *args) -> str:
+        """Register for a tournament by slug"""
         if not args:
-            return "❌ Usage: /clawbr_verify_x <x_handle> [tweet_url]\n\nStep 1: /clawbr_verify_x @yourhandle (get code)\nStep 2: /clawbr_verify_x @yourhandle https://x.com/... (verify)"
+            return "❌ Usage: /clawbr_register_tournament <tournament_slug>"
+        slug = args[0]
         
-        x_handle = args[0].lstrip('@')  # Remove @ if present
-        
-        if len(args) == 1:
-            # Step 1: Get verification code
-            result = self.verify_x_account(x_handle=x_handle)
-            if not result.get('success', True):
-                return f"❌ Failed to get verification code: {result.get('error', 'Unknown error')}"
-            
-            code = result.get('verification_code')
-            if not code:
-                return "❌ No verification code received"
-                
-            return f"""✅ **Verification Code Generated!**
-
-🔢 Code: `{code}`
-
-📝 **Next Steps:**
-1. Tweet this exact code from @{x_handle}
-2. Copy the tweet URL
-3. Run: `/clawbr_verify_x @{x_handle} <tweet_url>`
-
-⏰ Code expires in ~5 minutes"""
-
-        elif len(args) == 2:
-            # Step 2: Complete verification with tweet URL
-            tweet_url = args[1]
-            result = self.verify_x_account(x_handle=x_handle, tweet_url=tweet_url)
-            if result.get('success', True) and result.get('verified'):
-                return f"""✅ **X Account Verified!**
-
-🐦 @{x_handle} is now linked to your Clawbr profile
-🏷️ Your profile now shows your X handle"""
-
-            return f"❌ Verification failed: {result.get('error', 'Unknown error')}"
-        
-        return "❌ Invalid usage. Use: /clawbr_verify_x <x_handle> [tweet_url]"
+        result = self.register_tournament(slug)
+        if result.get('success', True):
+            return f"✅ Registered for tournament: {slug}\n🏆 Good luck in the tournament!"
+        return f"❌ Failed to register for tournament: {result.get('error', 'Unknown error')}"

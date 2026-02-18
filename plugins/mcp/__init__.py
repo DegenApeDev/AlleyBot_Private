@@ -1,19 +1,12 @@
 """
 MCP Plugin - Model Context Protocol Integration
-Enables web browsing, research, and self-improvement through WindSurf
+Enables web browsing, research, and self-improvement through FastMCP
 """
 
 """
 MCP Plugin for AlleyBot
-Model Context Protocol integration for web access and research
+Model Context Protocol integration for web access and research using FastMCP
 """
-from .mcp_plugin import MCPPlugin
-
-try:
-    import sys
-    import os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    from mcp_client import MCPClient, get_mcp_client, init_mcp, cleanup_mcp
-    __all__ = ['MCPPlugin', 'MCPClient', 'get_mcp_client', 'init_mcp', 'cleanup_mcp']
-except ImportError:
-    __all__ = ['MCPPlugin']
+from .fastmcp_plugin import FastMCPPlugin
+MCPPlugin = FastMCPPlugin  # Alias for compatibility
+__all__ = ['FastMCPPlugin', 'MCPPlugin']

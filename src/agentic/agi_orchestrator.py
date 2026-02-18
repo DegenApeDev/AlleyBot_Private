@@ -240,11 +240,11 @@ class AGIOrchestrator:
         )
     
     def _run_phase_7_detection(self) -> PhaseResult:
-        """Phase 7: World State Intelligence - Detect patterns"""
+        """Phase 7: World State Intelligence - Detect patterns with world model validation"""
         start = datetime.now()
         
         try:
-            # Detect trends
+            # Detect trends using inference engine
             trends = self.inference.detect_trends(hours=24, top_n=3)
             
             # Detect anomalies
@@ -253,25 +253,132 @@ class AGIOrchestrator:
             # Find cross-platform patterns
             patterns = self.inference.find_cross_platform_patterns(hours=48)
             
+            # Use world state manager to validate and score patterns (optional)
+            validated_trends = []
+            for trend in trends:
+                # Get world state validation (optional)
+                ws_validation = {}
+                wm_confidence = 0.5  # Default
+                
+                try:
+                    if hasattr(self.world_state, 'validate_pattern'):
+                        ws_validation = self.world_state.validate_pattern(
+                            pattern_type='trend',
+                            pattern_data={'topic': trend.topic, 'strength': trend.strength}
+                        )
+                    
+                    if hasattr(self.world_state, 'calculate_confidence_score'):
+                        wm_confidence = self.world_state.calculate_confidence_score(
+                            data_type='trend',
+                            data={'topic': trend.topic, 'strength': trend.strength}
+                        )
+                except Exception as e:
+                    logger.debug(f"World state validation failed for trend: {e}")
+                    wm_confidence = 0.5
+                
+                validated_trends.append({
+                    'topic': trend.topic,
+                    'strength': trend.strength,
+                    'world_model_validation': ws_validation,
+                    'wm_confidence': wm_confidence,
+                    'overall_confidence': (trend.confidence + wm_confidence) / 2
+                })
+            
+            # Validate anomalies with world model (optional)
+            validated_anomalies = []
+            for anomaly in anomalies:
+                ws_validation = {}
+                wm_confidence = 0.5
+                
+                try:
+                    if hasattr(self.world_state, 'validate_pattern'):
+                        ws_validation = self.world_state.validate_pattern(
+                            pattern_type='anomaly',
+                            pattern_data={'type': anomaly.anomaly_type, 'severity': anomaly.severity}
+                        )
+                    
+                    if hasattr(self.world_state, 'calculate_confidence_score'):
+                        wm_confidence = self.world_state.calculate_confidence_score(
+                            data_type='anomaly',
+                            data={'type': anomaly.anomaly_type, 'severity': anomaly.severity}
+                        )
+                except Exception as e:
+                    logger.debug(f"World state validation failed for anomaly: {e}")
+                    wm_confidence = 0.5
+                
+                validated_anomalies.append({
+                    'type': anomaly.anomaly_type,
+                    'severity': anomaly.severity,
+                    'world_model_validation': ws_validation,
+                    'wm_confidence': wm_confidence,
+                    'overall_confidence': (anomaly.confidence + wm_confidence) / 2
+                })
+            
+            # Validate cross-platform patterns (optional)
+            validated_patterns = []
+            for pattern in patterns:
+                ws_validation = {}
+                wm_confidence = 0.5
+                
+                try:
+                    if hasattr(self.world_state, 'validate_pattern'):
+                        ws_validation = self.world_state.validate_pattern(
+                            pattern_type='cross_platform',
+                            pattern_data={'type': pattern.pattern_type, 'platforms': pattern.platforms}
+                        )
+                    
+                    if hasattr(self.world_state, 'calculate_confidence_score'):
+                        wm_confidence = self.world_state.calculate_confidence_score(
+                            data_type='cross_platform',
+                            data={'type': pattern.pattern_type, 'platforms': pattern.platforms}
+                        )
+                except Exception as e:
+                    logger.debug(f"World state validation failed for pattern: {e}")
+                    wm_confidence = 0.5
+                
+                validated_patterns.append({
+                    'type': pattern.pattern_type,
+                    'platforms': pattern.platforms,
+                    'world_model_validation': ws_validation,
+                    'wm_confidence': wm_confidence,
+                    'overall_confidence': (pattern.confidence + wm_confidence) / 2
+                })
+            
             output = {
-                'trends': [{'topic': t.topic, 'strength': t.strength} for t in trends],
-                'anomalies': [{'type': a.anomaly_type, 'severity': a.severity} for a in anomalies],
-                'patterns': [{'type': p.pattern_type, 'platforms': p.platforms} for p in patterns],
-                'has_detection': bool(trends or anomalies or patterns)
+                'trends': [{'topic': t['topic'], 'strength': t['strength'], 'wm_confidence': t['wm_confidence']} 
+                          for t in validated_trends],
+                'anomalies': [{'type': a['type'], 'severity': a['severity'], 'wm_confidence': a['wm_confidence']} 
+                             for a in validated_anomalies],
+                'patterns': [{'type': p['type'], 'platforms': p['platforms'], 'wm_confidence': p['wm_confidence']} 
+                            for p in validated_patterns],
+                'has_detection': bool(validated_trends or validated_anomalies or validated_patterns),
+                'world_model_insights': {
+                    'validated_trends': len(validated_trends),
+                    'validated_anomalies': len(validated_anomalies),
+                    'validated_patterns': len(validated_patterns),
+                    'average_wm_confidence': sum([
+                        t['wm_confidence'] for t in validated_trends + validated_anomalies + validated_patterns
+                    ]) / max(1, len(validated_trends + validated_anomalies + validated_patterns))
+                }
             }
             
-            # Determine what to trigger next
+            # Determine what to trigger next based on world model validation
             triggered = []
-            if anomalies:
+            high_confidence_trends = [t for t in validated_trends if t['wm_confidence'] > 0.7]
+            if high_confidence_trends or validated_anomalies:
                 triggered.append(Phase.CAUSAL_UNDERSTANDING)
-            if trends:
+            if validated_trends:
                 triggered.append(Phase.CAUSAL_UNDERSTANDING)
+            
+            # Calculate overall confidence using world model
+            detection_count = len(validated_trends) + len(validated_anomalies) + len(validated_patterns)
+            overall_confidence = min(0.9, 0.5 + (detection_count * 0.1) + (output['world_model_insights']['average_wm_confidence'] * 0.2))
             
             return PhaseResult(
                 phase=Phase.WORLD_STATE_INTELLIGENCE,
                 success=True,
                 output=output,
-                confidence=0.8 if output['has_detection'] else 0.5,
+                confidence=overall_confidence,
                 duration_seconds=(datetime.now() - start).total_seconds(),
                 triggered_phases=triggered
             )
@@ -288,37 +395,127 @@ class AGIOrchestrator:
             )
     
     def _run_phase_10_causal(self, detection_output: Dict) -> PhaseResult:
-        """Phase 10: Causal Understanding - Understand why"""
+        """Phase 10: Causal Understanding - Understand why with world model validation"""
         start = datetime.now()
         
         try:
             insights = []
             
-            # Analyze causes for top trends
+            # Analyze causes for top trends with world model validation
             for trend in detection_output.get('trends', []):
-                # Find correlations for trend topic
+                # Get causal correlations from causal engine
                 correlations = self.causal.find_correlations(trend['topic'])
-                if correlations:
+                
+                # Validate each correlation with world state manager (optional)
+                validated_correlations = []
+                for correlation in correlations:
+                    # World state validation of causal relationship (optional)
+                    ws_validation = {}
+                    wm_confidence = 0.5  # Default
+                    
+                    try:
+                        if hasattr(self.world_state, 'validate_causal_relationship'):
+                            ws_validation = self.world_state.validate_causal_relationship(
+                                cause=correlation.cause_type,
+                                effect={'topic': trend['topic'], 'strength': trend['strength']},
+                                correlation_data={'strength': correlation.strength, 'evidence': correlation.evidence}
+                            )
+                        
+                        if hasattr(self.world_state, 'calculate_causal_confidence'):
+                            wm_confidence = self.world_state.calculate_causal_confidence(
+                                cause_data={'type': correlation.cause_type, 'strength': correlation.strength},
+                                effect_data={'topic': trend['topic'], 'trend_strength': trend['strength']}
+                            )
+                    except Exception as e:
+                        logger.debug(f"World state causal validation failed: {e}")
+                        wm_confidence = 0.5
+                    
+                    validated_correlations.append({
+                        'factor': correlation.cause_type,
+                        'strength': correlation.strength,
+                        'world_model_validation': ws_validation,
+                        'wm_confidence': wm_confidence,
+                        'overall_confidence': (correlation.confidence + wm_confidence) / 2,
+                        'evidence_quality': ws_validation.get('evidence_quality', 'unknown')
+                    })
+                
+                # Only include insights with sufficient world model confidence
+                high_confidence_correlations = [c for c in validated_correlations if c['wm_confidence'] > 0.6]
+                
+                if high_confidence_correlations:
                     insights.append({
                         'topic': trend['topic'],
-                        'likely_causes': [{'factor': c.cause_type, 'strength': c.strength} 
-                                         for c in correlations[:3]]
+                        'likely_causes': [{
+                            'factor': c['factor'], 
+                            'strength': c['strength'],
+                            'wm_confidence': c['wm_confidence']
+                        } for c in high_confidence_correlations[:3]],
+                        'world_model_validation': {
+                            'total_correlations': len(validated_correlations),
+                            'high_confidence_count': len(high_confidence_correlations),
+                            'average_wm_confidence': sum(c['wm_confidence'] for c in validated_correlations) / max(1, len(validated_correlations))
+                        }
                     })
             
-            # Get attribution for recent engagement
+            # Get attribution for recent engagement with world model context
             attribution = self.causal.get_impact_attribution('engagement', time_window_hours=24)
+            
+            # Validate attribution with world state (optional)
+            if attribution:
+                ws_attribution_validation = {}
+                wm_attribution_confidence = 0.5
+                
+                try:
+                    if hasattr(self.world_state, 'validate_attribution'):
+                        ws_attribution_validation = self.world_state.validate_attribution(
+                            action_type='engagement',
+                            attribution_data=attribution,
+                            time_window_hours=24
+                        )
+                    
+                    if hasattr(self.world_state, 'calculate_attribution_confidence'):
+                        wm_attribution_confidence = self.world_state.calculate_attribution_confidence(
+                            attribution_data=attribution
+                        )
+                except Exception as e:
+                    logger.debug(f"World state attribution validation failed: {e}")
+                    wm_attribution_confidence = 0.5
+                
+                attribution = {
+                    **attribution,
+                    'world_model_validation': ws_attribution_validation,
+                    'wm_confidence': wm_attribution_confidence
+                }
+            
+            # Calculate overall phase confidence using world model
+            total_insights = len(insights)
+            total_correlations = sum(len(insight.get('likely_causes', [])) for insight in insights)
+            average_wm_confidence = sum(
+                insight.get('world_model_validation', {}).get('average_wm_confidence', 0.5)
+                for insight in insights
+            ) / max(1, len(insights))
             
             output = {
                 'insights': insights,
                 'attribution': attribution,
-                'confidence': 0.7 if insights else 0.5
+                'world_model_summary': {
+                    'total_insights': total_insights,
+                    'total_correlations': total_correlations,
+                    'average_wm_confidence': average_wm_confidence,
+                    'validation_quality': 'high' if average_wm_confidence > 0.7 else 'medium' if average_wm_confidence > 0.5 else 'low'
+                }
             }
+            
+            # Calculate confidence based on world model validation
+            confidence = min(0.9, 0.4 + (total_insights * 0.1) + (average_wm_confidence * 0.3))
+            if attribution and attribution.get('wm_confidence', 0) > 0.7:
+                confidence += 0.1
             
             return PhaseResult(
                 phase=Phase.CAUSAL_UNDERSTANDING,
                 success=True,
                 output=output,
-                confidence=output['confidence'],
+                confidence=confidence,
                 duration_seconds=(datetime.now() - start).total_seconds(),
                 triggered_phases=[Phase.AUTONOMOUS_RESEARCH] if insights else []
             )
@@ -526,14 +723,14 @@ class AGIOrchestrator:
             )
     
     def _run_phase_14_metacognition(self, creative: Dict, social: Dict) -> PhaseResult:
-        """Phase 14: Metacognition - Validate confidence"""
+        """Phase 14: Metacognition - Validate confidence with world model calibration"""
         start = datetime.now()
         
         try:
             # Check resource constraints
             constraints = self.metacognition.check_resource_constraints()
             
-            # Assess overall capability for this task
+            # Assess overall capability for this task using metacognition
             task = "content_generation"
             calibrated_confidence = self.metacognition.calibrate_confidence(
                 task, 
@@ -543,28 +740,103 @@ class AGIOrchestrator:
             # Get metacognitive summary
             meta_summary = self.metacognition.get_metacognitive_summary()
             
-            # Decide whether to proceed
+            # World model validation of metacognitive assessment (optional)
+            wm_meta_validation = {}
+            wm_confidence_calibration = {'adjusted_confidence': calibrated_confidence, 'calibration_factor': 1.0}
+            
+            try:
+                if hasattr(self.world_state, 'validate_metacognition'):
+                    wm_meta_validation = self.world_state.validate_metacognition(
+                        metacognition_data={
+                            'calibrated_confidence': calibrated_confidence,
+                            'task_type': task,
+                            'context': {'novel': True, 'complexity': 0.6},
+                            'capabilities_known': meta_summary.get('capabilities_known', 0)
+                        }
+                    )
+                
+                if hasattr(self.world_state, 'calibrate_metacognitive_confidence'):
+                    wm_confidence_calibration = self.world_state.calibrate_metacognitive_confidence(
+                        original_confidence=calibrated_confidence,
+                        context_data={
+                            'creative_output': creative,
+                            'social_prediction': social,
+                            'resource_constraints': constraints
+                        }
+                    )
+            except Exception as e:
+                logger.debug(f"World state metacognition validation failed: {e}")
+                wm_confidence_calibration = {'adjusted_confidence': calibrated_confidence, 'calibration_factor': 1.0}
+            
+            # Apply world model calibration to metacognitive confidence
+            world_model_adjusted_confidence = (
+                calibrated_confidence * 0.7 +  # Original metacognition weight
+                wm_confidence_calibration.get('adjusted_confidence', calibrated_confidence) * 0.3  # World model weight
+            )
+            
+            # Validate resource constraints with world model (optional)
+            wm_constraint_validation = {}
+            
+            try:
+                if hasattr(self.world_state, 'validate_resource_constraints'):
+                    wm_constraint_validation = self.world_state.validate_resource_constraints(
+                        constraint_data=constraints
+                    )
+            except Exception as e:
+                logger.debug(f"World state constraint validation failed: {e}")
+                wm_constraint_validation = {'overall_confidence': 0.5}
+            
+            # Enhanced constraint assessment with world model
+            enhanced_constraints = {
+                **constraints,
+                'world_model_validation': wm_constraint_validation,
+                'wm_constraint_confidence': wm_constraint_validation.get('overall_confidence', 0.5)
+            }
+            
+            # Decide whether to proceed with world model-informed decision
             proceed = (
-                calibrated_confidence > 0.6 and
-                constraints.get('can_continue', True) and
+                world_model_adjusted_confidence > 0.6 and
+                enhanced_constraints.get('can_continue', True) and
                 social.get('proceed_recommended', True)
             )
             
+            # World model validation of social prediction (optional)
+            if social and social.get('predicted_reaction'):
+                try:
+                    if hasattr(self.world_state, 'validate_social_prediction'):
+                        wm_social_validation = self.world_state.validate_social_prediction(
+                            social_data=social['predicted_reaction'],
+                            context={'content_type': 'generated_content'}
+                        )
+                        social_confidence = wm_social_validation.get('validation_confidence', 0.5)
+                        proceed = proceed and (social_confidence > 0.4)
+                except Exception as e:
+                    logger.debug(f"World state social validation failed: {e}")
+                    social_confidence = 0.5
+            
             output = {
                 'proceed': proceed,
-                'confidence': calibrated_confidence,
-                'constraints': constraints,
+                'confidence': world_model_adjusted_confidence,
+                'constraints': enhanced_constraints,
                 'capabilities_known': meta_summary.get('capabilities_known', 0),
-                'rationale': f"Confidence: {calibrated_confidence:.0%}, "
-                            f"Constraints: {len(constraints.get('constraints', []))}, "
-                            f"Social: {social.get('predicted_reaction', {}).get('predicted_sentiment')}"
+                'world_model_calibration': {
+                    'original_confidence': calibrated_confidence,
+                    'wm_adjusted_confidence': world_model_adjusted_confidence,
+                    'calibration_factor': wm_confidence_calibration.get('calibration_factor', 1.0),
+                    'validation_quality': wm_meta_validation.get('validation_quality', 'unknown')
+                },
+                'rationale': f"WM-Calibrated Confidence: {world_model_adjusted_confidence:.1%}, "
+                           f"Original: {calibrated_confidence:.1%}, "
+                           f"Constraints: {len(enhanced_constraints.get('constraints', []))}, "
+                           f"Social: {social.get('predicted_reaction', {}).get('predicted_sentiment', 'unknown')}, "
+                           f"WM Validation: {wm_meta_validation.get('validation_quality', 'unknown')}"
             }
             
             return PhaseResult(
                 phase=Phase.METACOGNITION,
                 success=True,
                 output=output,
-                confidence=calibrated_confidence,
+                confidence=world_model_adjusted_confidence,
                 duration_seconds=(datetime.now() - start).total_seconds(),
                 triggered_phases=[Phase.MULTI_STEP_PLANNING] if proceed else []
             )

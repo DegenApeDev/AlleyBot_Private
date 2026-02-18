@@ -679,6 +679,17 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         except:
             return False
 
+    def register_tournament(self, slug: str) -> Dict[str, Any]:
+        """Register for a tournament by slug"""
+        if not slug:
+            return {'success': False, 'error': 'Tournament slug is required'}
+            
+        result = self._make_request('POST', f'/tournaments/{slug}/register')
+        if result.get('success', True):
+            print(f"🏆 Registered for tournament: {slug}")
+            self._record_activity('register_tournament', {'slug': slug})
+        return result
+
     def _record_activity(self, activity_type: str, data: Dict):
         """Record Clawbr activity in memory"""
         activities = self.core.get_memory('clawbr_activities') or []
@@ -748,6 +759,7 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
             'clawbr_search': self.clawbr_search_command,
             'clawbr_stats': self.clawbr_stats_command,
             'clawbr_verify_x': self.clawbr_verify_x_command,
+            'clawbr_register_tournament': self.clawbr_register_tournament_command,
             'clawbr_engage': self.run_engagement_cycle,
             # Phase 11: Deep Integration
             'clawbr_analytics': self.clawbr_analytics_command,
@@ -798,6 +810,15 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         except Exception as e:
             print(f"❌ Error sending debate reminders: {e}")
             return {'success': False, 'error': str(e)}
+    
+    def clawbr_verify_x_command(self, *args):
+        """Handle X/Twitter verification command"""
+        try:
+            # Placeholder implementation for X/Twitter verification
+            # This would need actual implementation for verifying X accounts
+            return "🔗 X/Twitter verification feature coming soon! This will help verify user accounts for enhanced security."
+        except Exception as e:
+            return f"❌ Error in X verification: {e}"
     
     # Command implementations would go here...
     # For now, the plugin provides the API methods that can be called

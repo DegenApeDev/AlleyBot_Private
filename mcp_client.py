@@ -15,7 +15,7 @@ class MCPClient:
     """
     
     def __init__(self, server_url: str = None):
-        self.server_url = server_url or "http://localhost:3000"  # Default MCP server
+        self.server_url = server_url  # No default - require explicit URL
         self.connected = False
         self.session = requests.Session()
         self.session.headers.update({
@@ -27,6 +27,11 @@ class MCPClient:
         
     def connect(self) -> bool:
         """Connect to MCP server and verify connection"""
+        if not self.server_url:
+            print("⚠️ No server URL provided to MCP client")
+            self.connected = False
+            return False
+            
         try:
             # Try to ping the MCP server
             response = self.session.get(
@@ -216,7 +221,7 @@ _mcp_client = None
 def get_mcp_client(server_url: str = None) -> MCPClient:
     """Get or create global MCP client instance"""
     global _mcp_client
-    if _mcp_client is None:
+    if _mcp_client is None or (_mcp_client.server_url != server_url and server_url):
         _mcp_client = MCPClient(server_url)
     return _mcp_client
 

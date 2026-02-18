@@ -220,7 +220,7 @@ Reply requirements:
 Generate ONLY the reply (no @ mentions, no explanations):"""
                 
                 # Use DeepSeek for contextual generation
-                reply_text = deepseek_ai.generate_text(reply_prompt, max_tokens=150)
+                reply_text = deepseek_ai.generate_reply_to_comment(reply_prompt, max_tokens=150)
                 reply_text = reply_text.strip().strip('"').strip("'")
                 
                 # Platform-specific reply method

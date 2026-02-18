@@ -153,10 +153,34 @@ class GoalStackMixin:
         
         self.current_goal = None
     
-    def add_goal_command(self, description: str, priority: int = 5, deadline_hours: int = 24):
+    def add_goal_command(self, *args):
         """CLI command to add a new goal"""
         if not self.goal_manager:
             return "❌ Goal manager not available"
+        
+        # Parse arguments - handle both individual args and joined description
+        if not args:
+            return "❌ Usage: brain_add_goal [description] [priority=5] [deadline_hours=24]"
+        
+        # Join all arguments as description for now, can parse priority/deadline later if needed
+        description = ' '.join(args)
+        priority = 5  # default
+        deadline_hours = 24  # default
+        
+        # Try to extract priority and deadline from end if numeric
+        if len(args) >= 2:
+            try:
+                priority = int(args[-1])
+                description = ' '.join(args[:-1])
+                if len(args) >= 3:
+                    try:
+                        deadline_hours = int(args[-2])
+                        description = ' '.join(args[:-2])
+                    except ValueError:
+                        pass  # Keep default deadline
+            except ValueError:
+                # No numeric priority, use all as description
+                description = ' '.join(args)
         
         goal = Goal(
             id=f"manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}",

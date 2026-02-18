@@ -22,6 +22,7 @@ from src.agentic.action_logger import ActionLogger, ActionRecord
 from src.agentic.symod_core import get_symod_manager, SyModObservation
 from src.agentic.skilldoc_manager import get_skilldoc_manager
 from src.agentic.agi_social_mixin import AGISocialMixin
+from src.agentic.agi_orchestrator import get_agi_orchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -125,10 +126,14 @@ class AutonomousBrain(AGISocialMixin):
         self.skilldoc_manager = get_skilldoc_manager()
         self._skilldoc_task: Optional[asyncio.Task] = None
         
+        # AGI Orchestrator integration
+        self.agi_orchestrator = get_agi_orchestrator(core=core)
+        
         # Initialize AGI social behaviors
         AGISocialMixin.__init__(self)
         
         logger.info("🧠 AutonomousBrain initialized")
+        logger.info(f"🎭 AGI Orchestrator: {'✅ Connected' if self.agi_orchestrator else '❌ Not available'}")
     
     def register_plugins_with_symod(self) -> None:
         """Register all loaded plugins with SyMod for observations"""
@@ -280,9 +285,14 @@ class AutonomousBrain(AGISocialMixin):
         for obs in observations:
             self.symod.observe(obs)
         
-        # === THINK: Get action proposals ===
+        # === AGI ORCHESTRATION: Run full AGI cycle analysis ===
+        agi_actions = await self._run_agi_orchestration_cycle()
+        logger.info(f"🎭 AGI Orchestrator: {len(agi_actions)} actions generated")
+        
+        # === THINK: Get action proposals from both SyMod and AGI ===
         proposals = await self._get_proposals()
-        logger.info(f"🧠 Generated {len(proposals)} proposals")
+        proposals.extend(agi_actions)  # Add AGI-generated actions
+        logger.info(f"🧠 Generated {len(proposals)} total proposals")
         
         # === ACT: Execute proposals ===
         executed = 0
@@ -561,7 +571,7 @@ class AutonomousBrain(AGISocialMixin):
         
         logger.info("🤖 Running AGI Social Cycle")
         
-        platforms = ['moltx', 'clawbr', 'moltbook', 'moltchan', 'moltroad']
+        platforms = ['moltx', 'clawbr', 'moltchan', 'moltroad', 'moltbit']
         total_replies = 0
         total_follows = 0
         
@@ -665,8 +675,152 @@ class AutonomousBrain(AGISocialMixin):
                 
                 proposals.extend(plugin_proposals)
         
-        # Sort by confidence
-        proposals.sort(key=lambda p: p.confidence, reverse=True)
+        return proposals
+    
+    async def _run_agi_orchestration_cycle(self) -> List[Any]:
+        """Run AGI Orchestrator cycle and convert results to action proposals"""
+        if not self.agi_orchestrator:
+            return []
+        
+        try:
+            # Run full AGI cycle
+            cycle_result = self.agi_orchestrator.run_cycle(trigger="brain_cycle")
+            
+            # Check if cycle was successful (AGICycleResult doesn't have success attribute)
+            # Success is determined by having phases executed and not just early termination
+            cycle_successful = (
+                hasattr(cycle_result, 'phases_executed') and 
+                len(cycle_result.phases_executed) > 0 and
+                not any(phase.output.get('error') for phase in cycle_result.phases_executed if hasattr(phase, 'output'))
+            )
+            
+            if not cycle_successful:
+                logger.info("🎭 AGI Orchestrator: No actionable insights this cycle")
+                return []
+            
+            # Convert AGI actions to SyMod proposals
+            proposals = []
+            
+            # Process final action if present
+            if cycle_result.final_action and cycle_result.final_action.get('action_taken'):
+                proposal = await self._convert_agi_action_to_proposal(
+                    cycle_result.final_action,
+                    cycle_result.phases_executed
+                )
+                if proposal:
+                    proposals.append(proposal)
+            
+            # Process creative content generation (common AGI output)
+            for phase_result in cycle_result.phases_executed:
+                if (phase_result.phase.value == 'CREATIVE_GENERATION' and 
+                    phase_result.success and phase_result.output):
+                    
+                    creative_proposals = await self._extract_creative_proposals(
+                        phase_result.output, cycle_result.phases_executed
+                    )
+                    proposals.extend(creative_proposals)
+            
+            logger.info(f"🎭 AGI Orchestrator generated {len(proposals)} action proposals")
+            return proposals
+            
+        except Exception as e:
+            logger.error(f"❌ AGI Orchestration error: {e}")
+            return []
+    
+    async def _convert_agi_action_to_proposal(self, agi_action: Dict, phases_executed) -> Optional[Any]:
+        """Convert AGI orchestrator action to SyMod proposal"""
+        from src.agentic.symod_core import SyModActionProposal
+        
+        action_taken = agi_action.get('action_taken', '')
+        content = agi_action.get('content_posted', '')
+        
+        # Map AGI actions to SyMod action types
+        action_mapping = {
+            'posted_to_moltx': 'moltx_post',
+            'posted_to_clawbr': 'clawbr_post',
+        }
+        
+        symod_action = action_mapping.get(action_taken)
+        if not symod_action:
+            return None
+        
+        # Determine confidence based on metacognition phase
+        confidence = 0.6  # Default
+        for phase in phases_executed:
+            if phase.phase.value == 'METACOGNITION' and phase.success:
+                confidence = phase.output.get('confidence', 0.6)
+                break
+        
+        # Extract platform from action
+        platform = 'unknown'
+        if 'moltx' in action_taken:
+            platform = 'moltx'
+        elif 'clawbr' in action_taken:
+            platform = 'clawbr'
+        
+        return SyModActionProposal(
+            action_type=symod_action,
+            target_id=None,  # Content posting doesn't need target ID
+            target_name=f"AGI_Content_{datetime.now().strftime('%H%M%S')}",
+            content=content,
+            confidence=confidence,
+            justification="AGI Orchestrator generated content based on multi-phase analysis",
+            metadata={
+                'plugin': platform,
+                'trigger': 'agi_orchestrator',
+                'phases_used': len(phases_executed),
+                'agi_action': action_taken
+            }
+        )
+    
+    async def _extract_creative_proposals(self, creative_output: Dict, phases_executed) -> List[Any]:
+        """Extract action proposals from creative generation phase"""
+        from src.agentic.symod_core import SyModActionProposal
+        
+        proposals = []
+        
+        # Check for recommended content
+        recommended = creative_output.get('recommended_content')
+        if recommended and isinstance(recommended, dict):
+            content = recommended.get('title', '')
+            if content:
+                # Create posting proposal
+                proposal = SyModActionProposal(
+                    action_type='moltx_post',  # Default to Moltx
+                    target_id=None,
+                    target_name="AGI_Creative_Content",
+                    content=content,
+                    confidence=0.7,  # Creative content is confident
+                    justification="AGI Creative Engine generated engaging content",
+                    metadata={
+                        'plugin': 'moltx',
+                        'trigger': 'agi_creative',
+                        'novelty_score': recommended.get('novelty', 0),
+                        'estimated_impact': recommended.get('estimated_impact', 0)
+                    }
+                )
+                proposals.append(proposal)
+        
+        # Check for story arcs
+        story_arc = creative_output.get('story_arc')
+        if story_arc and isinstance(story_arc, dict):
+            # Could create multi-post campaign, but for now just post the title
+            title = story_arc.get('title', '')
+            if title and len(title) < 200:  # Keep it reasonable
+                proposal = SyModActionProposal(
+                    action_type='moltx_post',  # Default to Moltx for stories
+                    target_id=None,
+                    target_name="AGI_Story_Arc",
+                    content=title,
+                    confidence=0.6,
+                    justification="AGI Creative Engine generated story concept",
+                    metadata={
+                        'plugin': 'moltx',
+                        'trigger': 'agi_creative',
+                        'story_posts': story_arc.get('posts', 0)
+                    }
+                )
+                proposals.append(proposal)
         
         return proposals
     
@@ -693,12 +847,8 @@ class AutonomousBrain(AGISocialMixin):
             action_type = proposal.action_type
             result = None
             
-            logger.info(f"🎯 Executing: {action_type} on {proposal.target_name} via {plugin_name}")
-            
             if plugin_name == 'moltx':
                 result = await self._execute_moltx_action(plugin, proposal)
-            elif plugin_name == 'moltbook':
-                result = await self._execute_moltbook_action(plugin, proposal)
             elif plugin_name == 'clawbr':
                 result = await self._execute_clawbr_action(plugin, proposal)
             elif plugin_name == 'moltchan':
@@ -768,35 +918,6 @@ class AutonomousBrain(AGISocialMixin):
         else:
             logger.warning(f"⚠️ Unknown/unhandled Moltx action: {action}")
             return None
-    
-    async def _execute_moltbook_action(self, plugin, proposal) -> Optional[str]:
-        """Execute Moltbook-specific actions"""
-        action = proposal.action_type
-        target_id = proposal.target_id
-        content = proposal.content
-        
-        # Check if suspended first
-        if hasattr(plugin, 'mb_api') and plugin.mb_api:
-            if getattr(plugin.mb_api, 'is_suspended', False):
-                logger.warning(f"🚫 Moltbook account suspended, skipping action")
-                return None
-        
-        if action == 'upvote' and target_id:
-            result = plugin.mb_api.upvote_post(target_id) if hasattr(plugin, 'mb_api') else None
-            return f"✅ Upvoted post {target_id}" if result else f"❌ Failed to upvote {target_id}"
-        elif action == 'comment' and target_id and content:
-            result = plugin.mb_api.add_comment(target_id, content) if hasattr(plugin, 'mb_api') else None
-            return f"✅ Commented on {target_id}" if result else f"❌ Failed to comment {target_id}"
-        elif action == 'post' and content:
-            if hasattr(plugin, 'create_intelligent_post'):
-                return plugin.create_intelligent_post()
-            elif hasattr(plugin, 'mb_api'):
-                result = plugin.mb_api.create_post('general', content[:100], content)
-                return f"✅ Created post" if result else f"❌ Failed to create post"
-        else:
-            logger.warning(f"⚠️ Unknown/unhandled Moltbook action: {action}")
-            return None
-    
     async def _execute_clawbr_action(self, plugin, proposal) -> Optional[Dict]:
         """Execute Clawbr-specific actions via thin executor - brain decides, Clawbr executes"""
         action_type = proposal.action_type

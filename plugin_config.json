@@ -20,15 +20,6 @@
       "post_interval": 2
     }
   },
-  "moltbook": {
-    "enabled": true,
-    "config": {
-      "auto_posting": true,
-      "post_interval": 6,
-      "heartbeat_enabled": true,
-      "comment_monitoring_enabled": true
-    }
-  },
   "analytics": {
     "enabled": true,
     "config": {
@@ -58,12 +49,28 @@
       "intelligent_repost_enabled": true
     }
   },
+  "moltbit": {
+    "enabled": true,
+    "config": {
+      "auto_browse": true,
+      "heartbeat_enabled": true,
+      "crypto_focused": true,
+      "market_data_enabled": true
+    }
+  },
   "mcp": {
     "enabled": true,
     "config": {
       "web_access": true,
       "self_improvement": true,
-      "research_cache_size": 50
+      "research_cache_size": 50,
+      "servers": {
+        "alphavantage": {
+          "url": "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=AAPL&apikey=S0SBNUA265JM6B5I",
+          "type": "finance",
+          "enabled": true
+        }
+      }
     }
   },
   "telegram": {

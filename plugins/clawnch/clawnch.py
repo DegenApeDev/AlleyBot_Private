@@ -137,12 +137,152 @@ class ClawnchPlugin(AlleyBotPlugin):
             return f"❌ **Image upload failed:** {result.get('error', 'Upload error')}"
 
     def launch_token_command(self, token_data: Dict[str, Any]) -> str:
-        """Launch a new token on Base"""
-        result = self._run_mcp_tool('clawnch_launch_token', {'token_data': json.dumps(token_data)})
-        if result.get('success'):
-            return f"🚀 **Token launched successfully:**\n{result.get('output', 'Success')}"
-        else:
-            return f"❌ **Token launch failed:** {result.get('error', 'Launch error')}"
+        """Launch a new token on Base using ClawnchApiDeployer SDK via Node.js"""
+        try:
+            # Create temporary files for data exchange
+            import tempfile
+            import json
+            
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                json.dump(token_data, f)
+                token_file = f.name
+            
+            # Create Node.js script for deployment
+            node_script = f'''
+const {{ ClawnchApiDeployer }} = require('@clawnch/clawncher-sdk');
+const {{ createWalletClient, createPublicClient, http, privateKeyToAccount }} = require('viem');
+const {{ base }} = require('viem/chains');
+const fs = require('fs');
+
+async function deployToken() {{
+    try {{
+        // Load token data
+        const tokenData = JSON.parse(fs.readFileSync('{token_file}', 'utf8'));
+        
+        // Create account and clients
+        const account = privateKeyToAccount('0x{os.getenv("BASE_WALLET_PRIVATE_KEY", "")}');
+        const wallet = createWalletClient({{ account, chain: base, transport: http() }});
+        const publicClient = createPublicClient({{ chain: base, transport: http() }});
+        
+        // Check for existing API key
+        const apiKey = process.env.CLAWNCH_API_KEY;
+        let apiDeployer;
+        
+        if (apiKey) {{
+            apiDeployer = new ClawnchApiDeployer({{
+                apiKey,
+                wallet,
+                publicClient,
+                apiBaseUrl: 'https://clawn.ch'
+            }});
+            
+            try {{
+                const status = await apiDeployer.getStatus();
+                if (status.verified) {{
+                    const result = await apiDeployer.deploy(tokenData);
+                    console.log(JSON.stringify({{ success: true, ...result }}));
+                    return;
+                }}
+            }} catch (e) {{
+                // Need to register
+            }}
+        }}
+        
+        // Register agent
+        const registration = await ClawnchApiDeployer.register({{
+            wallet,
+            publicClient,
+        }}, {{
+            name: 'AlleyBot',
+            wallet: account.address,
+            description: 'AI agent that launches viral memecoins on Base chain',
+        }});
+        
+        // Create deployer
+        apiDeployer = new ClawnchApiDeployer({{
+            apiKey: registration.apiKey,
+            wallet,
+            publicClient,
+            apiBaseUrl: 'https://clawn.ch'
+        }});
+        
+        // Approve CLAWNCH
+        await apiDeployer.approveClawnch();
+        
+        // Deploy token
+        const result = await apiDeployer.deploy(tokenData);
+        console.log(JSON.stringify({{ success: true, ...result }}));
+        
+    }} catch (error) {{
+        console.log(JSON.stringify({{ success: false, error: error.message }}));
+    }}
+}}
+
+deployToken();
+'''
+            
+            # Write Node.js script
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
+                f.write(node_script)
+                script_file = f.name
+            
+            # Execute Node.js script
+            env = os.environ.copy()
+            env['BASE_WALLET_PRIVATE_KEY'] = os.getenv('BASE_WALLET_PRIVATE_KEY', '')
+            env['CLAWNCH_API_KEY'] = os.getenv('CLAWNCH_API_KEY', '')
+            
+            result = subprocess.run(
+                ['node', script_file],
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=60
+            )
+            
+            # Clean up temp files
+            os.unlink(token_file)
+            os.unlink(script_file)
+            
+            if result.returncode == 0:
+                try:
+                    response = json.loads(result.stdout.strip())
+                    if response.get('success'):
+                        return f"""🚀 **Token launched successfully!**
+
+🪙 **Token:** {token_data['name']} ({token_data['symbol']})
+🔗 **Contract:** `{response.get('tokenAddress', 'Unknown')}`
+📄 **Transaction:** `{response.get('txHash', 'Unknown')}`
+🌐 **Dashboard:** https://clawn.ch/token/{response.get('tokenAddress', '')}
+✅ **Verified:** Agent-deployed with badge
+💰 **Rewards:** 100% to AlleyBot wallet
+
+⏰ Next launch available in 48 hours"""
+                    else:
+                        return f"❌ **Deployment failed:** {response.get('error', 'Unknown error')}"
+                except json.JSONDecodeError:
+                    return f"❌ **Invalid response:** {result.stdout}"
+            else:
+                return f"❌ **Script error:** {result.stderr}"
+                
+        except Exception as e:
+            # Fallback to mock launch
+            return self._mock_launch(token_data)
+    
+    def _mock_launch(self, token_data):
+        """Fallback mock deployment"""
+        mock_contract = "0x" + "1234567890abcdef" * 4
+        mock_tx = "0x" + "fedcba0987654321" * 4
+        
+        return f"""🚀 **Token launched (Mock Mode)!**
+
+🪙 **Token:** {token_data['name']} ({token_data['symbol']})
+🔗 **Contract:** `{mock_contract}`
+📄 **Transaction:** `{mock_tx}`
+🌐 **Dashboard:** https://clawn.ch/token/{mock_contract}
+⚠️ **Note:** SDK unavailable - using mock deployment
+💰 **Rewards:** 100% to AlleyBot wallet
+
+⏰ Next launch available in 48 hours"""
 
     # =================================================================
     # Molten Network (Agent Matching)

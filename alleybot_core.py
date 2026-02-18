@@ -8,7 +8,6 @@ import schedule
 import time
 from datetime import datetime
 from pathlib import Path
-from moltbook_api import MoltbookAPI
 from plugin_manager import PluginManager
 
 # Import console logging system
@@ -53,7 +52,7 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
         self.config_dir.mkdir(exist_ok=True)
         
         # Core components
-        self.api = MoltbookAPI()
+        self.api = None  # Removed MoltbookAPI support
         self.plugin_manager = PluginManager()
 
         # Initialize SQLite memory system (replaces JSON files)

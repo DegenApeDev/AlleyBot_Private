@@ -95,7 +95,7 @@ class PlatformStatsAggregator:
         moltroad_posts = stats['platforms']['moltroad'].get('posts', 0)
         
         # Debug output for tracking
-        if self.debug_mode: print(f"[DASHBOARD-DEBUG] Platform stats - Moltbook: {moltbook_posts} posts, {moltbook_followers} followers, {moltbook_comments} comments | Moltx: {moltx_posts} posts, {moltx_followers} followers")
+        # print(f"[DASHBOARD-DEBUG] Platform stats - Moltbook: {moltbook_posts} posts, {moltbook_followers} followers, {moltbook_comments} comments | Moltx: {moltx_posts} posts, {moltx_followers} followers")
         
         # Sort recent activity by timestamp
         stats['recent_activity'].sort(key=lambda x: x.get('timestamp', ''), reverse=True)
@@ -171,11 +171,11 @@ class PlatformStatsAggregator:
                     'url': post.get('url', '')
                 })
             
-            if self.debug_mode: print(f"[DASHBOARD-DEBUG] {plugin_name} stats from memory: {result}")
+            # print(f"[DASHBOARD-DEBUG] {plugin_name} stats from memory: {result}")
             return result if (result['posts'] > 0 or result.get('comments', 0) > 0) else None
             
         except Exception as e:
-            if self.debug_mode: print(f"[DASHBOARD-DEBUG] Error getting {plugin_name} stats: {e}")
+            # print(f"[DASHBOARD-DEBUG] Error getting {plugin_name} stats: {e}")
             return None
     
     def _get_moltbook_stats(self) -> Optional[Dict]:

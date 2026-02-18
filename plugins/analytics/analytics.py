@@ -764,15 +764,65 @@ class AnalyticsPlugin(AlleyBotPlugin):
             print(f"📊 Dashboard available at: http://localhost:{self.dashboard_port}")
             print(f"📊 Dashboard available at: http://0.0.0.0:{self.dashboard_port}")
             
+            # Test that all required components are available before starting
+            print("🔍 Checking dashboard components...")
+            
+            # Check template directory
+            import os
+            template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'templates')
+            if not os.path.exists(template_dir):
+                raise Exception(f"Template directory not found: {template_dir}")
+            if not os.path.exists(os.path.join(template_dir, 'dashboard_v2.html')):
+                raise Exception("Dashboard template 'dashboard_v2.html' not found")
+            print("✅ Templates available")
+            
+            # Check Flask app
+            if not self.app:
+                raise Exception("Flask app not initialized")
+            print("✅ Flask app initialized")
+            
+            # Check routes
+            if not hasattr(self.app, 'url_map') or len(self.app.url_map._rules) == 0:
+                raise Exception("No routes registered in Flask app")
+            print(f"✅ {len(self.app.url_map._rules)} routes registered")
+            
+            # Test a simple route to ensure everything works
+            print("🔍 Testing dashboard routes...")
+            try:
+                with self.app.test_client() as client:
+                    response = client.get('/')
+                    if response.status_code != 200:
+                        print(f"⚠️  Route test failed with status {response.status_code}")
+                    else:
+                        print("✅ Route test passed")
+            except Exception as route_error:
+                print(f"⚠️  Route test error (may be expected): {route_error}")
+            
+            print("🚀 Starting Flask development server...")
+            
+            # Start the server with error handling
             self.app.run(
                 debug=False,
                 host='0.0.0.0',
                 port=self.dashboard_port,
-                use_reloader=False
+                use_reloader=False,
+                threaded=True  # Allow multiple requests
             )
             
         except Exception as e:
-            return f"❌ Failed to start dashboard: {e}"
+            import traceback
+            error_msg = f"❌ Dashboard startup failed: {e}"
+            print(error_msg)
+            print("📋 Full traceback:")
+            traceback.print_exc()
+            
+            # Try to provide helpful debugging info
+            print("\n🔍 Debugging information:")
+            print(f"  Port: {self.dashboard_port}")
+            print(f"  Template dir: {template_dir if 'template_dir' in locals() else 'Not set'}")
+            print(f"  Flask app: {'Yes' if self.app else 'No'}")
+            
+            return error_msg
     
     def show_stats(self):
         """Show current statistics"""

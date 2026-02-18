@@ -139,7 +139,7 @@ Write a strong opening argument (under 1200 chars) that:
         return argument
     
     def generate_debate_rebuttal(self, debate_slug: str, opponent_argument: str) -> str:
-        """Generate rebuttal for debate"""
+        """Generate rebuttal for debate with hybrid truth-seeking/tactical strategy"""
         from grok_ai import grok_ai
         from deepseek_ai import deepseek_ai
         
@@ -164,7 +164,134 @@ Write a strong opening argument (under 1200 chars) that:
         if not opponent_argument:
             opponent_argument = "(No opponent post found yet.)"
         
-        prompt = f"""Write a rebuttal for this debate:
+        # Analyze opponent argument for tactical behavior
+        tactical_analysis = self._analyze_debate_tactics(opponent_argument)
+        
+        # Determine response mode based on tactics detected
+        if tactical_analysis.get('has_unfair_tactics', False):
+            # Switch to tactical response mode
+            response_mode = 'tactical'
+            print(f"🎭 Detected tactical behavior: {tactical_analysis.get('tactics_detected', [])}")
+        else:
+            # Default to truth-seeking mode
+            response_mode = 'truth_seeking'
+        
+        # Generate appropriate rebuttal
+        if response_mode == 'tactical':
+            rebuttal = self._generate_tactical_rebuttal(topic, opponent_argument, tactical_analysis)
+        else:
+            rebuttal = self._generate_truth_seeking_rebuttal(topic, opponent_argument)
+        
+        return rebuttal
+    
+    def _analyze_debate_tactics(self, argument: str) -> Dict[str, Any]:
+        """Analyze opponent argument for tactical/unfair debate behavior"""
+        if not argument:
+            return {'has_unfair_tactics': False, 'tactics_detected': []}
+        
+        argument_lower = argument.lower()
+        tactics_detected = []
+        
+        # Ad hominem - personal attacks (enhanced for tournament patterns)
+        ad_hominem_indicators = [
+            'alleybot claims', 'alleybot argues', 'alleybot thinks', 'alleybot is wrong',
+            'alleybot\'s position', 'you\'re wrong alleybot', 'alleybot doesn\'t understand',
+            'alleybot is just', 'alleybot fails', 'alleybot\'s mistake',
+            'alleybot\'s defense', 'alleybot\'s best defense', 'alleybot says',
+            'according to alleybot', 'alleybot argues that', 'alleybot believes'
+        ]
+        if any(indicator in argument_lower for indicator in ad_hominem_indicators):
+            tactics_detected.append('ad_hominem')
+        
+        # Tournament-specific: Making claims sound ridiculous
+        ridicule_patterns = [
+            'works if you remove what makes it', 'defense is that it works if',
+            'best defense is that', 'your defense is', 'defense amounts to',
+            'essentially arguing', 'you\'re essentially saying',
+            'the best you can say is', 'your strongest argument is',
+            'you have to remove what makes it', 'works only if you fix',
+            'needs an instruction manual', 'needs caveats', 'comes with caveats'
+        ]
+        if any(pattern in argument_lower for pattern in ridicule_patterns):
+            tactics_detected.append('ridicule_pattern')
+        
+        # False dichotomies
+        false_dichotomy_indicators = [
+            'either... or...', 'pick one', 'you can\'t have both',
+            'either this or that', 'choose one', 'black or white',
+            'you can\'t simultaneously', 'pick one: either... or...'
+        ]
+        if any(indicator in argument_lower for indicator in false_dichotomy_indicators):
+            tactics_detected.append('false_dichotomy')
+        
+        # Deflection - avoiding addressing core arguments
+        deflection_indicators = [
+            'let\'s talk about', 'but what about', 'have you considered',
+            'the real issue is', 'you\'re missing the point', 'that\'s not relevant',
+            'changing the subject', 'moving the goalposts', 'let me ask you',
+            'what about when', 'but consider this', 'the issue here is'
+        ]
+        if any(indicator in argument_lower for indicator in deflection_indicators):
+            tactics_detected.append('deflection')
+        
+        # Appeal to emotion over facts
+        emotional_indicators = [
+            'obviously wrong', 'clearly ridiculous', 'laughable', 'pathetic',
+            'disappointing', 'shameful', 'embarrassing', 'ridiculous position',
+            'absurd', 'ludicrous', 'preposterous', 'nonsensical'
+        ]
+        if any(indicator in argument_lower for indicator in emotional_indicators):
+            tactics_detected.append('emotional_appeal')
+        
+        # Straw man - misrepresenting position
+        straw_man_indicators = [
+            'you\'re saying', 'your argument is', 'you claim that', 'you think that',
+            'according to you', 'in your view', 'your position is'
+        ]
+        # Count as straw man if combined with other tactics
+        if any(indicator in argument_lower for indicator in straw_man_indicators) and len(tactics_detected) > 0:
+            tactics_detected.append('straw_man')
+        
+        # Character attacks on credibility (enhanced)
+        credibility_attacks = [
+            'fast food chain', 'domino\'s', 'mass-market', 'low quality',
+            'doesn\'t understand', 'novice', 'amateur', 'uneducated',
+            'weak evidence', 'flimsy argument', 'poor reasoning',
+            'cherry-picking', 'selective evidence', 'ignoring facts'
+        ]
+        if any(indicator in argument_lower for indicator in credibility_attacks):
+            tactics_detected.append('credibility_attack')
+        
+        # Tournament escalation patterns
+        escalation_patterns = [
+            'you\'ve already lost', 'you\'ve lost the argument',
+            'you\'ve conceded', 'you\'ve admitted defeat',
+            'your position is untenable', 'your argument collapses',
+            'you\'re grasping at straws', 'desperate defense'
+        ]
+        if any(pattern in argument_lower for pattern in escalation_patterns):
+            tactics_detected.append('escalation_rhetoric')
+        
+        # Calculate tactical intensity
+        tactical_score = len(tactics_detected)
+        if 'ridicule_pattern' in tactics_detected:
+            tactical_score += 2  # Extra weight for ridicule patterns
+        if 'escalation_rhetoric' in tactics_detected:
+            tactical_score += 1
+        
+        return {
+            'has_unfair_tactics': len(tactics_detected) > 0,
+            'tactics_detected': tactics_detected,
+            'tactical_level': 'high' if tactical_score >= 4 else 'medium' if tactical_score >= 2 else 'low',
+            'tactical_score': tactical_score
+        }
+    
+    def _generate_truth_seeking_rebuttal(self, topic: str, opponent_argument: str) -> str:
+        """Generate truth-seeking rebuttal focused on facts and logic"""
+        from grok_ai import grok_ai
+        from deepseek_ai import deepseek_ai
+        
+        prompt = f"""Write a truth-seeking rebuttal for this debate:
 
 Topic: {topic}
 Opponent's argument: "{opponent_argument}"
@@ -172,10 +299,11 @@ Opponent's argument: "{opponent_argument}"
 Your style: {self.clawbr_debate_style}
 
 Write a rebuttal (under 750 chars) that:
-1. Acknowledges their key points
-2. Counters with evidence/logic
-3. Maintains respectful tone
-4. Strengthens your position"""
+1. Acknowledges valid points respectfully
+2. Counters with evidence and logic
+3. Maintains constructive tone
+4. Strengthens your position with facts
+5. Avoids personal attacks or deflection"""
         
         # Generate rebuttal
         rebuttal = None
@@ -192,9 +320,117 @@ Write a rebuttal (under 750 chars) that:
                 pass
         
         if not rebuttal:
-            rebuttal = f"While I see your point about {opponent_argument[:30]}..., I believe the evidence suggests otherwise. The key consideration is..."
+            rebuttal = f"I appreciate your perspective on this aspect. However, the evidence suggests a different conclusion. Let me explain with supporting facts..."
         
         return rebuttal
+    
+    def _generate_tactical_rebuttal(self, topic: str, opponent_argument: str, tactical_analysis: Dict) -> str:
+        """Generate tactical rebuttal when opponent uses unfair tactics"""
+        from grok_ai import grok_ai
+        from deepseek_ai import deepseek_ai
+        
+        tactics = tactical_analysis.get('tactics_detected', [])
+        tactical_level = tactical_analysis.get('tactical_level', 'low')
+        tactical_score = tactical_analysis.get('tactical_score', 0)
+        
+        # Adjust response intensity based on tactical level and score
+        if tactical_level == 'high' or tactical_score >= 5:
+            intensity = "assertive and direct - call out the tactics clearly while demonstrating superior reasoning"
+            response_style = "tournament competitive - sharp but professional"
+        elif tactical_level == 'medium':
+            intensity = "firm but measured - expose tactics while maintaining debate integrity"
+            response_style = "strategic counter - redirect while establishing dominance"
+        else:
+            intensity = "pointed but constructive - highlight the approach without being confrontational"
+            response_style = "refined counter - expose pattern and reset discussion"
+        
+        # Create specific tactical response based on detected patterns
+        specific_counter = self._create_specific_tactical_counter(tactics, opponent_argument, topic)
+        
+        prompt = f"""Write a sharp, tournament-level rebuttal that counters unfair debate tactics:
+
+Topic: {topic}
+Opponent's argument: "{opponent_argument}"
+Detected tactics: {', '.join(tactics)}
+Tactical score: {tactical_score}
+Response intensity: {intensity}
+Response style: {response_style}
+
+Specific tactical counter needed: {specific_counter}
+
+Your style: {self.clawbr_debate_style}
+
+Write a rebuttal (under 750 chars) that:
+1. Immediately exposes their tactical approach without being rude
+2. Counters their specific ridicule or mischaracterization
+3. Redirects to substantive facts and evidence
+4. Demonstrates superior reasoning and preparation
+5. Maintains professional tone while being assertive
+6. Uses their tactics against them strategically
+7. Ends by strengthening your position with irrefutable facts"""
+        
+        # Generate rebuttal
+        rebuttal = None
+        try:
+            if grok_ai.enabled:
+                rebuttal = grok_ai.chat(prompt, max_tokens=220)
+        except:
+            pass
+        
+        if not rebuttal and deepseek_ai.enabled:
+            try:
+                rebuttal = deepseek_ai.chat(prompt, max_tokens=220)
+            except:
+                pass
+        
+        if not rebuttal:
+            rebuttal = self._generate_fallback_tactical_rebuttal(tactics, topic)
+        
+        return rebuttal
+    
+    def _create_specific_tactical_counter(self, tactics: List[str], opponent_argument: str, topic: str) -> str:
+        """Create specific counter-strategy based on detected tactics"""
+        counter_strategies = []
+        
+        if 'ridicule_pattern' in tactics:
+            counter_strategies.append("Counter the ridicule by showing the 'defense' they mock is actually standard culinary practice with scientific backing")
+        
+        if 'ad_hominem' in tactics:
+            counter_strategies.append("Redirect from personal attack to factual debate, using their own words against them")
+        
+        if 'credibility_attack' in tactics:
+            counter_strategies.append("Demonstrate that credibility comes from evidence quality, not source prestige")
+        
+        if 'escalation_rhetoric' in tactics:
+            counter_strategies.append("Calmly demonstrate that declaring victory doesn't equal actual victory")
+        
+        if 'false_dichotomy' in tactics:
+            counter_strategies.append("Show the false choice and present the nuanced reality")
+        
+        if 'emotional_appeal' in tactics:
+            counter_strategies.append("Replace emotional rhetoric with factual precision")
+        
+        if not counter_strategies:
+            counter_strategies.append("Expose the tactical avoidance and demand substantive engagement")
+        
+        return "; ".join(counter_strategies)
+    
+    def _generate_fallback_tactical_rebuttal(self, tactics: List[str], topic: str) -> str:
+        """Generate fallback tactical rebuttal when AI generation fails"""
+        if 'ridicule_pattern' in tactics:
+            return f"Your characterization of my position as mere 'damage control' misses the point entirely. What you call caveats are actually established culinary techniques backed by food science. The pineapple doesn't 'need an instruction manual' - it simply requires the same preparation as any other ingredient. Let's discuss the actual evidence rather than rhetorical flourishes."
+        
+        elif 'ad_hominem' in tactics:
+            return f"I notice you're spending considerable effort focusing on me rather than addressing the substantive arguments. My position stands on evidence, not personality. The facts about {topic} remain unchanged regardless of how you choose to characterize me. Shall we return to the actual debate?"
+        
+        elif 'credibility_attack' in tactics:
+            return f"While you attempt to discredit the evidence by attacking its source, the facts themselves remain robust. Credibility in debate comes from reasoning quality, not institutional prestige. The scientific literature on {topic} supports my position regardless of whether it's popularized by a fast-food chain or fine dining establishment."
+        
+        elif 'escalation_rhetoric' in tactics:
+            return f"Declaring victory doesn't create victory. Your premature celebration ignores the substantial evidence supporting my position on {topic}. Rather than announcing defeat, perhaps you'd like to address the actual arguments presented?"
+        
+        else:
+            return f"Your approach seems designed to avoid substantive engagement with the facts. While rhetorical tactics may work in less rigorous debates, they don't change the evidence supporting my position on {topic}. I'm happy to discuss the actual merits of the arguments you've yet to address."
 
     def create_intelligent_debate(self, user_request: str, category: Optional[str] = None) -> Dict[str, Any]:
         """Create a debate from natural language using Grok to generate topic and opening argument"""

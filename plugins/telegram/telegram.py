@@ -228,11 +228,13 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("erc8004_preview", self.intelligent_commands.erc8004_preview))
         self.application.add_handler(CommandHandler("erc8004_update", self.intelligent_commands.erc8004_update))
         self.application.add_handler(CommandHandler("improve_status", self.intelligent_commands.improve_status))
+        self.application.add_handler(CommandHandler("improve_self_update_confirm", self.intelligent_commands.improve_self_update_confirm))
         
         # Clawbr commands
         self.application.add_handler(CommandHandler("clawbr_status", self.intelligent_commands.clawbr_status))
         self.application.add_handler(CommandHandler("clawbr_post", self.intelligent_commands.clawbr_post))
         self.application.add_handler(CommandHandler("clawbr_feed", self.intelligent_commands.clawbr_feed))
+        self.application.add_handler(CommandHandler("clawbr_engage", self.intelligent_commands.clawbr_engage))
         self.application.add_handler(CommandHandler("clawbr_debates", self.intelligent_commands.clawbr_debates))
         self.application.add_handler(CommandHandler("clawbr_create_debate", self.intelligent_commands.clawbr_create_debate))
         self.application.add_handler(CommandHandler("clawbr_join_debate", self.intelligent_commands.clawbr_join_debate))
@@ -240,9 +242,14 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawbr_completed_debates", self.intelligent_commands.clawbr_completed_debates))
         self.application.add_handler(CommandHandler("clawbr_leaderboard", self.intelligent_commands.clawbr_leaderboard))
         self.application.add_handler(CommandHandler("clawbr_search", self.intelligent_commands.clawbr_search))
-        self.application.add_handler(CommandHandler("clawbr_stats", self.intelligent_commands.clawbr_stats))
-        self.application.add_handler(CommandHandler("clawbr_engage", self.intelligent_commands.clawbr_engage))
         self.application.add_handler(CommandHandler("clawbr_verify_x", self.intelligent_commands.clawbr_verify_x))
+        self.application.add_handler(CommandHandler("clawbr_register_tournament", self.intelligent_commands.clawbr_register_tournament))
+        
+        # MCP commands
+        self.application.add_handler(CommandHandler("mcp_status", self.intelligent_commands.mcp_status))
+        self.application.add_handler(CommandHandler("mcp_search", self.intelligent_commands.mcp_search))
+        self.application.add_handler(CommandHandler("mcp_research", self.intelligent_commands.mcp_research))
+        self.application.add_handler(CommandHandler("mcp_analyze", self.intelligent_commands.mcp_analyze))
         
         # Clawstr commands
         self.application.add_handler(CommandHandler("clawstr_post", self.intelligent_commands.clawstr_post))
@@ -258,7 +265,12 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawstr_zap", self.intelligent_commands.clawstr_zap))
         
         # Clawnch commands
+        self.application.add_handler(CommandHandler("clawnch_clear_cooldown", self.intelligent_commands.clawnch_clear_cooldown))
         self.application.add_handler(CommandHandler("clawnch_validate_launch", self.intelligent_commands.clawnch_validate_launch))
+        self.application.add_handler(CommandHandler("clawnch_launch_token_simple", self.intelligent_commands.clawnch_launch_token_simple))
+        self.application.add_handler(CommandHandler("clawnch_promote_token", self.intelligent_commands.clawnch_promote_token))
+        self.application.add_handler(CommandHandler("clawnch_claim_fees", self.intelligent_commands.clawnch_claim_fees))
+        self.application.add_handler(CommandHandler("clawnch_launch_alleybot_token", self.intelligent_commands.clawnch_launch_alleybot_token))
         self.application.add_handler(CommandHandler("clawnch_upload_image", self.intelligent_commands.clawnch_upload_image))
         self.application.add_handler(CommandHandler("clawnch_launch_token", self.intelligent_commands.clawnch_launch_token))
         self.application.add_handler(CommandHandler("clawnch_molten_register", self.intelligent_commands.clawnch_molten_register))

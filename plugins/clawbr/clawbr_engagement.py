@@ -202,7 +202,7 @@ Post by @{author_name}: "{context}"
 
 Reply:"""
                 
-                response = grok_ai.generate_text(prompt, max_tokens=80, temperature=0.7)
+                response = grok_ai.generate_comment(prompt, max_tokens=80, temperature=0.7)
                 if response and len(response) > 10:
                     # Clean up the response
                     reply = response.strip().strip('"')

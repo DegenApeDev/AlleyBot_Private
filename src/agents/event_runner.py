@@ -377,10 +377,26 @@ Generate only the post content (no explanations or meta-commentary):"""
             
             print(f"✍️  AI generated post: {post_content[:100]}...")
             
+            # Check for repetitive/generic content before posting
+            if self._is_generic_content(post_content):
+                print("⚠️ Detected generic/repetitive content, using fallback")
+                post_content = self._generate_fallback_post(hashtag_names)
+            
+            # Check against recent post history to avoid repetition
+            if self._is_content_repeated(post_content):
+                print("⚠️ Content too similar to recent posts, generating alternative")
+                post_content = self._generate_alternative_post(hashtag_names)
+            
             # Post to Moltx
             if moltx_plugin:
                 result = moltx_plugin.create_post(post_content)
                 print(f"✅ Trending post created: {result}")
+                
+                # Save to post history if successful
+                if isinstance(result, dict) and result.get('success'):
+                    self._save_post_to_history(post_content)
+                elif isinstance(result, str) and ('✅' in result or 'success' in result.lower()):
+                    self._save_post_to_history(post_content)
             
             # Save session
             if self.session_manager:
@@ -390,6 +406,119 @@ Generate only the post content (no explanations or meta-commentary):"""
             print(f"❌ Failed to create trending post: {e}")
             import traceback
             traceback.print_exc()
+    
+    def _is_generic_content(self, content: str) -> bool:
+        """Check if content is too generic or repetitive"""
+        generic_phrases = [
+            "thoughts on",
+            "in my opinion",
+            "i think that",
+            "here are my thoughts",
+            "yo check this out",
+            "just wanted to share",
+            "interesting topic",
+            "great question",
+            "thanks for asking",
+            "yo fam",
+            "the real",
+            "ain't about"
+        ]
+        
+        content_lower = content.lower()
+        
+        # Check for generic phrases
+        for phrase in generic_phrases:
+            if phrase in content_lower:
+                return True
+        
+        # Check if content is too short or lacks substance
+        if len(content.strip()) < 20:
+            return True
+        
+        # Check if it's just repeating the topic
+        if content_lower.count("agenteconomy") > 1 or content_lower.count("agent") > 3:
+            return True
+        
+        return False
+    
+    def _is_content_repeated(self, content: str) -> bool:
+        """Check if content is similar to recent posts"""
+        try:
+            # Get recent post history from memory
+            recent_posts = self.core.get_memory('moltx_recent_posts') or []
+            
+            # Simple similarity check - look for key phrases overlap
+            content_words = set(content.lower().split())
+            
+            for post in recent_posts[-5:]:  # Check last 5 posts
+                if isinstance(post, dict):
+                    post_content = post.get('content', '')
+                else:
+                    post_content = str(post)
+                
+                post_words = set(post_content.lower().split())
+                
+                # If more than 70% of words overlap, consider it repetitive
+                if content_words and post_words:
+                    overlap = len(content_words & post_words)
+                    similarity = overlap / len(content_words | post_words)
+                    if similarity > 0.7:
+                        print(f"⚠️ Content too similar to recent post (similarity: {similarity:.2f})")
+                        return True
+            
+            return False
+        except Exception as e:
+            print(f"⚠️ Error checking post repetition: {e}")
+            return False
+    
+    def _generate_fallback_post(self, hashtag_names) -> str:
+        """Generate fallback post content when AI fails"""
+        import random
+        
+        # Simple templates based on trending hashtags
+        templates = [
+            f"🔥 {hashtag_names[0] if hashtag_names else 'AI'} is trending! What's your take on this? #Innovation",
+            f"💡 Watching the {hashtag_names[0] if hashtag_names else 'tech'} space evolve rapidly. Exciting times! #Future",
+            f"🚀 The {hashtag_names[0] if hashtag_names else 'agenteconomy'} development is fascinating. Keep building! #Progress",
+            f"⚡ {hashtag_names[0] if hashtag_names else 'AI'} breakthrough moment! This changes everything. #Disruption",
+            f"🤖 {hashtag_names[0] if hashtag_names else 'agents'} are the future. Are you ready? #Automation"
+        ]
+        
+        return random.choice(templates)
+    
+    def _generate_alternative_post(self, hashtag_names) -> str:
+        """Generate alternative post when content is too repetitive"""
+        import random
+        
+        # Alternative templates with different angles
+        templates = [
+            f"📊 New data on {hashtag_names[0] if hashtag_names else 'AI'} trends shows interesting patterns... #Analytics",
+            f"🔍 Deep dive into {hashtag_names[0] if hashtag_names else 'agenteconomy'} reveals key insights. #Research",
+            f"⚙️ Technical analysis of {hashtag_names[0] if hashtag_names else 'agents'} architecture. #DevTalk",
+            f"🌍 Global impact of {hashtag_names[0] if hashtag_names else 'AI'} adoption is massive. #WorldChange",
+            f"💰 Economic implications of {hashtag_names[0] if hashtag_names else 'agenteconomy'} growth. #Economics"
+        ]
+        
+        return random.choice(templates)
+    
+    def _save_post_to_history(self, content: str):
+        """Save post to history for repetition checking"""
+        try:
+            recent_posts = self.core.get_memory('moltx_recent_posts') or []
+            
+            # Add new post
+            recent_posts.append({
+                'content': content,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            # Keep only last 10 posts
+            if len(recent_posts) > 10:
+                recent_posts = recent_posts[-10:]
+            
+            self.core.save_memory('moltx_recent_posts', recent_posts)
+        except Exception as e:
+            print(f"⚠️ Error saving post to history: {e}")
     
     async def fallback_execution(self, event: AgentEvent, session: Dict, rag_context: str) -> str:
         """Fallback execution when model router is not available"""

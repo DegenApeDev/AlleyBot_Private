@@ -13,7 +13,7 @@ class AlleyBotPlugin:
     """Base class for all AlleyBot plugins"""
     
     def __init__(self, config: Dict[str, Any]):
-        self.config = config
+        self.config = config or {}
         self.name = self.__class__.__name__
         self.initialized = False
         self.api = None
@@ -162,14 +162,19 @@ class PluginManager:
     def load_plugin(self, plugin_name: str, plugin_config: Dict[str, Any], api, core):
         """Load individual plugin"""
         try:
+            # Validate plugin config
+            if not plugin_config or not isinstance(plugin_config, dict):
+                print(f"⚠️ Invalid config for plugin {plugin_name}, skipping")
+                return
+            
             # Import plugin module
             if plugin_name == 'mcp':
-                module_path = f'plugins.{plugin_name}.mcp_plugin'
+                module_path = f'plugins.{plugin_name}.fastmcp_plugin'
             else:
                 module_path = f'plugins.{plugin_name}.{plugin_name}'
             
-            # Force reload to get latest version
-            if module_path in sys.modules:
+            # Force reload to get latest version (skip for mcp to avoid issues)
+            if module_path in sys.modules and plugin_name != 'mcp':
                 module = importlib.reload(sys.modules[module_path])
             else:
                 module = importlib.import_module(module_path)
@@ -188,7 +193,8 @@ class PluginManager:
                 return
             
             # Initialize plugin
-            plugin = plugin_class(plugin_config.get('config', {}))
+            plugin_config_dict = plugin_config.get('config') or {}
+            plugin = plugin_class(plugin_config_dict)
             plugin.initialize(api, core)
             
             # Register plugin
@@ -204,7 +210,11 @@ class PluginManager:
         except ImportError as e:
             print(f"❌ Failed to import plugin {plugin_name}: {e}")
         except Exception as e:
-            print(f"❌ Failed to load plugin {plugin_name}: {e}")
+            try:
+                error_str = str(e)
+            except:
+                error_str = "Exception details unavailable"
+            print(f"❌ Failed to load plugin {plugin_name}: {error_str}")
     
     def unload_plugin(self, plugin_name: str):
         """Unload a specific plugin"""

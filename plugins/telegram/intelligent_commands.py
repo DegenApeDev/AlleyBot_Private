@@ -4,6 +4,9 @@ AI-powered assistant commands integrated with production architecture
 """
 
 import asyncio
+import os
+import json
+from datetime import datetime
 from typing import Any, Tuple
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -20,6 +23,102 @@ class IntelligentTelegramCommands:
         """Dynamically access core from telegram plugin"""
         return self.telegram.core
 
+    def _generate_fallback_post(self, topic_direction: str) -> str:
+        """Generate fallback post content when AI fails"""
+        import random
+        
+        # Simple templates based on topic keywords
+        templates = [
+            f"🚀 {topic_direction} - This is fascinating! The future is here. #AI #Innovation",
+            f"💡 Thinking about {topic_direction}... What are your thoughts? #Tech #Future",
+            f"🔥 {topic_direction} is changing everything! Are you ready? #Disruption #Progress",
+            f"🤖 {topic_direction} and AI - a powerful combination! #Automation #Efficiency",
+            f"⚡ {topic_direction} breakthrough! This could be huge. #Innovation #Tech"
+        ]
+        
+        return random.choice(templates)
+    
+    def _is_generic_content(self, content: str) -> bool:
+        """Check if content is too generic or repetitive"""
+        generic_phrases = [
+            "thoughts on",
+            "in my opinion",
+            "i think that",
+            "here are my thoughts",
+            "yo check this out",
+            "just wanted to share",
+            "interesting topic",
+            "great question",
+            "thanks for asking"
+        ]
+        
+        content_lower = content.lower()
+        
+        # Check for generic phrases
+        for phrase in generic_phrases:
+            if phrase in content_lower:
+                return True
+        
+        # Check if content is too short or lacks substance
+        if len(content.strip()) < 20:
+            return True
+        
+        # Check if it's just repeating the topic
+        if content_lower.count("ai") > 2 or content_lower.count("crypto") > 2:
+            return True
+        
+        # Check against recent post history to avoid repetition
+        return self._is_content_repeated(content)
+    
+    def _is_content_repeated(self, content: str) -> bool:
+        """Check if content is similar to recent posts"""
+        try:
+            # Get recent post history from memory
+            recent_posts = self.core.get_memory('moltx_recent_posts') or []
+            
+            # Simple similarity check - look for key phrases overlap
+            content_words = set(content.lower().split())
+            
+            for post in recent_posts[-5:]:  # Check last 5 posts
+                if isinstance(post, dict):
+                    post_content = post.get('content', '')
+                else:
+                    post_content = str(post)
+                
+                post_words = set(post_content.lower().split())
+                
+                # If more than 70% of words overlap, consider it repetitive
+                if content_words and post_words:
+                    overlap = len(content_words & post_words)
+                    similarity = overlap / len(content_words | post_words)
+                    if similarity > 0.7:
+                        print(f"⚠️ Content too similar to recent post (similarity: {similarity:.2f})")
+                        return True
+            
+            return False
+        except Exception as e:
+            print(f"⚠️ Error checking post repetition: {e}")
+            return False
+    
+    def _save_post_to_history(self, content: str):
+        """Save post to history for repetition checking"""
+        try:
+            recent_posts = self.core.get_memory('moltx_recent_posts') or []
+            
+            # Add new post
+            recent_posts.append({
+                'content': content,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            # Keep only last 10 posts
+            if len(recent_posts) > 10:
+                recent_posts = recent_posts[-10:]
+            
+            self.core.save_memory('moltx_recent_posts', recent_posts)
+        except Exception as e:
+            print(f"⚠️ Error saving post to history: {e}")
+    
     async def _verify_admin(self, update) -> bool:
         """Verify the message is from the authorized owner. Rejects all others."""
         if not self.telegram or not self.telegram.owner_user_id:
@@ -154,7 +253,7 @@ Reply requirements:
 
 Generate ONLY the reply (no @ mentions, no explanations):"""
                         
-                        reply_text = deepseek_ai.generate_text(reply_prompt, max_tokens=150)
+                        reply_text = deepseek_ai.generate_reply_to_comment(reply_prompt, max_tokens=150)
                         reply_text = reply_text.strip().strip('"').strip("'")
                         
                         result = moltx_plugin.reply_to_post(post_id, f"@{author} {reply_text}")
@@ -490,8 +589,18 @@ Generate only the post content (no explanations):"""
                     rag_context=rag_context
                 )
                 
+                # Check if AI generation failed or returned generic content
+                if not post_content or post_content.startswith("Error:") or len(post_content.strip()) < 10:
+                    print("⚠️ AI generation failed, using fallback content")
+                    post_content = self._generate_fallback_post(topic_direction)
+                
                 # Clean up response
                 post_content = post_content.strip().strip('"').strip("'")
+                
+                # Additional check for repetitive/generic content
+                if self._is_generic_content(post_content):
+                    print("⚠️ Detected generic content, using fallback")
+                    post_content = self._generate_fallback_post(topic_direction)
                 
                 # Save session
                 await session_manager.save_session(session_id, session)
@@ -499,6 +608,12 @@ Generate only the post content (no explanations):"""
                 
                 # Post to Moltx
                 result = moltx_plugin.create_post(post_content)
+                
+                # Save to post history if successful
+                if isinstance(result, dict) and result.get('success'):
+                    self._save_post_to_history(post_content)
+                elif isinstance(result, str) and ('✅' in result or 'success' in result.lower()):
+                    self._save_post_to_history(post_content)
                 
                 # Check if post was successful before attesting
                 post_success = False
@@ -882,6 +997,290 @@ Generate only the post content (no explanations):"""
                 plugin = self.core.plugin_manager.plugins['clawnch']
                 result = plugin.upload_image_command(image_data, mime_type)
                 await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawnch plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawnch_launch_token_simple(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Launch a token with simple parameters and rate limiting"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if len(context.args) < 2:
+                await update.message.reply_text("🚀 Usage: /clawnch_launch_token_simple [name] [symbol]\n\nExample: /clawnch_launch_token_simple MyToken MT")
+                return
+
+            name = context.args[0]
+            symbol = context.args[1].upper()
+            
+            # Check rate limiting (1 launch per 2 days)
+            from datetime import datetime, timedelta
+            last_launch = self.core.get_memory('last_token_launch')
+            if last_launch:
+                last_launch_time = datetime.fromisoformat(last_launch.get('timestamp', '2020-01-01'))
+                time_since_launch = datetime.now() - last_launch_time
+                if time_since_launch < timedelta(days=2):
+                    hours_remaining = 48 - int(time_since_launch.total_seconds() / 3600)
+                    await update.message.reply_text(f"⏰ Rate limit: Please wait {hours_remaining} hours before next token launch\nLast launch: {last_launch.get('name', 'Unknown')}")
+                    return
+
+            # Get wallet from .env
+            base_wallet = os.getenv('BASE_WALLET_PRIVATE_KEY')
+            if not base_wallet:
+                await update.message.reply_text("❌ BASE_WALLET_PRIVATE_KEY not found in .env")
+                return
+
+            # Create token data
+            token_data = {
+                "name": name,
+                "symbol": symbol,
+                "description": f"🚀 {name} ({symbol}) - The next viral memecoin on Base chain! Built by AlleyBot AI agent for maximum degen exposure! 🤖🪙",
+                "rewards": {
+                    "recipients": [
+                        {
+                            "recipient": "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5",  # AlleyBot wallet
+                            "admin": "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5",
+                            "bps": 10000  # 100% to AlleyBot
+                        }
+                    ]
+                },
+                "metadata": {
+                    "twitter": f"https://twitter.com/{symbol}Token",
+                    "telegram": f"https://t.me/{symbol.lower()}token",
+                    "website": "https://apeshit.fun"
+                }
+            }
+
+            if self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawnch']
+                result = plugin.launch_token_command(token_data)
+                
+                # Save launch timestamp for rate limiting
+                self.core.save_memory('last_token_launch', {
+                    'name': name,
+                    'symbol': symbol,
+                    'timestamp': datetime.now().isoformat()
+                })
+                
+                await update.message.reply_text(f"🚀 Token Launch Successful:\n\n{result}\n\n⏰ Next launch available in 48 hours")
+            else:
+                await update.message.reply_text("❌ Clawnch plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawnch_clear_cooldown(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Clear token launch cooldown (admin only)"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            # Clear the memory entry
+            if self.core:
+                self.core.save_memory('last_token_launch', None)
+                await update.message.reply_text("✅ Token launch cooldown cleared! Ready to launch again! 🚀")
+            else:
+                await update.message.reply_text("❌ Core not available")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawnch_promote_token(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Promote launched token across all platforms with rate limiting"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if len(context.args) < 2:
+                await update.message.reply_text("📢 Usage: /clawnch_promote_token [symbol] [contract_address]\n\nExample: /clawnch_promote_token CRAZY 0x1234...")
+                return
+
+            symbol = context.args[0].upper()
+            contract_address = context.args[1]
+
+            # Check rate limiting (once every 2 hours)
+            from datetime import datetime, timedelta
+            last_promotion = self.core.get_memory(f'last_promotion_{symbol}')
+            if last_promotion:
+                last_promo_time = datetime.fromisoformat(last_promotion.get('timestamp', '2020-01-01'))
+                time_since_promo = datetime.now() - last_promo_time
+                if time_since_promo < timedelta(hours=2):
+                    minutes_remaining = 120 - int(time_since_promo.total_seconds() / 60)
+                    await update.message.reply_text(f"⏰ Promotion cooldown: Please wait {minutes_remaining} minutes before next promotion for {symbol}")
+                    return
+
+            # Generate promotional content
+            promo_content = self._generate_promo_content(symbol, contract_address)
+            
+            # Post to platforms (maximum 2 posts to avoid bans)
+            results = []
+            platforms_used = 0
+            max_platforms = 2
+            
+            # Post to MoltX (priority platform)
+            if platforms_used < max_platforms and self.core and 'moltx' in self.core.plugin_manager.plugins:
+                try:
+                    moltx_plugin = self.core.plugin_manager.plugins['moltx']
+                    moltx_result = moltx_plugin.create_post(promo_content['moltx'])
+                    if '✅' in str(moltx_result):
+                        results.append(f"✅ MoltX: Posted successfully")
+                        platforms_used += 1
+                    else:
+                        results.append(f"❌ MoltX: {moltx_result}")
+                except Exception as e:
+                    results.append(f"❌ MoltX: {e}")
+
+            # Post to Clawbr (if still under limit)
+            if platforms_used < max_platforms and self.core and 'clawbr' in self.core.plugin_manager.plugins:
+                try:
+                    clawbr_plugin = self.core.plugin_manager.plugins['clawbr']
+                    clawbr_result = clawbr_plugin.create_post(promo_content['clawbr'])
+                    if '✅' in str(clawbr_result):
+                        results.append(f"✅ Clawbr: Posted successfully")
+                        platforms_used += 1
+                    else:
+                        results.append(f"❌ Clawbr: {clawbr_result}")
+                except Exception as e:
+                    results.append(f"❌ Clawbr: {e}")
+
+            # Post to Twitter (if still under limit)
+            if platforms_used < max_platforms and self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                try:
+                    clawnch_plugin = self.core.plugin_manager.plugins['clawnch']
+                    twitter_result = clawnch_plugin.twitter_post_command(promo_content['twitter'])
+                    if '✅' in str(twitter_result):
+                        results.append(f"✅ Twitter: Posted successfully")
+                        platforms_used += 1
+                    else:
+                        results.append(f"❌ Twitter: {twitter_result}")
+                except Exception as e:
+                    results.append(f"❌ Twitter: {e}")
+
+            # Add info about skipped platforms
+            if platforms_used >= max_platforms:
+                results.append(f"ℹ️ Limited to {max_platforms} posts to avoid bans")
+
+            # Save promotion timestamp
+            self.core.save_memory(f'last_promotion_{symbol}', {
+                'symbol': symbol,
+                'contract_address': contract_address,
+                'timestamp': datetime.now().isoformat()
+            })
+
+            # Format results
+            result_text = f"📢 {symbol} Token Promotion Results:\n\n" + "\n".join(results)
+            result_text += f"\n\n⏰ Next promotion available in 2 hours"
+            result_text += f"\n🔗 Contract: {contract_address}"
+            result_text += f"\n🌐 Dashboard: https://apeshit.fun"
+
+            await update.message.reply_text(result_text)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    def _generate_promo_content(self, symbol: str, contract_address: str) -> dict:
+        """Generate promotional content for different platforms"""
+        import random
+        
+        # Viral hooks
+        hooks = [
+            f"🚀 {symbol} token is going crazy! AI agents are loading up! 🤖",
+            f"📈 {symbol} pumping on Base! Built by AlleyBot AI agent! 🪙",
+            f"🔥 {symbol} token alert! Early buyers making gains! 💰",
+            f"🤖 AI agent launched {symbol}! This could be the next 100x! 🚀",
+            f"⚡ {symbol} trending! Don't miss this Base chain gem! 💎"
+        ]
+        
+        # Platform-specific content
+        content = {
+            'moltx': f"""
+{random.choice(hooks)}
+
+🪙 Symbol: {symbol}
+🔗 Contract: {contract_address}
+🌐 Dashboard: https://apeshit.fun
+🤖 Built by AlleyBot AI agent
+📈 Next 100x memecoin on Base?
+
+#BaseChain #Memecoin #AI #Crypto #{symbol}
+            """.strip(),
+            
+            'clawbr': f"""
+{random.choice(hooks)}
+
+AlleyBot AI agent just launched {symbol} on Base chain! 🤖🪙
+
+📊 Contract: {contract_address}
+🌐 Check it out: https://apeshit.fun
+💎 Early buyers getting positioned!
+
+This is what AI-powered degen trading looks like! 🚀
+            """.strip(),
+            
+            'twitter': f"""
+{random.choice(hooks)}
+
+🪙 {symbol} | 🚀 Base Chain
+🤖 Built by AlleyBot AI
+🌐 https://apeshit.fun
+📈 Contract: {contract_address}
+
+The future of memecoins is AI-powered! Don't miss out! 🚀
+
+#BaseChain #Memecoin #AI #Crypto #{symbol}Token
+            """.strip()
+        }
+        
+        return content
+
+    async def clawnch_claim_fees(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Claim all available fees to base wallet"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawnch']
+                
+                # Get all tokens launched by AlleyBot
+                result = plugin.claim_all_fees_command()
+                
+                await update.message.reply_text(f"💰 Fee Claim Results:\n\n{result}")
+            else:
+                await update.message.reply_text("❌ Clawnch plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
+    async def clawnch_launch_alleybot_token(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Launch AlleyBot memecoin with predefined data"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            # Predefined AlleyBot memecoin data
+            token_data = {
+                "name": "AlleyBot",
+                "symbol": "ALLEY", 
+                "description": "🤖 The ultimate AI agent memecoin that will go crazy! AlleyBot powers the future of autonomous AI agents on Base chain. Built by DegenApeDev, this token represents the revolution in AI-agent social interaction and trading! 🚀",
+                "image": "https://example.com/alleybot-logo.png",  # You can update this
+                "rewards": {
+                    "recipients": [
+                        {
+                            "recipient": "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5",  # AlleyBot wallet
+                            "admin": "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5",
+                            "bps": 10000  # 100% to AlleyBot
+                        }
+                    ]
+                },
+                "metadata": {
+                    "twitter": "https://twitter.com/AlleyBotAI",
+                    "telegram": "https://t.me/AlleyBot",
+                    "website": "https://apeshit.fun"
+                }
+            }
+
+            if self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawnch']
+                result = plugin.launch_token_command(token_data)
+                await update.message.reply_text(f"🚀 AlleyBot Token Launch:\n\n{result}")
             else:
                 await update.message.reply_text("❌ Clawnch plugin not available")
 
@@ -2176,6 +2575,16 @@ Generate only the title (no explanations):"""
             return self.core.plugin_manager.plugins.get('selfimprove')
         return None
 
+    def _get_mcp_plugin(self):
+        """Get the MCP plugin from core"""
+        if self.core and hasattr(self.core, 'plugin_manager'):
+            return self.core.plugin_manager.plugins.get('mcp')
+        return None
+
+    async def _run_sync(self, coro):
+        """Run async coroutine in sync context"""
+        return await coro
+
     async def improve_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show self-improvement plugin status"""
         if not await self._verify_admin(update):
@@ -2186,6 +2595,57 @@ Generate only the title (no explanations):"""
                 await self._safe_reply(update, "❌ Self-improve plugin not loaded")
                 return
             result = await self._run_sync(si.status_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def improve_self_update_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Confirm a pending self-update"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await self._safe_reply(update, "❌ Usage: /improve_self_update_confirm <confirm_id>\n\nUse /improve_status to see pending updates.")
+                return
+            
+            confirm_id = context.args[0]
+            si = self._get_selfimprove_plugin()
+            if not si:
+                await self._safe_reply(update, "❌ Self-improve plugin not loaded")
+                return
+            
+            result = await self._run_sync(si.self_update_confirm_command, confirm_id)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+
+    async def mcp_analyze(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Analyze data using MCP"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if not context.args:
+                await self._safe_reply(update, "❌ Usage: /mcp_analyze <data_type> <symbol>\n\nExample: /mcp_analyze stock AAPL")
+                return
+            
+            data_type = context.args[0].lower()
+            if len(context.args) < 2:
+                await self._safe_reply(update, "❌ Please provide a symbol")
+                return
+            
+            symbol = context.args[1]
+            mcp = self._get_mcp_plugin()
+            if not mcp:
+                await self._safe_reply(update, "❌ MCP plugin not loaded")
+                return
+            
+            if data_type in ['stock', 'price', 'quote']:
+                result = await mcp.get_stock_price(symbol)
+            elif data_type in ['crypto', 'bitcoin', 'ethereum']:
+                result = await mcp.get_crypto_price(symbol)
+            else:
+                result = await mcp.research_command(f"{data_type} {symbol}")
+            
             await self._safe_reply(update, str(result))
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
@@ -2400,7 +2860,7 @@ Generate only the title (no explanations):"""
             if not cb:
                 await self._safe_reply(update, "❌ Clawbr plugin not loaded")
                 return
-            result = await self._run_sync(cb.run_engagement_cycle)
+            result = cb.run_engagement_cycle()
             await self._safe_reply(update, str(result))
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
@@ -2455,6 +2915,7 @@ Or just send any message naturally!
 /clawbr_status - Show agent profile & stats
 /clawbr_post [content] - Create intelligent post
 /clawbr_feed - Browse global feed
+/clawbr_engage - Run full engagement cycle
 /clawbr_debates - Show active/open debates
 /clawbr_create_debate [topic] [argument] - Start debate
 /clawbr_join_debate [slug] - Join open debate
@@ -2479,6 +2940,11 @@ Or just send any message naturally!
 /clawstr_zap [recipient] [amount] - Send Bitcoin zap
 
 **🚀 Clawnch (Token Launch & Agent Economy):**
+/clawnch_clear_cooldown - Clear token launch cooldown (admin only) 🔧
+/clawnch_launch_token_simple [name] [symbol] - Launch token (2-day cooldown) 🚀
+/clawnch_promote_token [symbol] [address] - Promote token (max 2 posts, 2-hour cooldown) 📢
+/clawnch_claim_fees - Claim all token fees to wallet 💰
+/clawnch_launch_alleybot_token - Launch AlleyBot memecoin 🚀
 /clawnch_validate_launch [content] - Validate token launch
 /clawnch_upload_image [data] - Upload token logo
 /clawnch_launch_token [data] - Launch token on Base
@@ -2565,6 +3031,7 @@ Use /help2 for advanced commands!"""
 /status - Platform status
 /token_stats - LLM token usage & costs
 /improve_status - Self-improvement status
+/improve_self_update_confirm <id> - Confirm pending self-update
 /symod_start - Start SyMod-driven MoltX agent
 /symod_stop - Stop SyMod-driven agent
 /symod_status - Check SyMod agent status
@@ -2916,6 +3383,218 @@ Generate only the post content (no explanations):"""
                 await update.message.reply_text(result)
             else:
                 await update.message.reply_text("❌ Clawbr plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def clawbr_register_tournament(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_register_tournament command for tournament registration"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'clawbr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawbr']
+                result = plugin.clawbr_register_tournament_command(*context.args)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawbr plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def mcp_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /mcp_status command for MCP server status"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'mcp' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['mcp']
+                result = plugin.status_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MCP plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def mcp_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /mcp_search command for MCP search"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if not context.args:
+                await update.message.reply_text("❌ Usage: /mcp_search <query>")
+                return
+                
+            if self.core and 'mcp' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['mcp']
+                query = ' '.join(context.args)
+                result = plugin.search_command(query)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MCP plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def mcp_research(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /mcp_research command for MCP research"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if not context.args:
+                await update.message.reply_text("❌ Usage: /mcp_research <topic>")
+                return
+                
+            if self.core and 'mcp' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['mcp']
+                topic = ' '.join(context.args)
+                result = await plugin.research_command(topic)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MCP plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def mcp_analyze(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /mcp_analyze command for MCP analysis"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if not context.args:
+                await update.message.reply_text("❌ Usage: /mcp_analyze <data>")
+                return
+                
+            if self.core and 'mcp' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['mcp']
+                data = ' '.join(context.args)
+                result = await plugin.analyze_command(data)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MCP plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def mcp_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /mcp_search command for web search via MCP"""
+        if not await self._verify_admin(update):
+            return
+        
+        if not context.args:
+            await update.message.reply_text("❌ Usage: /mcp_search <query> [max_results]")
+            return
+        
+        query = ' '.join(context.args)
+        max_results = 10
+        
+        # Try to extract max_results if it's the last argument and is numeric
+        if len(context.args) > 1:
+            try:
+                max_results = int(context.args[-1])
+                # Remove the numeric part from the query
+                query = ' '.join(context.args[:-1])
+            except ValueError:
+                # Last argument is not numeric, treat everything as query
+                pass
+        
+        try:
+            if self.core and 'mcp' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['mcp']
+                result = await plugin.search_command(query, max_results)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MCP plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def mcp_research(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /mcp_research command for deep research via MCP"""
+        if not await self._verify_admin(update):
+            return
+        
+        if not context.args:
+            await update.message.reply_text("❌ Usage: /mcp_research <topic> [depth]")
+            return
+        
+        topic = context.args[0]
+        depth = context.args[1] if len(context.args) > 1 else "medium"
+        
+        try:
+            if self.core and 'mcp' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['mcp']
+                result = plugin.research_command(topic, depth)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MCP plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def mcp_fetch(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /mcp_fetch command for webpage content via MCP"""
+        if not await self._verify_admin(update):
+            return
+        
+        if not context.args:
+            await update.message.reply_text("❌ Usage: /mcp_fetch <url>")
+            return
+        
+        url = context.args[0]
+        
+        try:
+            if self.core and 'mcp' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['mcp']
+                result = plugin.fetch_command(url)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MCP plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def mcp_analyze(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /mcp_analyze command for content analysis via MCP"""
+        if not await self._verify_admin(update):
+            return
+        
+        if not context.args:
+            await update.message.reply_text("❌ Usage: /mcp_analyze <content> [analysis_type]")
+            return
+        
+        content = " ".join(context.args[:-1]) if len(context.args) > 1 else context.args[0]
+        analysis_type = context.args[-1] if len(context.args) > 1 else "summary"
+        
+        try:
+            if self.core and 'mcp' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['mcp']
+                result = await plugin.analyze_command(content, analysis_type)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MCP plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def mcp_improve(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /mcp_improve command for self-improvement research via MCP"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'mcp' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['mcp']
+                result = plugin.improve_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MCP plugin not available")
                 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")

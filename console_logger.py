@@ -108,6 +108,8 @@ class ConsoleLogger:
             if self._in_write:
                 # Emergency fallback - write directly without logging
                 try:
+                    if isinstance(message, bytes):
+                        message = message.decode('utf-8', errors='replace')
                     self.stream.write(message)
                     self.stream.flush()
                 except:
@@ -116,6 +118,10 @@ class ConsoleLogger:
                 
             self._in_write = True
             try:
+                # Handle both string and bytes input (Flask sends bytes, others send strings)
+                if isinstance(message, bytes):
+                    message = message.decode('utf-8', errors='replace')
+                
                 # Write to original stream (console)
                 self.stream.write(message)
                 self.stream.flush()
