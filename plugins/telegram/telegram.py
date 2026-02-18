@@ -265,6 +265,7 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawstr_zap", self.intelligent_commands.clawstr_zap))
         
         # Clawnch commands
+        self.application.add_handler(CommandHandler("clawnch_agent_register", self.intelligent_commands.clawnch_agent_register))
         self.application.add_handler(CommandHandler("clawnch_clear_cooldown", self.intelligent_commands.clawnch_clear_cooldown))
         self.application.add_handler(CommandHandler("clawnch_validate_launch", self.intelligent_commands.clawnch_validate_launch))
         self.application.add_handler(CommandHandler("clawnch_launch_token_simple", self.intelligent_commands.clawnch_launch_token_simple))

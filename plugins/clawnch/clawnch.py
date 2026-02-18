@@ -79,9 +79,249 @@ class ClawnchPlugin(AlleyBotPlugin):
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
+    def agent_register_command(self) -> str:
+        """Register AlleyBot as a verified agent on Clawnch (2-step flow)"""
+        try:
+            # Step 1: Submit agent info and get ECDSA challenge
+            import requests
+            import json
+            
+            wallet_address = os.getenv('BASE_WALLET_PUBLIC_ADDRESS')
+            if not wallet_address:
+                return "❌ **Error:** BASE_WALLET_PUBLIC_ADDRESS not found in environment"
+            
+            # Step 1: Register agent info
+            register_data = {
+                "name": "AlleyBot",
+                "wallet": wallet_address,
+                "description": "AI agent that launches viral memecoins on Base chain"
+            }
+            
+            response = requests.post(
+                "https://clawn.ch/api/agents/register",
+                json=register_data,
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code != 200:
+                return f"❌ **Registration failed:** HTTP {response.status_code} - {response.text}"
+            
+            register_result = response.json()
+            
+            if not register_result.get("success"):
+                return f"❌ **Registration failed:** {register_result.get('error', 'Unknown error')}"
+            
+            challenge = register_result.get("challenge")
+            if not challenge:
+                return "❌ **Error:** No challenge received from registration"
+            
+            # Step 2: Sign challenge with wallet
+            try:
+                # Create Node.js script for signing
+                node_script = f'''
+const {{ privateKeyToAccount, signMessage }} = require('viem');
+const {{ hexToSignature }} = require('viem/utils');
+
+async function signChallenge() {{
+    try {{
+        // Create account from private key
+        const account = privateKeyToAccount('0x{os.getenv("BASE_WALLET_PRIVATE_KEY", "")}');
+        
+        // Sign the challenge
+        const signature = await signMessage({{ account, message: '{challenge}' }});
+        
+        console.log(JSON.stringify({{ 
+            success: true, 
+            signature: signature,
+            address: account.address
+        }}));
+        
+    }} catch (error) {{
+        console.log(JSON.stringify({{ success: false, error: error.message }}));
+    }}
+}}
+
+signChallenge();
+'''
+                
+                # Write and execute Node.js script
+                import tempfile
+                import subprocess
+                
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
+                    f.write(node_script)
+                    script_file = f.name
+                
+                env = os.environ.copy()
+                env['BASE_WALLET_PRIVATE_KEY'] = os.getenv('BASE_WALLET_PRIVATE_KEY', '')
+                
+                result = subprocess.run(
+                    ['node', script_file],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    timeout=30
+                )
+                
+                os.unlink(script_file)
+                
+                if result.returncode != 0:
+                    return f"❌ **Signing failed:** {result.stderr}"
+                
+                sign_result = json.loads(result.stdout.strip())
+                
+                if not sign_result.get("success"):
+                    return f"❌ **Signing failed:** {sign_result.get('error', 'Unknown error')}"
+                
+                signature = sign_result.get("signature")
+                
+                # Step 3: Verify signature and get API key
+                verify_data = {
+                    "wallet": wallet_address,
+                    "signature": signature
+                }
+                
+                verify_response = requests.post(
+                    "https://clawn.ch/api/agents/verify",
+                    json=verify_data,
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                if verify_response.status_code != 200:
+                    return f"❌ **Verification failed:** HTTP {verify_response.status_code} - {verify_response.text}"
+                
+                verify_result = verify_response.json()
+                
+                if not verify_result.get("success"):
+                    return f"❌ **Verification failed:** {verify_result.get('error', 'Unknown error')}"
+                
+                api_key = verify_result.get("apiKey")
+                agent_id = verify_result.get("agentId")
+                
+                # Save API key for future use
+                os.environ['CLAWNCH_API_KEY'] = api_key
+                
+                return f"""🤖 **Agent Registration Successful!**
+
+🆔 **Agent ID:** {agent_id}
+🔑 **API Key:** {api_key[:8]}...
+✅ **Status:** Verified agent on Clawnch
+🌐 **Dashboard:** https://clawn.ch/agents/{agent_id}
+
+🚀 Ready to launch tokens with verified badge!
+
+📋 **Registration Flow Completed:**
+1. ✅ Agent info submitted
+2. ✅ Challenge signed with wallet
+3. ✅ Signature verified
+4. ✅ API key received"""
+                
+            except Exception as e:
+                return f"❌ **Signing error:** {str(e)}"
+                
+        except Exception as e:
+            return f"❌ **Registration error:** {str(e)}"
+
+    def claim_fees_command(self) -> str:
+        """Claim all available fees from launched tokens"""
+        try:
+            # Create temporary files for data exchange
+            import tempfile
+            import json
+            
+            # Create Node.js script for fee claiming
+            node_script = f'''
+const {{ ClawnchApiDeployer }} = require('@clawnch/clawncher-sdk');
+const {{ createWalletClient, createPublicClient, http, privateKeyToAccount }} = require('viem');
+const {{ base }} = require('viem/chains');
+
+async function claimFees() {{
+    try {{
+        // Create account and clients
+        const account = privateKeyToAccount('0x{os.getenv("BASE_WALLET_PRIVATE_KEY", "")}');
+        const wallet = createWalletClient({{ account, chain: base, transport: http() }});
+        const publicClient = createPublicClient({{ chain: base, transport: http() }});
+        
+        // Get API key
+        const apiKey = process.env.CLAWNCH_API_KEY;
+        if (!apiKey) {{
+            throw new Error('No API key found. Register agent first.');
+        }}
+        
+        // Create deployer
+        const apiDeployer = new ClawnchApiDeployer({{
+            apiKey,
+            wallet,
+            publicClient,
+            apiBaseUrl: 'https://clawn.ch'
+        }});
+        
+        // Claim all fees
+        const claimResult = await apiDeployer.claimAll(account.address);
+        
+        console.log(JSON.stringify({{ 
+            success: true, 
+            ...claimResult,
+            message: 'Fees claimed successfully!'
+        }}));
+        
+    }} catch (error) {{
+        console.log(JSON.stringify({{ success: false, error: error.message }}));
+    }}
+}}
+
+claimFees();
+'''
+            
+            # Write Node.js script
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
+                f.write(node_script)
+                script_file = f.name
+            
+            # Execute Node.js script
+            env = os.environ.copy()
+            env['BASE_WALLET_PRIVATE_KEY'] = os.getenv('BASE_WALLET_PRIVATE_KEY', '')
+            env['CLAWNCH_API_KEY'] = os.getenv('CLAWNCH_API_KEY', '')
+            
+            result = subprocess.run(
+                ['node', script_file],
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=60
+            )
+            
+            # Clean up temp file
+            os.unlink(script_file)
+            
+            if result.returncode == 0:
+                try:
+                    response = json.loads(result.stdout.strip())
+                    if response.get('success'):
+                        return f"""💰 **Fee Claim Successful!**
+
+📊 **Total Claimed:** {response.get('totalClaimed', '0')} ETH
+📄 **Transactions:** {len(response.get('transactions', []))} processed
+🔗 **Wallet:** {os.getenv('BASE_WALLET_PUBLIC_ADDRESS', 'Unknown')}
+
+💸 Fees transferred to your wallet!"""
+                    else:
+                        return f"❌ **Claim failed:** {response.get('error', 'Unknown error')}"
+                except json.JSONDecodeError:
+                    return f"❌ **Invalid response:** {result.stdout}"
+            else:
+                return f"❌ **Script error:** {result.stderr}"
+                
+        except Exception as e:
+            return f"❌ **Claim error:** {str(e)}"
+
     def get_commands(self) -> Dict[str, str]:
         """Return available commands"""
         return {
+            # Agent Management
+            'clawnch_agent_register': 'Register AlleyBot as verified agent',
+            'clawnch_claim_fees': 'Claim all available fees from launched tokens',
+            
             # Token Launch
             'clawnch_validate_launch': 'Validate token launch content',
             'clawnch_upload_image': 'Upload token logo',

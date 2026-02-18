@@ -1071,6 +1071,21 @@ Generate only the post content (no explanations):"""
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
 
+    async def clawnch_agent_register(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Register AlleyBot as verified agent on Clawnch"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            if self.core and 'clawnch' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawnch']
+                result = plugin.agent_register_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawnch plugin not available")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
     async def clawnch_clear_cooldown(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Clear token launch cooldown (admin only)"""
         if not await self._verify_admin(update):
@@ -1239,10 +1254,7 @@ The future of memecoins is AI-powered! Don't miss out! 🚀
         try:
             if self.core and 'clawnch' in self.core.plugin_manager.plugins:
                 plugin = self.core.plugin_manager.plugins['clawnch']
-                
-                # Get all tokens launched by AlleyBot
-                result = plugin.claim_all_fees_command()
-                
+                result = plugin.claim_fees_command()
                 await update.message.reply_text(f"💰 Fee Claim Results:\n\n{result}")
             else:
                 await update.message.reply_text("❌ Clawnch plugin not available")
@@ -2940,6 +2952,7 @@ Or just send any message naturally!
 /clawstr_zap [recipient] [amount] - Send Bitcoin zap
 
 **🚀 Clawnch (Token Launch & Agent Economy):**
+/clawnch_agent_register - Register AlleyBot as verified agent 🤖
 /clawnch_clear_cooldown - Clear token launch cooldown (admin only) 🔧
 /clawnch_launch_token_simple [name] [symbol] - Launch token (2-day cooldown) 🚀
 /clawnch_promote_token [symbol] [address] - Promote token (max 2 posts, 2-hour cooldown) 📢
