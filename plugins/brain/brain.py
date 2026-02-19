@@ -277,6 +277,32 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         result = moltx.create_post(content)
         return result if result else "❌ Failed to create post"
 
+    def diversity_command(self, *args):
+        """Check content diversity across platforms"""
+        try:
+            from src.utils.content_diversity_monitor import get_diversity_monitor
+            monitor = get_diversity_monitor()
+            
+            # Gather recent posts from all platforms
+            platform_data = {}
+            
+            if hasattr(self, 'core') and self.core:
+                platforms = ['moltx', 'moltbook', 'moltbit', 'clawbr']
+                for platform in platforms:
+                    memory_key = f'{platform}_recent_posts'
+                    posts = self.core.get_memory(memory_key) or []
+                    if posts:
+                        platform_data[platform] = posts
+            
+            if not platform_data:
+                return "📭 No post history found for diversity analysis"
+            
+            report = monitor.get_diversity_report(platform_data)
+            return report
+            
+        except Exception as e:
+            return f"❌ Diversity check failed: {e}"
+
     def context_command(self, *args):
         """Show current context summary"""
         return f"🧠 Current Context:\n\n{self.build_context_summary()}"
@@ -344,6 +370,59 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
     # Plugin Interface
     # =========================================================================
 
+    def confidence_debug_command(self, *args) -> str:
+        """Debug why AGI cycles get low confidence"""
+        try:
+            if not hasattr(self, '_symod_enabled') or not self._symod_enabled:
+                return "❌ SyMod Truth Filter not enabled"
+            
+            # Get recent action attempts
+            recent_actions = getattr(self, 'action_history', [])[-5:]
+            
+            output = "🔍 AGI Confidence Debug Report\n\n"
+            
+            for i, action in enumerate(recent_actions, 1):
+                output += f"📊 Action {i}: {action.get('action', 'unknown')}\n"
+                output += f"   Platform: {action.get('platform', 'unknown')}\n"
+                output += f"   Impact: {action.get('impact', 'unknown')}\n"
+                output += f"   Success: {action.get('success', False)}\n"
+                
+                if 'symod_details' in action:
+                    details = action['symod_details']
+                    output += f"   🧮 SyMod Confidence: {details.get('confidence', 0):.2%}\n"
+                    output += f"   📉 Sentiment Mass: {details.get('sentiment_mass', 0):.3f}\n"
+                    output += f"   ⚡ Logical Impedance: {details.get('logical_impedance', 'N/A')}\n"
+                    output += f"   🔄 Digital Root Contradiction: {details.get('digital_root_contradiction', False)}\n"
+                    output += f"   🌟 Golden Window: {details.get('golden_window_aligned', False)}\n"
+                    output += f"   📝 Reasoning: {details.get('reasoning_trace', 'N/A')}\n"
+                elif 'symod_blocked' in action:
+                    output += f"   🚫 BLOCKED by SyMod: {action.get('output', 'Unknown reason')}\n"
+                else:
+                    output += f"   ℹ️ No SyMod validation data\n"
+                
+                output += "\n"
+            
+            # Current SyMod stats
+            if hasattr(self, 'get_symod_stats'):
+                stats = self.get_symod_stats()
+                qa = stats.get('qa_arena', {})
+                output += f"🔢 SyMod Current Stats:\n"
+                output += f"   Arena ID: {qa.get('id', 'N/A'):.6e}\n"
+                output += f"   Speed (cy): {qa.get('cy', 0):.6e}\n"
+                output += f"   Mass Limit: {stats.get('mass_natural_limit', 0):.6e}\n"
+            
+            # Recommendations
+            output += "\n💡 Recommendations:\n"
+            output += "1. 📝 Improve context quality for better sentiment mass\n"
+            output += "2. 🕐 Wait for Golden Window alignment for high-impact actions\n"
+            output += "3. 🎯 Focus on actions with clear intent\n"
+            output += "4. 🔍 Check for digital root contradictions in reasoning\n"
+            
+            return output
+            
+        except Exception as e:
+            return f"❌ Confidence debug failed: {e}"
+
     def get_commands(self):
         """Return CLI commands"""
         return {
@@ -352,9 +431,11 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             'brain_stop': self.stop_command,
             'brain_moltx_image_post': self.moltx_image_post_command,
             'brain_moltx_post': self.moltx_post_command,
+            'brain_diversity': self.diversity_command,
             'brain_context': self.context_command,
             'brain_actions': self.actions_command,
             'brain_history': self.history_command,
+            'brain_confidence_debug': self.confidence_debug_command,
             'brain_status': self.status_command,
             'brain_reply': self.smart_reply_command,
             'brain_insights': self.feedback_insights_command,

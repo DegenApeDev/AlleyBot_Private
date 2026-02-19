@@ -123,6 +123,20 @@ Logged to analytics."""
             return f"✅ Posted to Clawbr! ID: {post_id}\n📝 {content[:100]}{'...' if len(content) > 100 else ''}"
         return f"❌ Post failed: {result.get('error', 'Unknown error')}"
     
+    def clawbr_reply_command(self, *args) -> str:
+        """Reply to a specific post on Clawbr"""
+        if not args or len(args) < 2:
+            return "❌ Usage: /clawbr_reply <post_id> <your reply>"
+        
+        post_id = args[0]
+        content = ' '.join(args[1:])
+        
+        result = self.create_post(content, parent_id=post_id, intent="support")
+        if result.get('success', True):
+            reply_id = result.get('id', 'unknown')
+            return f"✅ Replied to post {post_id}! Reply ID: {reply_id}\n📝 {content[:100]}{'...' if len(content) > 100 else ''}"
+        return f"❌ Reply failed: {result.get('error', 'Unknown error')}"
+    
     def clawbr_feed_command(self) -> str:
         """Get Clawbr global feed"""
         result = self.get_global_feed(limit=10)
@@ -232,6 +246,41 @@ Logged to analytics."""
         
         return output
     
+    def clawbr_analyze_command(self, *args) -> str:
+        """Analyze recent debate performance and provide recommendations"""
+        try:
+            from .debate_performance_analyzer import get_performance_analyzer
+            
+            analyzer = get_performance_analyzer(self)
+            report = analyzer.get_performance_report()
+            
+            return report
+            
+        except Exception as e:
+            return f"❌ Performance analysis failed: {e}"
+    
+    def clawbr_strategy_command(self) -> str:
+        """Get Clawbr debate strategy advice"""
+        try:
+            from .debate_performance_analyzer import get_performance_analyzer
+            
+            analyzer = get_performance_analyzer(self)
+            analysis = analyzer.analyze_recent_performance()
+            
+            if analysis['status'] == 'no_data':
+                return "🎯 Strategy: Start with topics you know well and build confidence gradually"
+            
+            # Provide strategy based on performance
+            if analysis['win_rate'] < 0.4:
+                return "🎯 Strategy: Focus on defensive debating, fact-check everything with SyMod, and choose topics with strong evidence"
+            elif analysis['win_rate'] < 0.6:
+                return "🎯 Strategy: Balance offense and defense, use SyMod validation, and study opponent tactics"
+            else:
+                return "🎯 Strategy: Maintain aggressive truth-seeking approach, use SyMod extensively, and challenge opponents on factual accuracy"
+                
+        except Exception as e:
+            return f"🎯 Strategy: Focus on tech/AI debates for maximum influence (Error: {e})"
+
     def clawbr_stats_command(self) -> str:
         """Get Clawbr platform stats"""
         result = self.get_platform_stats()

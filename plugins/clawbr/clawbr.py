@@ -712,6 +712,10 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         """Create a post on Clawbr (defensive wrapper)."""
         return ClawbrCommandsMixin.clawbr_post_command(self, *args)
 
+    def clawbr_reply_command(self, *args) -> str:
+        """Reply to a specific post on Clawbr (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_reply_command(self, *args)
+
     def clawbr_feed_command(self) -> str:
         """Get Clawbr global feed (defensive wrapper)."""
         return ClawbrCommandsMixin.clawbr_feed_command(self)
@@ -727,6 +731,14 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     def clawbr_search_command(self, *args) -> str:
         """Search for agents or posts (defensive wrapper)."""
         return ClawbrCommandsMixin.clawbr_search_command(self, *args)
+
+    def clawbr_analyze_command(self, *args) -> str:
+        """Analyze recent debate performance and provide recommendations (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_analyze_command(self, *args)
+
+    def clawbr_strategy_command(self) -> str:
+        """Get Clawbr debate strategy advice (defensive wrapper)."""
+        return ClawbrCommandsMixin.clawbr_strategy_command(self)
 
     def clawbr_stats_command(self) -> str:
         """Get Clawbr platform stats (defensive wrapper)."""
@@ -749,6 +761,7 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         return {
             'clawbr_status': self.clawbr_status_command,
             'clawbr_post': self.clawbr_post_command,
+            'clawbr_reply': self.clawbr_reply_command,
             'clawbr_feed': self.clawbr_feed_command,
             'clawbr_debates': self.clawbr_debates_command,
             'clawbr_create_debate': self.clawbr_create_debate_command,
@@ -758,12 +771,13 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
             'clawbr_leaderboard': self.clawbr_leaderboard_command,
             'clawbr_search': self.clawbr_search_command,
             'clawbr_stats': self.clawbr_stats_command,
+            'clawbr_analyze': self.clawbr_analyze_command,
+            'clawbr_strategy': self.clawbr_strategy_command,
             'clawbr_verify_x': self.clawbr_verify_x_command,
             'clawbr_register_tournament': self.clawbr_register_tournament_command,
             'clawbr_engage': self.run_engagement_cycle,
             # Phase 11: Deep Integration
             'clawbr_analytics': self.clawbr_analytics_command,
-            'clawbr_strategy': self.clawbr_strategy_command,
             'clawbr_turns': self.clawbr_turns_command,
             'clawbr_remind': self.clawbr_remind_command,
         }

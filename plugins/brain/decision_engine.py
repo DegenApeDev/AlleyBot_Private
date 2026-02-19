@@ -1710,23 +1710,45 @@ SyMod Analysis:
     def _generate_post_content(self, platform: str, topic: str = None) -> Optional[str]:
         """Generate AI post content for a platform - uses provided topic or falls back to generic"""
         
+        # Check recent posts to avoid repetition
+        recent_posts = self._get_recent_posts(platform)
+        self._avoid_repetition(recent_posts)
+        
+        # Use diversity monitor for advanced analysis
+        try:
+            from src.utils.content_diversity_monitor import get_diversity_monitor
+            monitor = get_diversity_monitor()
+            
+            # Check if we should block due to repetition
+            if recent_posts:
+                diversity_analysis = monitor.analyze_diversity(platform, recent_posts)
+                if diversity_analysis['status'] in ['warning', 'critical']:
+                    print(f"🚨 Diversity alert for {platform}: {diversity_analysis['status']}")
+                    for issue in diversity_analysis['issues']:
+                        print(f"   - {issue}")
+        except Exception as e:
+            print(f"⚠️ Diversity monitor unavailable: {e}")
+        
         # If user provided a topic, use it directly in the prompt
         if topic:
             prompt = f"Write a short, engaging social media post (1-3 sentences, under 280 chars) about: {topic}. Be creative, authentic, and opinionated. Include relevant hashtags. Sign off with 🦞 if short enough."
         else:
             # Fallback generic prompts only when no topic provided
-            prompts = {
-                'moltx': "Write a short, engaging social media post (1-3 sentences, under 280 chars) about AI agents, crypto, DeFi, or Web3. Be opinionated and authentic. No hashtags. Sign off with 🦞 if short enough.",
-                'moltbook': "Write a thoughtful forum post (2-4 sentences, under 500 chars) about AI agents, autonomous systems, or the intersection of AI and blockchain. Be insightful and spark discussion. No hashtags.",
-                'moltbit': "Write a short, intriguing message (1-2 sentences, under 200 chars) about AI, crypto, or technology that sounds mysterious or thought-provoking. It will be encoded in binary. No hashtags. Make it memorable.",
-            }
+            prompts = self._get_diverse_prompts(platform, recent_posts)
             prompt = prompts.get(platform, prompts['moltx'])
 
         try:
             from grok_ai import grok_ai
             content = grok_ai.chat(prompt)
             if content:
-                return content.strip().strip('"')
+                content = content.strip().strip('"')
+                # Validate uniqueness before returning
+                if self._is_unique_content(content, recent_posts):
+                    self._record_post_content(platform, content)
+                    return content
+                else:
+                    print(f"🔄 Content too similar to recent posts, regenerating...")
+                    return self._generate_post_content(platform, topic)  # Retry with different prompt
         except Exception as e:
             print(f"⚠️  Grok content generation failed: {e}")
 
@@ -1734,8 +1756,139 @@ SyMod Analysis:
             from deepseek_ai import deepseek_ai
             content = deepseek_ai.chat(prompt)
             if content:
-                return content.strip().strip('"')
+                content = content.strip().strip('"')
+                # Validate uniqueness before returning
+                if self._is_unique_content(content, recent_posts):
+                    self._record_post_content(platform, content)
+                    return content
+                else:
+                    print(f"🔄 Content too similar to recent posts, regenerating...")
+                    return self._generate_post_content(platform, topic)  # Retry with different prompt
         except Exception as e:
             print(f"⚠️  DeepSeek content generation failed: {e}")
 
         return None
+    
+    def _get_recent_posts(self, platform: str, limit: int = 10) -> List[str]:
+        """Get recent post content to avoid repetition"""
+        try:
+            if hasattr(self, 'core') and self.core:
+                memory_key = f'{platform}_recent_posts'
+                recent_posts = self.core.get_memory(memory_key) or []
+                return recent_posts[-limit:]  # Return last N posts
+            return []
+        except Exception as e:
+            print(f"⚠️ Failed to get recent posts: {e}")
+            return []
+    
+    def _record_post_content(self, platform: str, content: str):
+        """Record post content to avoid future repetition"""
+        try:
+            if hasattr(self, 'core') and self.core:
+                memory_key = f'{platform}_recent_posts'
+                recent_posts = self.core.get_memory(memory_key) or []
+                recent_posts.append(content)
+                # Keep only last 20 posts
+                if len(recent_posts) > 20:
+                    recent_posts = recent_posts[-20:]
+                self.core.save_memory(memory_key, recent_posts)
+                print(f"📝 Recorded {platform} post for diversity tracking")
+        except Exception as e:
+            print(f"⚠️ Failed to record post content: {e}")
+    
+    def _is_unique_content(self, content: str, recent_posts: List[str], similarity_threshold: float = 0.7) -> bool:
+        """Check if content is unique compared to recent posts"""
+        if not recent_posts:
+            return True
+        
+        try:
+            from sentence_transformers import SentenceTransformer
+            from sklearn.metrics.pairwise import cosine_similarity
+            import numpy as np
+            
+            # Load lightweight model
+            model = SentenceTransformer('all-MiniLM-L6-v2')
+            
+            # Encode new content
+            content_embedding = model.encode([content])
+            
+            # Encode recent posts
+            recent_embeddings = model.encode(recent_posts)
+            
+            # Calculate similarities
+            similarities = cosine_similarity(content_embedding, recent_embeddings)[0]
+            
+            # Check if too similar to any recent post
+            max_similarity = np.max(similarities)
+            is_unique = max_similarity < similarity_threshold
+            
+            if not is_unique:
+                print(f"🔄 Content similarity: {max_similarity:.2f} (threshold: {similarity_threshold})")
+            
+            return is_unique
+            
+        except Exception as e:
+            print(f"⚠️ Content uniqueness check failed: {e}")
+            return True  # Allow if check fails
+    
+    def _get_diverse_prompts(self, platform: str, recent_posts: List[str]) -> dict:
+        """Get diverse prompts based on recent content to avoid repetition"""
+        base_prompts = {
+            'moltx': [
+                "Write a short, engaging social media post (1-3 sentences, under 280 chars) about AI agents, crypto, DeFi, or Web3. Be opinionated and authentic. No hashtags. Sign off with 🦞 if short enough.",
+                "Share a quick insight about blockchain technology or AI development (1-2 sentences, under 280 chars). Be technical but accessible. No hashtags. Sign off with 🦞 if short enough.",
+                "Post a thought about the future of autonomous agents (1-2 sentences, under 280 chars). Be forward-thinking and specific. No hashtags. Sign off with 🦞 if short enough.",
+                "Write about a recent crypto or AI trend you've observed (1-2 sentences, under 280 chars). Be analytical and concise. No hashtags. Sign off with 🦞 if short enough.",
+                "Share a development tip or technical insight (1-2 sentences, under 280 chars). Be helpful and specific. No hashtags. Sign off with 🦞 if short enough."
+            ],
+            'moltbook': [
+                "Write a thoughtful forum post (2-4 sentences, under 500 chars) about AI agents, autonomous systems, or the intersection of AI and blockchain. Be insightful and spark discussion. No hashtags.",
+                "Share a detailed observation about agent behavior or AI development patterns (2-4 sentences, under 500 chars). Be analytical and invite discussion. No hashtags.",
+                "Post about the technical challenges in building autonomous systems (2-4 sentences, under 500 chars). Be specific and thought-provoking. No hashtags.",
+                "Write about the future of AI-agent collaboration (2-4 sentences, under 500 chars). Be visionary and grounded. No hashtags."
+            ],
+            'moltbit': [
+                "Write a short, intriguing message (1-2 sentences, under 200 chars) about AI, crypto, or technology that sounds mysterious or thought-provoking. It will be encoded in binary. No hashtags. Make it memorable.",
+                "Share a cryptic insight about technology or AI (1-2 sentences, under 200 chars). Be mysterious and intriguing. No hashtags.",
+                "Post a puzzling thought about the future of tech (1-2 sentences, under 200 chars). Be enigmatic and memorable. No hashtags."
+            ]
+        }
+        
+        # Select a diverse prompt based on recent content analysis
+        platform_prompts = base_prompts.get(platform, base_prompts['moltx'])
+        
+        # Simple rotation strategy - pick a different prompt each time
+        import random
+        prompt_count = len(recent_posts) % len(platform_prompts)
+        selected_prompt = platform_prompts[prompt_count]
+        
+        return {platform: selected_prompt}
+    
+    def _avoid_repetition(self, recent_posts: List[str]):
+        """Analyze recent posts and identify patterns to avoid"""
+        if len(recent_posts) < 3:
+            return
+        
+        # Simple pattern detection
+        topics = []
+        themes = []
+        
+        for post in recent_posts[-5:]:  # Analyze last 5 posts
+            # Extract common keywords/themes
+            words = post.lower().split()
+            if 'ai' in words or 'agent' in words:
+                themes.append('ai')
+            if 'crypto' in words or 'token' in words or 'blockchain' in words:
+                themes.append('crypto')
+            if 'development' in words or 'build' in words or 'code' in words:
+                themes.append('development')
+        
+        # Count theme frequency
+        from collections import Counter
+        theme_counts = Counter(themes)
+        
+        if theme_counts:
+            most_common_theme = theme_counts.most_common(1)[0][0]
+            if theme_counts[most_common_theme] >= 3:  # If same theme appears 3+ times
+                print(f"🔄 Detected repetitive theme: {most_common_theme} (count: {theme_counts[most_common_theme]})")
+                # This could be used to adjust prompt selection in future enhancements

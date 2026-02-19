@@ -94,6 +94,22 @@ class BrainCommands:
             logger.error(f"Brain stop error: {e}")
             await update.message.reply_text(f"❌ Error stopping brain: {e}")
     
+    async def brain_confidence_debug(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Debug why AGI cycles get low confidence"""
+        if not self._is_owner(update):
+            await update.message.reply_text("⛔ Owner only")
+            return
+        try:
+            core = self._get_core()
+            if core and 'brain' in core.plugin_manager.plugins:
+                plugin = core.plugin_manager.plugins['brain']
+                result = plugin.confidence_debug_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Brain plugin not available")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+
     async def brain_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Get brain status and statistics"""
         if not self._is_owner(update):

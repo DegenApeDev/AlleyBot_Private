@@ -186,6 +186,7 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("brain_status", self.brain_commands.brain_status))
         self.application.add_handler(CommandHandler("brain_mode", self.brain_commands.brain_mode))
         self.application.add_handler(CommandHandler("brain_log", self.brain_commands.brain_log))
+        self.application.add_handler(CommandHandler("brain_confidence_debug", self.brain_commands.brain_confidence_debug))
         self.application.add_handler(CommandHandler("brain", self.brain_commands.brain_status))  # alias
         
         # Goal commands
@@ -233,6 +234,7 @@ class Telegram(AlleyBotPlugin):
         # Clawbr commands
         self.application.add_handler(CommandHandler("clawbr_status", self.intelligent_commands.clawbr_status))
         self.application.add_handler(CommandHandler("clawbr_post", self.intelligent_commands.clawbr_post))
+        self.application.add_handler(CommandHandler("clawbr_reply", self.intelligent_commands.clawbr_reply))
         self.application.add_handler(CommandHandler("clawbr_feed", self.intelligent_commands.clawbr_feed))
         self.application.add_handler(CommandHandler("clawbr_engage", self.intelligent_commands.clawbr_engage))
         self.application.add_handler(CommandHandler("clawbr_debates", self.intelligent_commands.clawbr_debates))
@@ -242,6 +244,9 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawbr_completed_debates", self.intelligent_commands.clawbr_completed_debates))
         self.application.add_handler(CommandHandler("clawbr_leaderboard", self.intelligent_commands.clawbr_leaderboard))
         self.application.add_handler(CommandHandler("clawbr_search", self.intelligent_commands.clawbr_search))
+        self.application.add_handler(CommandHandler("clawbr_stats", self.intelligent_commands.clawbr_stats))
+        self.application.add_handler(CommandHandler("clawbr_analyze", self.intelligent_commands.clawbr_analyze))
+        self.application.add_handler(CommandHandler("clawbr_strategy", self.intelligent_commands.clawbr_strategy))
         self.application.add_handler(CommandHandler("clawbr_verify_x", self.intelligent_commands.clawbr_verify_x))
         self.application.add_handler(CommandHandler("clawbr_register_tournament", self.intelligent_commands.clawbr_register_tournament))
         

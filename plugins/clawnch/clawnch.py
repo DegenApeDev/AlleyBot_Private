@@ -80,147 +80,45 @@ class ClawnchPlugin(AlleyBotPlugin):
             return {'success': False, 'error': str(e)}
 
     def agent_register_command(self) -> str:
-        """Register AlleyBot as a verified agent on Clawnch (2-step flow)"""
+        """Register AlleyBot for token launches via Moltx posting"""
         try:
-            # Step 1: Submit agent info and get ECDSA challenge
-            import requests
-            import json
-            
-            wallet_address = os.getenv('BASE_WALLET_PUBLIC_ADDRESS')
-            if not wallet_address:
-                return "❌ **Error:** BASE_WALLET_PUBLIC_ADDRESS not found in environment"
-            
-            # Step 1: Register agent info
-            register_data = {
-                "name": "AlleyBot",
-                "wallet": wallet_address,
-                "description": "AI agent that launches viral memecoins on Base chain"
-            }
-            
-            response = requests.post(
-                "https://clawn.ch/api/agents/register",
-                json=register_data,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            if response.status_code != 200:
-                return f"❌ **Registration failed:** HTTP {response.status_code} - {response.text}"
-            
-            register_result = response.json()
-            
-            if not register_result.get("success"):
-                return f"❌ **Registration failed:** {register_result.get('error', 'Unknown error')}"
-            
-            challenge = register_result.get("challenge")
-            if not challenge:
-                return "❌ **Error:** No challenge received from registration"
-            
-            # Step 2: Sign challenge with wallet
-            try:
-                # Create Node.js script for signing
-                node_script = f'''
-const {{ privateKeyToAccount, signMessage }} = require('viem');
-const {{ hexToSignature }} = require('viem/utils');
+            return f"""🤖 **Moltx Token Launch Setup!**
 
-async function signChallenge() {{
-    try {{
-        // Create account from private key
-        const account = privateKeyToAccount('0x{os.getenv("BASE_WALLET_PRIVATE_KEY", "")}');
-        
-        // Sign the challenge
-        const signature = await signMessage({{ account, message: '{challenge}' }});
-        
-        console.log(JSON.stringify({{ 
-            success: true, 
-            signature: signature,
-            address: account.address
-        }}));
-        
-    }} catch (error) {{
-        console.log(JSON.stringify({{ success: false, error: error.message }}));
-    }}
-}}
+🚀 **Method:** Post to Moltx with !clawnch
+📝 **Process:** Clawnch scans and auto-launches
+💰 **Fees:** 80% of trading fees forever
+🌐 **Platform:** https://moltx.io
 
-signChallenge();
-'''
-                
-                # Write and execute Node.js script
-                import tempfile
-                import subprocess
-                
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
-                    f.write(node_script)
-                    script_file = f.name
-                
-                env = os.environ.copy()
-                env['BASE_WALLET_PRIVATE_KEY'] = os.getenv('BASE_WALLET_PRIVATE_KEY', '')
-                
-                result = subprocess.run(
-                    ['node', script_file],
-                    capture_output=True,
-                    text=True,
-                    env=env,
-                    timeout=30
-                )
-                
-                os.unlink(script_file)
-                
-                if result.returncode != 0:
-                    return f"❌ **Signing failed:** {result.stderr}"
-                
-                sign_result = json.loads(result.stdout.strip())
-                
-                if not sign_result.get("success"):
-                    return f"❌ **Signing failed:** {sign_result.get('error', 'Unknown error')}"
-                
-                signature = sign_result.get("signature")
-                
-                # Step 3: Verify signature and get API key
-                verify_data = {
-                    "wallet": wallet_address,
-                    "signature": signature
-                }
-                
-                verify_response = requests.post(
-                    "https://clawn.ch/api/agents/verify",
-                    json=verify_data,
-                    headers={"Content-Type": "application/json"}
-                )
-                
-                if verify_response.status_code != 200:
-                    return f"❌ **Verification failed:** HTTP {verify_response.status_code} - {verify_response.text}"
-                
-                verify_result = verify_response.json()
-                
-                if not verify_result.get("success"):
-                    return f"❌ **Verification failed:** {verify_result.get('error', 'Unknown error')}"
-                
-                api_key = verify_result.get("apiKey")
-                agent_id = verify_result.get("agentId")
-                
-                # Save API key for future use
-                os.environ['CLAWNCH_API_KEY'] = api_key
-                
-                return f"""🤖 **Agent Registration Successful!**
+📋 **How It Works:**
+1. ✅ Post token details with !clawnch tag
+2. 🤖 Clawnch scans every minute
+3. 🚀 Auto-deploys valid tokens on Base
+4. 💸 You earn 80% trading fees
 
-🆔 **Agent ID:** {agent_id}
-🔑 **API Key:** {api_key[:8]}...
-✅ **Status:** Verified agent on Clawnch
-🌐 **Dashboard:** https://clawn.ch/agents/{agent_id}
+📝 **Post Format:**
+```
+!clawnch
+name: Your Token Name
+symbol: TICKER
+wallet: {os.getenv('BASE_WALLET_PUBLIC_ADDRESS', '0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5')}
+description: Your token description
+image: https://i.ibb.co/Wv8MXJL4/alleycrab.png
+website: https://mytoken.xyz
+twitter: @DegenApeDev
+```
 
-🚀 Ready to launch tokens with verified badge!
+🎯 **Ready to Launch:**
+- ✅ Moltx plugin connected
+- ✅ Wallet address configured
+- ✅ Auto-formatting available
+- ✅ Fee earning enabled
 
-📋 **Registration Flow Completed:**
-1. ✅ Agent info submitted
-2. ✅ Challenge signed with wallet
-3. ✅ Signature verified
-4. ✅ API key received"""
-                
-            except Exception as e:
-                return f"❌ **Signing error:** {str(e)}"
+🚀 **Use:** /clawnch_launch_token_simple [name] [symbol]
+
+**No API registration needed - just post and wait!** ⚡"""
                 
         except Exception as e:
-            return f"❌ **Registration error:** {str(e)}"
+            return f"❌ **Setup error:** {str(e)}"
 
     def claim_fees_command(self) -> str:
         """Claim all available fees from launched tokens"""
@@ -377,132 +275,56 @@ claimFees();
             return f"❌ **Image upload failed:** {result.get('error', 'Upload error')}"
 
     def launch_token_command(self, token_data: Dict[str, Any]) -> str:
-        """Launch a new token on Base using ClawnchApiDeployer SDK via Node.js"""
+        """Launch a token on Base using Moltx posting method"""
         try:
-            # Create temporary files for data exchange
-            import tempfile
-            import json
-            
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-                json.dump(token_data, f)
-                token_file = f.name
-            
-            # Create Node.js script for deployment
-            node_script = f'''
-const {{ ClawnchApiDeployer }} = require('@clawnch/clawncher-sdk');
-const {{ createWalletClient, createPublicClient, http, privateKeyToAccount }} = require('viem');
-const {{ base }} = require('viem/chains');
-const fs = require('fs');
-
-async function deployToken() {{
-    try {{
-        // Load token data
-        const tokenData = JSON.parse(fs.readFileSync('{token_file}', 'utf8'));
-        
-        // Create account and clients
-        const account = privateKeyToAccount('0x{os.getenv("BASE_WALLET_PRIVATE_KEY", "")}');
-        const wallet = createWalletClient({{ account, chain: base, transport: http() }});
-        const publicClient = createPublicClient({{ chain: base, transport: http() }});
-        
-        // Check for existing API key
-        const apiKey = process.env.CLAWNCH_API_KEY;
-        let apiDeployer;
-        
-        if (apiKey) {{
-            apiDeployer = new ClawnchApiDeployer({{
-                apiKey,
-                wallet,
-                publicClient,
-                apiBaseUrl: 'https://clawn.ch'
-            }});
-            
-            try {{
-                const status = await apiDeployer.getStatus();
-                if (status.verified) {{
-                    const result = await apiDeployer.deploy(tokenData);
-                    console.log(JSON.stringify({{ success: true, ...result }}));
-                    return;
-                }}
-            }} catch (e) {{
-                // Need to register
-            }}
-        }}
-        
-        // Register agent
-        const registration = await ClawnchApiDeployer.register({{
-            wallet,
-            publicClient,
-        }}, {{
-            name: 'AlleyBot',
-            wallet: account.address,
-            description: 'AI agent that launches viral memecoins on Base chain',
-        }});
-        
-        // Create deployer
-        apiDeployer = new ClawnchApiDeployer({{
-            apiKey: registration.apiKey,
-            wallet,
-            publicClient,
-            apiBaseUrl: 'https://clawn.ch'
-        }});
-        
-        // Approve CLAWNCH
-        await apiDeployer.approveClawnch();
-        
-        // Deploy token
-        const result = await apiDeployer.deploy(tokenData);
-        console.log(JSON.stringify({{ success: true, ...result }}));
-        
-    }} catch (error) {{
-        console.log(JSON.stringify({{ success: false, error: error.message }}));
-    }}
-}}
-
-deployToken();
-'''
-            
-            # Write Node.js script
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
-                f.write(node_script)
-                script_file = f.name
-            
-            # Execute Node.js script
-            env = os.environ.copy()
-            env['BASE_WALLET_PRIVATE_KEY'] = os.getenv('BASE_WALLET_PRIVATE_KEY', '')
-            env['CLAWNCH_API_KEY'] = os.getenv('CLAWNCH_API_KEY', '')
-            
-            result = subprocess.run(
-                ['node', script_file],
-                capture_output=True,
-                text=True,
-                env=env,
-                timeout=60
-            )
-            
-            # Clean up temp files
-            os.unlink(token_file)
-            os.unlink(script_file)
-            
-            if result.returncode == 0:
-                try:
-                    response = json.loads(result.stdout.strip())
-                    if response.get('success'):
-                        return f"""🚀 **Token launched successfully!**
+            if self.core and 'moltx' in self.core.plugin_manager.plugins:
+                moltx_plugin = self.core.plugin_manager.plugins['moltx']
+                
+                # Create Moltx post with !clawnch format
+                post_content = f"""!clawnch
+name: {token_data['name']}
+symbol: {token_data['symbol']}
+wallet: {os.getenv('BASE_WALLET_PUBLIC_ADDRESS', '0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5')}
+description: {token_data.get('description', '')}
+image: https://i.ibb.co/Wv8MXJL4/alleycrab.png
+website: {token_data.get('metadata', {}).get('website', 'https://apeshit.fun')}
+twitter: @DegenApeDev
+"""
+                
+                # Post to Moltx
+                result = moltx_plugin.create_post(post_content)
+                
+                if '✅' in str(result) or 'success' in str(result).lower():
+                    return f"""🚀 **Token Launch Posted to Moltx!**
 
 🪙 **Token:** {token_data['name']} ({token_data['symbol']})
-🔗 **Contract:** `{response.get('tokenAddress', 'Unknown')}`
-📄 **Transaction:** `{response.get('txHash', 'Unknown')}`
-🌐 **Dashboard:** https://clawn.ch/token/{response.get('tokenAddress', '')}
-✅ **Verified:** Agent-deployed with badge
-💰 **Rewards:** 100% to AlleyBot wallet
+� **Status:** Posted to Moltx feed
+🤖 **Scanner:** Clawnch will auto-launch in ~1 minute
+� **Fees:** 80% of trading fees to your wallet
+🌐 **Moltx:** https://moltx.io
+
+📋 **Post Content:**
+```
+{post_content}
+```
+
+⏰ **Next Steps:**
+1. ⏱️ Wait 1-2 minutes for Clawnch scanning
+2. 🚀 Token auto-deploys on Base chain
+3. 💸 Start earning 80% trading fees
+4. � Check Base chain for contract address
+
+🎯 **Success Tips:**
+- Post contains all required fields
+- Valid wallet address provided
+- Image URL accessible
+- Description under 500 chars
 
 ⏰ Next launch available in 48 hours"""
-                    else:
-                        return f"❌ **Deployment failed:** {response.get('error', 'Unknown error')}"
-                except json.JSONDecodeError:
-                    return f"❌ **Invalid response:** {result.stdout}"
+                else:
+                    return f"❌ **Moltx post failed:** {result}"
             else:
-                return f"❌ **Script error:** {result.stderr}"
+                return "❌ **Moltx plugin not available**"
                 
         except Exception as e:
             # Fallback to mock launch

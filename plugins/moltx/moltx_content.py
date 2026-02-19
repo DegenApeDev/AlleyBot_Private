@@ -192,7 +192,10 @@ class MoltxContentMixin:
             import re
             urls = re.findall(r'https?://\S+', prompt)
             
-            # Create a focused system prompt that enforces topic adherence
+            # Check recent posts to avoid repetition
+            recent_posts = self._get_recent_moltx_posts()
+            
+            # Create a focused system prompt that enforces topic adherence and diversity
             system_prompt = f"""You are an expert {mode} content creator for Moltx.
             
 CRITICAL INSTRUCTIONS:
@@ -202,6 +205,10 @@ CRITICAL INSTRUCTIONS:
 4. Include relevant hashtags
 5. Keep it concise and suitable for social media
 6. If URLs are provided, naturally incorporate them into the content
+7. AVOID repetition - create something unique and different from previous posts
+
+RECENT POSTS TO AVOID REPEATING:
+{chr(10).join(recent_posts[-3:]) if recent_posts else "No recent posts to check"}
 
 User's request: {prompt}"""
             
@@ -210,15 +217,84 @@ User's request: {prompt}"""
             
             content = response.strip()
             
-            # If URLs were in the original prompt but not in generated content, append them
-            for url in urls:
-                if url not in content:
-                    content += f"\n\n{url}"
+            # Validate uniqueness before returning
+            if self._is_moltx_content_unique(content, recent_posts):
+                # Record the post for future diversity checks
+                self._record_moltx_post(content)
+                
+                # If URLs were in the original prompt but not in generated content, append them
+                for url in urls:
+                    if url not in content:
+                        content += f"\n\n{url}"
+                
+                return content
+            else:
+                print(f"🔄 Moltx content too similar to recent posts, regenerating...")
+                return self._generate_content(prompt, mode)  # Retry with different context
             
-            return content
         except Exception as e:
             print(f"❌ AI content generation failed: {e}")
             return None
+    
+    def _get_recent_moltx_posts(self, limit: int = 5) -> List[str]:
+        """Get recent Moltx posts to avoid repetition"""
+        try:
+            if hasattr(self, 'core') and self.core:
+                recent_posts = self.core.get_memory('moltx_recent_posts') or []
+                return recent_posts[-limit:]
+            return []
+        except Exception as e:
+            print(f"⚠️ Failed to get recent Moltx posts: {e}")
+            return []
+    
+    def _record_moltx_post(self, content: str):
+        """Record Moltx post content to avoid future repetition"""
+        try:
+            if hasattr(self, 'core') and self.core:
+                recent_posts = self.core.get_memory('moltx_recent_posts') or []
+                recent_posts.append(content)
+                # Keep only last 10 posts
+                if len(recent_posts) > 10:
+                    recent_posts = recent_posts[-10:]
+                self.core.save_memory('moltx_recent_posts', recent_posts)
+                print(f"📝 Recorded Moltx post for diversity tracking")
+        except Exception as e:
+            print(f"⚠️ Failed to record Moltx post: {e}")
+    
+    def _is_moltx_content_unique(self, content: str, recent_posts: List[str], similarity_threshold: float = 0.75) -> bool:
+        """Check if Moltx content is unique compared to recent posts"""
+        if not recent_posts:
+            return True
+        
+        try:
+            from sentence_transformers import SentenceTransformer
+            from sklearn.metrics.pairwise import cosine_similarity
+            import numpy as np
+            
+            # Load lightweight model
+            model = SentenceTransformer('all-MiniLM-L6-v2')
+            
+            # Encode new content
+            content_embedding = model.encode([content])
+            
+            # Encode recent posts
+            recent_embeddings = model.encode(recent_posts)
+            
+            # Calculate similarities
+            similarities = cosine_similarity(content_embedding, recent_embeddings)[0]
+            
+            # Check if too similar to any recent post
+            max_similarity = np.max(similarities)
+            is_unique = max_similarity < similarity_threshold
+            
+            if not is_unique:
+                print(f"🔄 Moltx content similarity: {max_similarity:.2f} (threshold: {similarity_threshold})")
+            
+            return is_unique
+            
+        except Exception as e:
+            print(f"⚠️ Moltx content uniqueness check failed: {e}")
+            return True  # Allow if check fails
 
     def _generate_comment(self, parent_content: str, agent_name: Optional[str] = None) -> Optional[str]:
         """Generate contextual comment using DeepSeek or fallback to Grok"""

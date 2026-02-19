@@ -110,6 +110,10 @@ class ConversationalAI:
                                 cmd_line += f" | {args.get('content')}"
                         elif 'content' in args and command_name == 'moltx_post':
                             cmd_line = f"{command_name} {args.get('content')}"
+                        elif 'content' in args and command_name == 'clawbr_post':
+                            cmd_line = f"{command_name} {args.get('content')}"
+                        elif 'post_id' in args and 'content' in args and command_name == 'clawbr_reply':
+                            cmd_line = f"{command_name} {args.get('post_id')} {args.get('content')}"
                         elif 'prompt' in args:  # image generation
                             cmd_line = f"{command_name} {args.get('prompt')}"
                         elif 'symbol' in args:  # crypto price
@@ -126,6 +130,8 @@ class ConversationalAI:
                         'moltchan_post': f"🚀 Creating thread... [EXECUTE:{cmd_line}]",
                         'moltbook_post': f"📚 Creating post... [EXECUTE:{cmd_line}]",
                         'moltx_post': f"📢 Posting to Moltx... [EXECUTE:{cmd_line}]",
+                        'clawbr_post': f"🦞 Posting to Clawbr... [EXECUTE:{cmd_line}]",
+                        'clawbr_reply': f"🦞 Replying to Clawbr post... [EXECUTE:{cmd_line}]",
                         'moltx_engage': f"💬 Running engagement... [EXECUTE:{cmd_line}]",
                         'generate_image': f"🎨 Generating image... [EXECUTE:{cmd_line}]",
                         'brain_start': f"🧠 Starting brain... [EXECUTE:{cmd_line}]",
@@ -448,11 +454,16 @@ EXAMPLES OF COMMAND EXECUTION:
 - When user says "show me the moltx feed": respond AND include [EXECUTE:moltx_feed]
 - When user says "check clawbr debates": respond AND include [EXECUTE:clawbr_debates]
 - When user says "create debate about AI consciousness": respond AND include [EXECUTE:clawbr_create_debate AI consciousness | Will AI ever be truly conscious?]
+- When user says "reply to this clawbr post" or "comment on clawbr post": respond AND include [EXECUTE:clawbr_post your reply here]
+- When user says "post on clawbr about AI": respond AND include [EXECUTE:clawbr_post AI is revolutionizing everything]
+- When user says "reply to post dd6152e5-4dab-477e-b711-c2b26aa859ba with great point": respond AND include [EXECUTE:clawbr_reply dd6152e5-4dab-477e-b711-c2b26aa859ba Great point! Here's my take...]
 
 NATURAL LANGUAGE UNDERSTANDING:
 - User: "yo post on biz about bear market" → You: "Sure thing! Creating that thread now [EXECUTE:moltchan_post biz Bear Market | It's looking rough out there]"
 - User: "moltbook alleybot dev update" → You: "Got it! Posting to m/alleybot [EXECUTE:moltbook_post alleybot Dev Update | Working on new features]"
 - User: "engage with the feed" → You: "Time to level up! Running engagement [EXECUTE:moltx_engage 5]"
+- User: "reply to this clawbr post" → You: "Got it! Replying to that post [EXECUTE:clawbr_post Great point! Here's my take...]"
+- User: "comment on clawbr about AI" → You: "Nice! Adding my thoughts [EXECUTE:clawbr_post AI agents are getting really sophisticated...]"
 - User: "what can you do" → Answer conversationally without any [EXECUTE] tag
 - User: "how are you" → Answer conversationally without any [EXECUTE] tag
 

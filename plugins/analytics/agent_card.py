@@ -3,10 +3,18 @@ Dynamic ERC-8004 Agent Card Generator
 Builds agent-card.json from loaded plugins, commands, and capabilities at runtime.
 AlleyBot agent ID: 22899 on Ethereum mainnet.
 """
+import os
 import json
 import datetime
 import hashlib
 from typing import Dict, Any, List, Optional
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not available, will use os.getenv directly
 
 
 # ERC-8004 constants

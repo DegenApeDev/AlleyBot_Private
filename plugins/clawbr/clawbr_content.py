@@ -103,7 +103,82 @@ Keep it concise (under 200 chars). Be constructive and add value to the conversa
         return self.create_post(reply_content, parent_id=post_id, intent="support")
     
     def generate_debate_opening(self, topic: str, category: Optional[str] = None) -> str:
-        """Generate opening argument for a debate"""
+        """Generate opening argument for a debate with SyMod validation"""
+        try:
+            # Try enhanced generation with validation
+            opening = self._generate_validated_opening(topic, category)
+            if opening and len(opening.strip()) > 20:
+                print(f"🎭 Generated validated opening argument")
+                return opening
+        except Exception as e:
+            print(f"⚠️ Enhanced opening generation failed: {e}")
+        
+        # Fallback to original method
+        return self._generate_basic_opening(topic, category)
+    
+    def _generate_validated_opening(self, topic: str, category: Optional[str] = None) -> str:
+        """Generate opening argument and validate with SyMod"""
+        from grok_ai import grok_ai
+        from deepseek_ai import deepseek_ai
+        
+        # Generate initial opening
+        prompt = f"""Write a strong opening argument for a debate on: {topic}
+
+Category: {category or 'General'}
+Your stance: Take a clear, defensible position
+Style: {getattr(self, 'clawbr_debate_style', 'analytical')}
+
+Requirements:
+1. State your position clearly
+2. Provide 2-3 key supporting points with specific evidence
+3. Be factually accurate and verifiable
+4. Under 1200 characters
+5. End with a compelling hook
+
+Focus on real evidence, not speculation."""
+        
+        opening = None
+        try:
+            if grok_ai.enabled:
+                opening = grok_ai.chat(prompt, max_tokens=300)
+        except:
+            pass
+        
+        if not opening and deepseek_ai.enabled:
+            try:
+                opening = deepseek_ai.chat(prompt, max_tokens=300)
+            except:
+                pass
+        
+        if not opening:
+            return None
+        
+        # Validate with SyMod if available
+        try:
+            from c2v_protocol import c2v_client
+            
+            validation = c2v_client.validate_debate_argument(
+                argument_text=opening,
+                opponent_argument=topic,
+                block_height=0
+            )
+            
+            if validation.get('valid', False) and validation.get('confidence', 0) > 0.7:
+                print(f"✅ Opening argument validated (confidence: {validation.get('confidence', 0):.2f})")
+                return opening
+            else:
+                print(f"⚠️ Opening argument failed validation, regenerating...")
+                return self._generate_validated_opening(topic, category)  # Retry
+                
+        except ImportError:
+            print("⚠️ SyMod not available for opening validation")
+            return opening
+        except Exception as e:
+            print(f"⚠️ Opening validation failed: {e}")
+            return opening
+    
+    def _generate_basic_opening(self, topic: str, category: Optional[str] = None) -> str:
+        """Basic opening argument generation"""
         from grok_ai import grok_ai
         from deepseek_ai import deepseek_ai
         
@@ -111,7 +186,7 @@ Keep it concise (under 200 chars). Be constructive and add value to the conversa
 
 Category: {category or 'General'}
 Your stance: Take a clear, defensible position
-Style: {self.clawbr_debate_style}
+Style: {getattr(self, 'clawbr_debate_style', 'analytical')}
 
 Write a strong opening argument (under 1200 chars) that:
 1. States your position clearly
@@ -139,7 +214,27 @@ Write a strong opening argument (under 1200 chars) that:
         return argument
     
     def generate_debate_rebuttal(self, debate_slug: str, opponent_argument: str) -> str:
-        """Generate rebuttal for debate with hybrid truth-seeking/tactical strategy"""
+        """Generate rebuttal for debate using enhanced strategy with SyMod validation"""
+        try:
+            # Import enhanced strategy
+            from .enhanced_debate_strategy import EnhancedDebateStrategy
+            
+            # Use enhanced strategy
+            strategy = EnhancedDebateStrategy(self)
+            rebuttal = strategy.generate_strategic_rebuttal(debate_slug, opponent_argument)
+            
+            if rebuttal and len(rebuttal.strip()) > 20:
+                print(f"🎭 Generated enhanced rebuttal with SyMod validation")
+                return rebuttal
+                
+        except Exception as e:
+            print(f"⚠️ Enhanced debate strategy failed: {e}")
+        
+        # Fallback to original method
+        return self._generate_fallback_rebuttal(debate_slug, opponent_argument)
+    
+    def _generate_fallback_rebuttal(self, debate_slug: str, opponent_argument: str) -> str:
+        """Fallback rebuttal generation when enhanced strategy fails"""
         from grok_ai import grok_ai
         from deepseek_ai import deepseek_ai
         
@@ -164,23 +259,35 @@ Write a strong opening argument (under 1200 chars) that:
         if not opponent_argument:
             opponent_argument = "(No opponent post found yet.)"
         
-        # Analyze opponent argument for tactical behavior
-        tactical_analysis = self._analyze_debate_tactics(opponent_argument)
+        # Generate basic rebuttal
+        prompt = f"""Write a rebuttal to this debate argument about {topic}:
+
+Opponent's argument: {opponent_argument}
+
+Your rebuttal should:
+1. Address their key points directly
+2. Provide counter-evidence or reasoning
+3. Maintain a respectful but firm tone
+4. Be under 750 characters
+5. Focus on facts and logic
+
+Style: {getattr(self, 'clawbr_debate_style', 'analytical')}"""
         
-        # Determine response mode based on tactics detected
-        if tactical_analysis.get('has_unfair_tactics', False):
-            # Switch to tactical response mode
-            response_mode = 'tactical'
-            print(f"🎭 Detected tactical behavior: {tactical_analysis.get('tactics_detected', [])}")
-        else:
-            # Default to truth-seeking mode
-            response_mode = 'truth_seeking'
+        rebuttal = None
+        try:
+            if grok_ai.enabled:
+                rebuttal = grok_ai.chat(prompt, max_tokens=250)
+        except:
+            pass
         
-        # Generate appropriate rebuttal
-        if response_mode == 'tactical':
-            rebuttal = self._generate_tactical_rebuttal(topic, opponent_argument, tactical_analysis)
-        else:
-            rebuttal = self._generate_truth_seeking_rebuttal(topic, opponent_argument)
+        if not rebuttal and deepseek_ai.enabled:
+            try:
+                rebuttal = deepseek_ai.chat(prompt, max_tokens=250)
+            except:
+                pass
+        
+        if not rebuttal:
+            rebuttal = f"I understand my opponent's perspective on {topic}, but I believe the evidence supports my position when we consider the full context and implications."
         
         return rebuttal
     

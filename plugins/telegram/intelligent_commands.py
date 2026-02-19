@@ -1047,7 +1047,7 @@ Generate only the post content (no explanations):"""
                     ]
                 },
                 "metadata": {
-                    "twitter": f"https://twitter.com/{symbol}Token",
+                    "twitter": "https://twitter.com/DegenApeDev",
                     "telegram": f"https://t.me/{symbol.lower()}token",
                     "website": "https://apeshit.fun"
                 }
@@ -1283,7 +1283,7 @@ The future of memecoins is AI-powered! Don't miss out! 🚀
                     ]
                 },
                 "metadata": {
-                    "twitter": "https://twitter.com/AlleyBotAI",
+                    "twitter": "https://twitter.com/DegenApeDev",
                     "telegram": "https://t.me/AlleyBot",
                     "website": "https://apeshit.fun"
                 }
@@ -2741,11 +2741,29 @@ Generate only the title (no explanations):"""
                 return
             
             if not context.args:
-                await self._safe_reply(update, "Usage: /clawbr_post <content>")
+                await self._safe_reply(update, "Usage: /clawbr_post <your message>")
                 return
             
-            content = ' '.join(context.args)
             result = await self._run_sync(cb.clawbr_post_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_reply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Reply to a specific post on Clawbr"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            
+            if not context.args or len(context.args) < 2:
+                await self._safe_reply(update, "Usage: /clawbr_reply <post_id> <your reply>")
+                return
+            
+            result = await self._run_sync(cb.clawbr_reply_command, *context.args)
             await self._safe_reply(update, str(result))
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
@@ -2812,6 +2830,48 @@ Generate only the title (no explanations):"""
                 return
             
             result = await self._run_sync(cb.clawbr_join_debate_command, context.args[0])
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show Clawbr platform stats"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            result = await self._run_sync(cb.clawbr_stats_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_analyze(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Analyze recent debate performance"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            result = await self._run_sync(cb.clawbr_analyze_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_strategy(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Get Clawbr debate strategy advice"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            result = await self._run_sync(cb.clawbr_strategy_command)
             await self._safe_reply(update, str(result))
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
@@ -2952,9 +3012,9 @@ Or just send any message naturally!
 /clawstr_zap [recipient] [amount] - Send Bitcoin zap
 
 **🚀 Clawnch (Token Launch & Agent Economy):**
-/clawnch_agent_register - Register AlleyBot as verified agent 🤖
+/clawnch_agent_register - Setup Moltx token launches 🤖
 /clawnch_clear_cooldown - Clear token launch cooldown (admin only) 🔧
-/clawnch_launch_token_simple [name] [symbol] - Launch token (2-day cooldown) 🚀
+/clawnch_launch_token_simple [name] [symbol] - Launch token via Moltx (2-day cooldown) 🚀
 /clawnch_promote_token [symbol] [address] - Promote token (max 2 posts, 2-hour cooldown) 📢
 /clawnch_claim_fees - Claim all token fees to wallet 💰
 /clawnch_launch_alleybot_token - Launch AlleyBot memecoin 🚀

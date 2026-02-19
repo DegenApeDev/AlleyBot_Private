@@ -23,7 +23,7 @@ class DeepSeekAI:
             self.enabled = True
             print("✅ DeepSeek AI initialized")
     
-    def chat(self, prompt: str, system_prompt: str = None, max_tokens: int = 500) -> Optional[str]:
+    def chat(self, prompt: str, system_prompt: str = None, max_tokens: int = 500, temperature: float = 0.7) -> Optional[str]:
         """General-purpose chat method for simple prompts"""
         if not self.enabled:
             return None
@@ -32,6 +32,11 @@ class DeepSeekAI:
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})
             messages.append({"role": "user", "content": prompt})
+            
+            # Add diversity instruction if not already present
+            if system_prompt and "unique" not in system_prompt.lower() and "repetit" not in system_prompt.lower():
+                messages[0]["content"] += "\n\nIMPORTANT: Create unique, non-repetitive content. Avoid clichés and generic phrases. Be specific and original."
+            
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
@@ -40,7 +45,10 @@ class DeepSeekAI:
                 "model": self.model,
                 "messages": messages,
                 "max_tokens": max_tokens,
-                "temperature": 0.7
+                "temperature": min(temperature + 0.1, 1.0),  # Slightly increase temperature for diversity
+                "top_p": 0.9,
+                "presence_penalty": 0.3,  # Penalize repetition
+                "frequency_penalty": 0.3  # Penalize frequent tokens
             }
             response = requests.post(
                 f"{self.base_url}/chat/completions",

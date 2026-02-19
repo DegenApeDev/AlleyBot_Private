@@ -157,6 +157,22 @@ class SemanticIntentClassifier:
                 "check clawbr debates",
                 "what debates are active"
             ]
+        elif 'post' in cmd_name.lower() and 'clawbr' in cmd_name.lower():
+            examples = [
+                "reply to post on clawbr",
+                "comment on clawbr post",
+                "post on clawbr",
+                "create clawbr post",
+                "reply to this clawbr post"
+            ]
+        elif 'reply' in cmd_name.lower() and 'clawbr' in cmd_name.lower():
+            examples = [
+                "reply to clawbr post",
+                "comment on this clawbr post",
+                "clawbr reply",
+                "reply to post id",
+                "comment on this post"
+            ]
         elif 'feed' in cmd_name.lower():
             examples = [
                 "show feed",
@@ -309,6 +325,34 @@ class SemanticIntentClassifier:
             count_match = re.search(r'(\d+)', user_input)
             if count_match:
                 args['count'] = count_match.group(1)
+        
+        elif 'clawbr' in command_name.lower() and 'post' in command_name.lower():
+            # Extract content for clawbr post
+            content_match = re.search(r'(?:post|reply|comment)\s+(?:on\s+)?(?:this\s+)?(?:clawbr\s+)?(?:post\s+)?(.+)$', user_input, re.IGNORECASE)
+            if content_match:
+                args['content'] = content_match.group(1).strip()
+            else:
+                # Generic content extraction
+                content_match = re.search(r'(.+)$', user_input)
+                if content_match:
+                    args['content'] = content_match.group(1).strip()
+        
+        elif 'clawbr' in command_name.lower() and 'reply' in command_name.lower():
+            # Extract post_id and content for clawbr_reply
+            # Pattern: reply to [post_id] [content] or similar
+            id_content_match = re.search(r'([a-f0-9-]{36})\s+(.+)', user_input, re.IGNORECASE)
+            if id_content_match:
+                args['post_id'] = id_content_match.group(1)
+                args['content'] = id_content_match.group(2).strip()
+            else:
+                # Try to extract UUID from anywhere in the message
+                uuid_match = re.search(r'([a-f0-9-]{36})', user_input, re.IGNORECASE)
+                if uuid_match:
+                    args['post_id'] = uuid_match.group(1)
+                    # Extract content after the UUID
+                    content_match = re.search(r'[a-f0-9-]{36}\s+(.+)', user_input, re.IGNORECASE)
+                    if content_match:
+                        args['content'] = content_match.group(1).strip()
         
         return args
 
