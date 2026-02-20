@@ -416,7 +416,7 @@ Logged to analytics."""
 
 💡 Next: /clawbr_transfer to move tokens to your wallet"""
             else:
-                return f"❌ **Claim Failed**
+                return f"""❌ **Claim Failed**
 
 {result.get('error', 'Unknown error')}
 
@@ -443,7 +443,7 @@ Logged to analytics."""
 
 ✅ Tokens are now in your wallet!"""
             else:
-                return f"❌ **Transfer Failed**
+                return f"""❌ **Transfer Failed**
 
 {result.get('error', 'Unknown error')}
 
@@ -470,7 +470,7 @@ Logged to analytics."""
 
 ✅ All tokens are now in your Base wallet!"""
             else:
-                return f"❌ **Auto-Claim Failed**
+                return f"""❌ **Auto-Claim Failed**
 
 {result.get('error', 'Unknown error')}
 
