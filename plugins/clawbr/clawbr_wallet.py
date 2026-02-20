@@ -78,10 +78,15 @@ class ClawbrWalletMixin:
             print(f"✍️ Generated signature: {signature[:20]}...")
             
             # Step 3: Submit signature for verification
+            print(f"🔍 Debug: Submitting verification with wallet: {self.base_wallet_address}")
+            print(f"🔍 Debug: Signature format: {signature[:20]}... (length: {len(signature)})")
+            
             verification_response = self._make_request('POST', '/agents/me/verify-wallet', {
                 'wallet_address': self.base_wallet_address,
                 'signature': signature
             })
+            
+            print(f"🔍 Debug: Verification response: {verification_response}")
             
             if verification_response.get('success', True):
                 self.clawbr_wallet_verified = True
@@ -115,7 +120,7 @@ class ClawbrWalletMixin:
     def _sign_message(self, message: str) -> Optional[str]:
         """
         Sign message with Base wallet private key
-        Returns hex signature
+        Returns hex signature in the format expected by Clawbr
         """
         try:
             from web3 import Web3
@@ -134,7 +139,17 @@ class ClawbrWalletMixin:
             # Sign the encoded message
             signed_message = account.sign_message(message_encoded)
             
-            return signed_message.signature.hex()
+            # Try different signature formats that Clawbr might expect
+            signature_hex = signed_message.signature.hex()
+            
+            print(f"🔍 Debug: Raw signature bytes: {signed_message.signature.hex()}")
+            print(f"🔍 Debug: Message hash: {signed_message.message_hash.hex()}")
+            
+            # Return signature with 0x prefix (most common format)
+            if not signature_hex.startswith('0x'):
+                signature_hex = f"0x{signature_hex}"
+                
+            return signature_hex
             
         except ImportError:
             return {
