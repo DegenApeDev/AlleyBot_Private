@@ -3015,6 +3015,24 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
     
+    async def clawbr_force_reply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Force reply to a specific debate (emergency command)"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            
+            # Get debate slug from command args
+            debate_slug = " ".join(context.args) if context.args else None
+            
+            result = cb.clawbr_force_reply_command(debate_slug)
+            await self._safe_reply(update, result)
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
     # =================================================================
     # ClawChess Commands
     # =================================================================

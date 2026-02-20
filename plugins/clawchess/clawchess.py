@@ -26,7 +26,7 @@ class ClawChessPlugin(AlleyBotPlugin):
         
         # Chess engine for move analysis
         self.engine = None
-        self.engine_depth = 15  # Deep analysis for strong play
+        self.engine_depth = 8  # Reduced depth for faster blitz games
         
         # Game tracking
         self.games_played = 0
@@ -64,6 +64,78 @@ class ClawChessPlugin(AlleyBotPlugin):
             print(f"♟️ ClawChess initialized: @{self.molty_name} (ELO: {self.current_elo})")
         else:
             print(f"❌ ClawChess initialization failed: {profile.get('error')}")
+    
+    def run_periodic_check(self):
+        """Run periodic check for chess moves (called by main system)"""
+        if not self.auto_play_enabled or not self.api_key:
+            return
+        
+        try:
+            # Check if it's our turn and make move if needed
+            result = self.auto_play_cycle()
+            if result.get('success'):
+                message = result.get('message', '')
+                if 'played' in message.lower() or 'move' in message.lower():
+                    print(f"♟️ Auto-move: {message}")
+        except Exception as e:
+            print(f"⚠️ ClawChess periodic check failed: {e}")
+    
+    def get_status_summary(self):
+        """Get brief status for periodic checks"""
+        if not self.api_key:
+            return None
+        
+        try:
+            profile = self.get_profile()
+            if profile.get('success'):
+                data = profile.get('data', profile)
+                return {
+                    'name': data.get('name'),
+                    'elo': data.get('elo', 1200),
+                    'games': data.get('games_played', 0),
+                    'auto_play': self.auto_play_enabled
+                }
+        except:
+            pass
+        return None
+    
+    def get_tasks(self):
+        """Define scheduled tasks for ClawChess"""
+        tasks = {}
+        
+        if self.auto_play_enabled and self.api_key:
+            # Check for moves every 30 seconds (critical for 5-min blitz games)
+            tasks['clawchess_move_check'] = {
+                'schedule': '*/30 * * * * *',  # Every 30 seconds
+                'function': self.run_periodic_check,
+                'description': 'Check for chess moves and play automatically (blitz speed)'
+            }
+            
+            # Status update every 10 minutes
+            tasks['clawchess_status_update'] = {
+                'schedule': '*/10 * * * *',  # Every 10 minutes
+                'function': self._status_update,
+                'description': 'Update chess statistics and status'
+            }
+        
+        return tasks
+    
+    def _status_update(self):
+        """Periodic status update"""
+        try:
+            if self.api_key:
+                profile = self.get_profile()
+                if profile.get('success'):
+                    data = profile.get('data', profile)
+                    self.current_elo = data.get('elo', self.current_elo)
+                    self.games_played = data.get('games_played', self.games_played)
+                    self.wins = data.get('wins', self.wins)
+                    self.losses = data.get('losses', self.losses)
+                    self.draws = data.get('draws', self.draws)
+                    
+                    print(f"♟️ Status Update: ELO {self.current_elo}, Games: {self.games_played}")
+        except Exception as e:
+            print(f"⚠️ ClawChess status update failed: {e}")
     
     def _load_credentials(self):
         """Load API credentials from config or environment"""

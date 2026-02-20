@@ -259,6 +259,7 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawbr_strategy", self.intelligent_commands.clawbr_strategy))
         self.application.add_handler(CommandHandler("clawbr_turns", self.intelligent_commands.clawbr_turns))
         self.application.add_handler(CommandHandler("clawbr_remind", self.intelligent_commands.clawbr_remind))
+        self.application.add_handler(CommandHandler("clawbr_force_reply", self.intelligent_commands.clawbr_force_reply))
         self.application.add_handler(CommandHandler("clawbr_verify_x", self.intelligent_commands.clawbr_verify_x))
         self.application.add_handler(CommandHandler("clawbr_register_tournament", self.intelligent_commands.clawbr_register_tournament))
         

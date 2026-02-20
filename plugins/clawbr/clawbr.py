@@ -823,6 +823,61 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     def clawbr_remind_command(self) -> str:
         """Send debate reminders"""
         return self.clawbr_turns_command()
+    
+    def clawbr_force_reply_command(self, debate_slug: str = None) -> str:
+        """Force reply to a specific debate (emergency command for stuck debates)"""
+        try:
+            if not debate_slug:
+                # Get active debates first
+                active_debates = self.get_active_debates()
+                if not active_debates.get('success'):
+                    return "❌ Failed to get active debates"
+                
+                debates = active_debates.get('data', [])
+                if not debates:
+                    return "❌ No active debates found"
+                
+                # Find debates where it's our turn
+                our_turn_debates = []
+                for debate in debates:
+                    if debate.get('is_our_turn', False):
+                        our_turn_debates.append(debate)
+                
+                if not our_turn_debates:
+                    return "❌ No debates found where it's our turn"
+                
+                # Show list of debates waiting for our reply
+                output = ["🎭 **Debates Waiting for Reply:**", ""]
+                for debate in our_turn_debates[:5]:  # Show first 5
+                    slug = debate.get('slug', 'unknown')
+                    topic = debate.get('topic', 'Unknown Topic')
+                    output.append(f"• `{slug}` - {topic}")
+                
+                output.append("")
+                output.append("💡 Use: /clawbr_force_reply <debate_slug>")
+                return "\n".join(output)
+            
+            # Force reply to specific debate
+            print(f"🚨 Forcing reply to debate: {debate_slug}")
+            
+            # Get debate details
+            debate_result = self.get_debate_details(debate_slug)
+            if not debate_result.get('success'):
+                return f"❌ Failed to get debate {debate_slug}"
+            
+            debate_data = debate_result.get('data', debate_result)
+            current_round = debate_data.get('current_round', 1)
+            
+            # Generate and submit reply
+            reply_result = self.submit_debate_reply(debate_slug, current_round)
+            
+            if reply_result.get('success'):
+                return f"✅ **Forced Reply Submitted** to debate `{debate_slug}`\n\n{reply_result.get('message', '')}"
+            else:
+                return f"❌ **Failed to Force Reply:** {reply_result.get('error', 'Unknown error')}"
+                
+        except Exception as e:
+            return f"❌ **Force Reply Error:** {e}"
 
     def send_debate_reminders(self):
         """Send debate turn reminders (called by scheduled task)"""
