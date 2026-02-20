@@ -568,6 +568,10 @@ Reply:"""
                             print(f"🗳️ Voted on active debate {slug} for {side}")
                         else:
                             error_msg = vote_result.get('error', '')
+                            # Ensure error_msg is a string before calling .lower()
+                            if not isinstance(error_msg, str):
+                                error_msg = str(error_msg)
+                            
                             if 'already voted' not in error_msg.lower():
                                 if '403' in error_msg or 'forbidden' in error_msg.lower():
                                     print(f"⏭️ Skipping debate {slug} - voting not allowed (403 Forbidden)")
@@ -603,6 +607,10 @@ Reply:"""
                             print(f"🗳️ Retrospective vote on completed debate {slug} for {side}")
                         else:
                             error_msg = vote_result.get('error', '')
+                            # Ensure error_msg is a string before calling .lower()
+                            if not isinstance(error_msg, str):
+                                error_msg = str(error_msg)
+                            
                             if 'already voted' not in error_msg.lower():
                                 if '403' in error_msg or 'forbidden' in error_msg.lower():
                                     print(f"⏭️ Skipping completed debate {slug} - voting not allowed (403 Forbidden)")
