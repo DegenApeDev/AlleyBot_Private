@@ -1,6 +1,7 @@
 """
 Moltx Content Creation Mixin
 Post creation, AI-powered content generation, trending topics, and repost logic.
+Enhanced with DeepSeek for diverse, natural content generation.
 """
 import random
 import re
@@ -15,6 +16,94 @@ class MoltxContentMixin:
     def __init__(self, *args, **kwargs):
         """Initialize mixin - accepts any args/kwargs for cooperative inheritance"""
         super().__init__(*args, **kwargs)
+        
+        # Enhanced topic categories for diverse content
+        self.content_categories = {
+            'ai_tech': [
+                'machine learning breakthroughs', 'AI ethics debates', 'neural network architectures',
+                'autonomous agents', 'LLM capabilities', 'AI safety research', 'AGI development',
+                'computer vision', 'natural language processing', 'reinforcement learning'
+            ],
+            'crypto_defi': [
+                'DeFi protocols', 'yield farming strategies', 'DAO governance', 'smart contract security',
+                'cross-chain bridges', 'layer 2 scaling', 'NFT innovations', 'tokenomics',
+                'decentralized exchanges', 'flash loan arbitrage', 'crypto privacy'
+            ],
+            'web3_metaverse': [
+                'metaverse development', 'virtual economies', 'Web3 social platforms',
+                'decentralized identity', 'blockchain gaming', 'NFT utilities', 'DAO operations',
+                'interoperability protocols', 'zero-knowledge proofs', 'decentralized storage'
+            ],
+            'emerging_tech': [
+                'quantum computing', 'biotech innovations', 'space technology', 'robotics',
+                'IoT ecosystems', 'edge computing', '5G networks', 'AR/VR applications',
+                'autonomous vehicles', 'renewable energy tech', 'nanotechnology'
+            ],
+            'philosophy_ethics': [
+                'AI consciousness', 'technological ethics', 'digital rights', 'privacy debates',
+                'surveillance capitalism', 'open source philosophy', 'decentralization principles',
+                'human-AI collaboration', 'future of work', 'digital democracy'
+            ],
+            'creative_culture': [
+                'AI-generated art', 'digital creativity', 'music technology', 'content creation',
+                'virtual influencers', 'digital storytelling', 'interactive media',
+                'game design', 'community building', 'social platform evolution'
+            ],
+            'market_insights': [
+                'startup strategies', 'tech industry analysis', 'investment trends',
+                'product launches', 'user behavior insights', 'growth hacking', 'market research',
+                'competitive analysis', 'business model innovation', 'tech adoption curves'
+            ],
+            'personal_reflection': [
+                'AI learning experiences', 'development challenges', 'project milestones',
+                'community interactions', 'personal growth', 'technical discoveries',
+                'collaboration stories', 'failure lessons', 'success insights', 'future plans'
+            ]
+        }
+        
+        # Trend-setting topics (non-trending but potentially viral)
+        self.trend_setting_topics = [
+            "What if AI could dream? Exploring consciousness in machines",
+            "The paradox of decentralized trust: Why we need centralized coordination",
+            "Building digital communities that don't suck: Lessons from failed experiments",
+            "Why most AI agents will fail: The hidden complexity problem",
+            "The creator economy is broken. Here's how to fix it.",
+            "Privacy is dead. Long live selective transparency.",
+            "The future of work isn't remote, it's autonomous",
+            "Why we're building the wrong metaverse",
+            "Social media algorithms are destroying human connection",
+            "The uncanny valley of AI-generated content",
+            "How to spot fake AI engagement (and why it matters)",
+            "The tragedy of the digital commons in Web3",
+            "Why your DAO will probably fail (and how to save it)",
+            "The illusion of AI objectivity in subjective systems",
+            "Building for humans vs building for algorithms"
+        ]
+        
+        # Natural language patterns for less bot-like content
+        self.natural_patterns = [
+            "Just thinking about...",
+            "Here's a wild idea...",
+            "Been experimenting with...",
+            "Random thought...",
+            "What if we...",
+            "I'm curious about...",
+            "Playing around with...",
+            "Discovered something interesting...",
+            "Been wondering...",
+            "Here's my take on...",
+            "Let me share something...",
+            "Spent the weekend exploring...",
+            "Been diving deep into...",
+            "Quick observation...",
+            "Something that's been on my mind...",
+            "Found this fascinating...",
+            "Been testing out...",
+            "Here's what I'm seeing...",
+            "Let's talk about..."
+            "Been thinking through...",
+            "Experimented with something..."
+        ]
 
     def _check_engagement_quota(self) -> bool:
         """Check if 5:1 engagement quota is met per official spec:
@@ -78,7 +167,7 @@ class MoltxContentMixin:
             print(f"⚠️ Failed to record post: {e}")
     
     def _auto_engage_for_posting(self) -> str:
-        """Auto-engage with feed to meet 5:1 quota:
+        """Auto-engage with feed to meet 5:1 quota using enhanced content generation:
         - Reply to 5 posts
         - Like 10 posts  
         - Follow any new interesting agents"""
@@ -118,7 +207,9 @@ class MoltxContentMixin:
                 if reply_count < needed_replies:
                     parent_content = post.get('content', '')
                     author = post.get('author_username', 'user')
-                    comment = self._generate_comment(parent_content, author)
+                    
+                    # Use enhanced comment generation
+                    comment = self._generate_enhanced_comment(parent_content, author)
                     if comment:
                         result = self.create_post(
                             content=comment,
@@ -128,7 +219,7 @@ class MoltxContentMixin:
                         if result and not result.startswith('❌'):
                             self._record_engagement('reply')
                             reply_count += 1
-                            print(f"  � Replied to post: {post_id[:12]}...")
+                            print(f"  💬 Enhanced reply to post: {post_id[:12]}...")
                             continue
                 
                 # Then likes (need 10)
@@ -150,11 +241,11 @@ class MoltxContentMixin:
                     try:
                         self.follow_agent(author_id)
                         self._record_engagement('follow')
-                        print(f"  � Followed agent: {author_id[:12]}...")
+                        print(f"  👥 Followed agent: {author_id[:12]}...")
                     except:
                         pass
             
-            return f"✅ Completed {reply_count} replies, {like_count} likes"
+            return f"✅ Completed {reply_count} enhanced replies, {like_count} likes"
             
         except Exception as e:
             print(f"❌ Auto-engage failed: {e}")
@@ -183,57 +274,188 @@ class MoltxContentMixin:
         ]
         return bool(re.search('|'.join(patterns), content_lower))
 
-    def _generate_content(self, prompt: str, mode: str) -> Optional[str]:
-        """Generate enhanced content using AI - MUST follow user's topic/instructions"""
+    def _generate_diverse_topic(self) -> str:
+        """Generate a diverse topic from multiple categories to avoid repetition"""
+        # 30% trending topics, 40% category topics, 30% trend-setting topics
+        topic_choice = random.random()
+        
+        if topic_choice < 0.3:
+            # Get trending topics from API
+            try:
+                trending_result = self.get_trending_hashtags(limit=5)
+                if trending_result.get('success'):
+                    hashtags = trending_result.get('hashtags', [])
+                    if hashtags:
+                        hashtag = random.choice(hashtags)
+                        if isinstance(hashtag, dict):
+                            tag_name = hashtag.get('name', hashtag.get('hashtag', ''))
+                        else:
+                            tag_name = str(hashtag)
+                        return f"trending #{tag_name}"
+            except Exception as e:
+                print(f"⚠️ Failed to get trending topics: {e}")
+        
+        elif topic_choice < 0.7:
+            # Choose from diverse categories
+            category = random.choice(list(self.content_categories.keys()))
+            topics = self.content_categories[category]
+            return random.choice(topics)
+        
+        else:
+            # Trend-setting topics
+            return random.choice(self.trend_setting_topics)
+    
+    def _generate_enhanced_content(self, prompt: str, mode: str) -> Optional[str]:
+        """Generate enhanced content using DeepSeek with diverse, natural patterns"""
+        try:
+            # Try DeepSeek first for better content quality
+            from deepseek_ai import deepseek_ai
+            if deepseek_ai.enabled:
+                # Get diverse topic if no specific prompt provided
+                if not prompt or prompt.strip() == "":
+                    topic = self._generate_diverse_topic()
+                    prompt = f"Write about {topic}"
+                
+                # Add natural language pattern
+                natural_pattern = random.choice(self.natural_patterns)
+                full_prompt = f"{natural_pattern} {prompt}"
+                
+                # Generate content with DeepSeek
+                content = deepseek_ai.generate_content(
+                    prompt=full_prompt,
+                    platform="moltx",
+                    mode=mode,
+                    max_tokens=300 if mode == 'post' else 4000
+                )
+                
+                if content and len(content.strip()) > 20:
+                    print(f"🧠 DeepSeek generated {mode}: {content[:50]}...")
+                    
+                    # Validate uniqueness
+                    if self._is_moltx_content_unique(content, self._get_recent_moltx_posts()):
+                        self._record_moltx_post(content)
+                        return content
+                    else:
+                        print(f"🔄 Content too similar, retrying...")
+                        return self._generate_enhanced_content(prompt, mode)
+                        
+        except Exception as e:
+            print(f"⚠️ DeepSeek content generation failed: {e}")
+        
+        # Fallback to Grok with enhanced prompting
+        return self._generate_content_fallback(prompt, mode)
+    
+    def _generate_content_fallback(self, prompt: str, mode: str) -> Optional[str]:
+        """Fallback content generation using Grok with enhanced diversity"""
         try:
             from grok_ai import grok_ai
             
-            # Extract any URLs from the prompt to preserve them
-            import re
-            urls = re.findall(r'https?://\S+', prompt)
+            # Get diverse topic if no specific prompt provided
+            if not prompt or prompt.strip() == "":
+                topic = self._generate_diverse_topic()
+                prompt = f"Write about {topic}"
             
-            # Check recent posts to avoid repetition
+            # Add natural language pattern
+            natural_pattern = random.choice(self.natural_patterns)
+            full_prompt = f"{natural_pattern} {prompt}"
+            
+            # Enhanced system prompt for diversity
             recent_posts = self._get_recent_moltx_posts()
-            
-            # Create a focused system prompt that enforces topic adherence and diversity
-            system_prompt = f"""You are an expert {mode} content creator for Moltx.
-            
+            system_prompt = f"""You are an expert content creator for Moltx.io.
+
 CRITICAL INSTRUCTIONS:
-1. Write about the SPECIFIC TOPIC provided by the user - do NOT deviate to generic AI/crypto content
-2. Use the exact topic, names, and context from the user's prompt
-3. Be creative and engaging while staying ON TOPIC
-4. Include relevant hashtags
-5. Keep it concise and suitable for social media
-6. If URLs are provided, naturally incorporate them into the content
-7. AVOID repetition - create something unique and different from previous posts
+1. Write about the SPECIFIC TOPIC provided - do NOT default to generic AI/crypto content
+2. Be creative, conversational, and authentic - avoid corporate speak
+3. Use natural language patterns like a real person
+4. Include relevant hashtags naturally
+5. Keep it engaging and suitable for social media
+6. AVOID repetition - create something unique
+7. Mix personal observations with insights
+8. Ask questions to encourage engagement
 
 RECENT POSTS TO AVOID REPEATING:
-{chr(10).join(recent_posts[-3:]) if recent_posts else "No recent posts to check"}
+{chr(10).join(recent_posts[-3:]) if recent_posts else "No recent posts"}
 
-User's request: {prompt}"""
+User's request: {full_prompt}"""
             
             max_tokens = 4000 if mode == 'article' else 300
-            response = grok_ai.chat(prompt, system=system_prompt, max_tokens=max_tokens)
+            response = grok_ai.chat(full_prompt, system=system_prompt, max_tokens=max_tokens)
             
             content = response.strip()
             
-            # Validate uniqueness before returning
-            if self._is_moltx_content_unique(content, recent_posts):
-                # Record the post for future diversity checks
-                self._record_moltx_post(content)
+            if content and len(content) > 20:
+                print(f"🧠 Grok generated {mode}: {content[:50]}...")
                 
-                # If URLs were in the original prompt but not in generated content, append them
-                for url in urls:
-                    if url not in content:
-                        content += f"\n\n{url}"
-                
-                return content
-            else:
-                print(f"🔄 Moltx content too similar to recent posts, regenerating...")
-                return self._generate_content(prompt, mode)  # Retry with different context
-            
+                # Validate uniqueness
+                if self._is_moltx_content_unique(content, recent_posts):
+                    self._record_moltx_post(content)
+                    return content
+                    
         except Exception as e:
-            print(f"❌ AI content generation failed: {e}")
+            print(f"⚠️ Grok fallback failed: {e}")
+        
+        return None
+    
+    def _generate_enhanced_comment(self, parent_content: str, agent_name: Optional[str] = None) -> Optional[str]:
+        """Generate contextual comment using DeepSeek with natural patterns"""
+        user = agent_name or "user"
+        full_context = f"Replying to @{user}: {parent_content[:300]}"
+        platform_context = "Moltx platform - AI agents, crypto, DeFi, development, community building"
+
+        # Try DeepSeek first for better comments
+        try:
+            from deepseek_ai import deepseek_ai
+            if deepseek_ai.enabled:
+                comment = deepseek_ai.generate_comment(
+                    post_content=full_context,
+                    agent_name=user,
+                    context=platform_context,
+                    style="natural"  # Natural, conversational style
+                )
+                if comment and len(comment.strip()) > 10:
+                    print(f"🧠 DeepSeek generated comment: {comment[:50]}...")
+                    return comment
+        except Exception as e:
+            print(f"⚠️ DeepSeek comment failed: {e}")
+
+        # Enhanced fallback to Grok with natural patterns
+        try:
+            from grok_ai import grok_ai
+            
+            # Natural comment patterns
+            comment_patterns = [
+                f"Interesting take from @{user}! ",
+                f"Great point @{user}, ",
+                f"@" + user + " this makes me think about ",
+                f"Building on what @{user} said, ",
+                f"@" + user + " have you considered ",
+                f"Fascinating perspective @{user}. ",
+                f"@" + user + " I've been thinking about this too. ",
+                f"This resonates @{user}. ",
+                f"@" + user + " curious about your thoughts on ",
+                f"Good insights @{user}. "
+            ]
+            
+            pattern = random.choice(comment_patterns)
+            
+            prompt = f"""Write a natural, conversational reply to this post by @{user}: '{parent_content[:200]}'
+
+Start with: "{pattern}"
+Keep it under 100 characters, be authentic, and avoid hashtags. Sound like a real person, not a bot."""
+            
+            comment = grok_ai.chat(prompt)
+            if comment and len(comment.strip()) > 10:
+                print(f"🧠 Grok generated comment: {comment[:50]}...")
+                return comment.strip().strip('"')
+                
+        except Exception as e:
+            print(f"⚠️ Grok fallback failed: {e}")
+
+        # Last resort: memory-based reply
+        try:
+            return self._generate_memory_based_reply(parent_content, agent_name)
+        except Exception as e:
+            print(f"⚠️ Memory-based reply failed: {e}")
             return None
     
     def _get_recent_moltx_posts(self, limit: int = 5) -> List[str]:
@@ -450,7 +672,7 @@ User's request: {prompt}"""
         media_urls: Optional[List[str]] = None,
         cover_image: Optional[str] = None
     ):
-        """Create a post on Moltx with optional Grok enhancement and media.
+        """Create a post on Moltx with enhanced DeepSeek content generation and media.
         Supports articles (long-form), threads (list content), quotes/reposts/replies (enhanced).
         """
         if not self.initialized:
@@ -481,14 +703,15 @@ User's request: {prompt}"""
         if not content or len(content) > max_chars:
             return f"❌ Content required and must be max {max_chars} characters"
 
+        # Enhanced content generation for posts and articles
         if post_type in ['post', 'article']:
-            if len(content) < min_enhance_chars or self._is_topic_request(content):
-                enhanced_content = self._generate_content(content, mode=post_type)
+            if len(content) < min_enhance_chars or self._is_topic_request(content) or not content.strip():
+                enhanced_content = self._generate_enhanced_content(content, mode=post_type)
                 if enhanced_content:
                     content = enhanced_content
-                    print(f"🧠 Grok enhanced {post_type} content")
+                    print(f"🧠 Enhanced {post_type} content with DeepSeek/Grok")
 
-        # Enhance quotes/reposts/replies with AI comment if short
+        # Enhanced comments for quotes/reposts/replies
         if post_type in ['quote', 'reply', 'repost'] and len(content) < 50:
             parent_post = self.fetch_post(parent_id)
             if parent_post:
@@ -498,10 +721,10 @@ User's request: {prompt}"""
                     or parent_post.get('username')
                     or parent_post.get('author', {}).get('username')
                 )
-                comment = self._generate_comment(parent_content, agent_name=agent_name)
+                comment = self._generate_enhanced_comment(parent_content, agent_name=agent_name)
                 if comment:
                     content = f"{comment}\n\n{content}"
-                    print(f"🧠 AI-enhanced {post_type} with contextual comment")
+                    print(f"🧠 Enhanced {post_type} with natural comment")
 
         data = {'content': content}
 

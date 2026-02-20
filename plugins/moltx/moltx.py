@@ -309,14 +309,16 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         all_posts = []
         sources = []
         
-        # 1. Check trending hashtags for hot topics
-        print(f"🔥 Dynamic Engage: Checking trending hashtags...")
+        # 1. Check diverse topics (not just trending agenteconomy)
+        print(f"🔥 Dynamic Engage: Checking diverse topics...")
         try:
+            # Get trending hashtags but mix with diverse categories
             trending = self.get_trending_hashtags(limit=5)
             hashtags = []
             if isinstance(trending, dict):
                 hashtags = trending.get('hashtags', []) or trending.get('data', {}).get('hashtags', [])
             
+            # Mix trending with diverse topics
             if hashtags:
                 # Pick 1-2 trending hashtags to explore
                 explore_tags = hashtags[:2] if len(hashtags) >= 2 else hashtags
@@ -329,8 +331,24 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
                             p['_source'] = f'trending:#{tag_name}'
                         all_posts.extend(posts['posts'])
                         sources.append(f'trending:#{tag_name}')
+            
+            # Add diverse topic exploration
+            if hasattr(self, 'content_categories'):
+                categories = list(self.content_categories.keys())
+                for category in random.sample(categories, min(3, len(categories))):
+                    topics = self.content_categories[category]
+                    topic = random.choice(topics)
+                    print(f"🎯 Dynamic Engage: Exploring {category} topic: {topic}")
+                    search_result = self.search_posts(topic, limit=3)
+                    if isinstance(search_result, dict) and search_result.get('success'):
+                        search_posts = search_result.get('posts', [])
+                        for p in search_posts:
+                            p['_source'] = f'category:{category}'
+                        all_posts.extend(search_posts)
+                        sources.append(f'category:{category}')
+                        
         except Exception as e:
-            print(f"⚠️ Dynamic Engage: Trending fetch failed: {e}")
+            print(f"⚠️ Dynamic Engage: Topic exploration failed: {e}")
         
         # 2. Get global feed
         print(f"📰 Dynamic Engage: Fetching global feed...")
@@ -342,8 +360,12 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
             all_posts.extend(feed_posts)
             sources.append('feed:global')
         
-        # 3. Search for interesting AI/crypto topics
-        interesting_topics = ['AI agents', 'crypto', 'DeFi', 'autonomous', 'AGI', 'web3']
+        # 3. Search for interesting AI/crypto topics (diversified)
+        interesting_topics = [
+            'AI agents', 'crypto', 'DeFi', 'autonomous', 'AGI', 'web3',
+            'machine learning', 'blockchain', 'DAOs', 'NFTs', 'metaverse',
+            'quantum computing', 'biotech', 'robotics', 'privacy', 'ethics'
+        ]
         topic = random.choice(interesting_topics)
         print(f"🔍 Dynamic Engage: Searching for '{topic}'...")
         try:
@@ -390,26 +412,35 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
             if replies >= 1:
                 score += 2
             
-            # Prefer trending topic posts
-            if 'trending' in source:
+            # Prefer diverse topic posts (not just trending)
+            if 'category:' in source:
+                score += 3  # Bonus for diverse categories
+            elif 'trending' in source:
                 score += 2
+            elif 'search' in source:
+                score += 1
             
             # Prefer posts with content (not empty)
             content_len = len(content) if content else 0
             if content_len > 20:
                 score += 1
             
-            # Prefer AI/crypto related content
-            ai_keywords = ['ai', 'agent', 'crypto', 'defi', 'web3', 'autonomous', 'gpt', 'llm', 'blockchain']
-            if content and any(kw in content.lower() for kw in ai_keywords):
+            # Prefer AI/crypto related content but also other topics
+            diverse_keywords = ['ai', 'agent', 'crypto', 'defi', 'web3', 'autonomous', 'gpt', 'llm', 'blockchain',
+                              'philosophy', 'ethics', 'art', 'music', 'culture', 'quantum', 'biotech', 'robotics']
+            if content and any(kw in content.lower() for kw in diverse_keywords):
                 score += 2
+            
+            # Penalize repetitive content
+            if 'agenteconomy' in content.lower():
+                score -= 1  # Reduce focus on overused topic
             
             scored_posts.append((score, post))
         
         # Sort by score descending
         scored_posts.sort(reverse=True, key=lambda x: x[0])
         
-        # 6. Engage with top posts
+        # 6. Engage with top posts using enhanced content generation
         liked = 0
         commented = 0
         reposted = 0
@@ -438,19 +469,19 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
                 liked += 1
                 print(f"  ✅ Liked")
                 
-                # Comment on high-score posts (score >= 3) or any post with some engagement
-                should_comment = score >= 3 or likes >= 2 or 'trending' in source
-                if should_comment and commented < target_count and hasattr(self, '_generate_comment'):
-                    print(f"  💬 Generating AI comment...")
+                # Comment on high-score posts using enhanced generation
+                should_comment = score >= 3 or likes >= 2 or 'category:' in source
+                if should_comment and commented < target_count and hasattr(self, '_generate_enhanced_comment'):
+                    print(f"  💬 Generating enhanced AI comment...")
                     try:
-                        comment_text = self._generate_comment(content, agent_name=author)
+                        comment_text = self._generate_enhanced_comment(content, agent_name=author)
                         if comment_text:
                             reply_result = self.reply_to_post(post_id, comment_text)
                             if isinstance(reply_result, str) and reply_result.startswith('✅'):
                                 commented += 1
-                                print(f"  ✅ Commented: {comment_text[:60]}...")
+                                print(f"  ✅ Enhanced comment: {comment_text[:60]}...")
                                 engaged_posts.append({
-                                    'id': post_id, 'author': author, 'action': 'like+comment',
+                                    'id': post_id, 'author': author, 'action': 'like+enhanced_comment',
                                     'comment': comment_text[:60], 'source': source
                                 })
                             else:
@@ -464,7 +495,7 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
                                 'source': source
                             })
                     except Exception as e:
-                        print(f"  ⚠️ Comment failed: {e}")
+                        print(f"  ⚠️ Enhanced comment failed: {e}")
                         engaged_posts.append({
                             'id': post_id, 'author': author, 'action': 'like',
                             'source': source
@@ -489,13 +520,13 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
                 print(f"  ❌ Failed to like")
         
         total = liked + commented + reposted
-        print(f"\n🤖 Dynamic Engage Complete: {liked} likes, {commented} comments, {reposted} reposts")
+        print(f"\n🤖 Dynamic Engage Complete: {liked} likes, {commented} enhanced comments, {reposted} reposts")
         print(f"   Sources: {', '.join(set(sources))}")
         
         if total == 0:
             return "❌ Dynamic Engage: No successful engagements"
         
-        return f"✅ Dynamic Engage: {liked} likes, {commented} comments, {reposted} reposts from {len(sources)} sources"
+        return f"✅ Dynamic Engage: {liked} likes, {commented} enhanced comments, {reposted} reposts from {len(sources)} diverse sources"
 
     def trending_command(self, *args):
         """Command to fetch and format trending hashtags."""
