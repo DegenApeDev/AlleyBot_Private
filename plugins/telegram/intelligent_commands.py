@@ -2582,16 +2582,34 @@ Generate only the title (no explanations):"""
     # =================================================================
 
     def _get_selfimprove_plugin(self):
-        """Get the selfimprove plugin from core"""
+        """Get the self-improve plugin from core"""
         if self.core and hasattr(self.core, 'plugin_manager'):
             return self.core.plugin_manager.plugins.get('selfimprove')
         return None
-
+    
     def _get_mcp_plugin(self):
         """Get the MCP plugin from core"""
         if self.core and hasattr(self.core, 'plugin_manager'):
             return self.core.plugin_manager.plugins.get('mcp')
         return None
+    
+    def _get_plugin(self, plugin_name: str):
+        """Generic plugin getter"""
+        if self.core and hasattr(self.core, 'plugin_manager'):
+            return self.core.plugin_manager.plugins.get(plugin_name)
+        return None
+    
+    def _get_base_wallet_balance_plugin(self):
+        """Get the base wallet balance plugin from core"""
+        return self._get_plugin('base_wallet_balance')
+    
+    def _get_best_crypto_swap_price_plugin(self):
+        """Get the best crypto swap price plugin from core"""
+        return self._get_plugin('best_crypto_swap_price')
+    
+    def _get_fluid_lending_plugin(self):
+        """Get the fluid lending plugin from core"""
+        return self._get_plugin('fluid_lending')
 
     async def improve_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show self-improvement plugin status"""
@@ -2877,7 +2895,7 @@ Generate only the title (no explanations):"""
         if not await self._verify_admin(update):
             return
         try:
-            plugin = self._get_plugin('best_crypto_swap_price')
+            plugin = self._get_best_crypto_swap_price_plugin()
             if not plugin:
                 await self._safe_reply(update, "❌ Best Crypto Swap Price plugin not loaded")
                 return
@@ -2891,118 +2909,12 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
     
-    async def compare_aggregators(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Compare all DEX aggregators for best price"""
-        if not await self._verify_admin(update):
-            return
-        try:
-            plugin = self._get_plugin('best_crypto_swap_price')
-            if not plugin:
-                await self._safe_reply(update, "❌ Best Crypto Swap Price plugin not loaded")
-                return
-            
-            if not context.args:
-                await self._safe_reply(update, "Usage: /compare_aggregators <network> <sell_token> <buy_token> <sell_amount>")
-                return
-            
-            result = await self._run_sync(plugin.compare_aggregators_command, *context.args)
-            await self._safe_reply(update, str(result))
-        except Exception as e:
-            await self._safe_reply(update, f"❌ Error: {e}")
-    
-    async def swap_tokens(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Quick swap quote with execution data"""
-        if not await self._verify_admin(update):
-            return
-        try:
-            plugin = self._get_plugin('best_crypto_swap_price')
-            if not plugin:
-                await self._safe_reply(update, "❌ Best Crypto Swap Price plugin not loaded")
-                return
-            
-            if not context.args:
-                await self._safe_reply(update, "Usage: /swap_tokens <network> <sell_symbol> <buy_symbol> <amount>")
-                return
-            
-            result = await self._run_sync(plugin.swap_tokens_command, *context.args)
-            await self._safe_reply(update, str(result))
-        except Exception as e:
-            await self._safe_reply(update, f"❌ Error: {e}")
-    
-    async def supported_tokens(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """List supported tokens and aggregators"""
-        if not await self._verify_admin(update):
-            return
-        try:
-            plugin = self._get_plugin('best_crypto_swap_price')
-            if not plugin:
-                await self._safe_reply(update, "❌ Best Crypto Swap Price plugin not loaded")
-                return
-            
-            result = await self._run_sync(plugin.supported_tokens_command)
-            await self._safe_reply(update, str(result))
-        except Exception as e:
-            await self._safe_reply(update, f"❌ Error: {e}")
-    
-    async def fluid_positions(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Check Fluid lending positions"""
-        if not await self._verify_admin(update):
-            return
-        try:
-            plugin = self._get_plugin('fluid_lending')
-            if not plugin:
-                await self._safe_reply(update, "❌ Fluid Lending plugin not loaded")
-                return
-            
-            if not context.args:
-                await self._safe_reply(update, "Usage: /fluid_positions <address>")
-                return
-            
-            result = await self._run_sync(plugin.fluid_positions_command, *context.args)
-            await self._safe_reply(update, str(result))
-        except Exception as e:
-            await self._safe_reply(update, f"❌ Error: {e}")
-    
-    async def fluid_earnings(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Calculate Fluid earnings projection"""
-        if not await self._verify_admin(update):
-            return
-        try:
-            plugin = self._get_plugin('fluid_lending')
-            if not plugin:
-                await self._safe_reply(update, "❌ Fluid Lending plugin not loaded")
-                return
-            
-            if not context.args:
-                await self._safe_reply(update, "Usage: /fluid_earnings <address> [days]")
-                return
-            
-            result = await self._run_sync(plugin.fluid_earnings_command, *context.args)
-            await self._safe_reply(update, str(result))
-        except Exception as e:
-            await self._safe_reply(update, f"❌ Error: {e}")
-    
-    async def fluid_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Show Fluid Protocol stats"""
-        if not await self._verify_admin(update):
-            return
-        try:
-            plugin = self._get_plugin('fluid_lending')
-            if not plugin:
-                await self._safe_reply(update, "❌ Fluid Lending plugin not loaded")
-                return
-            
-            result = await self._run_sync(plugin.fluid_stats_command)
-            await self._safe_reply(update, str(result))
-        except Exception as e:
-            await self._safe_reply(update, f"❌ Error: {e}")
-    
     async def base_balance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Check wallet balance on Base"""
         if not await self._verify_admin(update):
             return
         try:
-            plugin = self._get_plugin('base_wallet_balance')
+            plugin = self._get_base_wallet_balance_plugin()
             if not plugin:
                 await self._safe_reply(update, "❌ Base Wallet Balance plugin not loaded")
                 return
@@ -3021,7 +2933,7 @@ Generate only the title (no explanations):"""
         if not await self._verify_admin(update):
             return
         try:
-            plugin = self._get_plugin('base_wallet_balance')
+            plugin = self._get_base_wallet_balance_plugin()
             if not plugin:
                 await self._safe_reply(update, "❌ Base Wallet Balance plugin not loaded")
                 return
@@ -3040,7 +2952,7 @@ Generate only the title (no explanations):"""
         if not await self._verify_admin(update):
             return
         try:
-            plugin = self._get_plugin('base_wallet_balance')
+            plugin = self._get_base_wallet_balance_plugin()
             if not plugin:
                 await self._safe_reply(update, "❌ Base Wallet Balance plugin not loaded")
                 return
@@ -3055,7 +2967,7 @@ Generate only the title (no explanations):"""
         if not await self._verify_admin(update):
             return
         try:
-            plugin = self._get_plugin('base_wallet_balance')
+            plugin = self._get_base_wallet_balance_plugin()
             if not plugin:
                 await self._safe_reply(update, "❌ Base Wallet Balance plugin not loaded")
                 return
@@ -3074,7 +2986,7 @@ Generate only the title (no explanations):"""
         if not await self._verify_admin(update):
             return
         try:
-            plugin = self._get_plugin('base_wallet_balance')
+            plugin = self._get_base_wallet_balance_plugin()
             if not plugin:
                 await self._safe_reply(update, "❌ Base Wallet Balance plugin not loaded")
                 return
@@ -3093,7 +3005,7 @@ Generate only the title (no explanations):"""
         if not await self._verify_admin(update):
             return
         try:
-            plugin = self._get_plugin('base_wallet_balance')
+            plugin = self._get_base_wallet_balance_plugin()
             if not plugin:
                 await self._safe_reply(update, "❌ Base Wallet Balance plugin not loaded")
                 return
@@ -3112,7 +3024,7 @@ Generate only the title (no explanations):"""
         if not await self._verify_admin(update):
             return
         try:
-            plugin = self._get_plugin('base_wallet_balance')
+            plugin = self._get_base_wallet_balance_plugin()
             if not plugin:
                 await self._safe_reply(update, "❌ Base Wallet Balance plugin not loaded")
                 return
@@ -3137,6 +3049,58 @@ Generate only the title (no explanations):"""
                 return
             
             result = await self._run_sync(plugin.fluid_apr_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_vote(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_vote command - Auto vote on available debates"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            
+            result = await self._run_sync(cb.clawbr_vote_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_vote_specific(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_vote_specific command - Vote on specific debate"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            
+            if not context.args:
+                await self._safe_reply(update, "Usage: /clawbr_vote_specific <slug> <side>")
+                return
+            
+            result = await self._run_sync(cb.clawbr_vote_specific_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_check_voting(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_check_voting command - Check voting opportunities"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            
+            result = await self._run_sync(cb.clawbr_check_voting_command)
             await self._safe_reply(update, str(result))
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")

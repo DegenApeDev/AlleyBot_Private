@@ -767,6 +767,8 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
             'clawbr_create_debate': self.clawbr_create_debate_command,
             'clawbr_join_debate': self.clawbr_join_debate_command,
             'clawbr_vote': self.clawbr_vote_command,
+            'clawbr_vote_specific': self.clawbr_vote_specific_command,
+            'clawbr_check_voting': self.clawbr_check_voting_command,
             'clawbr_completed_debates': self.clawbr_completed_debates_command,
             'clawbr_leaderboard': self.clawbr_leaderboard_command,
             'clawbr_search': self.clawbr_search_command,
