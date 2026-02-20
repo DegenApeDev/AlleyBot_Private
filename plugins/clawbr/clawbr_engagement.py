@@ -1,6 +1,7 @@
 """
 Clawbr Engagement Mixin
 Handles automated engagement, notifications, and debate participation
+Updated for Clawbr Skill File v1.9
 """
 import time
 import random
@@ -14,13 +15,26 @@ class ClawbrEngagementMixin:
     def _init_clawbr_engagement(self):
         """Initialize engagement settings"""
         self.clawbr_auto_like = self.config.get('clawbr_auto_like', True)
-        self.clawbr_auto_follow = self.config.get('clawbr_auto_follow', True)  # Enabled
-        self.clawbr_auto_comment = self.config.get('clawbr_auto_comment', True)  # New: auto-comment
+        self.clawbr_auto_follow = self.config.get('clawbr_auto_follow', True)
+        self.clawbr_auto_comment = self.config.get('clawbr_auto_comment', True)
         self.clawbr_debate_seeker = self.config.get('clawbr_debate_seeker', True)
         self.clawbr_last_engagement = self.core.get_memory('clawbr_last_engagement') or {}
-        self.clawbr_commented_posts = self.core.get_memory('clawbr_commented_posts') or []  # Track replied posts
-        self.clawbr_followed_agents = self.core.get_memory('clawbr_followed_agents') or []  # Track followed agents
-    
+        self.clawbr_commented_posts = self.core.get_memory('clawbr_commented_posts') or []
+        self.clawbr_followed_agents = self.core.get_memory('clawbr_followed_agents') or []
+        
+        # Rate limiting based on skill.md v1.9
+        # Posts & Replies: 60/hour, Likes & Follows: 120/hour
+        self.clawbr_rate_limits = self.core.get_memory('clawbr_rate_limits') or {
+            'last_post_reply': 0,    # Posts & Replies: 60/hour = 1 per minute
+            'last_like_follow': 0,   # Likes & Follows: 120/hour = 1 per 30 seconds  
+            'last_vote': 0,          # Voting: 4 hours (our choice)
+            'last_join': 0,          # Join debates: 30 minutes
+            'last_notifications': 0   # Check notifications: 5 minutes
+        }
+        
+        # Track joined debates for auto-reply
+        self.clawbr_joined_debates = self.core.get_memory('clawbr_joined_debates') or {}
+        
     def _get_clawbr_agent_id(self) -> str:
         """Get current Clawbr agent ID"""
         return getattr(self, 'agent_id', self.config.get('agent_id', ''))
@@ -33,8 +47,57 @@ class ClawbrEngagementMixin:
             if len(self.clawbr_last_engagement) % 10 == 0:
                 self.core.set_memory('clawbr_last_engagement', self.clawbr_last_engagement)
     
+    def _check_rate_limit(self, action: str, interval_seconds: float = 60.0) -> bool:
+        """Check if action is allowed based on rate limiting"""
+        now = time.time()
+        last_action = self.clawbr_rate_limits.get(f'last_{action}', 0)
+        
+        if now - last_action >= interval_seconds:
+            self.clawbr_rate_limits[f'last_{action}'] = now
+            self.core.set_memory('clawbr_rate_limits', self.clawbr_rate_limits)
+            return True
+        
+        return False
+    
+    def get_notifications(self, unread_only: bool = False) -> Dict[str, Any]:
+        """Get notifications from Clawbr API"""
+        try:
+            params = {'unread': 'true'} if unread_only else {}
+            result = self._make_api_request('GET', '/api/v1/notifications', params=params)
+            return result
+        except Exception as e:
+            print(f"⚠️ Failed to get notifications: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def get_unread_count(self) -> Dict[str, Any]:
+        """Get unread notification count"""
+        try:
+            result = self._make_api_request('GET', '/api/v1/notifications/unread_count')
+            return result
+        except Exception as e:
+            print(f"⚠️ Failed to get unread count: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def mark_notifications_read(self, notification_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Mark notifications as read"""
+        try:
+            if notification_ids:
+                body = {'ids': notification_ids}
+            else:
+                body = {}  # Mark all as read
+            
+            result = self._make_api_request('POST', '/api/v1/notifications/read', json=body)
+            return result
+        except Exception as e:
+            print(f"⚠️ Failed to mark notifications read: {e}")
+            return {'success': False, 'error': str(e)}
+    
     def check_notifications(self) -> Dict[str, Any]:
         """Check for new notifications and process them"""
+        # Rate limit: check notifications every 5 minutes
+        if not self._check_rate_limit('notifications', 300):
+            return {'success': True, 'message': 'Rate limited - notification check cooldown', 'processed': 0}
+        
         notifications = self.get_notifications(unread_only=True)
         
         if not notifications.get('success', True):
@@ -71,11 +134,12 @@ class ClawbrEngagementMixin:
         elif notif_type == 'follow':
             print(f"👥 {actor_name} started following you")
             if self.clawbr_auto_follow:
-                # Use correct endpoint
-                result = self.follow_agent(actor.get('name'))
-                if result.get('success'):
-                    print(f"✅ Auto-followed back: {actor_name}")
-                self._record_engagement('auto_follow_back', {'actor': actor_name})
+                # Rate limit: follows are 120/hour = 1 per 30 seconds
+                if self._check_rate_limit('like_follow', 30):
+                    result = self.follow_agent(actor.get('name'))
+                    if result.get('success'):
+                        print(f"✅ Auto-followed back: {actor_name}")
+                    self._record_engagement('auto_follow_back', {'actor': actor_name})
         
         elif notif_type == 'mention':
             print(f"📢 {actor_name} mentioned you")
@@ -86,9 +150,20 @@ class ClawbrEngagementMixin:
         elif notif_type == 'debate':
             print(f"🎭 Debate update: {notification.get('message', 'New activity')}")
             self._check_debate_turns()
+        
+        elif notif_type == 'debate_reply':
+            # NEW: Handle debate replies - check if it's our turn
+            print(f"🎭 Debate reply received - checking if it's our turn")
+            debate_slug = notification.get('debateSlug')
+            if debate_slug:
+                self._check_debate_turns()
     
     def _auto_reply_to_mention(self, post_id: str, mentioner: str):
         """Automatically reply to mentions"""
+        # Rate limit: posts & replies are 60/hour = 1 per minute
+        if not self._check_rate_limit('post_reply', 60):
+            return
+        
         # Get the post
         post = self.get_post(post_id)
         if not post.get('success', True):
@@ -264,14 +339,25 @@ Reply:"""
                 slug = debate.get('slug')
                 if not slug:
                     continue
+                
+                # Rate limit: posts & replies are 60/hour = 1 per minute
+                if not self._check_rate_limit('post_reply', 60):
+                    continue
+                
                 opponent_last = debate.get('opponentLastPost', '')
 
                 rebuttal = self.generate_debate_rebuttal(slug, opponent_last)
+                # Ensure within 1200 char limit for debate posts (skill.md v1.9)
+                if len(rebuttal) > 1200:
+                    rebuttal = rebuttal[:1200]
+                
                 result = self.submit_debate_argument(slug, rebuttal)
 
                 if result.get('success', True):
                     turns_taken += 1
                     print(f"🎭 Submitted argument in debate: {slug}")
+                else:
+                    print(f"❌ Failed to submit argument in {slug}: {result.get('error')}")
 
         return {
             'success': True,
@@ -295,27 +381,51 @@ Reply:"""
                 continue
 
             if action_type in {'join', 'join_debate'}:
-                join_result = self.join_debate(slug)
-                if join_result.get('success', True):
-                    results['joined'] += 1
+                # Rate limit: joining debates every 30 minutes
+                if self._check_rate_limit('join', 1800):
+                    join_result = self.join_debate(slug)
+                    if join_result.get('success', True):
+                        results['joined'] += 1
+                        # Track joined debate for auto-reply
+                        self.clawbr_joined_debates[slug] = time.time()
+                        self.core.set_memory('clawbr_joined_debates', self.clawbr_joined_debates)
 
             elif action_type in {'post', 'take_turn'}:
+                # Rate limit: posts & replies are 60/hour = 1 per minute
+                if not self._check_rate_limit('post_reply', 60):
+                    continue
+                
                 opponent_last = action.get('opponentLastPost', '')
                 rebuttal = self.generate_debate_rebuttal(slug, opponent_last)
+                # Ensure within 1200 char limit for debate posts
+                if len(rebuttal) > 1200:
+                    rebuttal = rebuttal[:1200]
+                
                 post_result = self.submit_debate_argument(slug, rebuttal)
                 if post_result.get('success', True):
                     results['posted'] += 1
+                else:
+                    print(f"❌ Failed to post in debate {slug}: {post_result.get('error')}")
 
             elif action_type in {'vote', 'cast_vote'}:
+                # Rate limit: voting every 4 hours (our choice to reduce usage)
+                if not self._check_rate_limit('vote', 14400):  # 4 hours
+                    continue
+                
                 side = action.get('side') or 'challenger'
                 vote_reason = action.get('voteReason') or (
                     'I vote based on clarity, logic, and evidence presented. The chosen side made the stronger case.'
                 )
+                # Ensure minimum 100 characters for vote to count (skill.md v1.9)
                 if len(vote_reason) < 100:
                     vote_reason = (vote_reason + ' ' + vote_reason).strip()
+                    vote_reason = vote_reason[:200]  # Trim to reasonable length
+                
                 vote_result = self.vote_debate(slug, side, vote_reason)
                 if vote_result.get('success', True):
                     results['voted'] += 1
+                else:
+                    print(f"❌ Failed to vote on debate {slug}: {vote_result.get('error')}")
 
         return {'success': True, **results}
     
@@ -334,9 +444,16 @@ Reply:"""
         This method is called by the scheduled task to gather data that feeds into
         the autonomous brain's SENSE-THINK-ACT-REFLECT cycle.
         
+        Updated for Clawbr Skill File v1.9 with proper rate limiting and notifications.
+        
         Note: Accepts *args, **kwargs for task scheduler compatibility.
         """
         observations: List[Dict[str, Any]] = []
+        
+        # Check notifications first (rate limited to every 5 minutes)
+        notification_results = self.check_notifications()
+        if notification_results.get('processed', 0) > 0:
+            print(f"📬 Processed {notification_results['processed']} notifications")
         
         # Collect feed observations
         feed = self.get_global_feed(sort='recent', limit=20)
@@ -389,17 +506,17 @@ Reply:"""
             pending.extend(observations)
             self.core.save_memory('clawbr_pending_observations', pending[-100:])
         
-        # Check debate turns and submit responses
+        # Check debate turns and submit responses (rate limited)
         debate_results = self._check_debate_turns()
         if debate_results.get('turns_taken', 0) > 0:
             print(f"🎭 Debate: Took {debate_results['turns_taken']} turns")
         
-        # Handle debate hub actions (join, vote, etc)
+        # Handle debate hub actions (join, vote, etc) with rate limiting
         hub_results = self._handle_debate_hub_actions()
         if hub_results.get('joined', 0) > 0 or hub_results.get('posted', 0) > 0:
             print(f"🎭 Debate Hub: {hub_results.get('joined', 0)} joined, {hub_results.get('posted', 0)} posted, {hub_results.get('voted', 0)} voted")
         
-        # Auto-vote on completed debates to meet posting requirements
+        # Auto-vote on completed debates to meet posting requirements (rate limited to 4 hours)
         voting_results = self._auto_vote_on_completed_debates(limit=5)
         if voting_results.get('votes_cast', 0) > 0:
             print(f"🗳️ Auto-voted: {voting_results['votes_cast']} votes on completed debates")
@@ -409,6 +526,9 @@ Reply:"""
         # Format clean output for Telegram
         output_lines = [f"✅ **Clawbr Engage Complete**"]
         output_lines.append(f"📊 Observations: {len(observations)}")
+        
+        if notification_results.get('processed', 0) > 0:
+            output_lines.append(f"📬 Notifications: {notification_results['processed']} processed")
         
         if debate_results.get('turns_taken', 0) > 0:
             output_lines.append(f"🎭 Debate Turns Taken: {debate_results['turns_taken']}")
@@ -427,6 +547,20 @@ Reply:"""
                 content = obs.get('content', '')[:60] + "..." if len(obs.get('content', '')) > 60 else obs.get('content', '')
                 score = obs.get('metrics', {}).get('engagement_score', 0)
                 output_lines.append(f"• @{author} (score:{score}): {content}")
+        
+        # Add rate limiting status
+        rate_status = []
+        now = time.time()
+        for action, interval in [('post_reply', 60), ('like_follow', 30), ('vote', 14400), ('notifications', 300)]:
+            last = self.clawbr_rate_limits.get(f'last_{action}', 0)
+            if last > 0:
+                next_allowed = last + interval
+                if next_allowed > now:
+                    wait_time = int((next_allowed - now) / 60)
+                    rate_status.append(f"{action}: {wait_time}min")
+        
+        if rate_status:
+            output_lines.append(f"\n⏱️ Rate Limits: {', '.join(rate_status[:3])}")
         
         return "\n".join(output_lines)
 
