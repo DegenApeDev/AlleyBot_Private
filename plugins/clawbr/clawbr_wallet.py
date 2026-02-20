@@ -209,7 +209,7 @@ class ClawbrWalletMixin:
             print(f"🔍 Getting claim transaction data for externally verified wallet: {wallet_address}")
             
             # Get the claim transaction data
-            claim_tx_response = self._make_request('GET', f'/tokens/claim-tx/{wallet_address}', auth_required=False)
+            claim_tx_response = self._make_request('GET', f'/tokens/claim-tx/{wallet_address}')
             
             if not claim_tx_response.get('success', True):
                 error_msg = claim_tx_response.get('error', 'Failed to get claim transaction')
