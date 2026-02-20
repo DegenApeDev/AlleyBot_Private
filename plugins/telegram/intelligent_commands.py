@@ -2997,6 +2997,135 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
     
+    async def base_balance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check wallet balance on Base"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('base_wallet_balance')
+            if not plugin:
+                await self._safe_reply(update, "❌ Base Wallet Balance plugin not loaded")
+                return
+            
+            if not context.args:
+                await self._safe_reply(update, "Usage: /base_balance <address> [token]")
+                return
+            
+            result = await self._run_sync(plugin.balance_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def base_eth_balance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check ETH balance on Base"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('base_wallet_balance')
+            if not plugin:
+                await self._safe_reply(update, "❌ Base Wallet Balance plugin not loaded")
+                return
+            
+            if not context.args:
+                await self._safe_reply(update, "Usage: /base_eth_balance <address>")
+                return
+            
+            result = await self._run_sync(plugin.eth_balance_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def base_tokens(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """List supported tokens on Base"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('base_wallet_balance')
+            if not plugin:
+                await self._safe_reply(update, "❌ Base Wallet Balance plugin not loaded")
+                return
+            
+            result = await self._run_sync(plugin.supported_tokens_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def add_base_token(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Add custom token to Base wallet checker"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('base_wallet_balance')
+            if not plugin:
+                await self._safe_reply(update, "❌ Base Wallet Balance plugin not loaded")
+                return
+            
+            if len(context.args) < 4:
+                await self._safe_reply(update, "Usage: /add_base_token <symbol> <address> <name> <decimals>")
+                return
+            
+            result = await self._run_sync(plugin.add_token_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def base_wallet_summary(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Get wallet summary on Base"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('base_wallet_balance')
+            if not plugin:
+                await self._safe_reply(update, "❌ Base Wallet Balance plugin not loaded")
+                return
+            
+            if not context.args:
+                await self._safe_reply(update, "Usage: /base_wallet_summary <address>")
+                return
+            
+            result = await self._run_sync(plugin.wallet_summary_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def contract_balance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check contract balance on Base"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('base_wallet_balance')
+            if not plugin:
+                await self._safe_reply(update, "❌ Base Wallet Balance plugin not loaded")
+                return
+            
+            if len(context.args) < 2:
+                await self._safe_reply(update, "Usage: /contract_balance <address> <contract_address>")
+                return
+            
+            result = await self._run_sync(plugin.contract_balance_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def multi_contract_balance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check multiple contract balances on Base"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('base_wallet_balance')
+            if not plugin:
+                await self._safe_reply(update, "❌ Base Wallet Balance plugin not loaded")
+                return
+            
+            if len(context.args) < 2:
+                await self._safe_reply(update, "Usage: /multi_contract_balance <address> <contract1,contract2,...>")
+                return
+            
+            result = await self._run_sync(plugin.multi_contract_balance_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
     async def fluid_apr(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Check current Fluid APRs"""
         if not await self._verify_admin(update):
