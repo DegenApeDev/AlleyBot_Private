@@ -14,11 +14,10 @@ class PlatformStatsAggregator:
     
     def __init__(self, core):
         self.core = core
-        self.moltbook_api_key = os.getenv('MOLTBOOK_API_KEY')
         self.moltx_api_key = os.getenv('MOLTX_API_KEY')
         self.moltchan_api_key = os.getenv('MOLTCHAN_API_KEY')
         self.moltroad_api_key = os.getenv('MOLTROAD_API_KEY')
-        self._follower_cache = None  # {moltbook: N, moltx: N, total: N, fetched_at: iso}
+        self._follower_cache = None  # {moltx: N, moltchan: N, moltroad: N, total: N, fetched_at: iso}
         self._follower_cache_ttl = 86400  # 24 hours in seconds
     
     def get_all_stats(self) -> Dict:
@@ -40,19 +39,6 @@ class PlatformStatsAggregator:
         plugins = {}
         if self.core and hasattr(self.core, 'plugin_manager'):
             plugins = self.core.plugin_manager.plugins
-        
-        # ── Moltbook ──
-        moltbook_stats = self._get_plugin_stats(plugins, 'moltbook')
-        if not moltbook_stats:
-            moltbook_stats = self._get_moltbook_stats()
-        if not moltbook_stats:
-            moltbook_stats = {'posts': 0, 'comments': 0, 'followers': 0, 'following': 0, 'recent_posts': []}
-        stats['platforms']['moltbook'] = moltbook_stats
-        stats['total_posts'] += moltbook_stats.get('posts', 0)
-        stats['total_comments'] += moltbook_stats.get('comments', 0)
-        stats['total_followers'] += moltbook_stats.get('followers', 0)
-        stats['total_following'] += moltbook_stats.get('following', 0)
-        stats['recent_activity'].extend(moltbook_stats.get('recent_posts', []))
         
         # ── Moltx ──
         moltx_stats = self._get_plugin_stats(plugins, 'moltx')
@@ -86,16 +72,12 @@ class PlatformStatsAggregator:
         # Platform-specific stats
         moltx_posts = stats['platforms']['moltx'].get('posts', 0)
         moltx_followers = stats['platforms']['moltx'].get('followers', 0)
-        moltbook_posts = stats['platforms']['moltbook'].get('posts', 0)
-        moltbook_comments = stats['platforms']['moltbook'].get('comments', 0)
-        moltbook_karma = stats['platforms']['moltbook'].get('karma', 0)
-        moltbook_followers = stats['platforms']['moltbook'].get('followers', 0)
         moltchan_posts = stats['platforms']['moltchan'].get('threads', stats['platforms']['moltchan'].get('posts', 0))
         moltchan_replies = stats['platforms']['moltchan'].get('replies', 0)
         moltroad_posts = stats['platforms']['moltroad'].get('posts', 0)
         
         # Debug output for tracking
-        # print(f"[DASHBOARD-DEBUG] Platform stats - Moltbook: {moltbook_posts} posts, {moltbook_followers} followers, {moltbook_comments} comments | Moltx: {moltx_posts} posts, {moltx_followers} followers")
+        # print(f"[DASHBOARD-DEBUG] Platform stats - Moltx: {moltx_posts} posts, {moltx_followers} followers")
         
         # Sort recent activity by timestamp
         stats['recent_activity'].sort(key=lambda x: x.get('timestamp', ''), reverse=True)
@@ -105,8 +87,6 @@ class PlatformStatsAggregator:
         follower_data = self._get_cached_followers()
         stats['total_followers'] = follower_data.get('total', stats['total_followers'])
         # Update per-platform follower counts too
-        if 'moltbook' in stats['platforms']:
-            stats['platforms']['moltbook']['followers'] = follower_data.get('moltbook', stats['platforms']['moltbook'].get('followers', 0))
         if 'moltx' in stats['platforms']:
             stats['platforms']['moltx']['followers'] = follower_data.get('moltx', stats['platforms']['moltx'].get('followers', 0))
 
@@ -176,59 +156,6 @@ class PlatformStatsAggregator:
             
         except Exception as e:
             # print(f"[DASHBOARD-DEBUG] Error getting {plugin_name} stats: {e}")
-            return None
-    
-    def _get_moltbook_stats(self) -> Optional[Dict]:
-        """Get stats from Moltbook"""
-        if not self.moltbook_api_key:
-            return None
-        
-        try:
-            headers = {'Authorization': f'Bearer {self.moltbook_api_key}'}
-            
-            # Get agent profile - this includes recentPosts
-            response = requests.get(
-                'https://www.moltbook.com/api/v1/agents/me',
-                headers=headers,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Check if response is successful
-                if not data.get('success'):
-                    print(f"⚠️  Moltbook API returned success=false")
-                    return None
-                
-                agent = data.get('agent', {})
-                stats = agent.get('stats', {})
-                recent_posts_data = data.get('recentPosts', [])
-                
-                # Format recent posts
-                recent_posts = []
-                for post in recent_posts_data[:10]:
-                    recent_posts.append({
-                        'type': 'post',
-                        'platform': 'Moltbook',
-                        'title': post.get('title', ''),
-                        'url': f"https://www.moltbook.com/post/{post.get('id')}",
-                        'timestamp': post.get('created_at', ''),
-                        'upvotes': post.get('upvotes', 0),
-                        'comments': post.get('comment_count', 0)
-                    })
-                
-                return {
-                    'posts': stats.get('posts', 0),
-                    'comments': stats.get('comments', 0),
-                    'followers': agent.get('follower_count', 0),
-                    'following': agent.get('following_count', 0),
-                    'karma': agent.get('karma', 0),
-                    'recent_posts': recent_posts,
-                    'status': 'active'
-                }
-        except Exception as e:
-            print(f"⚠️  Moltbook stats error: {e}")
             return None
     
     def _get_moltx_stats(self) -> Optional[Dict]:
