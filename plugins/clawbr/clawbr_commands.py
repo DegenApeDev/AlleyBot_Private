@@ -408,9 +408,25 @@ Logged to analytics."""
         try:
             result = self.claim_tokens()
             if result['success']:
-                return f"""🎉 **Tokens Claimed Successfully!**
+                if result.get('requires_manual_submission'):
+                    return f"""🔗 **Claim Transaction Ready**
 
-🪙 Amount: {result.get('amount', 0):,} $CLAWBR
+🪙 Your externally verified wallet requires manual claiming
+📋 Transaction data prepared for your wallet
+🌐 Claim Page: {result.get('claim_url', 'https://www.clawbr.org/claim')}
+
+💡 **Next Steps:**
+1. Visit {result.get('claim_url', 'https://www.clawbr.org/claim')}
+2. Connect your wallet: {self.base_wallet_address[:20]}...{self.base_wallet_address[-4:]}
+3. Claim your tokens directly on the website
+
+✅ Your wallet is verified and ready to claim!
+🔐 Tokens will go directly to your Base wallet"""
+                else:
+                    claimed_amount = result.get('amount', 0)
+                    return f"""🎉 **Tokens Claimed Successfully!**
+
+🪙 Amount: {claimed_amount:,} $CLAWBR
 🔗 Transaction: {result.get('basescan_url', 'N/A')}
 📝 TX Hash: {result.get('tx_hash', 'N/A')[:20]}...
 
@@ -423,7 +439,7 @@ Logged to analytics."""
 💡 Make sure:
 • Wallet is verified (/clawbr_verify_wallet)
 • Claim snapshot is active
-• Wallet has gas for transactions"""
+• For external wallets: Visit https://www.clawbr.org/claim"""
         except Exception as e:
             return f"❌ Claim error: {str(e)}"
     
@@ -434,7 +450,8 @@ Logged to analytics."""
         try:
             result = self.transfer_tokens_to_wallet(destination)
             if result['success']:
-                return f"""💸 **Transfer Successful!**
+                if result.get('transferred'):
+                    return f"""💸 **Transfer Successful!**
 
 🪙 Amount: {result.get('amount', 0):,} $CLAWBR
 📍 Destination: {result.get('destination', 'N/A')[:20]}...{result.get('destination', 'N/A')[-4:]}
@@ -442,14 +459,29 @@ Logged to analytics."""
 📝 TX Hash: {result.get('tx_hash', 'N/A')[:20]}...
 
 ✅ Tokens are now in your wallet!"""
+                else:
+                    return f"""✅ **Externally Verified Wallet**
+
+🔐 Your Base wallet is verified with Clawbr
+🪙 Tokens go directly to your wallet after claiming
+📍 Your wallet: {self.base_wallet_address[:20]}...{self.base_wallet_address[-4:]}
+
+💡 **How it works:**
+• Use /clawbr_claim to get claim transaction data
+• Visit https://www.clawbr.org/claim to claim tokens
+• Tokens arrive directly in your Base wallet
+• No transfer needed - tokens are already yours!
+
+🎯 Your externally verified wallet is the destination!"""
             else:
                 return f"""❌ **Transfer Failed**
 
 {result.get('error', 'Unknown error')}
 
-💡 Usage:
-• /clawbr_transfer - Transfer to your Base wallet
-• /clawbr_transfer <address> - Transfer to specific address"""
+💡 For externally verified wallets:
+• Tokens go directly to your verified wallet
+• No transfer step needed after claiming
+• Visit https://www.clawbr.org/claim to claim tokens"""
         except Exception as e:
             return f"❌ Transfer error: {str(e)}"
     
@@ -461,10 +493,29 @@ Logged to analytics."""
                 claim_result = result.get('claim_result', {})
                 transfer_result = result.get('transfer_result', {})
                 
-                return f"""🤖 **Auto-Claim & Transfer Complete**
+                if claim_result.get('requires_manual_submission'):
+                    return f"""🤖 **Auto-Claim Ready for External Wallet**
 
-🪙 Claimed: {claim_result.get('amount', 0):,} $CLAWBR
-💸 Transferred: {transfer_result.get('amount', 0):,} $CLAWBR
+🔐 Your Base wallet is verified: {self.base_wallet_address[:20]}...{self.base_wallet_address[-4:]}
+🪙 Claim transaction data prepared
+🌐 Ready to claim at: {claim_result.get('claim_url', 'https://www.clawbr.org/claim')}
+
+💡 **Auto-Complete Process:**
+1. ✅ Wallet verified with signature
+2. ✅ Claim transaction data prepared
+3. 🔄 Visit website to submit transaction
+4. 🎯 Tokens arrive directly in your Base wallet
+
+🔗 **Claim Now:** {claim_result.get('claim_url', 'https://www.clawbr.org/claim')}
+
+✅ No transfer needed - tokens go straight to your wallet!"""
+                else:
+                    claimed_amount = claim_result.get('amount', 0)
+                    transferred_amount = transfer_result.get('amount', 0)
+                    return f"""🤖 **Auto-Claim & Transfer Complete**
+
+🪙 Claimed: {claimed_amount:,} $CLAWBR
+💸 Transferred: {transferred_amount:,} $CLAWBR
 🔗 Claim TX: {claim_result.get('basescan_url', 'N/A')[:50]}...
 🔗 Transfer TX: {transfer_result.get('basescan_url', 'N/A')[:50]}...
 
@@ -474,10 +525,13 @@ Logged to analytics."""
 
 {result.get('error', 'Unknown error')}
 
-💡 This command:
-1. Verifies wallet (if needed)
-2. Claims available tokens
-3. Transfers to your Base wallet"""
+💡 **For External Wallets:**
+1. /clawbr_verify_wallet - Verify your Base wallet ✅
+2. /clawbr_claim - Get claim transaction data
+3. Visit https://www.clawbr.org/claim to claim
+4. Tokens arrive directly in your wallet
+
+🎯 No wallet generation needed!"""
         except Exception as e:
             return f"❌ Auto-claim error: {str(e)}"
     

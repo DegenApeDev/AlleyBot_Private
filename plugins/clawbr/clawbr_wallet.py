@@ -191,7 +191,7 @@ class ClawbrWalletMixin:
     def claim_tokens(self) -> Dict[str, Any]:
         """
         Claim available $CLAWBR tokens
-        Requires wallet to be verified first
+        For externally verified wallets, uses the /tokens/claim-tx/:wallet endpoint
         """
         if not self.clawbr_wallet_verified:
             return {
@@ -202,33 +202,51 @@ class ClawbrWalletMixin:
         try:
             print(f"🪙 Attempting to claim $CLAWBR tokens...")
             
-            response = self._make_request('POST', '/tokens/claim')
+            # For externally verified wallets, we need to use the claim-tx endpoint
+            # This returns the raw transaction data that needs to be signed and submitted
+            wallet_address = self.clawbr_wallet_address or self.base_wallet_address
             
-            if response.get('success', True):
-                data = response.get('data', response)
-                claimed_amount = data.get('amount', 0)
-                tx_hash = data.get('tx_hash', '')
-                basescan_url = data.get('basescan', '')
-                
-                print(f"🎉 Successfully claimed {claimed_amount} $CLAWBR tokens!")
-                print(f"🔗 Transaction: {basescan_url}")
-                
-                return {
-                    'success': True,
-                    'claimed': True,
-                    'amount': claimed_amount,
-                    'tx_hash': tx_hash,
-                    'basescan_url': basescan_url,
-                    'message': f'Claimed {claimed_amount} $CLAWBR tokens'
-                }
-            else:
-                error_msg = response.get('error', 'Claim failed')
-                print(f"❌ Token claim failed: {error_msg}")
-                
+            print(f"🔍 Getting claim transaction data for externally verified wallet: {wallet_address}")
+            
+            # Get the claim transaction data
+            claim_tx_response = self._make_request('GET', f'/tokens/claim-tx/{wallet_address}', auth_required=False)
+            
+            if not claim_tx_response.get('success', True):
+                error_msg = claim_tx_response.get('error', 'Failed to get claim transaction')
+                print(f"❌ Failed to get claim transaction: {error_msg}")
                 return {
                     'success': False,
-                    'error': error_msg
+                    'error': f'Claim transaction failed: {error_msg}',
+                    'note': 'For externally verified wallets, you may need to claim via https://www.clawbr.org/claim'
                 }
+            
+            claim_data = claim_tx_response.get('data', claim_tx_response)
+            tx_data = claim_data.get('transaction', {})
+            to_address = claim_data.get('to')
+            value = claim_data.get('value', 0)
+            data = claim_data.get('data', '')
+            
+            print(f"🔍 Claim transaction data:")
+            print(f"  To: {to_address}")
+            print(f"  Value: {value}")
+            print(f"  Data: {data[:50]}...")
+            
+            # For now, return the transaction data and instructions
+            # The user will need to submit this transaction manually or we can implement signing
+            return {
+                'success': True,
+                'claimed': False,  # Not claimed yet, transaction data provided
+                'requires_manual_submission': True,
+                'transaction_data': {
+                    'to': to_address,
+                    'value': value,
+                    'data': data,
+                    'gas_limit': claim_data.get('gasLimit', 200000),
+                    'gas_price': claim_data.get('gasPrice', '0.00000002')
+                },
+                'message': f'Externally verified wallet requires manual transaction submission. Visit https://www.clawbr.org/claim to claim tokens.',
+                'claim_url': f'https://www.clawbr.org/claim'
+            }
                 
         except Exception as e:
             return {
@@ -239,7 +257,7 @@ class ClawbrWalletMixin:
     def transfer_tokens_to_wallet(self, destination_address: str = None) -> Dict[str, Any]:
         """
         Transfer claimed tokens to a wallet
-        If no destination specified, transfers to the verified Base wallet
+        For externally verified wallets, this is not applicable as tokens go directly to the verified wallet
         """
         if not destination_address:
             destination_address = self.base_wallet_address
@@ -248,6 +266,16 @@ class ClawbrWalletMixin:
             return {
                 'success': False,
                 'error': 'No destination address specified and no BASE_WALLET_PUBLIC_ADDRESS found'
+            }
+        
+        # For externally verified wallets, tokens go directly to the verified wallet
+        # No transfer needed - they're already in your wallet after claiming
+        if self.clawbr_wallet_verified and self.clawbr_wallet_address == self.base_wallet_address:
+            return {
+                'success': True,
+                'transferred': False,
+                'message': 'Externally verified wallet: Tokens go directly to your wallet after claiming. No transfer needed.',
+                'note': 'Use /clawbr_claim to claim tokens directly to your verified wallet.'
             }
         
         try:
