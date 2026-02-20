@@ -338,17 +338,21 @@ class Metacognition:
             # Confidence is bounded by weakest relevant capability
             base_confidence = min(cap_confidences) * 0.9
         
-        # Adjust for context complexity
+        # Adjust for context complexity (less aggressive penalty)
         complexity = context.get('complexity', 0.5)
-        base_confidence *= (1 - complexity * 0.3)
+        base_confidence *= (1 - complexity * 0.2)  # Reduced from 0.3 to 0.2
         
         # Adjust for time pressure
         if context.get('urgent', False):
             base_confidence *= 0.9  # Slightly lower under pressure
         
-        # Adjust for novel situations
+        # Adjust for novel situations (less aggressive penalty)
         if context.get('novel', False):
-            base_confidence *= 0.85
+            base_confidence *= 0.9  # Changed from 0.85 to 0.9
+        
+        # Ensure minimum confidence for manual interventions
+        if context.get('manual_trigger', False):
+            base_confidence = max(base_confidence, 0.5)
         
         return max(0.1, min(0.95, base_confidence))
     

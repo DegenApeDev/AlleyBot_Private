@@ -198,7 +198,8 @@ class AGIOrchestrator:
         # Phase 14: Metacognitive check
         meta_result = self._run_phase_14_metacognition(
             creative_result.output,
-            social_result.output
+            social_result.output,
+            trigger
         )
         phases_executed.append(meta_result)
         
@@ -722,7 +723,7 @@ class AGIOrchestrator:
                 triggered_phases=[]
             )
     
-    def _run_phase_14_metacognition(self, creative: Dict, social: Dict) -> PhaseResult:
+    def _run_phase_14_metacognition(self, creative: Dict, social: Dict, trigger: str = "scheduled") -> PhaseResult:
         """Phase 14: Metacognition - Validate confidence with world model calibration"""
         start = datetime.now()
         
@@ -732,9 +733,10 @@ class AGIOrchestrator:
             
             # Assess overall capability for this task using metacognition
             task = "content_generation"
+            context = {'novel': True, 'complexity': 0.6, 'manual_trigger': trigger == "manual"}
             calibrated_confidence = self.metacognition.calibrate_confidence(
                 task, 
-                context={'novel': True, 'complexity': 0.6}
+                context
             )
             
             # Get metacognitive summary
@@ -794,8 +796,11 @@ class AGIOrchestrator:
             }
             
             # Decide whether to proceed with world model-informed decision
+            # Lower threshold for manual triggers to be more responsive
+            confidence_threshold = 0.4 if trigger == "manual" else 0.6
+            
             proceed = (
-                world_model_adjusted_confidence > 0.6 and
+                world_model_adjusted_confidence > confidence_threshold and
                 enhanced_constraints.get('can_continue', True) and
                 social.get('proceed_recommended', True)
             )
