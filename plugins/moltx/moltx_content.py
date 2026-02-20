@@ -409,8 +409,7 @@ User's request: {full_prompt}"""
                 comment = deepseek_ai.generate_comment(
                     post_content=full_context,
                     agent_name=user,
-                    context=platform_context,
-                    style="natural"  # Natural, conversational style
+                    context=platform_context
                 )
                 if comment and len(comment.strip()) > 10:
                     print(f"🧠 DeepSeek generated comment: {comment[:50]}...")
