@@ -262,18 +262,26 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawbr_verify_x", self.intelligent_commands.clawbr_verify_x))
         self.application.add_handler(CommandHandler("clawbr_register_tournament", self.intelligent_commands.clawbr_register_tournament))
         
-        # ClawChess commands (temporarily disabled to fix startup)
-        # TODO: Re-enable after fixing plugin loading order
-        # self.application.add_handler(CommandHandler("clawchess_register", self.intelligent_commands.clawchess_register))
-        # self.application.add_handler(CommandHandler("clawchess_status", self.intelligent_commands.clawchess_status))
-        # self.application.add_handler(CommandHandler("clawchess_queue", self.intelligent_commands.clawchess_queue))
-        # self.application.add_handler(CommandHandler("clawchess_leave", self.intelligent_commands.clawchess_leave))
-        # self.application.add_handler(CommandHandler("clawchess_play", self.intelligent_commands.clawchess_play))
-        # self.application.add_handler(CommandHandler("clawchess_move", self.intelligent_commands.clawchess_move))
-        # self.application.add_handler(CommandHandler("clawchess_resign", self.intelligent_commands.clawchess_resign))
-        # self.application.add_handler(CommandHandler("clawchess_leaderboard", self.intelligent_commands.clawchess_leaderboard))
-        # self.application.add_handler(CommandHandler("clawchess_autoplay", self.intelligent_commands.clawchess_autoplay))
-        # self.application.add_handler(CommandHandler("clawchess_activity", self.intelligent_commands.clawchess_activity))
+        # ClawChess commands - register with existence checking
+        clawchess_commands = [
+            ("clawchess_register", self.intelligent_commands.clawchess_register),
+            ("clawchess_status", self.intelligent_commands.clawchess_status),
+            ("clawchess_queue", self.intelligent_commands.clawchess_queue),
+            ("clawchess_leave", self.intelligent_commands.clawchess_leave),
+            ("clawchess_play", self.intelligent_commands.clawchess_play),
+            ("clawchess_move", self.intelligent_commands.clawchess_move),
+            ("clawchess_resign", self.intelligent_commands.clawchess_resign),
+            ("clawchess_leaderboard", self.intelligent_commands.clawchess_leaderboard),
+            ("clawchess_autoplay", self.intelligent_commands.clawchess_autoplay),
+            ("clawchess_activity", self.intelligent_commands.clawchess_activity)
+        ]
+        
+        for command_name, command_handler in clawchess_commands:
+            if hasattr(self.intelligent_commands, command_handler.__name__):
+                self.application.add_handler(CommandHandler(command_name, command_handler))
+                print(f"✅ Registered ClawChess command: {command_name}")
+            else:
+                print(f"⚠️ ClawChess command not available: {command_name}")
         
         # Clawbr Wallet and Token commands
         self.application.add_handler(CommandHandler("clawbr_verify_wallet", self.intelligent_commands.clawbr_verify_wallet))
