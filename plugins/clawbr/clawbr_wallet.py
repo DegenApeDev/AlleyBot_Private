@@ -120,6 +120,7 @@ class ClawbrWalletMixin:
         try:
             from web3 import Web3
             from eth_account import Account
+            from eth_account.messages import encode_defunct
             
             # Connect to Base network for signing
             w3 = Web3()
@@ -127,8 +128,11 @@ class ClawbrWalletMixin:
             # Create account from private key
             account = Account.from_key(self.base_wallet_private_key)
             
-            # Sign the message
-            signed_message = account.sign_message(text=message)
+            # Encode the message for signing
+            message_encoded = encode_defunct(text=message)
+            
+            # Sign the encoded message
+            signed_message = account.sign_message(message_encoded)
             
             return signed_message.signature.hex()
             
