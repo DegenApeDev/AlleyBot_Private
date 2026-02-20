@@ -353,35 +353,6 @@ Logged to analytics."""
         return f"❌ Failed to register for tournament: {result.get('error', 'Unknown error')}"
     
     # Wallet and Token Commands
-    def clawbr_generate_wallet_command(self, *args) -> str:
-        """Generate server-side claims wallet for automatic token claiming"""
-        try:
-            result = self.generate_claims_wallet()
-            if result['success']:
-                return f"""🔐 **Claims Wallet Generated**
-
-🏦 Server Wallet: {result.get('wallet_address', 'N/A')}
-✅ Verified: {result.get('verified', False)}
-🎯 Purpose: Automatic $CLAWBR token claiming
-
-💡 **Next Steps:**
-• /clawbr_balance - Check token balance
-• /clawbr_claim - Claim available tokens (automatic!)
-• /clawbr_transfer - Transfer to your Base wallet
-
-🚀 Automatic claiming is now enabled!"""
-            else:
-                return f"""❌ **Wallet Generation Failed**
-
-{result.get('error', 'Unknown error')}
-
-💡 Make sure:
-• CLAWBR_API_KEY is valid
-• Only call this once per agent
-• Server-side wallet doesn't exist yet"""
-        except Exception as e:
-            return f"❌ Wallet generation error: {str(e)}"
-    
     def clawbr_verify_wallet_command(self, *args) -> str:
         """Verify Base wallet with Clawbr for token operations"""
         try:
@@ -437,25 +408,11 @@ Logged to analytics."""
         try:
             result = self.claim_tokens()
             if result['success']:
-                wallet_type = result.get('wallet_type', 'unknown')
-                
-                if wallet_type == 'server':
-                    # Server wallet - automatic claiming worked
-                    claimed_amount = result.get('amount', 0)
-                    return f"""🎉 **Tokens Claimed Automatically!**
-
-🪙 Amount: {claimed_amount:,} $CLAWBR
-🏦 Server Wallet: {getattr(self, 'claims_wallet_address', 'N/A')[:20]}...{getattr(self, 'claims_wallet_address', 'N/A')[-4:] if getattr(self, 'claims_wallet_address', None) else ''}
-🔗 Transaction: {result.get('basescan_url', 'N/A')}
-📝 TX Hash: {result.get('tx_hash', 'N/A')[:20]}...
-
-💡 Next: /clawbr_transfer to move tokens to your Base wallet"""
-                    
-                elif result.get('requires_manual_submission'):
+                if result.get('requires_manual_submission'):
                     # External wallet - manual claiming needed
                     return f"""🔗 **Claim Transaction Ready**
 
-🪙 Your externally verified wallet requires manual claiming
+🪙 Your verified Base wallet requires manual claiming
 📋 Transaction data prepared for your wallet
 🌐 Claim Page: {result.get('claim_url', 'https://www.clawbr.org/claim')}
 
@@ -466,7 +423,6 @@ Logged to analytics."""
 
 ✅ Your wallet is verified and ready to claim!
 🔐 Tokens will go directly to your Base wallet"""
-                    
                 else:
                     # Standard successful claim
                     claimed_amount = result.get('amount', 0)
@@ -479,29 +435,16 @@ Logged to analytics."""
 💡 Next: /clawbr_transfer to move tokens to your wallet"""
             else:
                 error_msg = result.get('error', 'Unknown error')
-                
-                # Check if it's suggesting to generate a server wallet
-                if 'generate-wallet' in error_msg.lower() or 'server-held' in error_msg.lower():
-                    return f"""❌ **Server Wallet Required**
-
-{error_msg}
-
-💡 **Solution:**
-• /clawbr_generate_wallet - Create server-side claims wallet
-• Then /clawbr_claim - Claim automatically with server wallet
-• Finally /clawbr_transfer - Transfer to your Base wallet
-
-🚀 Server wallet enables automatic claiming!"""
-                
                 return f"""❌ **Claim Failed**
 
 {error_msg}
 
-💡 Make sure:
-• Wallet is verified (/clawbr_verify_wallet)
-• Claim snapshot is active
-• For external wallets: Visit https://www.clawbr.org/claim
-• Or generate server wallet: /clawbr_generate_wallet"""
+💡 **For Your Verified Base Wallet:**
+• Visit https://www.clawbr.org/claim to claim tokens
+• Your wallet: {self.base_wallet_address[:20]}...{self.base_wallet_address[-4:]}
+• Tokens go directly to your Base wallet after claiming
+
+🎯 Your external wallet is already linked and ready!"""
         except Exception as e:
             return f"❌ Claim error: {str(e)}"
     

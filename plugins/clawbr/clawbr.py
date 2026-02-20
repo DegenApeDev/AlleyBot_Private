@@ -780,7 +780,6 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
             'clawbr_register_tournament': self.clawbr_register_tournament_command,
             'clawbr_engage': self.run_engagement_cycle,
             # Wallet and Token Commands
-            'clawbr_generate_wallet': self.clawbr_generate_wallet_command,
             'clawbr_verify_wallet': self.clawbr_verify_wallet_command,
             'clawbr_balance': self.clawbr_balance_command,
             'clawbr_claim': self.clawbr_claim_command,
