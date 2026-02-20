@@ -408,8 +408,29 @@ Logged to analytics."""
         try:
             result = self.claim_tokens()
             if result['success']:
-                if result.get('requires_manual_submission'):
+                if result.get('no_tokens_available'):
+                    return f"""⏳ **No Tokens Available Yet**
+
+🪙 Your wallet is verified and ready to claim
+🔐 Wallet: {self.base_wallet_address[:20]}...{self.base_wallet_address[-4:]}
+📝 Status: Waiting for token distribution
+
+💡 **What's Happening:**
+• Clawbr token system is in alpha mode
+• Dev just added token functionality today
+• System may need time to recognize wallet linking
+• Tokens may not be distributed yet
+
+🔄 **Next Steps:**
+• Try again in a few hours or tomorrow
+• Check Clawbr announcements for updates
+• Your wallet is ready when tokens become available
+
+🎯 Your wallet is verified and ready to claim!"""
+                    
+                elif result.get('requires_manual_submission'):
                     # External wallet - manual claiming needed
+                    alpha_note = result.get('alpha_note', '')
                     return f"""🔗 **Claim Transaction Ready**
 
 🪙 Your verified Base wallet requires manual claiming
@@ -420,6 +441,8 @@ Logged to analytics."""
 1. Visit {result.get('claim_url', 'https://www.clawbr.org/claim')}
 2. Connect your wallet: {self.base_wallet_address[:20]}...{self.base_wallet_address[-4:]}
 3. Claim your tokens directly on the website
+
+{f'🧪 Alpha Note: {alpha_note}' if alpha_note else ''}
 
 ✅ Your wallet is verified and ready to claim!
 🔐 Tokens will go directly to your Base wallet"""
@@ -435,16 +458,31 @@ Logged to analytics."""
 💡 Next: /clawbr_transfer to move tokens to your wallet"""
             else:
                 error_msg = result.get('error', 'Unknown error')
-                return f"""❌ **Claim Failed**
+                alpha_note = result.get('alpha_note', '')
+                suggestion = result.get('suggestion', '')
+                
+                # Build helpful error message for alpha mode
+                error_output = f"""❌ **Claim Failed**
 
-{error_msg}
+{error_msg}"""
 
-💡 **For Your Verified Base Wallet:**
-• Visit https://www.clawbr.org/claim to claim tokens
-• Your wallet: {self.base_wallet_address[:20]}...{self.base_wallet_address[-4:]}
-• Tokens go directly to your Base wallet after claiming
+                if alpha_note:
+                    error_output += f"\n\n🧪 Alpha Note: {alpha_note}"
+                
+                if suggestion:
+                    error_output += f"\n\n💡 Suggestion: {suggestion}"
+                
+                error_output += f"""
 
-🎯 Your external wallet is already linked and ready!"""
+💡 **For Alpha Mode:**
+• Clawbr debates is in alpha - features may be limited
+• Dev just added token functionality today
+• System may need time to recognize wallet linking
+• Try again later or check Clawbr announcements
+
+🎯 Your wallet: {self.base_wallet_address[:20]}...{self.base_wallet_address[-4:]}"""
+                
+                return error_output
         except Exception as e:
             return f"❌ Claim error: {str(e)}"
     

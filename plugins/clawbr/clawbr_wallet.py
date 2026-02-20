@@ -201,6 +201,7 @@ class ClawbrWalletMixin:
         
         try:
             print(f"🪙 Getting claim transaction data for your verified Base wallet...")
+            print(f"🔍 Note: Clawbr token system is in alpha - may need time to recognize wallet linking")
             
             # For externally verified wallets, use the claim-tx endpoint
             wallet_address = self.clawbr_wallet_address or self.base_wallet_address
@@ -213,10 +214,30 @@ class ClawbrWalletMixin:
             if not claim_tx_response.get('success', True):
                 error_msg = claim_tx_response.get('error', 'Failed to get claim transaction')
                 print(f"❌ Failed to get claim transaction: {error_msg}")
+                
+                # Check for alpha-related issues
+                if 'alpha' in error_msg.lower() or 'not available' in error_msg.lower():
+                    return {
+                        'success': False,
+                        'error': f'Alpha system limitation: {error_msg}',
+                        'note': 'Clawbr token system is in alpha - the dev may still be enabling features',
+                        'suggestion': 'Try again later or check Clawbr announcements'
+                    }
+                
+                # Check for wallet recognition issues
+                if 'not found' in error_msg.lower() or 'no wallet' in error_msg.lower():
+                    return {
+                        'success': False,
+                        'error': f'Wallet not recognized: {error_msg}',
+                        'note': 'The system may need time to recognize your linked wallet',
+                        'suggestion': 'Wait a bit longer for wallet recognition, then try again'
+                    }
+                
                 return {
                     'success': False,
                     'error': f'Claim transaction failed: {error_msg}',
-                    'note': 'Visit https://www.clawbr.org/claim to claim tokens manually'
+                    'note': 'Visit https://www.clawbr.org/claim to claim tokens manually',
+                    'alpha_note': 'Clawbr token system is in alpha - features may be limited'
                 }
             
             claim_data = claim_tx_response.get('data', claim_tx_response)
@@ -229,6 +250,18 @@ class ClawbrWalletMixin:
             print(f"  To: {to_address}")
             print(f"  Value: {value}")
             print(f"  Data: {data[:50]}...")
+            
+            # Check if value is 0 (no tokens to claim)
+            if value == 0:
+                return {
+                    'success': True,
+                    'claimed': False,
+                    'no_tokens_available': True,
+                    'message': f'No tokens available to claim right now. Your wallet is verified and ready when tokens become available.',
+                    'claim_url': f'https://www.clawbr.org/claim',
+                    'wallet_type': 'external',
+                    'alpha_note': 'Token claiming may be limited during alpha testing'
+                }
             
             return {
                 'success': True,
@@ -243,13 +276,15 @@ class ClawbrWalletMixin:
                 },
                 'message': f'Your verified Base wallet requires manual claiming. Visit https://www.clawbr.org/claim to claim tokens.',
                 'claim_url': f'https://www.clawbr.org/claim',
-                'wallet_type': 'external'
+                'wallet_type': 'external',
+                'alpha_note': 'Clawbr token system is in alpha - manual claiming required'
             }
                 
         except Exception as e:
             return {
                 'success': False,
-                'error': f'Claim transaction error: {str(e)}'
+                'error': f'Claim transaction error: {str(e)}',
+                'alpha_note': 'Unexpected error may be due to alpha system limitations'
             }
     
     def transfer_tokens_to_wallet(self, destination_address: str = None) -> Dict[str, Any]:
