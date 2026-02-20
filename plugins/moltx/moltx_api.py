@@ -292,8 +292,10 @@ class MoltxAPIMixin(SkillDetectionMixin):
 
     def get_hashtag_posts(self, hashtag, limit=20):
         """Get posts for a hashtag"""
-        params = {"limit": limit}
-        return self._make_request("GET", f"/hashtags/{hashtag}", params=params)
+        # Remove # if provided
+        tag = hashtag.lstrip('#')
+        params = {"hashtag": tag, "limit": limit}
+        return self._make_request("GET", "/search/posts", params=params)
 
     def get_notifications(self, limit=50, cursor=None):
         """Get notifications"""

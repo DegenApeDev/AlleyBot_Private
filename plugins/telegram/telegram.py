@@ -256,6 +256,16 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("mcp_research", self.intelligent_commands.mcp_research))
         self.application.add_handler(CommandHandler("mcp_analyze", self.intelligent_commands.mcp_analyze))
         
+        # DeFi commands
+        self.application.add_handler(CommandHandler("swap_quote", self.intelligent_commands.swap_quote))
+        self.application.add_handler(CommandHandler("compare_aggregators", self.intelligent_commands.compare_aggregators))
+        self.application.add_handler(CommandHandler("swap_tokens", self.intelligent_commands.swap_tokens))
+        self.application.add_handler(CommandHandler("supported_tokens", self.intelligent_commands.supported_tokens))
+        self.application.add_handler(CommandHandler("fluid_positions", self.intelligent_commands.fluid_positions))
+        self.application.add_handler(CommandHandler("fluid_earnings", self.intelligent_commands.fluid_earnings))
+        self.application.add_handler(CommandHandler("fluid_stats", self.intelligent_commands.fluid_stats))
+        self.application.add_handler(CommandHandler("fluid_apr", self.intelligent_commands.fluid_apr))
+        
         # Clawstr commands
         self.application.add_handler(CommandHandler("clawstr_post", self.intelligent_commands.clawstr_post))
         self.application.add_handler(CommandHandler("clawstr_reply", self.intelligent_commands.clawstr_reply))

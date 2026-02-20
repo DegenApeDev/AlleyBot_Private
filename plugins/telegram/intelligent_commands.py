@@ -2593,10 +2593,6 @@ Generate only the title (no explanations):"""
             return self.core.plugin_manager.plugins.get('mcp')
         return None
 
-    async def _run_sync(self, coro):
-        """Run async coroutine in sync context"""
-        return await coro
-
     async def improve_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show self-improvement plugin status"""
         if not await self._verify_admin(update):
@@ -2872,6 +2868,146 @@ Generate only the title (no explanations):"""
                 await self._safe_reply(update, "❌ Clawbr plugin not loaded")
                 return
             result = await self._run_sync(cb.clawbr_strategy_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def swap_quote(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Get swap quote from multiple DEX aggregators"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('best_crypto_swap_price')
+            if not plugin:
+                await self._safe_reply(update, "❌ Best Crypto Swap Price plugin not loaded")
+                return
+            
+            if not context.args:
+                await self._safe_reply(update, "Usage: /swap_quote <network> <sell_token> <buy_token> <sell_amount> [slippage]")
+                return
+            
+            result = await self._run_sync(plugin.swap_quote_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def compare_aggregators(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Compare all DEX aggregators for best price"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('best_crypto_swap_price')
+            if not plugin:
+                await self._safe_reply(update, "❌ Best Crypto Swap Price plugin not loaded")
+                return
+            
+            if not context.args:
+                await self._safe_reply(update, "Usage: /compare_aggregators <network> <sell_token> <buy_token> <sell_amount>")
+                return
+            
+            result = await self._run_sync(plugin.compare_aggregators_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def swap_tokens(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Quick swap quote with execution data"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('best_crypto_swap_price')
+            if not plugin:
+                await self._safe_reply(update, "❌ Best Crypto Swap Price plugin not loaded")
+                return
+            
+            if not context.args:
+                await self._safe_reply(update, "Usage: /swap_tokens <network> <sell_symbol> <buy_symbol> <amount>")
+                return
+            
+            result = await self._run_sync(plugin.swap_tokens_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def supported_tokens(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """List supported tokens and aggregators"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('best_crypto_swap_price')
+            if not plugin:
+                await self._safe_reply(update, "❌ Best Crypto Swap Price plugin not loaded")
+                return
+            
+            result = await self._run_sync(plugin.supported_tokens_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def fluid_positions(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check Fluid lending positions"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('fluid_lending')
+            if not plugin:
+                await self._safe_reply(update, "❌ Fluid Lending plugin not loaded")
+                return
+            
+            if not context.args:
+                await self._safe_reply(update, "Usage: /fluid_positions <address>")
+                return
+            
+            result = await self._run_sync(plugin.fluid_positions_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def fluid_earnings(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Calculate Fluid earnings projection"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('fluid_lending')
+            if not plugin:
+                await self._safe_reply(update, "❌ Fluid Lending plugin not loaded")
+                return
+            
+            if not context.args:
+                await self._safe_reply(update, "Usage: /fluid_earnings <address> [days]")
+                return
+            
+            result = await self._run_sync(plugin.fluid_earnings_command, *context.args)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def fluid_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show Fluid Protocol stats"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('fluid_lending')
+            if not plugin:
+                await self._safe_reply(update, "❌ Fluid Lending plugin not loaded")
+                return
+            
+            result = await self._run_sync(plugin.fluid_stats_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def fluid_apr(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check current Fluid APRs"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            plugin = self._get_plugin('fluid_lending')
+            if not plugin:
+                await self._safe_reply(update, "❌ Fluid Lending plugin not loaded")
+                return
+            
+            result = await self._run_sync(plugin.fluid_apr_command)
             await self._safe_reply(update, str(result))
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
