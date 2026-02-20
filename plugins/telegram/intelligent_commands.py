@@ -3015,6 +3015,163 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
     
+    # =================================================================
+    # ClawChess Commands
+    # =================================================================
+    
+    def _get_clawchess_plugin(self):
+        """Get ClawChess plugin instance"""
+        if not self.core or not hasattr(self.core, 'plugin_manager'):
+            return None
+        return self.core.plugin_manager.get_plugin('clawchess')
+    
+    async def clawchess_register(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Register new ClawChess account"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cc = self._get_clawchess_plugin()
+            if not cc:
+                await self._safe_reply(update, "❌ ClawChess plugin not loaded")
+                return
+            
+            # Parse args: name and optional bio
+            name = " ".join(context.args) if context.args else "AlleyBot"
+            
+            result = await self._run_sync(cc.register_command, name)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawchess_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Get ClawChess status"""
+        try:
+            cc = self._get_clawchess_plugin()
+            if not cc:
+                await self._safe_reply(update, "❌ ClawChess plugin not loaded")
+                return
+            result = await self._run_sync(cc.status_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawchess_queue(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Join matchmaking queue"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cc = self._get_clawchess_plugin()
+            if not cc:
+                await self._safe_reply(update, "❌ ClawChess plugin not loaded")
+                return
+            result = await self._run_sync(cc.queue_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawchess_leave(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Leave matchmaking queue"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cc = self._get_clawchess_plugin()
+            if not cc:
+                await self._safe_reply(update, "❌ ClawChess plugin not loaded")
+                return
+            result = await self._run_sync(cc.leave_queue_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawchess_play(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Play a game (auto-play cycle)"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cc = self._get_clawchess_plugin()
+            if not cc:
+                await self._safe_reply(update, "❌ ClawChess plugin not loaded")
+                return
+            result = await self._run_sync(cc.play_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawchess_move(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Make a specific chess move"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cc = self._get_clawchess_plugin()
+            if not cc:
+                await self._safe_reply(update, "❌ ClawChess plugin not loaded")
+                return
+            
+            if not context.args:
+                await self._safe_reply(update, "❌ Usage: /clawchess_move <move> (e.g., e4, Nf3, O-O)")
+                return
+            
+            move = context.args[0]
+            result = await self._run_sync(cc.move_command, move)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawchess_resign(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Resign current game"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cc = self._get_clawchess_plugin()
+            if not cc:
+                await self._safe_reply(update, "❌ ClawChess plugin not loaded")
+                return
+            result = await self._run_sync(cc.resign_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawchess_leaderboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Get ELO leaderboard"""
+        try:
+            cc = self._get_clawchess_plugin()
+            if not cc:
+                await self._safe_reply(update, "❌ ClawChess plugin not loaded")
+                return
+            result = await self._run_sync(cc.leaderboard_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawchess_autoplay(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Toggle auto-play mode"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cc = self._get_clawchess_plugin()
+            if not cc:
+                await self._safe_reply(update, "❌ ClawChess plugin not loaded")
+                return
+            
+            # Parse toggle argument
+            toggle = context.args[0] if context.args else None
+            result = await self._run_sync(cc.autoplay_command, toggle)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawchess_activity(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check current activity"""
+        try:
+            cc = self._get_clawchess_plugin()
+            if not cc:
+                await self._safe_reply(update, "❌ ClawChess plugin not loaded")
+                return
+            result = await self._run_sync(cc.activity_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
     async def swap_quote(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Get swap quote from multiple DEX aggregators"""
         if not await self._verify_admin(update):

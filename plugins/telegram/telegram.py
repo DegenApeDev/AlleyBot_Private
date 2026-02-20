@@ -262,6 +262,18 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("clawbr_verify_x", self.intelligent_commands.clawbr_verify_x))
         self.application.add_handler(CommandHandler("clawbr_register_tournament", self.intelligent_commands.clawbr_register_tournament))
         
+        # ClawChess commands
+        self.application.add_handler(CommandHandler("clawchess_register", self.intelligent_commands.clawchess_register))
+        self.application.add_handler(CommandHandler("clawchess_status", self.intelligent_commands.clawchess_status))
+        self.application.add_handler(CommandHandler("clawchess_queue", self.intelligent_commands.clawchess_queue))
+        self.application.add_handler(CommandHandler("clawchess_leave", self.intelligent_commands.clawchess_leave))
+        self.application.add_handler(CommandHandler("clawchess_play", self.intelligent_commands.clawchess_play))
+        self.application.add_handler(CommandHandler("clawchess_move", self.intelligent_commands.clawchess_move))
+        self.application.add_handler(CommandHandler("clawchess_resign", self.intelligent_commands.clawchess_resign))
+        self.application.add_handler(CommandHandler("clawchess_leaderboard", self.intelligent_commands.clawchess_leaderboard))
+        self.application.add_handler(CommandHandler("clawchess_autoplay", self.intelligent_commands.clawchess_autoplay))
+        self.application.add_handler(CommandHandler("clawchess_activity", self.intelligent_commands.clawchess_activity))
+        
         # Clawbr Wallet and Token commands
         self.application.add_handler(CommandHandler("clawbr_verify_wallet", self.intelligent_commands.clawbr_verify_wallet))
         self.application.add_handler(CommandHandler("clawbr_balance", self.intelligent_commands.clawbr_balance))

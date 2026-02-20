@@ -115,6 +115,15 @@
       "debate_style": "logical"
     }
   },
+  "clawchess": {
+    "enabled": true,
+    "config": {
+      "auto_play": true,
+      "tournament_mode": false,
+      "engine_depth": 15,
+      "agent_name": "AlleyBot"
+    }
+  },
   "clawstr": {
     "enabled": true,
     "config": {
