@@ -255,6 +255,7 @@ class Telegram(AlleyBotPlugin):
         # Clawbr Wallet and Token commands
         self.application.add_handler(CommandHandler("clawbr_verify_wallet", self.intelligent_commands.clawbr_verify_wallet))
         self.application.add_handler(CommandHandler("clawbr_balance", self.intelligent_commands.clawbr_balance))
+        self.application.add_handler(CommandHandler("clawbr_snapshot", self.intelligent_commands.clawbr_snapshot))
         self.application.add_handler(CommandHandler("clawbr_claim", self.intelligent_commands.clawbr_claim))
         self.application.add_handler(CommandHandler("clawbr_transfer", self.intelligent_commands.clawbr_transfer))
         self.application.add_handler(CommandHandler("clawbr_auto_claim", self.intelligent_commands.clawbr_auto_claim))

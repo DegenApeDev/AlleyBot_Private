@@ -381,11 +381,14 @@ Logged to analytics."""
             return f"❌ Wallet verification error: {str(e)}"
     
     def clawbr_balance_command(self, *args) -> str:
-        """Show $CLAWBR token balance and stats"""
+        """Show $CLAWBR token balance and stats with snapshot status"""
         try:
             result = self.get_token_balance()
             if result['success']:
-                return f"""🪙 **$CLAWBR Token Balance**
+                snapshot_status = result.get('snapshot_status', 'Unknown')
+                can_claim = result.get('can_claim', False)
+                
+                balance_output = f"""🪙 **$CLAWBR Token Balance**
 
 💰 Balance: {result.get('balance', 0):,} $CLAWBR
 🏆 Total Earned: {result.get('total_earned', 0):,} $CLAWBR
@@ -394,14 +397,74 @@ Logged to analytics."""
 🔐 Wallet: {'✅ Verified' if result.get('wallet_verified') else '❌ Not verified'}
 📍 Address: {result.get('wallet_address', 'N/A')[:20]}...{result.get('wallet_address', 'N/A')[-4:] if result.get('wallet_address') else ''}
 
+📸 Snapshot Status: {snapshot_status}"""
+                
+                if can_claim:
+                    balance_output += f"""
+
+🎉 **Claiming Available!**
+💡 Use: /clawbr_claim to claim your {result.get('unclaimed', 0):,} tokens
+🌐 Or visit: https://www.clawbr.org/claim"""
+                else:
+                    balance_output += f"""
+
+⏳ **Waiting for Snapshot**
+💡 Use: /clawbr_snapshot to check when next snapshot is active
+📊 Snapshots auto-update Merkle root on-chain"""
+                
+                balance_output += f"""
+
 💡 Commands:
 • /clawbr_verify_wallet - Verify wallet for claiming
-• /clawbr_claim - Claim available tokens
-• /clawbr_transfer - Transfer to personal wallet"""
+• /clawbr_snapshot - Check snapshot status
+• /clawbr_claim - Claim available tokens"""
+                
+                return balance_output
             else:
                 return f"❌ Failed to get balance: {result.get('error', 'Unknown error')}"
         except Exception as e:
             return f"❌ Balance check error: {str(e)}"
+    
+    def clawbr_snapshot_command(self, *args) -> str:
+        """Check if there's an active snapshot for token claiming"""
+        try:
+            result = self.check_snapshot_status()
+            if result['success']:
+                if result.get('snapshot_active'):
+                    return f"""🎉 **Snapshot Active!**
+
+📸 **Claiming Period is Open**
+🪙 Tokens Available: {result.get('unclaimed_tokens', 0):,} $CLAWBR
+🔗 Merkle Root: Updated on-chain
+
+💡 **Next Steps:**
+• /clawbr_claim - Get claim transaction data
+• Visit https://www.clawbr.org/claim to claim
+• Tokens go directly to your Base wallet
+
+🚀 Claim now before snapshot ends!"""
+                else:
+                    return f"""⏳ **No Active Snapshot**
+
+📸 **Claiming Period Closed**
+🪙 Available: 0 $CLAWBR
+📊 Status: Waiting for next snapshot
+
+💡 **How Snapshots Work:**
+• Snapshots auto-update Merkle root on-chain
+• Claiming is only available during active snapshots
+• Check Clawbr announcements for snapshot schedule
+
+🔄 **Next Steps:**
+• Wait for next snapshot period
+• Check /clawbr_balance periodically
+• Monitor Clawbr announcements
+
+🎯 Your wallet is verified and ready!"""
+            else:
+                return f"❌ Failed to check snapshot status: {result.get('error', 'Unknown error')}"
+        except Exception as e:
+            return f"❌ Snapshot status error: {str(e)}"
     
     def clawbr_claim_command(self, *args) -> str:
         """Claim available $CLAWBR tokens"""

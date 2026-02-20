@@ -782,6 +782,7 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
             # Wallet and Token Commands
             'clawbr_verify_wallet': self.clawbr_verify_wallet_command,
             'clawbr_balance': self.clawbr_balance_command,
+            'clawbr_snapshot': self.clawbr_snapshot_command,
             'clawbr_claim': self.clawbr_claim_command,
             'clawbr_transfer': self.clawbr_transfer_command,
             'clawbr_auto_claim': self.clawbr_auto_claim_command,

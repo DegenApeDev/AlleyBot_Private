@@ -4055,6 +4055,22 @@ Generate only the post content (no explanations):"""
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
     
+    async def clawbr_snapshot(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_snapshot command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'clawbr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawbr']
+                result = plugin.clawbr_snapshot_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawbr plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
     async def clawbr_claim(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /clawbr_claim command"""
         if not await self._verify_admin(update):

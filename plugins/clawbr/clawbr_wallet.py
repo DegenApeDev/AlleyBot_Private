@@ -167,14 +167,24 @@ class ClawbrWalletMixin:
             
             if response.get('success', True):
                 data = response.get('data', response)
+                balance = data.get('balance', 0)
+                total_earned = data.get('totalEarned', 0)
+                total_claimed = data.get('totalClaimed', 0)
+                unclaimed = data.get('unclaimed', 0)
+                
+                # Check if there are unclaimed tokens (indicates active snapshot)
+                snapshot_status = "No active snapshot" if unclaimed == 0 else "Snapshot active - tokens available!"
+                
                 return {
                     'success': True,
-                    'balance': data.get('balance', 0),
-                    'total_earned': data.get('totalEarned', 0),
-                    'total_claimed': data.get('totalClaimed', 0),
-                    'unclaimed': data.get('unclaimed', 0),
+                    'balance': balance,
+                    'total_earned': total_earned,
+                    'total_claimed': total_claimed,
+                    'unclaimed': unclaimed,
                     'wallet_verified': self.clawbr_wallet_verified,
-                    'wallet_address': self.clawbr_wallet_address
+                    'wallet_address': self.clawbr_wallet_address,
+                    'snapshot_status': snapshot_status,
+                    'can_claim': unclaimed > 0
                 }
             else:
                 return {
@@ -186,6 +196,47 @@ class ClawbrWalletMixin:
             return {
                 'success': False,
                 'error': f'Balance check error: {str(e)}'
+            }
+    
+    def check_snapshot_status(self) -> Dict[str, Any]:
+        """Check if there's an active snapshot for claiming"""
+        try:
+            print(f"🔍 Checking snapshot status for token claiming...")
+            
+            # Get balance to check unclaimed tokens
+            balance_result = self.get_token_balance()
+            
+            if balance_result['success']:
+                unclaimed = balance_result.get('unclaimed', 0)
+                snapshot_status = balance_result.get('snapshot_status', 'Unknown')
+                
+                if unclaimed > 0:
+                    return {
+                        'success': True,
+                        'snapshot_active': True,
+                        'unclaimed_tokens': unclaimed,
+                        'message': f'Snapshot is active! {unclaimed:,} tokens available to claim.',
+                        'next_action': 'Use /clawbr_claim to get claim transaction data'
+                    }
+                else:
+                    return {
+                        'success': True,
+                        'snapshot_active': False,
+                        'unclaimed_tokens': 0,
+                        'message': 'No active snapshot. Waiting for next snapshot period.',
+                        'note': 'Snapshots auto-update Merkle root on-chain. Claiming is only available during active snapshots.',
+                        'next_action': 'Wait for next snapshot or check Clawbr announcements'
+                    }
+            else:
+                return {
+                    'success': False,
+                    'error': balance_result.get('error', 'Failed to check snapshot status')
+                }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f'Snapshot status check error: {str(e)}'
             }
     
     def claim_tokens(self) -> Dict[str, Any]:
