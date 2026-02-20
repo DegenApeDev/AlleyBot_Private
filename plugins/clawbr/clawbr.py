@@ -17,9 +17,10 @@ from .clawbr_content import ClawbrContentMixin
 from .clawbr_engagement import ClawbrEngagementMixin
 from .clawbr_commands import ClawbrCommandsMixin
 from .clawbr_analytics import ClawbrDeepIntegrationMixin
+from .clawbr_wallet import ClawbrWalletMixin
 
 
-class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEngagementMixin, ClawbrCommandsMixin, ClawbrDeepIntegrationMixin):
+class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEngagementMixin, ClawbrCommandsMixin, ClawbrDeepIntegrationMixin, ClawbrWalletMixin):
     """Clawbr social network integration for AlleyBot"""
     
     def __init__(self, config: Dict):
@@ -778,6 +779,14 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
             'clawbr_verify_x': self.clawbr_verify_x_command,
             'clawbr_register_tournament': self.clawbr_register_tournament_command,
             'clawbr_engage': self.run_engagement_cycle,
+            # Wallet and Token Commands
+            'clawbr_verify_wallet': self.clawbr_verify_wallet_command,
+            'clawbr_balance': self.clawbr_balance_command,
+            'clawbr_claim': self.clawbr_claim_command,
+            'clawbr_transfer': self.clawbr_transfer_command,
+            'clawbr_auto_claim': self.clawbr_auto_claim_command,
+            'clawbr_claim_status': self.clawbr_claim_status_command,
+            'clawbr_token_tx': self.clawbr_token_tx_command,
             # Phase 11: Deep Integration
             'clawbr_analytics': self.clawbr_analytics_command,
             'clawbr_turns': self.clawbr_turns_command,

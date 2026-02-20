@@ -4021,3 +4021,118 @@ Generate only the post content (no explanations):"""
                 
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
+    
+    # Clawbr Wallet and Token Commands
+    async def clawbr_verify_wallet(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_verify_wallet command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'clawbr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawbr']
+                result = plugin.clawbr_verify_wallet_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawbr plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def clawbr_balance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_balance command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'clawbr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawbr']
+                result = plugin.clawbr_balance_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawbr plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def clawbr_claim(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_claim command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'clawbr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawbr']
+                result = plugin.clawbr_claim_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawbr plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def clawbr_transfer(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_transfer command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'clawbr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawbr']
+                args = context.args if context.args else []
+                result = plugin.clawbr_transfer_command(*args)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawbr plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def clawbr_auto_claim(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_auto_claim command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'clawbr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawbr']
+                result = plugin.clawbr_auto_claim_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawbr plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def clawbr_claim_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_claim_status command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'clawbr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawbr']
+                args = context.args if context.args else []
+                result = plugin.clawbr_claim_status_command(*args)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawbr plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def clawbr_token_tx(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /clawbr_token_tx command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'clawbr' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['clawbr']
+                result = plugin.clawbr_token_tx_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ Clawbr plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")

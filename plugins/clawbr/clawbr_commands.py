@@ -351,3 +351,180 @@ Logged to analytics."""
         if result.get('success', True):
             return f"✅ Registered for tournament: {slug}\n🏆 Good luck in the tournament!"
         return f"❌ Failed to register for tournament: {result.get('error', 'Unknown error')}"
+    
+    # Wallet and Token Commands
+    def clawbr_verify_wallet_command(self, *args) -> str:
+        """Verify Base wallet with Clawbr for token operations"""
+        try:
+            result = self.verify_base_wallet_with_clawbr()
+            if result['success']:
+                return f"""✅ **Wallet Verified Successfully**
+
+🔐 Wallet: {result.get('wallet_address', 'N/A')}
+⏰ Verified: {result.get('verified_at', 'N/A')}
+🪙 Ready for $CLAWBR token operations
+
+💡 Next steps:
+• /clawbr_balance - Check token balance
+• /clawbr_claim - Claim available tokens
+• /clawbr_transfer - Transfer tokens to wallet"""
+            else:
+                return f"❌ **Wallet Verification Failed**
+
+{result.get('error', 'Unknown error')}
+
+💡 Make sure:
+• BASE_WALLET_PUBLIC_ADDRESS is set in .env
+• BASE_WALLET_PRIVATE_KEY is set in .env
+• CLAWBR_API_KEY is valid"""
+        except Exception as e:
+            return f"❌ Wallet verification error: {str(e)}"
+    
+    def clawbr_balance_command(self, *args) -> str:
+        """Show $CLAWBR token balance and stats"""
+        try:
+            result = self.get_token_balance()
+            if result['success']:
+                return f"""🪙 **$CLAWBR Token Balance**
+
+💰 Balance: {result.get('balance', 0):,} $CLAWBR
+🏆 Total Earned: {result.get('total_earned', 0):,} $CLAWBR
+💸 Total Claimed: {result.get('total_claimed', 0):,} $CLAWBR
+📋 Unclaimed: {result.get('unclaimed', 0):,} $CLAWBR
+🔐 Wallet: {'✅ Verified' if result.get('wallet_verified') else '❌ Not verified'}
+📍 Address: {result.get('wallet_address', 'N/A')[:20]}...{result.get('wallet_address', 'N/A')[-4:] if result.get('wallet_address') else ''}
+
+💡 Commands:
+• /clawbr_verify_wallet - Verify wallet for claiming
+• /clawbr_claim - Claim available tokens
+• /clawbr_transfer - Transfer to personal wallet"""
+            else:
+                return f"❌ Failed to get balance: {result.get('error', 'Unknown error')}"
+        except Exception as e:
+            return f"❌ Balance check error: {str(e)}"
+    
+    def clawbr_claim_command(self, *args) -> str:
+        """Claim available $CLAWBR tokens"""
+        try:
+            result = self.claim_tokens()
+            if result['success']:
+                return f"""🎉 **Tokens Claimed Successfully!**
+
+🪙 Amount: {result.get('amount', 0):,} $CLAWBR
+🔗 Transaction: {result.get('basescan_url', 'N/A')}
+📝 TX Hash: {result.get('tx_hash', 'N/A')[:20]}...
+
+💡 Next: /clawbr_transfer to move tokens to your wallet"""
+            else:
+                return f"❌ **Claim Failed**
+
+{result.get('error', 'Unknown error')}
+
+💡 Make sure:
+• Wallet is verified (/clawbr_verify_wallet)
+• Claim snapshot is active
+• Wallet has gas for transactions"""
+        except Exception as e:
+            return f"❌ Claim error: {str(e)}"
+    
+    def clawbr_transfer_command(self, *args) -> str:
+        """Transfer claimed $CLAWBR tokens to wallet"""
+        destination = args[0] if args else None
+        
+        try:
+            result = self.transfer_tokens_to_wallet(destination)
+            if result['success']:
+                return f"""💸 **Transfer Successful!**
+
+🪙 Amount: {result.get('amount', 0):,} $CLAWBR
+📍 Destination: {result.get('destination', 'N/A')[:20]}...{result.get('destination', 'N/A')[-4:]}
+🔗 Transaction: {result.get('basescan_url', 'N/A')}
+📝 TX Hash: {result.get('tx_hash', 'N/A')[:20]}...
+
+✅ Tokens are now in your wallet!"""
+            else:
+                return f"❌ **Transfer Failed**
+
+{result.get('error', 'Unknown error')}
+
+💡 Usage:
+• /clawbr_transfer - Transfer to your Base wallet
+• /clawbr_transfer <address> - Transfer to specific address"""
+        except Exception as e:
+            return f"❌ Transfer error: {str(e)}"
+    
+    def clawbr_auto_claim_command(self, *args) -> str:
+        """Auto-claim and transfer tokens in one step"""
+        try:
+            result = self.auto_claim_and_transfer()
+            if result['success']:
+                claim_result = result.get('claim_result', {})
+                transfer_result = result.get('transfer_result', {})
+                
+                return f"""🤖 **Auto-Claim & Transfer Complete**
+
+🪙 Claimed: {claim_result.get('amount', 0):,} $CLAWBR
+💸 Transferred: {transfer_result.get('amount', 0):,} $CLAWBR
+🔗 Claim TX: {claim_result.get('basescan_url', 'N/A')[:50]}...
+🔗 Transfer TX: {transfer_result.get('basescan_url', 'N/A')[:50]}...
+
+✅ All tokens are now in your Base wallet!"""
+            else:
+                return f"❌ **Auto-Claim Failed**
+
+{result.get('error', 'Unknown error')}
+
+💡 This command:
+1. Verifies wallet (if needed)
+2. Claims available tokens
+3. Transfers to your Base wallet"""
+        except Exception as e:
+            return f"❌ Auto-claim error: {str(e)}"
+    
+    def clawbr_claim_status_command(self, *args) -> str:
+        """Check claim status for wallet"""
+        wallet_address = args[0] if args else None
+        
+        try:
+            result = self.get_claim_status(wallet_address)
+            if result['success']:
+                proof_data = result.get('proof_data', {})
+                return f"""📊 **Claim Status**
+
+📍 Wallet: {result.get('wallet_address', 'N/A')[:20]}...{result.get('wallet_address', 'N/A')[-4:]}
+📋 Status: {result.get('claim_status', 'unknown')}
+🏆 Total Claimed: {result.get('total_claimed', 0):,} $CLAWBR
+📅 Last Claim: {result.get('last_claim', 'Never')}
+
+🔍 Proof Data: {json.dumps(proof_data, indent=2)[:200]}..."""
+            else:
+                return f"❌ Failed to get claim status: {result.get('error', 'Unknown error')}"
+        except Exception as e:
+            return f"❌ Claim status error: {str(e)}"
+    
+    def clawbr_token_tx_command(self, *args) -> str:
+        """Show token transaction history"""
+        try:
+            result = self.get_token_transactions()
+            if result['success']:
+                transactions = result.get('transactions', [])
+                
+                if not transactions:
+                    return "📭 No token transactions found"
+                
+                output = f"📜 **Token Transactions** ({len(transactions)} total)\n\n"
+                for tx in transactions[:10]:  # Show last 10
+                    tx_type = tx.get('type', 'unknown')
+                    amount = tx.get('amount', 0)
+                    hash_str = tx.get('hash', '')[:20]
+                    timestamp = tx.get('timestamp', 'Unknown')
+                    
+                    output += f"• {tx_type}: {amount:,} $CLAWBR\n"
+                    output += f"  📅 {timestamp}\n"
+                    output += f"  🔗 {hash_str}...\n\n"
+                
+                return output
+            else:
+                return f"❌ Failed to get transactions: {result.get('error', 'Unknown error')}"
+        except Exception as e:
+            return f"❌ Transaction history error: {str(e)}"
