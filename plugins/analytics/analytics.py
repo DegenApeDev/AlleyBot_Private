@@ -1050,4 +1050,26 @@ class AnalyticsPlugin(AlleyBotPlugin):
             return jsonify(honeypot_security.get_honeypot_stats())
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+    
+    def api_wallets(self):
+        """API endpoint for wallet information"""
+        try:
+            from config import (
+                BTC_WALLET, ETH_WALLET, BASE_WALLET, SOL_WALLET
+            )
+            
+            wallets = {
+                'btc': BTC_WALLET,
+                'eth': ETH_WALLET, 
+                'base': BASE_WALLET,
+                'sol': SOL_WALLET
+            }
+            
+            return jsonify({
+                'success': True,
+                'wallets': wallets,
+                'note': 'Private keys stored securely in .env file'
+            })
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
