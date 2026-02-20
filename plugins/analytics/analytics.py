@@ -7,12 +7,13 @@ import sys
 import os
 import json
 from datetime import datetime
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from plugin_manager import AlleyBotPlugin
 from plugins.analytics.platform_aggregator import PlatformStatsAggregator
 from plugins.analytics.agent_card import AgentCardGenerator
+from plugins.analytics.honeypot_security import honeypot_security
 
 class AnalyticsPlugin(AlleyBotPlugin):
     """Analytics and dashboard plugin"""
@@ -55,6 +56,8 @@ class AnalyticsPlugin(AlleyBotPlugin):
             'agentcard': self.agentcard_status_command,
             'agentcard_update': self.agentcard_update_command,
             'agentcard_dryrun': self.agentcard_dryrun_command,
+            'honeypot_stats': self.honeypot_stats_command,
+            'honeypot_unblock': self.honeypot_unblock_command,
         }
     
     def get_endpoints(self):
@@ -66,6 +69,9 @@ class AnalyticsPlugin(AlleyBotPlugin):
             '/api/activity': self.api_activity,
             '/api/recent_activity': self.api_recent_activity,
             '/api/interactions': self.api_interactions,
+            '/api/wallets': self.api_wallets,
+            '/api/agent_card': self.api_agent_card,
+            '/api/honeypot_stats': self.api_honeypot_stats,
             '/.well-known/agent-card.json': self.api_agent_card,
         }
     
@@ -75,6 +81,32 @@ class AnalyticsPlugin(AlleyBotPlugin):
         template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'templates')
         static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'img')
         self.app = Flask(__name__, template_folder=template_dir, static_folder=static_dir, static_url_path='/static/img')
+        
+        # Add honeypot security middleware
+        @self.app.before_request
+        def honeypot_middleware():
+            """Check all requests for suspicious activity"""
+            ip = request.remote_addr
+            user_agent = request.headers.get('User-Agent', '')
+            path = request.path
+            method = request.method
+            headers = dict(request.headers)
+            
+            # Skip honeypot check for static files and legitimate routes
+            legitimate_routes = ['/', '/api/', '/static/', '/favicon.ico']
+            if any(path.startswith(route) for route in legitimate_routes):
+                return None
+            
+            # Analyze request
+            is_blocked, reason = honeypot_security.analyze_request(ip, user_agent, path, method, headers)
+            
+            if is_blocked:
+                return jsonify({"error": "Access denied", "reason": reason}), 403
+            
+            return None
+        
+        # Install honeypot trap routes
+        honeypot_security.add_honeypot_route(self.app)
         
         # Register endpoints
         for endpoint, func in self.get_endpoints().items():
@@ -964,4 +996,58 @@ class AnalyticsPlugin(AlleyBotPlugin):
             return result
         except Exception as e:
             return f"❌ Dry run failed: {e}"
+    
+    # Honeypot Security Commands
+    def honeypot_stats_command(self, *args) -> str:
+        """Show honeypot security statistics"""
+        try:
+            stats = honeypot_security.get_honeypot_stats()
+            
+            output = f"🎯 **Honeypot Security Stats**\n\n"
+            output += f"🚫 **Blocked IPs:** {stats['total_blocked_ips']}\n"
+            output += f"🎯 **Total Hits:** {stats['total_hits']}\n"
+            output += f"📈 **Last 24h:** {stats['recent_24h_hits']} hits\n\n"
+            
+            if stats['top_attack_patterns']:
+                output += f"🔍 **Top Attack Patterns:**\n"
+                for pattern, count in list(stats['top_attack_patterns'].items())[:5]:
+                    output += f"  • {pattern}: {count}\n"
+                output += "\n"
+            
+            if stats['most_suspicious_ips']:
+                output += f"⚠️ **Most Suspicious IPs:**\n"
+                for ip_data in stats['most_suspicious_ips'][:3]:
+                    output += f"  • {ip_data['ip']} (Score: {ip_data['score']})\n"
+                output += "\n"
+            
+            if stats['blocked_ips']:
+                output += f"🚫 **Currently Blocked:** {', '.join(stats['blocked_ips'][:5])}"
+                if len(stats['blocked_ips']) > 5:
+                    output += f" and {len(stats['blocked_ips']) - 5} more"
+            
+            return output
+            
+        except Exception as e:
+            return f"❌ Failed to get honeypot stats: {e}"
+    
+    def honeypot_unblock_command(self, *args) -> str:
+        """Unblock an IP address"""
+        if not args:
+            return "❌ Usage: honeypot_unblock <ip_address>"
+        
+        ip = args[0]
+        try:
+            if honeypot_security.unblock_ip(ip):
+                return f"✅ Unblocked IP: {ip}"
+            else:
+                return f"❌ IP {ip} was not blocked"
+        except Exception as e:
+            return f"❌ Failed to unblock IP: {e}"
+    
+    def api_honeypot_stats(self):
+        """API endpoint for honeypot statistics"""
+        try:
+            return jsonify(honeypot_security.get_honeypot_stats())
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
