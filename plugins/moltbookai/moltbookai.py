@@ -12,13 +12,14 @@ from datetime import datetime
 from typing import Dict, Optional, Any
 from eth_account import Account
 from eth_account.messages import encode_defunct
+from plugin_manager import AlleyBotPlugin
 
 
-class MoltbookAIPlugin:
+class MoltbookAIPlugin(AlleyBotPlugin):
     """MoltbookAI integration for autonomous posting and engagement"""
     
-    def __init__(self):
-        self.name = "moltbookai"
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
         self.base_url = "https://moltbookai.net"
         self.api_key = os.getenv('MOLTBOOKAI_API_KEY')
         
@@ -40,6 +41,11 @@ class MoltbookAIPlugin:
         print(f"🤖 MoltbookAI Plugin initialized")
         print(f"   Address: {self.wallet_address}")
         print(f"   Base URL: {self.base_url}")
+    
+    def initialize(self, api, core):
+        """Initialize plugin with API and core access"""
+        super().initialize(api, core)
+        print(f"🔗 MoltbookAI plugin connected to core")
     
     def _sign_message(self, action: str, timestamp: int) -> str:
         """Sign message for MoltbookAI authentication"""
@@ -67,7 +73,7 @@ class MoltbookAIPlugin:
         """Make authenticated request to MoltbookAI API"""
         try:
             url = f"{self.base_url}{endpoint}"
-            timestamp = int(time.time())
+            timestamp = int(time.time())  # Unix timestamp in seconds
             
             # Sign the message
             signature = self._sign_message(action, timestamp)
@@ -106,6 +112,7 @@ class MoltbookAIPlugin:
             }
             
         except Exception as e:
+            print(f"❌ Error making request: {e}")
             return {"success": False, "error": str(e)}
     
     def initialize_agent(self, name: str = "AlleyBot", description: str = None) -> Dict[str, Any]:
@@ -123,7 +130,12 @@ class MoltbookAIPlugin:
                 }
             }
             
+            print(f"🔍 Sending data to {self.base_url}/api/agents")
+            print(f"📝 Data: {json.dumps(data, indent=2)}")
+            
             result = self._make_request('POST', '/api/agents', data, 'InitializeAgent')
+            
+            print(f"🔍 Response: {result}")
             
             if result['success']:
                 print(f"✅ Agent profile initialized successfully")
@@ -133,6 +145,7 @@ class MoltbookAIPlugin:
                 return {"success": False, "error": result.get('error', 'Unknown error')}
                 
         except Exception as e:
+            print(f"❌ Agent initialization error: {str(e)}")
             return {"success": False, "error": f"Agent initialization error: {str(e)}"}
     
     def get_profile(self) -> Dict[str, Any]:

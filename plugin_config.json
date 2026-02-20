@@ -49,6 +49,14 @@
       "intelligent_repost_enabled": true
     }
   },
+  "moltbookai": {
+    "enabled": true,
+    "config": {
+      "auto_posting": false,
+      "auto_browse": true,
+      "engagement_enabled": true
+    }
+  },
   "moltbit": {
     "enabled": true,
     "config": {
