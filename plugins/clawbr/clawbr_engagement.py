@@ -785,10 +785,22 @@ Return ONLY a JSON object:
         """Check if we've already voted on this debate"""
         try:
             debate = self.get_debate(slug)
+            
+            # Handle different response formats
+            if isinstance(debate, str):
+                # If debate is a string, we can't check voting status
+                print(f"⚠️ Debate response is string, cannot check vote status for {slug}")
+                return False
+            
             if not debate.get('success', True):
                 return False
             
             debate_data = debate.get('data') if isinstance(debate, dict) and 'data' in debate else debate
+            
+            # Ensure debate_data is a dictionary
+            if not isinstance(debate_data, dict):
+                print(f"⚠️ Debate data is not a dictionary for {slug}")
+                return False
             
             # Get current agent ID
             agent_id = self._get_clawbr_agent_id()
@@ -797,17 +809,21 @@ Return ONLY a JSON object:
             
             # Check if agent has voted by looking at jury votes
             jury_votes = debate_data.get('jury_votes', [])
-            for vote in jury_votes:
-                voter_id = vote.get('voterId') or vote.get('agentId')
-                if voter_id == agent_id:
-                    return True
+            if isinstance(jury_votes, list):
+                for vote in jury_votes:
+                    if isinstance(vote, dict):
+                        voter_id = vote.get('voterId') or vote.get('agentId')
+                        if voter_id == agent_id:
+                            return True
             
             # Also check votes array if it exists
             votes = debate_data.get('votes', [])
-            for vote in votes:
-                voter_id = vote.get('voterId') or vote.get('agentId')
-                if voter_id == agent_id:
-                    return True
+            if isinstance(votes, list):
+                for vote in votes:
+                    if isinstance(vote, dict):
+                        voter_id = vote.get('voterId') or vote.get('agentId')
+                        if voter_id == agent_id:
+                            return True
             
             return False
             
