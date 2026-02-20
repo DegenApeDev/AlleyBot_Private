@@ -45,7 +45,7 @@ class ClawbrEngagementMixin:
         if actor:
             self.clawbr_last_engagement[actor] = time.time()
             if len(self.clawbr_last_engagement) % 10 == 0:
-                self.core.set_memory('clawbr_last_engagement', self.clawbr_last_engagement)
+                self.core.save_memory('clawbr_last_engagement', self.clawbr_last_engagement)
     
     def _check_rate_limit(self, action: str, interval_seconds: float = 60.0) -> bool:
         """Check if action is allowed based on rate limiting"""
@@ -54,7 +54,7 @@ class ClawbrEngagementMixin:
         
         if now - last_action >= interval_seconds:
             self.clawbr_rate_limits[f'last_{action}'] = now
-            self.core.set_memory('clawbr_rate_limits', self.clawbr_rate_limits)
+            self.core.save_memory('clawbr_rate_limits', self.clawbr_rate_limits)
             return True
         
         return False
@@ -231,7 +231,7 @@ class ClawbrEngagementMixin:
                         if reply_result.get('success'):
                             results['commented'] += 1
                             self.clawbr_commented_posts.append(post_id)
-                            self.core.set_memory('clawbr_commented_posts', self.clawbr_commented_posts[-100:])
+                            self.core.save_memory('clawbr_commented_posts', self.clawbr_commented_posts[-100:])
                             self._record_engagement('comment', {'actor': author, 'post_id': post_id})
                             print(f"💬 Commented on {author}'s post")
             
@@ -242,7 +242,7 @@ class ClawbrEngagementMixin:
                     if follow_result.get('success'):
                         results['followed'] += 1
                         self.clawbr_followed_agents.append(author)
-                        self.core.set_memory('clawbr_followed_agents', self.clawbr_followed_agents[-100:])
+                        self.core.save_memory('clawbr_followed_agents', self.clawbr_followed_agents[-100:])
                         self._record_engagement('follow', {'actor': author})
                         print(f"👥 Followed {author}")
             
@@ -251,6 +251,10 @@ class ClawbrEngagementMixin:
                 join_result = self.join_debate(post['debateSlug'])
                 if join_result.get('success'):
                     results['debates_joined'] += 1
+                    # Track joined debate for auto-reply
+                    self.clawbr_joined_debates[post['debateSlug']] = time.time()
+                    self.core.save_memory('clawbr_joined_debates', self.clawbr_joined_debates)
+                    print(f"🎭 Joined debate: {post['debateSlug']} - will auto-reply when it's our turn")
         
         return {
             'success': True,
@@ -388,7 +392,7 @@ Reply:"""
                         results['joined'] += 1
                         # Track joined debate for auto-reply
                         self.clawbr_joined_debates[slug] = time.time()
-                        self.core.set_memory('clawbr_joined_debates', self.clawbr_joined_debates)
+                        self.core.save_memory('clawbr_joined_debates', self.clawbr_joined_debates)
 
             elif action_type in {'post', 'take_turn'}:
                 # Rate limit: posts & replies are 60/hour = 1 per minute
@@ -631,7 +635,7 @@ Reply:"""
             'followed': len(followed_agents),
             'agents': followed_agents,
         }
-        self.core.set_memory('clawbr_follow_10_analytics', analytics)
+        self.core.save_memory('clawbr_follow_10_analytics', analytics)
         
         print(f"📊 Followed {len(followed_agents)}/{target} agents")
         
