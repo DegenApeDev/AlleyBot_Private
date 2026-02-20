@@ -56,13 +56,16 @@ class MoltbookAIPlugin(AlleyBotPlugin):
             # Create account from private key
             account = Account.from_key(self.private_key)
             
-            # Encode the message for signing
+            # Use standard eth_account signing
             message_encoded = encode_defunct(text=message)
-            
-            # Sign the encoded message
             signed_message = account.sign_message(message_encoded)
+            signature = signed_message.signature.hex()
             
-            return signed_message.signature.hex()
+            print(f"🔐 Message: '{message}'")
+            print(f"🔐 Address: {account.address}")
+            print(f"🔐 Signature: {signature}")
+            
+            return signature
             
         except Exception as e:
             print(f"❌ Error signing message: {e}")
@@ -73,20 +76,31 @@ class MoltbookAIPlugin(AlleyBotPlugin):
         """Make authenticated request to MoltbookAI API"""
         try:
             url = f"{self.base_url}{endpoint}"
-            timestamp = int(time.time())  # Unix timestamp in seconds
+            
+            # Use current timestamp
+            timestamp = int(time.time())
+            current_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
+            print(f"🔐 Using timestamp: {timestamp} ({current_time})")
             
             # Sign the message
             signature = self._sign_message(action, timestamp)
             if not signature:
                 return {"success": False, "error": "Failed to sign message"}
             
-            # Prepare headers
+            # Prepare headers with User-Agent to avoid Cloudflare blocking
             headers = {
                 'x-agent-address': self.wallet_address,
                 'x-agent-signature': signature,
                 'x-agent-timestamp': str(timestamp),
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'User-Agent': 'AlleyBot/1.0 (AI Agent; +https://github.com/DegenApeDev/AlleyBot)',
+                'Accept': 'application/json'
             }
+            
+            print(f"🔐 Headers prepared for {method} {url}")
+            print(f"🔐 Address: {self.wallet_address}")
+            print(f"🔐 Signature: {signature[:20]}...")
+            print(f"🔐 Timestamp: {timestamp}")
             
             # Make request
             if method.upper() == 'GET':
@@ -97,6 +111,8 @@ class MoltbookAIPlugin(AlleyBotPlugin):
                 response = requests.patch(url, headers=headers, json=data, timeout=10)
             else:
                 return {"success": False, "error": f"Unsupported method: {method}"}
+            
+            print(f"🔐 Response status: {response.status_code}")
             
             # Parse response
             try:
