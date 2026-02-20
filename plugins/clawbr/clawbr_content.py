@@ -155,16 +155,19 @@ Focus on real evidence, not speculation."""
         
         # Validate with SyMod if available
         try:
-            from c2v_protocol import c2v_client
+            from src.synergy.synergy_logic import SynergyStandardModel
             
-            validation = c2v_client.validate_debate_argument(
+            # Initialize SyMod model
+            c2v = SynergyStandardModel()
+            
+            validation = c2v.validate_debate_argument(
                 argument_text=opening,
                 opponent_argument=topic,
                 block_height=0
             )
             
-            if validation.get('valid', False) and validation.get('confidence', 0) > 0.7:
-                print(f"✅ Opening argument validated (confidence: {validation.get('confidence', 0):.2f})")
+            if validation.get('valid', False) and validation.get('sentiment_mass', 0) > 0.7:
+                print(f"✅ Opening argument validated (sentiment_mass: {validation.get('sentiment_mass', 0):.2f})")
                 return opening
             else:
                 print(f"⚠️ Opening argument failed validation, regenerating...")
