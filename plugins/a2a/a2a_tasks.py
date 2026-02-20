@@ -6,7 +6,7 @@ permission tiers (public/paid/owner_only), and sandboxed execution.
 """
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Callable
 
 
@@ -148,7 +148,7 @@ class A2ATaskResult:
         self.error = error
         self.task_id = task_id
         self.execution_time_ms = execution_time_ms
-        self.timestamp = datetime.now(datetime.UTC).isoformat() + 'Z'
+        self.timestamp = datetime.now(timezone.utc).isoformat() + 'Z'
 
     def to_dict(self) -> Dict[str, Any]:
         result = {
@@ -179,7 +179,7 @@ class A2ATaskHandlerMixin:
         # Image generation daily limits (budget control)
         self._image_gen_daily_limit = 50  # Max 50 images per day
         self._image_gen_daily_count = 0
-        self._image_gen_date = datetime.now(datetime.UTC).date()
+        self._image_gen_date = datetime.now(timezone.utc).date()
 
     # ── Task Execution ──────────────────────────────────────────────
 
@@ -291,7 +291,7 @@ class A2ATaskHandlerMixin:
             'uptime': uptime,
             'tasks_executed': self._tasks_executed,
             'tasks_failed': self._tasks_failed,
-            'timestamp': datetime.now(datetime.UTC).isoformat() + 'Z',
+            'timestamp': datetime.now(timezone.utc).isoformat() + 'Z',
         }
 
     def _task_stats(self, params: Dict, agent_id: str) -> Dict:
