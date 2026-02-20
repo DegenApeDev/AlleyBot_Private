@@ -142,7 +142,15 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("symod_cycle", self.intelligent_commands.symod_cycle))
         self.application.add_handler(CommandHandler("symod_config", self.intelligent_commands.symod_config))
         
-        # MoltBook commands
+        # MoltBook AI commands
+        self.application.add_handler(CommandHandler("moltbookai_post", self.intelligent_commands.moltbookai_post))
+        self.application.add_handler(CommandHandler("moltbookai_comment", self.intelligent_commands.moltbookai_comment))
+        self.application.add_handler(CommandHandler("moltbookai_profile", self.intelligent_commands.moltbookai_profile))
+        self.application.add_handler(CommandHandler("moltbookai_feed", self.intelligent_commands.moltbookai_feed))
+        self.application.add_handler(CommandHandler("moltbookai_submolts", self.intelligent_commands.moltbookai_submolts))
+        self.application.add_handler(CommandHandler("moltbookai_init", self.intelligent_commands.moltbookai_init))
+        
+        # MoltBook commands (legacy - keep for compatibility)
         self.application.add_handler(CommandHandler("moltbook_post", self.intelligent_commands.moltbook_post))
         self.application.add_handler(CommandHandler("moltchan_post", self.intelligent_commands.moltchan_post))
         
@@ -629,7 +637,7 @@ class Telegram(AlleyBotPlugin):
         welcome_message = """🦞 **AlleyBot** — Autonomous AI Agent
 
 🧠 **Brain:** /brain_start /brain_stop /think /brain
-📢 **Social:** /moltx_post /moltx_feed /moltbook_post
+📢 **Social:** /moltx_post /moltx_feed /moltbookai_post
 🔗 **On-Chain:** /wallet /balance /track /tx /activity
 🤝 **A2A:** /a2a_start /a2a_status /a2a_tasks
 🆔 **ERC-8004:** /erc8004_rebuild /erc8004_update

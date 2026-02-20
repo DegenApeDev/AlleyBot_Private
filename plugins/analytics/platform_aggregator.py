@@ -221,7 +221,7 @@ class PlatformStatsAggregator:
             return None
     
     def _get_cached_followers(self) -> Dict:
-        """Get combined follower count from MoltBook + MoltX, cached for 1 hour (not 24h)"""
+        """Get combined follower count from MoltBook AI + MoltX, cached for 1 hour (not 24h)"""
         now = datetime.now()
 
         # Check in-memory cache first (reduced from 24h to 1h for more accurate data)
@@ -255,23 +255,25 @@ class PlatformStatsAggregator:
         moltbook_followers = 0
         moltx_followers = 0
 
-        # MoltBook: https://www.moltbook.com/api/v1/agents/profile?name=AlleyBot
+        # MoltBook AI: https://moltbookai.net/api/agents/me?address=0x...
         try:
+            # Get AlleyBot's address from environment or use default
+            alleybot_address = os.getenv('ALLEYBOT_ADDRESS', '0x1234567890123456789012345678901234567890')
             resp = requests.get(
-                'https://www.moltbook.com/api/v1/agents/profile?name=AlleyBot',
+                f'https://moltbookai.net/api/agents/me?address={alleybot_address}',
                 timeout=10
             )
-            # if self.debug_mode: print(f"[DASHBOARD-DEBUG] MoltBook profile response: {resp.status_code}")
+            # if self.debug_mode: print(f"[DASHBOARD-DEBUG] MoltBook AI profile response: {resp.status_code}")
             if resp.status_code == 200:
                 data = resp.json()
-                # if self.debug_mode: print(f"[DASHBOARD-DEBUG] MoltBook data keys: {list(data.keys()) if isinstance(data, dict) else 'not dict'}")
+                # if self.debug_mode: print(f"[DASHBOARD-DEBUG] MoltBook AI data keys: {list(data.keys()) if isinstance(data, dict) else 'not dict'}")
                 if isinstance(data, dict):
                     agent = data.get('agent', data.get('data', data))
                     if isinstance(agent, dict):
                         moltbook_followers = agent.get('follower_count', agent.get('followers', 0))
-                        # if self.debug_mode: print(f"[DASHBOARD-DEBUG] MoltBook followers found: {moltbook_followers}")
+                        # if self.debug_mode: print(f"[DASHBOARD-DEBUG] MoltBook AI followers found: {moltbook_followers}")
         except Exception as e:
-            # if self.debug_mode: print(f"[DASHBOARD-DEBUG] MoltBook follower fetch error: {e}")
+            # if self.debug_mode: print(f"[DASHBOARD-DEBUG] MoltBook AI follower fetch error: {e}")
             pass
 
         # MoltX: Try multiple endpoints for followers

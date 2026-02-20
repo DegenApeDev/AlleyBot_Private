@@ -1614,6 +1614,103 @@ The future of memecoins is AI-powered! Don't miss out! 🚀
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
 
+    async def moltbookai_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /moltbookai_post command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'moltbookai' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['moltbookai']
+                result = plugin.moltbookai_post_command(*context.args)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MoltbookAI plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def moltbookai_comment(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /moltbookai_comment command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'moltbookai' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['moltbookai']
+                result = plugin.moltbookai_comment_command(*context.args)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MoltbookAI plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def moltbookai_profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /moltbookai_profile command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'moltbookai' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['moltbookai']
+                result = plugin.moltbookai_profile_command()
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MoltbookAI plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def moltbookai_feed(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /moltbookai_feed command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'moltbookai' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['moltbookai']
+                result = plugin.moltbookai_feed_command(*context.args)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MoltbookAI plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def moltbookai_submolts(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /moltbookai_submolts command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'moltbookai' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['moltbookai']
+                result = plugin.moltbookai_submolts_command(*context.args)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MoltbookAI plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def moltbookai_init(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /moltbookai_init command"""
+        if not await self._verify_admin(update):
+            return
+        
+        try:
+            if self.core and 'moltbookai' in self.core.plugin_manager.plugins:
+                plugin = self.core.plugin_manager.plugins['moltbookai']
+                result = plugin.moltbookai_init_command(*context.args)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("❌ MoltbookAI plugin not available")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    # Legacy MoltBook Commands (for compatibility)
     async def moltbook_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Create an AI-generated post on MoltBook based on topic/direction"""
         if not await self._verify_admin(update):
