@@ -2987,6 +2987,34 @@ Generate only the title (no explanations):"""
         except Exception as e:
             await self._safe_reply(update, f"❌ Error: {e}")
     
+    async def clawbr_turns(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check and reply to debate turns"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            result = await self._run_sync(cb.clawbr_turns_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
+    async def clawbr_remind(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Send debate reminders (alias for clawbr_turns)"""
+        if not await self._verify_admin(update):
+            return
+        try:
+            cb = self._get_clawbr_plugin()
+            if not cb:
+                await self._safe_reply(update, "❌ Clawbr plugin not loaded")
+                return
+            result = await self._run_sync(cb.clawbr_remind_command)
+            await self._safe_reply(update, str(result))
+        except Exception as e:
+            await self._safe_reply(update, f"❌ Error: {e}")
+    
     async def swap_quote(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Get swap quote from multiple DEX aggregators"""
         if not await self._verify_admin(update):
