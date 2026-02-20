@@ -386,42 +386,44 @@ class EnhancedDebateStrategy:
         elif len(tactics) == 0:
             return 'straightforward'
         else:
-            return 'mixed_tactical'
     
     def _validate_claims_with_symod(self, argument: str, topic: str) -> Dict[str, Any]:
         """Use SyMod to validate claims and find counter-evidence"""
         try:
-            # Try to import SyMod validation
-            from c2v_protocol import c2v_client
+            # Try to import the correct SyMod interface
+            from src.synergy.synergy_logic import SynergyStandardModel
+            
+            # Initialize SyMod model
+            c2v = SynergyStandardModel()
             
             # Extract key claims from argument
             claims = self._extract_claims(argument)
-            
             validated_claims = []
             counter_evidence = []
             
             for claim in claims:
                 try:
                     # Validate claim with SyMod
-                    validation = c2v_client.validate_debate_argument(
+                    validation = c2v.validate_debate_argument(
                         argument_text=claim,
                         opponent_argument=topic,
-                        block_height=0  # Use latest block
+                        block_height=None  # Use latest block
                     )
                     
                     validated_claims.append({
                         'claim': claim,
                         'valid': validation.get('valid', False),
-                        'confidence': validation.get('confidence', 0.0),
-                        'reasoning': validation.get('reasoning', '')
+                        'confidence': validation.get('sentiment_mass', 0.0),
+                        'reasoning': f"Field Status: {validation.get('synergy_field_status', 'Unknown')}, "
+                                     f"Impedance: {validation.get('logical_impedance', '0e0')}"
                     })
                     
                     # If claim is invalid, get counter-evidence
                     if not validation.get('valid', False):
                         counter_evidence.append({
                             'false_claim': claim,
-                            'correction': validation.get('reasoning', ''),
-                            'confidence': validation.get('confidence', 0.0)
+                            'correction': f"Claim fails SyMod validation. Field status: {validation.get('synergy_field_status', 'Unknown')}",
+                            'confidence': validation.get('sentiment_mass', 0.0)
                         })
                 
                 except Exception as e:
