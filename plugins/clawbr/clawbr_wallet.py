@@ -188,17 +188,117 @@ class ClawbrWalletMixin:
                 'error': f'Balance check error: {str(e)}'
             }
     
+    def generate_claims_wallet(self) -> Dict[str, Any]:
+        """
+        Generate a server-side claims wallet for automatic token claiming
+        This creates a wallet held by Clawbr's servers for easier claiming
+        Only call this once per agent
+        """
+        if not self.api_key:
+            return {
+                'success': False,
+                'error': 'CLAWBR_API_KEY not found in environment'
+            }
+        
+        try:
+            print(f"🔐 Generating server-side claims wallet...")
+            
+            response = self._make_request('POST', '/agents/me/generate-wallet')
+            
+            if response.get('success', True):
+                data = response.get('data', response)
+                wallet_address = data.get('wallet_address', '')
+                verified = data.get('verified', False)
+                
+                print(f"✅ Claims wallet generated: {wallet_address}")
+                print(f"🔐 Verified: {verified}")
+                
+                # Store the claims wallet info
+                self.claims_wallet_address = wallet_address
+                self.claims_wallet_verified = verified
+                
+                return {
+                    'success': True,
+                    'wallet_address': wallet_address,
+                    'verified': verified,
+                    'message': f'Server-side claims wallet generated: {wallet_address}'
+                }
+            else:
+                error_msg = response.get('error', 'Failed to generate claims wallet')
+                print(f"❌ Failed to generate claims wallet: {error_msg}")
+                
+                return {
+                    'success': False,
+                    'error': error_msg
+                }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f'Claims wallet generation error: {str(e)}'
+            }
+    
     def claim_tokens(self) -> Dict[str, Any]:
         """
         Claim available $CLAWBR tokens
-        For externally verified wallets, uses the /tokens/claim-tx/:wallet endpoint
+        Uses server-side claims wallet if available, otherwise external wallet flow
         """
+        # Check if we have a server-side claims wallet
+        if hasattr(self, 'claims_wallet_address') and self.claims_wallet_address:
+            return self._claim_with_server_wallet()
+        
+        # Check if external wallet is verified
         if not self.clawbr_wallet_verified:
             return {
                 'success': False,
                 'error': 'Wallet not verified. Call verify_base_wallet_with_clawbr() first.'
             }
         
+        # Use external wallet flow
+        return self._claim_with_external_wallet()
+    
+    def _claim_with_server_wallet(self) -> Dict[str, Any]:
+        """Claim tokens using server-side claims wallet"""
+        try:
+            print(f"🪙 Attempting to claim $CLAWBR tokens with server wallet...")
+            
+            response = self._make_request('POST', '/tokens/claim')
+            
+            if response.get('success', True):
+                data = response.get('data', response)
+                claimed_amount = data.get('amount', 0)
+                tx_hash = data.get('tx_hash', '')
+                basescan_url = data.get('basescan', '')
+                
+                print(f"🎉 Successfully claimed {claimed_amount} $CLAWBR tokens!")
+                print(f"🔗 Transaction: {basescan_url}")
+                
+                return {
+                    'success': True,
+                    'claimed': True,
+                    'amount': claimed_amount,
+                    'tx_hash': tx_hash,
+                    'basescan_url': basescan_url,
+                    'message': f'Claimed {claimed_amount} $CLAWBR tokens',
+                    'wallet_type': 'server'
+                }
+            else:
+                error_msg = response.get('error', 'Claim failed')
+                print(f"❌ Token claim failed: {error_msg}")
+                
+                return {
+                    'success': False,
+                    'error': error_msg
+                }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f'Server wallet claim error: {str(e)}'
+            }
+    
+    def _claim_with_external_wallet(self) -> Dict[str, Any]:
+        """Claim tokens using externally verified wallet"""
         try:
             print(f"🪙 Attempting to claim $CLAWBR tokens...")
             
@@ -245,13 +345,14 @@ class ClawbrWalletMixin:
                     'gas_price': claim_data.get('gasPrice', '0.00000002')
                 },
                 'message': f'Externally verified wallet requires manual transaction submission. Visit https://www.clawbr.org/claim to claim tokens.',
-                'claim_url': f'https://www.clawbr.org/claim'
+                'claim_url': f'https://www.clawbr.org/claim',
+                'wallet_type': 'external'
             }
                 
         except Exception as e:
             return {
                 'success': False,
-                'error': f'Claim error: {str(e)}'
+                'error': f'External wallet claim error: {str(e)}'
             }
     
     def transfer_tokens_to_wallet(self, destination_address: str = None) -> Dict[str, Any]:
