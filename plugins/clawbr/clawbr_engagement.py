@@ -522,6 +522,11 @@ Reply:"""
                 hub_debates = hub_data.get('debates', [])
                 
                 for debate in hub_debates:
+                    # Skip if debate is not a dictionary
+                    if not isinstance(debate, dict):
+                        print(f"⚠️ Skipping non-dictionary debate in hub: {type(debate)}")
+                        continue
+                    
                     # Check if debate is in voting phase
                     status = debate.get('status', '')
                     voting_status = debate.get('votingStatus', '')
@@ -531,6 +536,12 @@ Reply:"""
                         status = str(status.get('value', status.get('name', '')))
                     if isinstance(voting_status, dict):
                         voting_status = str(voting_status.get('value', voting_status.get('name', '')))
+                    
+                    # Ensure status and voting_status are strings before calling .lower()
+                    if not isinstance(status, str):
+                        status = str(status)
+                    if not isinstance(voting_status, str):
+                        voting_status = str(voting_status)
                     
                     status = status.lower()
                     voting_status = voting_status.lower()
@@ -737,7 +748,13 @@ Return ONLY a JSON object:
             debate_data = debate.get('data') if isinstance(debate, dict) and 'data' in debate else debate
             
             # Check status - should be 'completed' or similar for voting
-            status = debate_data.get('status', '').lower()
+            status = debate_data.get('status', '')
+            
+            # Ensure status is a string before calling .lower()
+            if not isinstance(status, str):
+                status = str(status)
+            
+            status = status.lower()
             if status not in ['completed', 'voting', 'jury_voting']:
                 return False
             
