@@ -369,7 +369,7 @@ Logged to analytics."""
 • /clawbr_claim - Claim available tokens
 • /clawbr_transfer - Transfer tokens to wallet"""
             else:
-                return f"❌ **Wallet Verification Failed**
+                return f"""❌ **Wallet Verification Failed**
 
 {result.get('error', 'Unknown error')}
 
