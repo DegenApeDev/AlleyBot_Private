@@ -1,0 +1,414 @@
+"""
+Self-Improvement Plugin for AlleyBot
+Autonomous coding, git branch workflow, test-before-merge, and skill marketplace.
+
+Split into mixins:
+- git_workflow.py: Git branching for safe self-edits
+- test_gate.py: Test-before-merge validation
+- skill_marketplace.py: Skill sharing and importing
+"""
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+from plugin_manager import AlleyBotPlugin
+from plugins.selfimprove.git_workflow import GitWorkflowMixin
+from plugins.selfimprove.test_gate import TestGateMixin
+from plugins.selfimprove.skill_marketplace import SkillMarketplaceMixin
+from plugins.selfimprove.skill_builder import SkillBuilderMixin
+from plugins.selfimprove.skill_updater import SkillUpdaterMixin
+from plugins.selfimprove.autonomous_coder import AutonomousCoderMixin
+
+
+class SelfImprovePlugin(GitWorkflowMixin, TestGateMixin, SkillMarketplaceMixin, SkillBuilderMixin, SkillUpdaterMixin, AutonomousCoderMixin, AlleyBotPlugin):
+    """Self-improvement capabilities: autonomous coding, git workflow, test gates, skill marketplace"""
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.autonomous_coder = None
+
+    def initialize(self, api, core):
+        """Initialize self-improvement plugin"""
+        super().initialize(api, core)
+
+        # Initialize sub-systems
+        self._init_git_workflow()
+        self._init_test_gate()
+        self._init_marketplace()
+
+        # Wire autonomous coder if available
+        try:
+            from autonomous_coder import AutonomousCoder
+            self.autonomous_coder = AutonomousCoder()
+            print("✅ Autonomous coder loaded")
+        except ImportError:
+            print("⚠️  autonomous_coder.py not found, code generation limited to skill_generator")
+
+        # Initialize skill builder (SKILL.md discovery + AI generation)
+        self._init_skill_builder()
+        print(f"🧩 Skill builder ready ({len(self.loaded_skills)} skills discovered)")
+
+        # Initialize skill updater (auto-download platform skill files)
+        self._init_skill_updater()
+
+        # Initialize autonomous coder (AI code generation + self-update)
+        self._init_autonomous_coder()
+
+        print("✅ Self-improvement plugin ready")
+
+    def improve_command(self, *args):
+        """Run a self-improvement cycle: identify gaps, generate a new skill"""
+        return self.build_skill_command(*args)
+
+    def drafts_command(self, *args):
+        """Show pending code drafts from autonomous coder with risk levels"""
+        if not self.autonomous_coder:
+            return "❌ Autonomous coder not available"
+
+        drafts = self.autonomous_coder.get_pending_drafts()
+        if not drafts:
+            return "📭 No pending drafts"
+
+        output = f"📋 Pending Drafts ({len(drafts)})\n\n"
+        for d in drafts[:10]:
+            # Get risk level if available (from self-improvement hooks)
+            risk_level = d.get('risk_level', 'unknown')
+            risk_icon = {'low': '🟢', 'medium': '🟡', 'high': '🔴', 'unknown': '⚪'}.get(risk_level, '⚪')
+            
+            output += f"  📝 {d['draft_id']} - {d.get('task', 'Auto-fix')[:50]}\n"
+            output += f"     Status: {d.get('status', 'PENDING')} | Files: {len(d.get('files', []))}\n"
+            output += f"     Risk: {risk_icon} {risk_level.upper()}"
+            
+            # Show root cause if auto-generated fix
+            if d.get('root_cause'):
+                output += f" | Cause: {d['root_cause'][:30]}"
+            output += "\n"
+            
+            # Show framework validation status
+            validation = d.get('framework_validation', {})
+            if validation:
+                if validation.get('valid'):
+                    output += f"     ✅ Framework checks passed\n"
+                else:
+                    output += f"     ❌ Framework errors: {len(validation.get('errors', []))}\n"
+            
+            output += f"     Created: {d.get('timestamp', '')[:16]}\n\n"
+        
+        output += "\nUsage: /improve_approve <draft_id> to deploy (requires human approval for medium/high risk)"
+        return output
+
+    def approve_draft_command(self, *args):
+        """Approve a code draft. Usage: improve_approve <draft_id>"""
+        if not self.autonomous_coder:
+            return "❌ Autonomous coder not available"
+        if not args:
+            return "❌ Usage: improve_approve <draft_id>"
+
+        draft_id = args[0]
+
+        # Test the draft first
+        test_result = self.autonomous_coder.test_code(draft_id)
+        if test_result.get('status') == 'test_error':
+            return f"❌ Draft failed testing: {test_result.get('error', '?')}"
+
+        if test_result.get('tests_failed', 0) > 0:
+            return (
+                f"❌ Draft has failing tests: "
+                f"{test_result['tests_passed']}/{test_result['tests_run']} passed\n"
+                f"Fix issues before approving."
+            )
+
+        # Approve
+        result = self.autonomous_coder.approve_draft(draft_id, {
+            'reviewer': 'AlleyBot-SelfImprove',
+            'comments': 'Auto-approved after passing tests',
+        })
+
+        if result.get('status') == 'approved':
+            return f"✅ Draft {draft_id} approved and ready for deployment"
+        return f"❌ Approval failed: {result.get('error', '?')}"
+
+    def deploy_draft_command(self, *args):
+        """Deploy an approved draft. Usage: improve_deploy <draft_id>"""
+        if not self.autonomous_coder:
+            return "❌ Autonomous coder not available"
+        if not args:
+            return "❌ Usage: improve_deploy <draft_id>"
+
+        draft_id = args[0]
+
+        # Run merge gate first
+        gate = self.merge_gate_check()
+        if not gate['gate_passed']:
+            return f"❌ Cannot deploy - test gate failed:\n{gate['summary']}"
+
+        result = self.autonomous_coder.deploy_code(draft_id)
+        if result.get('status') == 'deployed':
+            files = result.get('files_deployed', [])
+            return f"✅ Deployed {len(files)} files from draft {draft_id}"
+        return f"❌ Deployment failed: {result.get('error', '?')}"
+
+    def status_command(self, *args):
+        """Show self-improvement system status"""
+        output = "🧠 Self-Improvement Status\n\n"
+
+        # Git workflow
+        current = self._current_branch()
+        output += f"  📍 Branch: {current}\n"
+        auto_branches = [b for b in self.branch_history if b['status'] == 'active']
+        output += f"  🔀 Active improvement branches: {len(auto_branches)}\n"
+
+        # Autonomous coder
+        if self.autonomous_coder:
+            drafts = self.autonomous_coder.get_pending_drafts()
+            output += f"  📝 Pending drafts: {len(drafts)}\n"
+        else:
+            output += "  📝 Autonomous coder: not loaded\n"
+
+        # Skill builder
+        output += f"  🧩 Skills discovered: {len(self.loaded_skills)}\n"
+        if self.loaded_skills:
+            for name in list(self.loaded_skills.keys())[:5]:
+                output += f"      📄 {name}\n"
+
+        # Test gate
+        recent_tests = self.test_results_history[-3:] if self.test_results_history else []
+        if recent_tests:
+            output += "\n  🧪 Recent Test Results:\n"
+            for t in recent_tests:
+                icon = "✅" if t.get('gate_passed') else "❌"
+                tests = t.get('tests', {})
+                output += f"    {icon} {tests.get('tests_run', '?')} tests | {t.get('branch', '?')}\n"
+        else:
+            output += "  🧪 No test results yet\n"
+
+        # Marketplace
+        output += f"\n  📦 Published skills: {len(self.published_skills)}\n"
+        output += f"  📥 Imported skills: {len(self.imported_skills)}\n"
+
+        # Skill updater
+        if hasattr(self, 'skill_versions') and self.skill_versions:
+            output += f"\n  🔄 Tracked platform skills: {len(self.skill_versions)}\n"
+            for plat, ver in sorted(self.skill_versions.items()):
+                output += f"      {plat}: v{ver}\n"
+
+        # Autonomous coder
+        if hasattr(self, '_coder_history'):
+            recent = [h for h in self._coder_history[-3:]]
+            if recent:
+                output += "\n  🤖 Recent Self-Updates:\n"
+                for h in reversed(recent):
+                    icon = "✔️" if h.get('success') else "❌"
+                    output += f"    {icon} {h.get('task', '?')[:50]}\n"
+            else:
+                output += "\n  🤖 Autonomous coder: ready (no updates yet)\n"
+
+        return output
+
+    def metrics_command(self, *args):
+        """Show self-improvement action metrics. Usage: improve_metrics"""
+        output = "📊 Self-Improvement Metrics\n\n"
+        
+        # Get metrics from brain hooks if available
+        metrics = []
+        if self.core:
+            try:
+                metrics = self.core.get_memory('action_metrics') or []
+            except:
+                pass
+        
+        if not metrics:
+            return "📊 No action metrics recorded yet.\n\nMetrics are collected when actions succeed or fail."
+        
+        # Calculate summary statistics
+        total = len(metrics)
+        successful = sum(1 for m in metrics if m.get('success'))
+        failed = total - successful
+        success_rate = (successful / total * 100) if total > 0 else 0
+        
+        output += f"Summary (last {min(total, 1000)} actions):\n"
+        output += f"  Total: {total}\n"
+        output += f"  ✅ Success: {successful} ({success_rate:.1f}%)\n"
+        output += f"  ❌ Failed: {failed}\n\n"
+        
+        # By platform
+        by_platform = {}
+        for m in metrics:
+            plat = m.get('platform', 'unknown')
+            if plat not in by_platform:
+                by_platform[plat] = {'total': 0, 'success': 0}
+            by_platform[plat]['total'] += 1
+            if m.get('success'):
+                by_platform[plat]['success'] += 1
+        
+        if by_platform:
+            output += "By Platform:\n"
+            for plat, stats in sorted(by_platform.items(), key=lambda x: x[1]['total'], reverse=True):
+                rate = (stats['success'] / stats['total'] * 100) if stats['total'] > 0 else 0
+                icon = "✅" if rate >= 80 else "⚠️" if rate >= 50 else "❌"
+                output += f"  {icon} {plat:12} {stats['success']}/{stats['total']} ({rate:.0f}%)\n"
+        
+        # Recent failures
+        recent_failures = [m for m in metrics[-50:] if not m.get('success')]
+        if recent_failures:
+            output += f"\nRecent Failures (last 50 actions):\n"
+            for m in recent_failures[-5:]:
+                ts = m.get('timestamp', '')[:16]
+                action = m.get('action_type', 'unknown')
+                error = m.get('error_code', 'unknown')
+                output += f"  {ts} {action:20} Error: {error}\n"
+        
+        return output
+
+    def get_tasks(self):
+        """Return scheduled tasks"""
+        tasks = {}
+
+        if self.config.get('auto_improve', False):
+            tasks['self_improvement_cycle'] = {
+                'function': lambda: self.improve_command(),
+                'schedule': '0 */6 * * *',
+                'description': 'Run autonomous self-improvement cycle every 6 hours'
+            }
+
+        # Always check for skill updates every 12 hours
+        tasks['skill_update_check'] = {
+            'function': lambda: self.update_skills_command(),
+            'schedule': '0 */12 * * *',
+            'description': 'Check all platforms for skill file updates'
+        }
+
+        return tasks
+
+    def get_commands(self):
+        """Return CLI commands"""
+        return {
+            # Core
+            'improve': self.improve_command,
+            'improve_status': self.status_command,
+            'improve_skills': self.list_skills_command,
+            'improve_build': self.build_skill_command,
+            # Git workflow
+            'improve_branch': self.git_branch_command,
+            'improve_commit': self.git_commit_command,
+            'improve_done': self.git_done_command,
+            'improve_git': self.git_status_command,
+            # Test gate
+            'improve_test': self.test_gate_command,
+            'improve_gate': self.merge_gate_command,
+            'improve_sandbox': self.sandbox_test_command,
+            # Autonomous coder
+            'improve_drafts': self.drafts_command,
+            'improve_approve': self.approve_draft_command,
+            'improve_deploy': self.deploy_draft_command,
+            # Metrics
+            'improve_metrics': self.metrics_command,
+            # Marketplace
+            'improve_market': self.marketplace_list_command,
+            'improve_publish': self.marketplace_publish_command,
+            'improve_import': self.marketplace_import_command,
+            'improve_market_status': self.marketplace_status_command,
+            # Skill updater
+            'improve_update_skills': self.update_skills_command,
+            'improve_update_skill': self.update_single_skill_command,
+            'improve_skill_versions': self.skill_versions_command,
+            # Autonomous coder
+            'improve_self_update': self.self_update_command,
+            'improve_self_update_confirm': self.self_update_confirm_command,  # NEW: Confirmation gate
+            'improve_apply_skill': self.self_update_from_skill_command,
+            'improve_update_restart': self.self_update_and_restart_command,
+            'improve_coder_status': self.coder_status_command,
+            # ERC-8004 on-chain profile
+            'improve_erc8004_preview': self.erc8004_preview_command,
+            'improve_erc8004_rebuild': self.erc8004_rebuild_command,
+            'improve_erc8004_update': self.erc8004_update_command,
+        }
+
+    def erc8004_preview_command(self, *args):
+        """Preview ERC-8004 on-chain profile update (dry run)"""
+        try:
+            from plugins.analytics.agent_card import AgentCardGenerator
+            gen = AgentCardGenerator(self.core)
+            return gen.update_onchain(dry_run=True)
+        except Exception as e:
+            return f"❌ ERC-8004 preview failed: {e}"
+
+    def erc8004_rebuild_command(self, *args):
+        """Rebuild agent card from live plugins/tasks and save to static file (no on-chain tx)"""
+        try:
+            import os, json
+            from plugins.analytics.agent_card import AgentCardGenerator
+            gen = AgentCardGenerator(self.core)
+            card = gen.generate()
+
+            # Save to static file
+            static_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                'static', '.well-known', 'agent-card.json'
+            )
+            gen.save_static(static_path)
+
+            # Build summary
+            skills = gen._collect_skills()
+            caps = card.get('capabilities', [])
+            a2a_skills = []
+            for svc in card.get('services', []):
+                if svc.get('name') == 'A2A':
+                    a2a_skills = svc.get('a2aSkills', [])
+                    break
+
+            free = [s for s in a2a_skills if 'free' in s.get('tags', [])]
+            paid = [s for s in a2a_skills if 'paid' in s.get('tags', [])]
+
+            lines = [
+                f"✅ Agent card rebuilt and saved!",
+                f"🆔 ERC-8004 Agent #22899",
+                f"📊 {len(skills)} OASF skills, {len(caps)} capabilities",
+                f"🤝 {len(a2a_skills)} A2A tasks ({len(free)} free, {len(paid)} paid)",
+                f"",
+            ]
+            for s in a2a_skills:
+                price = s.get('pricing', {}).get('amount', 'free')
+                tag = '💰' if 'paid' in s.get('tags', []) else '🟢'
+                lines.append(f"  {tag} {s['id']} (${price})")
+
+            a2a_svc = next((s for s in card.get('services', []) if s.get('name') == 'A2A'), {})
+            lines.append(f"")
+            lines.append(f"🌐 A2A endpoint: {a2a_svc.get('endpoint', 'N/A')}")
+            lines.append(f"📁 Saved to: {static_path}")
+            lines.append(f"📝 Card size: {len(json.dumps(card))} bytes")
+            lines.append(f"")
+            lines.append(f"⚠️ Run /improve_erc8004_update to push on-chain")
+
+            return '\n'.join(lines)
+        except Exception as e:
+            return f"❌ Agent card rebuild failed: {e}"
+
+    def erc8004_update_command(self, *args):
+        """Update ERC-8004 on-chain profile with current skills (agent #22899)"""
+        try:
+            from plugins.analytics.agent_card import AgentCardGenerator
+            gen = AgentCardGenerator(self.core)
+
+            # Also save the static agent-card.json
+            import os
+            static_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                'static', '.well-known', 'agent-card.json'
+            )
+            gen.save_static(static_path)
+
+            return gen.update_onchain(dry_run=False)
+        except Exception as e:
+            return f"❌ ERC-8004 update failed: {e}"
+
+    def get_endpoints(self):
+        """Return web endpoints"""
+        return {}
+
+    def cleanup(self):
+        """Cleanup self-improvement plugin"""
+        self._save_git_state()
+        self._save_test_state()
+        self._save_marketplace_state()
+        print("🧠 Self-improvement plugin cleaned up")

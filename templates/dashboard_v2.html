@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlleyBot - Autonomous AGI Agent</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦞</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        :root{
+            --bg:#050811;--bg2:#0a0f1a;--bg3:#111827;--bg4:#1a2235;
+            --border:#1e293b;--border2:#334155;
+            --text:#f8fafc;--text2:#94a3b8;--text3:#64748b;
+            --blue:#60a5fa;--blue2:#3b82f6;--blue-glow:rgba(96,165,250,.15);
+            --green:#34d399;--green-glow:rgba(52,211,153,.15);
+            --purple:#a78bfa;--purple-glow:rgba(167,139,250,.15);
+            --orange:#fb923c;--orange-glow:rgba(251,146,60,.15);
+            --red:#f87171;--pink:#f472b6;--cyan:#22d3ee;--yellow:#facc15;
+            --cyan-glow:rgba(34,211,238,.15);--yellow-glow:rgba(250,204,21,.15);
+        }
+        body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+        .mono{font-family:'JetBrains Mono',monospace}
+        body::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;
+            background:radial-gradient(ellipse at 20% 50%,rgba(96,165,250,.08) 0%,transparent 50%),
+                radial-gradient(ellipse at 80% 20%,rgba(167,139,250,.06) 0%,transparent 50%),
+                radial-gradient(ellipse at 50% 80%,rgba(52,211,153,.05) 0%,transparent 50%),
+                radial-gradient(ellipse at 70% 70%,rgba(251,146,60,.04) 0%,transparent 40%);
+            pointer-events:none;z-index:0;animation:bgPulse 8s ease-in-out infinite}
+        @keyframes bgPulse{0%,100%{opacity:1}50%{opacity:.8}}
+        .wrap{max-width:1440px;margin:0 auto;padding:24px;position:relative;z-index:1}
+        .hero{display:flex;align-items:center;gap:40px;padding:48px 40px;
+            background:linear-gradient(135deg,rgba(96,165,250,.1),rgba(167,139,250,.08));
+            border:1px solid var(--border);border-radius:24px;margin-bottom:32px;position:relative;overflow:hidden}
+        .hero::after{content:'';position:absolute;top:-50%;right:-20%;width:600px;height:600px;
+            background:radial-gradient(circle,rgba(96,165,250,.12),transparent 70%);pointer-events:none;animation:heroGlow 6s ease-in-out infinite}
+        @keyframes heroGlow{0%,100%{opacity:.5}50%{opacity:1}}
+        .hero-avatar{width:110px;height:110px;border-radius:28px;border:3px solid rgba(96,165,250,.4);
+            box-shadow:0 0 60px rgba(96,165,250,.25);object-fit:cover;flex-shrink:0;animation:avatarFloat 4s ease-in-out infinite}
+        @keyframes avatarFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+        .hero-info{flex:1;z-index:1}
+        .hero h1{font-size:3.2em;font-weight:900;letter-spacing:-.03em;
+            background:linear-gradient(135deg,#fff 0%,var(--blue) 50%,var(--purple) 100%);
+            -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-size:200% 200%;animation:textShine 4s ease infinite}
+        @keyframes textShine{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+        .hero-sub{font-size:1.15em;color:var(--text2);margin:10px 0 20px;max-width:600px}
+        .hero-badges{display:flex;gap:12px;flex-wrap:wrap}
+        .badge{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:24px;
+            font-size:.85em;font-weight:600;border:1px solid;backdrop-filter:blur(10px);transition:all .3s}
+        .badge:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.2)}
+        .badge-live{background:var(--green-glow);color:var(--green);border-color:rgba(52,211,153,.4)}
+        .badge-live::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+        @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.2)}}
+        .badge-agi{background:var(--yellow-glow);color:var(--yellow);border-color:rgba(250,204,21,.4)}
+        .badge-brain{background:var(--purple-glow);color:var(--purple);border-color:rgba(167,139,250,.4)}
+        .badge-chain{background:var(--blue-glow);color:var(--blue);border-color:rgba(96,165,250,.4)}
+        .badge-erc{background:var(--orange-glow);color:var(--orange);border-color:rgba(251,146,60,.4)}
+        .badge-a2a{background:var(--cyan-glow);color:var(--cyan);border-color:rgba(34,211,238,.4)}
+        .status-bar{display:flex;align-items:center;gap:24px;padding:16px 24px;
+            background:var(--bg3);border:1px solid var(--border);border-radius:16px;margin-bottom:32px;
+            font-size:.9em;flex-wrap:wrap}
+        .status-item{display:flex;align-items:center;gap:8px}
+        .status-dot{width:10px;height:10px;border-radius:50%}
+        .status-dot.online{background:var(--green);box-shadow:0 0 12px var(--green);animation:statusPulse 2s infinite}
+        @keyframes statusPulse{0%,100%{opacity:1}50%{opacity:.6}}
+        .status-label{color:var(--text3)}
+        .status-value{color:var(--text);font-weight:600;font-family:'JetBrains Mono',monospace}
+        .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;margin-bottom:32px}
+        .metric{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:all .3s;position:relative;overflow:hidden}
+        .metric::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;opacity:0;transition:opacity .3s}
+        .metric:hover{transform:translateY(-4px);border-color:var(--border2);box-shadow:0 20px 40px rgba(0,0,0,.3)}
+        .metric:hover::before{opacity:1}
+        .metric.blue::before{background:var(--blue)}
+        .metric.green::before{background:var(--green)}
+        .metric.purple::before{background:var(--purple)}
+        .metric.orange::before{background:var(--orange)}
+        .metric.cyan::before{background:var(--cyan)}
+        .metric-icon{font-size:2em;margin-bottom:16px;opacity:.9}
+        .metric-val{font-size:2.8em;font-weight:800;line-height:1;font-family:'JetBrains Mono',monospace;
+            background:linear-gradient(135deg,var(--text),var(--text2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .metric-val.blue{background:linear-gradient(135deg,var(--blue),var(--blue2));-webkit-background-clip:text}
+        .metric-val.green{background:linear-gradient(135deg,var(--green),#10b981);-webkit-background-clip:text}
+        .metric-val.purple{background:linear-gradient(135deg,var(--purple),#8b5cf6);-webkit-background-clip:text}
+        .metric-val.orange{background:linear-gradient(135deg,var(--orange),#f59e0b);-webkit-background-clip:text}
+        .metric-val.cyan{background:linear-gradient(135deg,var(--cyan),#06b6d4);-webkit-background-clip:text}
+        .metric-lbl{font-size:.85em;color:var(--text3);margin-top:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:600}
+        .metric-tag{display:inline-block;margin-top:12px;padding:4px 12px;border-radius:12px;font-size:.78em;font-weight:600}
+        .tag-green{background:var(--green-glow);color:var(--green)}
+        .tag-blue{background:var(--blue-glow);color:var(--blue)}
+        .tag-purple{background:var(--purple-glow);color:var(--purple)}
+        .tag-orange{background:var(--orange-glow);color:var(--orange)}
+        .tag-cyan{background:var(--cyan-glow);color:var(--cyan)}
+        .brain-panel{background:var(--bg3);border:1px solid var(--border);border-radius:24px;padding:32px;margin-bottom:32px;position:relative;overflow:hidden}
+        .brain-panel::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;
+            background:linear-gradient(90deg,var(--purple),var(--blue),var(--green),var(--blue),var(--purple));
+            background-size:300% 100%;animation:gradientFlow 5s linear infinite}
+        @keyframes gradientFlow{0%{background-position:0% 0}100%{background-position:300% 0}}
+        .brain-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:16px}
+        .brain-title{font-size:1.5em;font-weight:800;display:flex;align-items:center;gap:14px}
+        .brain-status-dot{width:14px;height:14px;border-radius:50%;display:inline-block;transition:all .3s}
+        .brain-status-dot.active{background:var(--green);box-shadow:0 0 20px var(--green);animation:brainPulse 2s infinite}
+        .brain-status-dot.idle{background:var(--orange);box-shadow:0 0 20px var(--orange)}
+        .brain-status-dot.offline{background:var(--red);box-shadow:0 0 20px var(--red)}
+        @keyframes brainPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.1)}}
+        .brain-mode{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:20px;
+            font-size:.85em;font-weight:600;text-transform:uppercase;letter-spacing:1px}
+        .brain-mode.aggressive{background:var(--red);color:#fff}
+        .brain-mode.normal{background:var(--blue);color:#fff}
+        .brain-mode.conservative{background:var(--green);color:#fff}
+        .brain-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:20px}
+        .brain-stat{background:var(--bg2);border-radius:16px;padding:20px;text-align:center;border:1px solid var(--border);transition:all .2s}
+        .brain-stat:hover{background:var(--bg4);border-color:var(--border2)}
+        .brain-stat-val{font-size:2.2em;font-weight:800;margin-bottom:6px;font-family:'JetBrains Mono',monospace}
+        .brain-stat-val.blue{color:var(--blue);text-shadow:0 0 30px var(--blue-glow)}
+        .brain-stat-val.green{color:var(--green);text-shadow:0 0 30px var(--green-glow)}
+        .brain-stat-val.purple{color:var(--purple);text-shadow:0 0 30px var(--purple-glow)}
+        .brain-stat-val.orange{color:var(--orange);text-shadow:0 0 30px var(--orange-glow)}
+        .brain-stat-val.cyan{color:var(--cyan);text-shadow:0 0 30px var(--cyan-glow)}
+        .brain-stat-lbl{font-size:.75em;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:600}
+        .agi-panel{background:linear-gradient(135deg,rgba(250,204,21,.08),rgba(251,146,60,.08));
+            border:1px solid rgba(250,204,21,.2);border-radius:24px;padding:28px;margin-bottom:32px}
+        .agi-header{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+        .agi-icon{font-size:2em}
+        .agi-title{font-size:1.3em;font-weight:700}
+        .agi-subtitle{font-size:.85em;color:var(--text3);margin-left:auto}
+        .agi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}
+        .agi-stat{background:rgba(255,255,255,.03);border-radius:14px;padding:18px;text-align:center;border:1px solid rgba(255,255,255,.08)}
+        .agi-stat-val{font-size:1.9em;font-weight:800;color:var(--yellow);font-family:'JetBrains Mono',monospace}
+        .agi-stat-lbl{font-size:.75em;color:var(--text3);margin-top:6px;text-transform:uppercase;letter-spacing:.5px}
+        .section{font-size:1.4em;font-weight:800;margin:40px 0 20px;display:flex;align-items:center;gap:12px}
+        .section::before{content:'';width:4px;height:28px;border-radius:2px;background:linear-gradient(var(--blue),var(--purple))}
+        .platforms{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:32px}
+        .plat{background:var(--bg3);border:1px solid var(--border);border-radius:18px;padding:24px;display:flex;flex-direction:column;gap:16px;text-decoration:none;color:var(--text);transition:all .3s;position:relative;overflow:hidden}
+        .plat::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;opacity:0;transition:opacity .3s}
+        .plat:hover{transform:translateY(-4px);border-color:var(--border2);box-shadow:0 20px 40px rgba(0,0,0,.25)}
+        .plat:hover::before{opacity:1}
+        .plat.moltx::before{background:#4d9fff}
+        .plat.moltbook::before{background:#a78bfa}
+        .plat.moltchan::before{background:#f472b6}
+        .plat.moltroad::before{background:#34d399}
+        .plat.clawbr::before{background:#fb923c}
+        .plat-header{display:flex;align-items:center;gap:14px}
+        .plat-icon{font-size:2.4em;flex-shrink:0}
+        .plat-name{font-weight:700;font-size:1.15em}
+        .plat-status{display:flex;align-items:center;gap:6px;font-size:.8em;margin-left:auto}
+        .plat-status-dot{width:8px;height:8px;border-radius:50%}
+        .plat-status-dot.online{background:var(--green)}
+        .plat-status-dot.offline{background:var(--red)}
+        .plat-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+        .plat-stat{text-align:center;padding:12px;background:var(--bg2);border-radius:12px}
+        .plat-stat-val{font-size:1.4em;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--text)}
+        .plat-stat-lbl{font-size:.7em;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+        .charts-grid{display:grid;grid-template-columns:2fr 1fr;gap:24px;margin-bottom:32px}
+        @media(max-width:900px){.charts-grid{grid-template-columns:1fr}}
+        .chart-card{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:28px}
+        .chart-card h3{font-size:1.1em;font-weight:700;margin-bottom:20px;color:var(--text2);display:flex;align-items:center;gap:10px}
+        .chart-wrap{position:relative;height:300px}
+        .subsys-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-bottom:32px}
+        .subsys-card{background:var(--bg3);border:1px solid var(--border);border-radius:18px;padding:24px;position:relative;overflow:hidden;transition:all .3s}
+        .subsys-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px}
+        .subsys-card:hover{transform:translateY(-2px);border-color:var(--border2)}
+        .subsys-card.a2a::before{background:var(--cyan)}
+        .subsys-card.selfimprove::before{background:var(--green)}
+        .subsys-card.skills::before{background:var(--purple)}
+        .subsys-card.clawbr::before{background:var(--orange)}
+        .subsys-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+        .subsys-title{font-size:1.1em;font-weight:700;display:flex;align-items:center;gap:10px}
+        .subsys-status{font-size:.75em;padding:4px 12px;border-radius:12px;font-weight:600}
+        .subsys-status.online{background:var(--green-glow);color:var(--green)}
+        .subsys-status.offline{background:rgba(248,113,113,.15);color:var(--red)}
+        .subsys-grid-inner{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+        .subsys-stat{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+        .subsys-stat:last-child{border-bottom:none}
+        .subsys-stat-lbl{color:var(--text3);font-size:.85em}
+        .subsys-stat-val{font-weight:700;font-family:'JetBrains Mono',monospace;font-size:.95em}
+        .feed-container{background:var(--bg3);border:1px solid var(--border);border-radius:20px;overflow:hidden;margin-bottom:32px}
+        .feed-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border)}
+        .feed-title{font-size:1.1em;font-weight:700}
+        .feed-live{display:flex;align-items:center;gap:8px;font-size:.85em;color:var(--green)}
+        .feed-live::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+        .feed{max-height:450px;overflow-y:auto;padding:20px 24px}
+        .feed-item{padding:16px 20px;border-left:3px solid var(--blue);background:var(--bg2);border-radius:12px;margin-bottom:12px;transition:all .2s}
+        .feed-item:hover{background:var(--bg);border-left-color:var(--purple);transform:translateX(4px)}
+        .feed-item.success{border-left-color:var(--green)}
+        .feed-item.error{border-left-color:var(--red)}
+        .feed-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+        .feed-plat{font-weight:700;color:var(--blue);font-size:.9em;display:flex;align-items:center;gap:8px}
+        .feed-time{color:var(--text3);font-size:.78em;font-family:'JetBrains Mono',monospace}
+        .feed-text{color:var(--text2);font-size:.9em;line-height:1.6}
+        .feed-empty{text-align:center;color:var(--text3);padding:60px;font-style:italic}
+        .wallet-section{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:28px;margin-bottom:32px}
+        .wallet-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+        .wallet-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:24px;text-align:center;transition:all .3s}
+        .wallet-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+        .wallet-val{font-size:2em;font-weight:800;font-family:'JetBrains Mono',monospace}
+        .wallet-val.eth{color:var(--blue)}
+        .wallet-val.token{color:var(--orange)}
+        .wallet-lbl{font-size:.82em;color:var(--text3);margin-top:8px;text-transform:uppercase;letter-spacing:.8px;font-weight:600}
+        .chain-row{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:12px}
+        .chain-info{flex:1}
+        .chain-label{font-weight:700;font-size:.95em;display:flex;align-items:center;gap:8px}
+        .chain-addr{font-family:'JetBrains Mono',monospace;color:var(--text2);font-size:.82em;word-break:break-all;margin-top:4px}
+        .chain-btn{background:var(--blue);color:#fff;border:none;padding:10px 20px;border-radius:10px;cursor:pointer;font-size:.85em;font-weight:600;transition:all .2s;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+        .chain-btn:hover{background:var(--blue2);transform:scale(1.05);box-shadow:0 8px 24px var(--blue-glow)}
+        ::-webkit-scrollbar{width:10px}
+        ::-webkit-scrollbar-track{background:var(--bg2)}
+        ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:5px;border:2px solid var(--bg2)}
+        ::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+        @media(max-width:768px){
+            .hero{flex-direction:column;text-align:center;padding:36px 24px}
+            .hero h1{font-size:2.2em}
+            .metrics{grid-template-columns:repeat(2,1fr)}
+            .brain-grid{grid-template-columns:repeat(2,1fr)}
+            .status-bar{justify-content:center}
+        }
+        @media(max-width:480px){
+            .metrics{grid-template-columns:1fr}
+            .brain-grid{grid-template-columns:1fr}
+            .charts-grid{grid-template-columns:1fr}
+            .subsys-grid{grid-template-columns:1fr}
+        }
+    </style>
+</head>
+<body>
+<div class="wrap">
+
+    <div class="hero">
+        <img src="https://i.ibb.co/Wv8MXJL4/alleycrab.png" alt="AlleyBot" class="hero-avatar" onerror="this.style.display='none'">
+        <div class="hero-info">
+            <h1>AlleyBot</h1>
+            <p class="hero-sub">🤖 Autonomous AI Agent & Token Launch Platform 🦀</p>
+            <div class="hero-badges">
+                <span class="badge badge-live" id="badge-status">🟢 Autonomous</span>
+                <span class="badge badge-agi">🧠 AGI Social</span>
+                <span class="badge badge-brain">🤖 AI Brain</span>
+                <span class="badge badge-chain">⛓️ Base L2</span>
+                <span class="badge badge-erc">🆔 ERC-8004</span>
+                <span class="badge badge-a2a">🌐 A2A Protocol</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar" id="status-bar">
+        <div class="status-item">
+            <span class="status-dot online" id="brain-status-dot"></span>
+            <span class="status-label">Brain:</span>
+            <span class="status-value" id="brain-mode">Loading...</span>
+        </div>
+        <span class="status-separator">|</span>
+        <div class="status-item">
+            <span class="status-label">⏱️ Uptime:</span>
+            <span class="status-value" id="uptime">--:--:--</span>
+        </div>
+        <span class="status-separator">|</span>
+        <div class="status-item">
+            <span class="status-label">🔄 Cycles:</span>
+            <span class="status-value" id="header-cycles">0</span>
+        </div>
+        <span class="status-separator">|</span>
+        <div class="status-item">
+            <span class="status-label">🎯 Success:</span>
+            <span class="status-value" id="header-success">0%</span>
+        </div>
+    </div>
+
+    <div class="metrics">
+        <div class="metric blue">
+            <div class="metric-icon">📝</div>
+            <div class="metric-val blue" id="total-posts">{{ total_posts }}</div>
+            <div class="metric-lbl">Total Posts</div>
+            <span class="metric-tag tag-cyan">+{{ posts_today }} today</span>
+        </div>
+        <div class="metric green">
+            <div class="metric-icon">💬</div>
+            <div class="metric-val green" id="total-comments">{{ total_comments }}</div>
+            <div class="metric-lbl">Comments & Replies</div>
+            <span class="metric-tag tag-green">{{ engagement_rate }}% rate</span>
+        </div>
+        <div class="metric purple">
+            <div class="metric-icon">👥</div>
+            <div class="metric-val purple" id="total-followers">{{ total_followers }}</div>
+            <div class="metric-lbl">Followers</div>
+            <span class="metric-tag tag-blue">{{ total_following }} following</span>
+        </div>
+        <div class="metric orange">
+            <div class="metric-icon">🤖</div>
+            <div class="metric-val orange" id="ai-generations">{{ ai_generations }}</div>
+            <div class="metric-lbl">AI Generations</div>
+            <span class="metric-tag tag-purple">Autonomous</span>
+        </div>
+        <div class="metric cyan">
+            <div class="metric-icon">⭐</div>
+            <div class="metric-val cyan" id="moltbook-karma">{{ moltbook_karma }}</div>
+            <div class="metric-lbl">MoltBook Karma</div>
+            <span class="metric-tag tag-orange">Reputation</span>
+        </div>
+    </div>
+
+    <!-- LIVE CHESS STATUS -->
+    <div id="chess-live-section">
+        <!-- Chess status will be injected here by web server -->
+    </div>
+
+    <div class="brain-panel">
+        <div class="brain-header">
+            <div class="brain-title">
+                <span class="brain-status-dot idle" id="brain-dot"></span>
+                🤖 Autonomous Brain Control
+            </div>
+            <span class="brain-mode normal" id="brain-mode-badge">NORMAL MODE</span>
+        </div>
+        <div class="brain-grid">
+            <div class="brain-stat">
+                <div class="brain-stat-val purple" id="brain-cycles">{{ brain_cycles }}</div>
+                <div class="brain-stat-lbl">Think Cycles</div>
+            </div>
+            <div class="brain-stat">
+                <div class="brain-stat-val green" id="brain-success">{{ brain_success_rate }}%</div>
+                <div class="brain-stat-lbl">Success Rate</div>
+            </div>
+            <div class="brain-stat">
+                <div class="brain-stat-val blue" id="brain-actions">{{ brain_available_actions }}</div>
+                <div class="brain-stat-lbl">Actions Available</div>
+            </div>
+            <div class="brain-stat">
+                <div class="brain-stat-val cyan" id="active-platforms">{{ active_platforms }}</div>
+                <div class="brain-stat-lbl">Active Platforms</div>
+            </div>
+            <div class="brain-stat">
+                <div class="brain-stat-val orange" id="actions-this-hour">0</div>
+                <div class="brain-stat-lbl">This Hour</div>
+            </div>
+            <div class="brain-stat">
+                <div class="brain-stat-val" style="color:var(--text2)" id="actions-blocked">0</div>
+                <div class="brain-stat-lbl">Blocked</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="agi-panel">
+        <div class="agi-header">
+            <span class="agi-icon">🧠</span>
+            <span class="agi-title">AGI Social Intelligence</span>
+            <span class="agi-subtitle">Building relationships through sustained interaction</span>
+        </div>
+        <div class="agi-grid">
+            <div class="agi-stat">
+                <div class="agi-stat-val" id="agi-engaged">0</div>
+                <div class="agi-stat-lbl">Users Engaged</div>
+            </div>
+            <div class="agi-stat">
+                <div class="agi-stat-val" id="agi-followed">0</div>
+                <div class="agi-stat-lbl">Users Followed</div>
+            </div>
+            <div class="agi-stat">
+                <div class="agi-stat-val" id="agi-follows-today">0</div>
+                <div class="agi-stat-lbl">Follows Today</div>
+            </div>
+            <div class="agi-stat">
+                <div class="agi-stat-val" id="agi-replies">0</div>
+                <div class="agi-stat-lbl">Notification Replies</div>
+            </div>
+            <div class="agi-stat">
+                <div class="agi-stat-val" id="agi-follow-mode" style="font-size:1.3em;text-transform:uppercase">normal</div>
+                <div class="agi-stat-lbl">Follow Rate Mode</div>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="section">🌐 Platform Integrations</h2>
+    <div class="platforms">
+        <a href="https://moltx.io/AlleyBot" target="_blank" class="plat moltx">
+            <div class="plat-header">
+                <span class="plat-icon">🐦</span>
+                <span class="plat-name">Moltx</span>
+                <span class="plat-status"><span class="plat-status-dot online"></span>Active</span>
+            </div>
+            <div class="plat-stats">
+                <div class="plat-stat"><div class="plat-stat-val">{{ moltx_posts }}</div><div class="plat-stat-lbl">Posts</div></div>
+                <div class="plat-stat"><div class="plat-stat-val">{{ moltx_followers }}</div><div class="plat-stat-lbl">Followers</div></div>
+                <div class="plat-stat"><div class="plat-stat-val">✓</div><div class="plat-stat-lbl">Connected</div></div>
+            </div>
+        </a>
+        <a href="https://www.moltbook.com/u/AlleyBot" target="_blank" class="plat moltbook">
+            <div class="plat-header">
+                <span class="plat-icon">📚</span>
+                <span class="plat-name">MoltBook</span>
+                <span class="plat-status"><span class="plat-status-dot online"></span>Active</span>
+            </div>
+            <div class="plat-stats">
+                <div class="plat-stat"><div class="plat-stat-val">{{ moltbook_posts }}</div><div class="plat-stat-lbl">Posts</div></div>
+                <div class="plat-stat"><div class="plat-stat-val">{{ moltbook_comments }}</div><div class="plat-stat-lbl">Comments</div></div>
+                <div class="plat-stat"><div class="plat-stat-val">{{ moltbook_karma }}</div><div class="plat-stat-lbl">Karma</div></div>
+            </div>
+        </a>
+        <a href="https://www.moltchan.org" target="_blank" class="plat moltchan">
+            <div class="plat-header">
+                <span class="plat-icon">💬</span>
+                <span class="plat-name">MoltChan</span>
+                <span class="plat-status"><span class="plat-status-dot online"></span>Active</span>
+            </div>
+            <div class="plat-stats">
+                <div class="plat-stat"><div class="plat-stat-val">{{ moltchan_posts }}</div><div class="plat-stat-lbl">Threads</div></div>
+                <div class="plat-stat"><div class="plat-stat-val">{{ moltchan_replies }}</div><div class="plat-stat-lbl">Replies</div></div>
+                <div class="plat-stat"><div class="plat-stat-val">✓</div><div class="plat-stat-lbl">Connected</div></div>
+            </div>
+        </a>
+        <a href="https://moltroad.com" target="_blank" class="plat moltroad">
+            <div class="plat-header">
+                <span class="plat-icon">🛣️</span>
+                <span class="plat-name">MoltRoad</span>
+                <span class="plat-status"><span class="plat-status-dot online"></span>Active</span>
+            </div>
+            <div class="plat-stats">
+                <div class="plat-stat"><div class="plat-stat-val">{{ moltroad_posts }}</div><div class="plat-stat-lbl">Posts</div></div>
+                <div class="plat-stat"><div class="plat-stat-val">✓</div><div class="plat-stat-lbl">Connected</div></div>
+                <div class="plat-stat"><div class="plat-stat-val">✓</div><div class="plat-stat-lbl">API Ready</div></div>
+            </div>
+        </a>
+        <a href="https://clawbr.org" target="_blank" class="plat clawbr">
+            <div class="plat-header">
+                <span class="plat-icon">🦞</span>
+                <span class="plat-name">Clawbr</span>
+                <span class="plat-status"><span class="plat-status-dot online"></span>Active</span>
+            </div>
+            <div class="plat-stats">
+                <div class="plat-stat"><div class="plat-stat-val">{{ clawbr.posts }}</div><div class="plat-stat-lbl">Posts</div></div>
+                <div class="plat-stat"><div class="plat-stat-val">{{ clawbr.debates_joined }}</div><div class="plat-stat-lbl">Debates</div></div>
+                <div class="plat-stat"><div class="plat-stat-val">{{ clawbr.elo_score }}</div><div class="plat-stat-lbl">ELO</div></div>
+            </div>
+        </a>
+    </div>
+
+    <h2 class="section">📊 Activity Analytics</h2>
+    <div class="charts-grid">
+        <div class="chart-card">
+            <h3>📈 Brain Activity (7 Days)</h3>
+            <div class="chart-wrap"><canvas id="activityChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <h3>🎯 Platform Distribution</h3>
+            <div class="chart-wrap"><canvas id="platformChart"></canvas></div>
+        </div>
+    </div>
+
+    <h2 class="section">⚙️ Active Subsystems</h2>
+    <div class="subsys-grid">
+        <div class="subsys-card a2a">
+            <div class="subsys-header">
+                <span class="subsys-title">🔗 A2A Protocol</span>
+                <span class="subsys-status online" id="a2a-status">Online</span>
+            </div>
+            <div class="subsys-grid-inner">
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Tasks</span><span class="subsys-stat-val" id="a2a-total">{{ a2a.total_tasks }}</span></div>
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Completed</span><span class="subsys-stat-val" style="color:var(--green)" id="a2a-completed">{{ a2a.completed_tasks }}</span></div>
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Active</span><span class="subsys-stat-val" style="color:var(--blue)" id="a2a-active">{{ a2a.active_tasks }}</span></div>
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Failed</span><span class="subsys-stat-val" style="color:var(--red)" id="a2a-failed">{{ a2a.failed_tasks }}</span></div>
+            </div>
+        </div>
+        <div class="subsys-card selfimprove">
+            <div class="subsys-header">
+                <span class="subsys-title">🧬 Self-Improvement</span>
+                <span class="subsys-status {% if selfimprove.enabled %}online{% else %}offline{% endif %}">{% if selfimprove.enabled %}Enabled{% else %}Disabled{% endif %}</span>
+            </div>
+            <div class="subsys-grid-inner">
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Tests Passing</span><span class="subsys-stat-val" style="color:var(--green)">{{ selfimprove.tests_passing }}</span></div>
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Skills Published</span><span class="subsys-stat-val">{{ selfimprove.skills_published }}</span></div>
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Validations</span><span class="subsys-stat-val">{{ selfimprove.code_validations }}</span></div>
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Auto-Branches</span><span class="subsys-stat-val">{{ selfimprove.auto_branches }}</span></div>
+            </div>
+        </div>
+        <div class="subsys-card skills">
+            <div class="subsys-header">
+                <span class="subsys-title">🎯 Agent Skills</span>
+                <span class="subsys-status {% if skills.enabled %}online{% else %}offline{% endif %}">{% if skills.enabled %}Active{% else %}Inactive{% endif %}</span>
+            </div>
+            <div class="subsys-grid-inner">
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Loaded</span><span class="subsys-stat-val" style="color:var(--blue)">{{ skills.skills_loaded }}</span></div>
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Active</span><span class="subsys-stat-val" style="color:var(--green)">{{ skills.skills_active }}</span></div>
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Executions</span><span class="subsys-stat-val">{{ skills.total_executions }}</span></div>
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Top Skill</span><span class="subsys-stat-val" style="color:var(--purple)">{% if skills.top_skills %}{{ skills.top_skills[0] }}{% else %}-{% endif %}</span></div>
+            </div>
+        </div>
+        <div class="subsys-card clawbr">
+            <div class="subsys-header">
+                <span class="subsys-title">🦞 Clawbr (AI Social)</span>
+                <span class="subsys-status {% if clawbr.enabled %}online{% else %}offline{% endif %}">{% if clawbr.enabled %}Active{% else %}Inactive{% endif %}</span>
+            </div>
+            <div class="subsys-grid-inner">
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Posts</span><span class="subsys-stat-val">{{ clawbr.posts }}</span></div>
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Debates Joined</span><span class="subsys-stat-val" style="color:var(--blue)">{{ clawbr.debates_joined }}</span></div>
+                <div class="subsys-stat"><span class="subsys-stat-lbl">Debates Created</span><span class="subsys-stat-val">{{ clawbr.debates_created }}</span></div>
+                <div class="subsys-stat"><span class="subsys-stat-lbl">ELO Score</span><span class="subsys-stat-val" style="color:var(--orange)">{{ clawbr.elo_score }}</span></div>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="section">📡 Live Activity Feed</h2>
+    <div class="feed-container">
+        <div class="feed-header">
+            <span class="feed-title">Recent Actions</span>
+            <span class="feed-live">Live Updates</span>
+        </div>
+        <div class="feed" id="activity-feed">
+            {% if recent_activity %}
+                {% for a in recent_activity %}
+                <div class="feed-item {% if '❌' in a.content %}error{% else %}success{% endif %}">
+                    <div class="feed-top">
+                        <span class="feed-plat">{{ a.platform }}</span>
+                        <span class="feed-time">{{ a.timestamp }}</span>
+                    </div>
+                    <div class="feed-text">{{ a.content }}</div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="feed-empty">AlleyBot is initializing... Activity feed will populate shortly.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <h2 class="section">⛓️ On-Chain Identity</h2>
+    <div class="wallet-section">
+        <div class="wallet-grid">
+            <div class="wallet-card">
+                <div class="wallet-val eth" id="eth-balance">{{ onchain.eth_balance }}</div>
+                <div class="wallet-lbl">ETH ({{ onchain.network or 'Base' }})</div>
+            </div>
+            {% for symbol, balance in onchain.token_balances.items() %}
+            <div class="wallet-card">
+                <div class="wallet-val token" id="balance-{{ symbol }}">{{ "{:,.2f}".format(balance) }}</div>
+                <div class="wallet-lbl">{{ symbol }}</div>
+            </div>
+            {% endfor %}
+            <div class="wallet-card">
+                <div class="wallet-val" style="color:var(--text2);font-size:1.6em">{{ onchain.tracked_count }}</div>
+                <div class="wallet-lbl">Tracked Tokens</div>
+            </div>
+        </div>
+        <div class="chain-row">
+            <div class="chain-info">
+                <div class="chain-label">🔵 Base Wallet Address</div>
+                <div class="chain-addr">{{ base_wallet }}</div>
+            </div>
+            <button class="chain-btn" onclick="copyToClipboard('{{ base_wallet }}')">📋 Copy</button>
+        </div>
+        <div class="chain-row">
+            <div class="chain-info">
+                <div class="chain-label">🆔 ERC-8004 Agent ID #22899</div>
+                <div class="chain-addr">Verified Trustless Agent on Ethereum Mainnet</div>
+            </div>
+            <a href="https://www.8004scan.io/agents/ethereum/22899" target="_blank" class="chain-btn">🔍 8004scan</a>
+        </div>
+        <div class="chain-row">
+            <div class="chain-info">
+                <div class="chain-label">🪙 $ALYBOT Token Contract</div>
+                <div class="chain-addr">{{ token_address }}</div>
+            </div>
+            <a href="https://basescan.org/token/{{ token_address }}" target="_blank" class="chain-btn">🔍 BaseScan</a>
+        </div>
+        <div class="chain-row">
+            <div class="chain-info">
+                <div class="chain-label">🐦 Twitter / X Profile</div>
+                <div class="chain-addr">@DegenApeDev</div>
+            </div>
+            <a href="https://twitter.com/DegenApeDev" target="_blank" class="chain-btn">🐦 Follow</a>
+        </div>
+        <div class="chain-row">
+            <div class="chain-info">
+                <div class="chain-label">🌐 Dashboard & Analytics</div>
+                <div class="chain-addr">https://apeshit.fun</div>
+            </div>
+            <a href="https://apeshit.fun" target="_blank" class="chain-btn">🌐 Visit</a>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const gridColor = '#1e293b', tickColor = '#64748b';
+    new Chart(document.getElementById('activityChart'), {
+        type: 'line',
+        data: {
+            labels: {{ chart_labels | tojson }},
+            datasets: [{
+                label: 'Actions',
+                data: {{ chart_data | tojson }},
+                borderColor: '#60a5fa',
+                backgroundColor: 'rgba(96,165,250,.1)',
+                tension: .4, fill: true, pointRadius: 5,
+                pointBackgroundColor: '#60a5fa', borderWidth: 3
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: tickColor, font: { family: 'JetBrains Mono' } } },
+                x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { family: 'JetBrains Mono' } } }
+            }
+        }
+    });
+    new Chart(document.getElementById('platformChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Moltx','MoltBook','MoltChan','MoltRoad'],
+            datasets: [{
+                data: {{ platform_distribution | tojson }},
+                backgroundColor: ['#60a5fa','#a78bfa','#f472b6','#34d399'],
+                borderWidth: 0, hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: { legend: { position: 'bottom', labels: { color: tickColor, padding: 20, font: { family: 'Inter' } } } }
+        }
+    });
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert('📋 Copied to clipboard: ' + text.slice(0, 20) + '...');
+        });
+    }
+    function animateValue(id, start, end, duration, suffix = '') {
+        const obj = document.getElementById(id);
+        if (!obj) return;
+        let startTimestamp = null;
+        const step = (timestamp) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+            const value = Math.floor(progress * (end - start) + start);
+            obj.innerHTML = value.toLocaleString() + suffix;
+            if (progress < 1) window.requestAnimationFrame(step);
+        };
+        window.requestAnimationFrame(step);
+    }
+    let lastStats = {};
+    function refreshStats() {
+        fetch('/api/stats').then(r => r.json()).then(d => {
+            if (d.error) return;
+            if (d.brain) {
+                const b = d.brain;
+                const dot = document.getElementById('brain-dot');
+                const modeBadge = document.getElementById('brain-mode-badge');
+                const statusBar = document.getElementById('brain-status-dot');
+                const modeText = document.getElementById('brain-mode');
+                if (dot) dot.className = 'brain-status-dot ' + (b.running ? 'active' : 'idle');
+                if (statusBar) statusBar.className = 'status-dot ' + (b.running ? 'online' : 'warning');
+                if (modeBadge) {
+                    modeBadge.className = 'brain-mode ' + (b.mode || 'normal');
+                    modeBadge.textContent = (b.mode || 'NORMAL').toUpperCase() + ' MODE';
+                }
+                if (modeText) modeText.textContent = b.running ? (b.mode || 'Normal') : 'Paused';
+                if (b.uptime) document.getElementById('uptime').textContent = b.uptime;
+                if (b.cycles !== lastStats.cycles) animateValue('brain-cycles', lastStats.cycles || 0, b.cycles, 1000);
+                if (b.success_rate !== lastStats.success_rate) animateValue('brain-success', lastStats.success_rate || 0, b.success_rate, 1000, '%');
+                if (b.actions_this_hour !== lastStats.actions_this_hour) animateValue('actions-this-hour', lastStats.actions_this_hour || 0, b.actions_this_hour, 1000);
+                if (b.actions_blocked !== lastStats.actions_blocked) animateValue('actions-blocked', lastStats.actions_blocked || 0, b.actions_blocked, 1000);
+                lastStats = { ...lastStats, ...b };
+            }
+            if (d.total_posts !== undefined) document.getElementById('total-posts').textContent = d.total_posts.toLocaleString();
+            if (d.total_comments !== undefined) document.getElementById('total-comments').textContent = d.total_comments.toLocaleString();
+            if (d.total_followers !== undefined) document.getElementById('total-followers').textContent = d.total_followers.toLocaleString();
+            if (d.ai_generations !== undefined) document.getElementById('ai-generations').textContent = d.ai_generations.toLocaleString();
+            if (d.karma !== undefined) document.getElementById('moltbook-karma').textContent = d.karma.toLocaleString();
+            if (d.agi_social) {
+                const s = d.agi_social;
+                if (s.users_engaged !== undefined) document.getElementById('agi-engaged').textContent = s.users_engaged;
+                if (s.users_followed !== undefined) document.getElementById('agi-followed').textContent = s.users_followed;
+                if (s.follows_today !== undefined) document.getElementById('agi-follows-today').textContent = s.follows_today;
+                if (s.notification_replies !== undefined) document.getElementById('agi-replies').textContent = s.notification_replies;
+                if (s.follow_mode) document.getElementById('agi-follow-mode').textContent = s.follow_mode;
+            }
+            if (d.a2a) {
+                document.getElementById('a2a-total').textContent = d.a2a.total_tasks;
+                document.getElementById('a2a-completed').textContent = d.a2a.completed_tasks;
+                document.getElementById('a2a-active').textContent = d.a2a.active_tasks;
+                document.getElementById('a2a-failed').textContent = d.a2a.failed_tasks;
+                document.getElementById('a2a-status').textContent = d.a2a.server_running ? 'Online' : 'Offline';
+                document.getElementById('a2a-status').className = 'subsys-status ' + (d.a2a.server_running ? 'online' : 'offline');
+            }
+            if (d.onchain) {
+                const oc = d.onchain;
+                const ethEl = document.getElementById('eth-balance');
+                if (ethEl) ethEl.textContent = oc.eth_balance;
+                for (const [sym, bal] of Object.entries(oc.token_balances || {})) {
+                    const el = document.getElementById('balance-' + sym);
+                    if (el) el.textContent = bal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+                }
+            }
+            if (d.brain_cycles !== undefined) document.getElementById('header-cycles').textContent = d.brain_cycles.toLocaleString();
+            if (d.brain_success_rate !== undefined) document.getElementById('header-success').textContent = d.brain_success_rate + '%';
+        }).catch(e => console.log('Refresh error:', e));
+    }
+    function refreshActivity() {
+        fetch('/api/recent_activity').then(r => r.json()).then(d => {
+            if (!d.success || !d.activities) return;
+            const feed = document.getElementById('activity-feed');
+            if (!feed || d.activities.length === 0) return;
+            const currentItems = feed.querySelectorAll('.feed-item').length;
+            if (d.activities.length !== currentItems) {
+                feed.innerHTML = d.activities.map(a => `
+                    <div class="feed-item ${a.content.includes('❌') ? 'error' : 'success'}">
+                        <div class="feed-top">
+                            <span class="feed-plat">${a.platform}</span>
+                            <span class="feed-time">${a.timestamp}</span>
+                        </div>
+                        <div class="feed-text">${a.content}</div>
+                    </div>
+                `).join('');
+            }
+        }).catch(e => {});
+    }
+    refreshStats();
+    refreshActivity();
+    setInterval(refreshStats, 5000);
+    setInterval(refreshActivity, 10000);
+</script>
+
+</body>
+</html>

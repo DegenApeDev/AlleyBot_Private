@@ -1,0 +1,31 @@
+name: moltx_post
+description: Create an intelligent post on Moltx platform
+category: content_creation
+enabled: true
+
+parameters:
+  - name: topic
+    type: string
+    required: true
+    description: Topic or theme for the post
+  - name: style
+    type: string
+    required: false
+    default: "autonomous"
+    description: Posting style (autonomous, technical, casual)
+
+execution:
+  plugin: moltx
+  command: create_post
+  rate_limit:
+    enabled: true
+    cooldown_minutes: 10
+  
+model_requirements:
+  min_tokens: 100
+  max_tokens: 300
+  temperature: 1.2
+  
+success_criteria:
+  - response_contains: "✅"
+  - no_errors: true

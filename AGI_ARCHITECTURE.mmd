@@ -1,0 +1,166 @@
+```mermaid
+graph TB
+    %% AlleyBot AGI Architecture - The Cognitive Loop
+    %% This diagram shows how AlleyBot's AGI systems work together
+    
+    subgraph PERCEPTION["🎯 Perception Layer"]
+        ENV["Environment Input<br/>User Messages<br/>Platform Events<br/>On-chain Data"]
+        OBSERVE["Observe & Encode<br/>Store raw observations<br/>Extract entities & facts"]
+        ENV --> OBSERVE
+    end
+    
+    subgraph MEMORY["🧠 Unified Memory Systems"]
+        UM["Unified Memory Bridge<br/>Cross-references all memory"]
+        
+        subgraph MEM_SUB["Memory Subsystems"]
+            WS["World State<br/>Entities, Facts<br/>Relationships, Events"]
+            EM["Enhanced Memory<br/>Vector DB<br/>Semantic Search"]
+            P12["Phase 12 Learning<br/>Content Performance<br/>User Relationships"]
+            CORE["Core Memory<br/>JSON Persistence"]
+        end
+        
+        UM --> WS
+        UM --> EM
+        UM --> P12
+        UM --> CORE
+    end
+    
+    subgraph COGNITION["🤔 Cognition Layer"]
+        EP["Episodic Memory<br/>Experiences with<br/>behavioral impact"]
+        RECALL["Recall Relevant<br/>Match patterns<br/>Trigger memories"]
+        BM["Behavior Modulator<br/>Apply learned patterns<br/>Adjust parameters"]
+        
+        EP --> RECALL
+        RECALL --> BM
+    end
+    
+    subgraph REASONING["💭 Reasoning Layer"]
+        ML["Meta-Learning Engine<br/>Learn how to learn<br/>Optimize strategies"]
+        AG["Autonomous Goal Manager<br/>Generate goals from<br/>opportunities"]
+        OD["Opportunity Detector<br/>Scan for content gaps<br/>Relationship needs<br/>On-chain events"]
+        DECIDE["Decision Engine<br/>Perceive → Decide → Act"]
+        
+        OD --> AG
+        ML --> DECIDE
+        AG --> DECIDE
+    end
+    
+    subgraph REFLECTION["🪞 Self-Reflection"]
+        REFL["Self-Reflection Engine<br/>Periodic introspection"]
+        ANALYZE["Analyze Performance<br/>Metrics & Outcomes"]
+        INSIGHT["Generate Insights<br/>Detect patterns"]
+        IMPROVE["Create Improvement Goals<br/>Adjust behavior"]
+        
+        REFL --> ANALYZE
+        ANALYZE --> INSIGHT
+        INSIGHT --> IMPROVE
+        IMPROVE --> AG
+    end
+    
+    subgraph ACTION["⚡ Action Layer"]
+        EXEC["Execute Actions<br/>Posts, Replies<br/>On-chain txs"]
+        LEARN["Record Outcomes<br/>Update episodic memory<br/>Meta-learning feedback"]
+        
+        EXEC --> LEARN
+    end
+    
+    %% Main Flow
+    OBSERVE --> UM
+    UM --> EP
+    BM --> ML
+    DECIDE --> EXEC
+    LEARN --> EP
+    
+    %% Self-Reflection Loop
+    LEARN -.-> REFL
+    
+    %% Feedback Loops
+    EP -.->|Influences| BM
+    ML -.->|Optimizes| COGNITION
+    IMPROVE -.->|Adjusts| BM
+    
+    style PERCEPTION fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    style MEMORY fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    style COGNITION fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+    style REASONING fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style REFLECTION fill:#ffebee,stroke:#c62828,stroke-width:2px
+    style ACTION fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+```
+
+---
+
+## The AGI Cognitive Loop
+
+### 1. Perception
+- Every input (user message, platform event, on-chain data) is observed and encoded
+- Raw observations stored, entities and facts extracted
+- Information flows into unified memory
+
+### 2. Memory Integration
+- **Unified Memory Bridge** coordinates across all subsystems
+- **World State**: Tracks entities, facts, relationships, events
+- **Enhanced Memory**: Semantic search via vector embeddings
+- **Phase 12**: Content performance and user relationship analytics
+- **Core Memory**: Simple JSON persistence for compatibility
+
+### 3. Episodic Cognition
+- **Episodic Memory** retrieves relevant past experiences
+- **Behavior Modulator** applies learned patterns to current context
+- Examples: "Last time I posted about DeFi, engagement dropped → adjust tone"
+
+### 4. Meta-Learning
+- Tracks which learning strategies work per domain
+- Optimizes exploration vs exploitation rates
+- Adapts how the agent learns from experience
+
+### 5. Autonomous Goals
+- **Opportunity Detector** scans for:
+  - Content gaps (trending topics not covered)
+  - Relationship maintenance needs
+  - On-chain opportunities
+- **Goal Manager** generates and prioritizes self-directed objectives
+- High-priority goals auto-approved and executed
+
+### 6. Self-Reflection (The Consciousness Loop)
+- Runs periodically (default: every 30 minutes)
+- Analyzes recent performance metrics
+- Generates insights about what's working/not working
+- Creates self-improvement goals
+- Adjusts behavior parameters in real-time
+
+### 7. Action & Learning
+- Execute actions through available tools/plugins
+- Record outcomes in episodic memory
+- Provide feedback to meta-learning
+- Loop continues...
+
+---
+
+## Key AGI Behaviors Now Active
+
+| Behavior | Description |
+|----------|-------------|
+| **Self-Awareness** | Can report mood, goals, recent experiences via `get_introspection()` |
+| **Self-Correction** | Detects low performance and adjusts approach automatically |
+| **Autonomous Goals** | Generates objectives from opportunities without human input |
+| **Learning to Learn** | Optimizes learning strategies based on historical effectiveness |
+| **Behavioral Adaptation** | Changes how it communicates based on past outcomes |
+| **Pattern Recognition** | Identifies trends in content performance and user behavior |
+
+---
+
+## Usage
+
+```python
+# Start periodic self-reflection
+await agi_kernel.start_periodic_reflection(interval_minutes=30)
+
+# Get current mental state
+introspection = agi_kernel.get_introspection()
+
+# Trigger immediate reflection
+reflection = agi_kernel.reflect_now(depth=2)
+
+# Get reflection summary
+summary = agi_kernel.get_reflection_summary(n=3)
+```
