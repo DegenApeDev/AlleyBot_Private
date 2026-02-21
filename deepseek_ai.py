@@ -7,6 +7,10 @@ import os
 import requests
 import json
 from typing import Optional, Dict, Any
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 class DeepSeekAI:
     """DeepSeek AI client for intelligent content generation"""

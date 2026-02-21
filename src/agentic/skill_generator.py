@@ -582,6 +582,38 @@ result = {skill_name}(...)
         if registered:
             self.generated_skills.append(skill_name)
             print(f"✅ Skill '{skill_name}' registered successfully")
+            
+            # Bridge to plugin-based self-update system for actual plugin creation
+            if skill_name.endswith('_plugin') or 'plugin' in skill_name.lower():
+                try:
+                    # Import and call the plugin-based self-update system
+                    import sys
+                    import os
+                    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'plugins', 'selfimprove'))
+                    from autonomous_coder import AutonomousCoderMixin
+                    
+                    # Create self-update task description
+                    task_desc = f"Create {skill_name} plugin: {capability_description}"
+                    
+                    # Call the plugin-based self-update system
+                    print(f"🤖 Triggering plugin-based self-update for: {skill_name}")
+                    
+                    # Create an instance of the autonomous coder mixin
+                    class BridgeCoder(AutonomousCoderMixin):
+                        def __init__(self):
+                            self._pending_self_updates = {}
+                    
+                    bridge = BridgeCoder()
+                    
+                    # Call the self-update command
+                    result = bridge.self_update_command(task_desc.split())
+                    print(f"📋 Plugin-based self-update result: {result}")
+                    
+                except Exception as e:
+                    print(f"⚠️  Failed to bridge to plugin system: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
             return {
                 'success': True,
                 'skill_name': skill_name,
