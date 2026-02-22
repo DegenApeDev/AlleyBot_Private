@@ -128,6 +128,17 @@ class AGIOrchestrator:
         # Core reference for plugin access
         self.core = core
         
+        # Share state with AGIKernel so learning accumulates in one place
+        try:
+            from src.agentic.agi_kernel import get_agi_kernel
+            self.agi_kernel = get_agi_kernel(core)
+            # Override goal manager with kernel's shared instance
+            self.goals = self.agi_kernel.goal_manager
+            logger.info("🔗 AGIOrchestrator linked to AGIKernel (shared goal manager + episodic memory)")
+        except Exception as e:
+            self.agi_kernel = None
+            logger.warning(f"⚠️ AGIKernel link failed, using standalone: {e}")
+        
         # Safety controls
         self.last_post_time: Optional[datetime] = None
         self.min_post_interval_minutes = 30  # Don't post more than every 30 min
@@ -797,7 +808,7 @@ class AGIOrchestrator:
             
             # Decide whether to proceed with world model-informed decision
             # Lower threshold for manual triggers to be more responsive
-            confidence_threshold = 0.4 if trigger == "manual" else 0.6
+            confidence_threshold = 0.35 if trigger == "manual" else 0.45
             
             proceed = (
                 world_model_adjusted_confidence > confidence_threshold and

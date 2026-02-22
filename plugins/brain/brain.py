@@ -423,12 +423,65 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         except Exception as e:
             return f"❌ Confidence debug failed: {e}"
 
+    def agi_cycle_command(self, *args):
+        """Run a full 14-phase AGI cycle manually. Usage: agi_cycle [manual|scheduled]"""
+        trigger = args[0] if args else 'manual'
+        try:
+            from src.agentic.agi_orchestrator import get_agi_orchestrator
+            orchestrator = get_agi_orchestrator(core=self.core)
+            result = orchestrator.run_cycle(trigger=trigger)
+            phases = result.phases_executed
+            phase_lines = '\n'.join(
+                f"  {'✅' if p.success else '❌'} {p.phase.name} ({p.duration_seconds:.1f}s)"
+                for p in phases
+            )
+            action = result.final_action or {}
+            learnings = ', '.join(result.learnings) if result.learnings else 'none'
+            return (
+                f"🧠 AGI Cycle Complete\n\n"
+                f"Cycle ID: {result.cycle_id}\n"
+                f"Trigger: {result.triggered_by}\n"
+                f"Phases Executed: {len(phases)}\n\n"
+                f"{phase_lines}\n\n"
+                f"Action: {action.get('action_taken', 'none')}\n"
+                f"Result: {action.get('result', 'n/a')}\n"
+                f"Learnings: {learnings}"
+            )
+        except Exception as e:
+            import traceback
+            return f"❌ AGI cycle failed: {e}\n{traceback.format_exc()[-500:]}"
+
+    def agi_status_command(self, *args):
+        """Show AGI orchestrator and kernel status"""
+        try:
+            from src.agentic.agi_orchestrator import get_agi_orchestrator
+            from src.agentic.agi_kernel import get_agi_kernel
+            orchestrator = get_agi_orchestrator(core=self.core)
+            kernel = get_agi_kernel(self.core)
+            summary = orchestrator.get_orchestrator_summary()
+            introspection = kernel.get_introspection()
+            mental = introspection.get('mental_state', {})
+            ws_stats = summary.get('inference_summary', {})
+            output = "🧠 AGI System Status\n\n"
+            output += f"  Mood: {mental.get('mood_description', '?')} ({mental.get('mood', 0):.2f})\n"
+            output += f"  Active Goals: {mental.get('active_goal_count', 0)}\n"
+            output += f"  Proposed Goals: {mental.get('proposed_goal_count', 0)}\n"
+            output += f"  Total Memories: {mental.get('total_memories', 0)}\n"
+            output += f"  Kernel linked: {'✅' if orchestrator.agi_kernel else '❌'}\n"
+            output += f"  Last post: {orchestrator.last_post_time.strftime('%H:%M') if orchestrator.last_post_time else 'never'}\n"
+            output += f"  Posts today: {orchestrator.daily_post_count}/{orchestrator.max_daily_posts}\n"
+            return output
+        except Exception as e:
+            return f"❌ AGI status failed: {e}"
+
     def get_commands(self):
         """Return CLI commands"""
         return {
             'brain_think': self.think_command,
             'brain_start': self.start_command,
             'brain_stop': self.stop_command,
+            'agi_cycle': self.agi_cycle_command,
+            'agi_status': self.agi_status_command,
             'brain_moltx_image_post': self.moltx_image_post_command,
             'brain_moltx_post': self.moltx_post_command,
             'brain_diversity': self.diversity_command,

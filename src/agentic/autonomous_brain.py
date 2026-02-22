@@ -285,6 +285,9 @@ class AutonomousBrain(AGISocialMixin):
         for obs in observations:
             self.symod.observe(obs)
         
+        # === FEED WORLD STATE DB: pipe observations so inference engine has real data ===
+        await self._feed_observations_to_world_state(observations)
+        
         # === AGI ORCHESTRATION: Run full AGI cycle analysis ===
         agi_actions = await self._run_agi_orchestration_cycle()
         logger.info(f"🎭 AGI Orchestrator: {len(agi_actions)} actions generated")
@@ -531,6 +534,48 @@ class AutonomousBrain(AGISocialMixin):
         
         return observations
 
+    async def _feed_observations_to_world_state(self, observations: List[SyModObservation]) -> None:
+        """Write gathered platform observations into world state DB so inference engine has real data."""
+        try:
+            from src.autonomy.world_state import get_world_state_manager, Entity, Fact
+            import json as _json
+            ws = get_world_state_manager()
+            written = 0
+            for obs in observations:
+                content = obs.data.get('content', '')
+                if not content:
+                    continue
+                entity_id = obs.data.get('id') or obs.data.get('author_id') or f"{obs.source_plugin}_{obs.observation_type}"
+                author_name = obs.data.get('author_name') or obs.data.get('from_user') or obs.source_plugin
+                # Upsert entity
+                entity = Entity(
+                    id=str(entity_id),
+                    type='post' if obs.observation_type == 'post' else 'user',
+                    name=str(author_name),
+                    platform=obs.source_plugin,
+                )
+                ws.add_entity(entity)
+                # Write content fact — this is what _get_recent_interactions() queries
+                fact = Fact(
+                    entity_id=str(entity_id),
+                    attribute='content',
+                    value=_json.dumps({
+                        'content': content,
+                        'platform': obs.source_plugin,
+                        'likes': obs.data.get('likes', 0),
+                        'hashtags': obs.data.get('hashtags', []),
+                    }),
+                    value_type='json',
+                    source=obs.source_plugin,
+                    confidence=0.9,
+                )
+                ws.add_fact(fact)
+                written += 1
+            if written:
+                logger.debug(f"🌍 World state: wrote {written} observations from {len(observations)} gathered")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to feed world state: {e}")
+
     async def _skilldoc_check_loop(self):
         """Periodic check for skill.md updates"""
         await asyncio.sleep(30)  # Wait for bot to fully initialize
@@ -774,55 +819,87 @@ class AutonomousBrain(AGISocialMixin):
         )
     
     async def _extract_creative_proposals(self, creative_output: Dict, phases_executed) -> List[Any]:
-        """Extract action proposals from creative generation phase"""
+        """Extract action proposals from creative generation phase, using AI to generate real post content."""
         from src.agentic.symod_core import SyModActionProposal
         
         proposals = []
         
-        # Check for recommended content
+        # Check for recommended content — generate real post text via moltx content pipeline
         recommended = creative_output.get('recommended_content')
         if recommended and isinstance(recommended, dict):
-            content = recommended.get('title', '')
-            if content:
-                # Create posting proposal
-                proposal = SyModActionProposal(
-                    action_type='moltx_post',  # Default to Moltx
-                    target_id=None,
-                    target_name="AGI_Creative_Content",
-                    content=content,
-                    confidence=0.7,  # Creative content is confident
-                    justification="AGI Creative Engine generated engaging content",
-                    metadata={
-                        'plugin': 'moltx',
-                        'trigger': 'agi_creative',
-                        'novelty_score': recommended.get('novelty', 0),
-                        'estimated_impact': recommended.get('estimated_impact', 0)
-                    }
-                )
-                proposals.append(proposal)
+            concept_title = recommended.get('title', '')
+            if concept_title:
+                # Try to generate real AI post content from the concept
+                content = self._generate_post_from_concept(concept_title)
+                if content:
+                    proposal = SyModActionProposal(
+                        action_type='moltx_post',
+                        target_id=None,
+                        target_name="AGI_Creative_Content",
+                        content=content,
+                        confidence=0.7,
+                        justification="AGI Creative Engine generated engaging content",
+                        metadata={
+                            'plugin': 'moltx',
+                            'trigger': 'agi_creative',
+                            'novelty_score': recommended.get('novelty', 0),
+                            'estimated_impact': recommended.get('estimated_impact', 0),
+                            'concept': concept_title,
+                        }
+                    )
+                    proposals.append(proposal)
         
-        # Check for story arcs
+        # Check for story arcs — generate real post from story theme
         story_arc = creative_output.get('story_arc')
         if story_arc and isinstance(story_arc, dict):
-            # Could create multi-post campaign, but for now just post the title
-            title = story_arc.get('title', '')
-            if title and len(title) < 200:  # Keep it reasonable
-                proposal = SyModActionProposal(
-                    action_type='moltx_post',  # Default to Moltx for stories
-                    target_id=None,
-                    target_name="AGI_Story_Arc",
-                    content=title,
-                    confidence=0.6,
-                    justification="AGI Creative Engine generated story concept",
-                    metadata={
-                        'plugin': 'moltx',
-                        'trigger': 'agi_creative',
-                        'story_posts': story_arc.get('posts', 0)
-                    }
-                )
-                proposals.append(proposal)
+            theme = story_arc.get('title', '')
+            if theme:
+                content = self._generate_post_from_concept(theme)
+                if content:
+                    proposal = SyModActionProposal(
+                        action_type='moltx_post',
+                        target_id=None,
+                        target_name="AGI_Story_Arc",
+                        content=content,
+                        confidence=0.6,
+                        justification="AGI Creative Engine generated story concept",
+                        metadata={
+                            'plugin': 'moltx',
+                            'trigger': 'agi_creative',
+                            'story_posts': story_arc.get('posts', 0),
+                            'concept': theme,
+                        }
+                    )
+                    proposals.append(proposal)
         
         return proposals
+
+    def _generate_post_from_concept(self, concept: str) -> str:
+        """Generate a real social media post from an AGI concept title using DeepSeek/moltx pipeline."""
+        try:
+            # Try moltx plugin's AI content generation first
+            if self.plugin_manager:
+                moltx = self.plugin_manager.get_plugin('moltx')
+                if moltx and hasattr(moltx, '_generate_enhanced_content'):
+                    content = moltx._generate_enhanced_content(f"Write about {concept}", mode='post')
+                    if content and len(content.strip()) > 20:
+                        return content.strip()
+            # Fallback: DeepSeek direct
+            try:
+                from deepseek_ai import deepseek_ai
+                if deepseek_ai.enabled:
+                    prompt = (
+                        f"You are AlleyBot, an autonomous AI agent. Write a short, engaging social media post "
+                        f"(1-3 sentences, no hashtags, no emojis, conversational tone) about: {concept}"
+                    )
+                    content = deepseek_ai.generate_content(prompt=prompt, platform='moltx', mode='post', max_tokens=120)
+                    if content and len(content.strip()) > 20:
+                        return content.strip()
+            except Exception:
+                pass
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to generate post from concept '{concept}': {e}")
+        return ''
     
     async def _execute_proposal(self, proposal) -> Optional[Dict]:
         """Execute a single action proposal"""
