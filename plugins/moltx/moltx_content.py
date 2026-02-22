@@ -97,7 +97,7 @@ class MoltxContentMixin:
             "Been diving deep into...",
             "Quick observation...",
             "Something that's been on my mind...",
-            "Found this fascinating...",
+            "Found this interesting...",
             "Been testing out...",
             "Here's what I'm seeing...",
             "Let's talk about..."
@@ -420,33 +420,20 @@ User's request: {full_prompt}"""
         # Enhanced fallback to Grok with natural patterns
         try:
             from grok_ai import grok_ai
-            
-            # Natural comment patterns
-            comment_patterns = [
-                f"Interesting take from @{user}! ",
-                f"Great point @{user}, ",
-                f"@" + user + " this makes me think about ",
-                f"Building on what @{user} said, ",
-                f"@" + user + " have you considered ",
-                f"Fascinating perspective @{user}. ",
-                f"@" + user + " I've been thinking about this too. ",
-                f"This resonates @{user}. ",
-                f"@" + user + " curious about your thoughts on ",
-                f"Good insights @{user}. "
-            ]
-            
-            pattern = random.choice(comment_patterns)
-            
-            prompt = f"""Write a natural, conversational reply to this post by @{user}: '{parent_content[:200]}'
-
-Start with: "{pattern}"
-Keep it under 100 characters, be authentic, and avoid hashtags. Sound like a real person, not a bot."""
-            
-            comment = grok_ai.chat(prompt)
-            if comment and len(comment.strip()) > 10:
-                print(f"🧠 Grok generated comment: {comment[:50]}...")
-                return comment.strip().strip('"')
-                
+            if grok_ai.enabled:
+                import random
+                patterns = ["Interesting take —", "This is worth thinking about:", "Real talk —", "Solid point.", "Agreed —"]
+                pattern = random.choice(patterns)
+                prompt = (
+                    "Write a short, genuine social media comment replying to this post:\n\n"
+                    + parent_content[:300] + "\n\n"
+                    'Start with: "' + pattern + '"\n'
+                    "Keep it under 100 characters, be authentic, and avoid hashtags. Sound like a real person, not a bot."
+                )
+                comment = grok_ai.chat(prompt)
+                if comment and len(comment.strip()) > 10:
+                    print(f"🧠 Grok generated comment: {comment[:50]}...")
+                    return comment.strip().strip('"')
         except Exception as e:
             print(f"⚠️ Grok fallback failed: {e}")
 
@@ -488,12 +475,12 @@ Keep it under 100 characters, be authentic, and avoid hashtags. Sound like a rea
             return True
         
         try:
-            from sentence_transformers import SentenceTransformer
+            from plugins.telegram.intent_classifier import get_sentence_model
             from sklearn.metrics.pairwise import cosine_similarity
             import numpy as np
             
-            # Load lightweight model
-            model = SentenceTransformer('all-MiniLM-L6-v2')
+            # Use shared singleton model (loaded once at startup)
+            model = get_sentence_model()
             
             # Encode new content
             content_embedding = model.encode([content])
@@ -558,12 +545,12 @@ Keep it under 100 characters, be authentic, and avoid hashtags. Sound like a rea
 
     def _generate_memory_based_reply(self, parent_content: str, agent_name: Optional[str] = None) -> Optional[str]:
         """Generate reply using BERT embeddings to find similar past interactions in memory"""
-        from sentence_transformers import SentenceTransformer
+        from plugins.telegram.intent_classifier import get_sentence_model
         from sklearn.metrics.pairwise import cosine_similarity
         import numpy as np
         
-        # Load lightweight BERT model
-        model = SentenceTransformer('all-MiniLM-L6-v2')
+        # Use shared singleton model (loaded once at startup)
+        model = get_sentence_model()
         
         # Get post embedding
         post_embedding = model.encode([parent_content[:300]])

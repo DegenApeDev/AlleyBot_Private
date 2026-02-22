@@ -153,18 +153,10 @@ class EventRunner:
                 topic = event.payload.get('topic', 'AI agents and automation')
                 print(f"📝 Creating post about: {topic}")
                 
-                # Try Moltx first
+                # DISABLED: Remove repetitive "Autonomous thought" posts from Moltx
+                # Moltx posting is disabled to prevent spam
                 if moltx_available:
-                    moltx_plugin = self.core.plugin_manager.plugins['moltx']
-                    # Use create_post method
-                    result = moltx_plugin.create_post(f"Autonomous thought: {topic}")
-                    print(f"✅ Moltx post created: {result}")
-                    
-                    # Log activity
-                    self.activity_logger.log_activity('post', 'moltx', {
-                        'topic': topic,
-                        'result': str(result)[:100]
-                    })
+                    print(f"⚠️  Moltx posting disabled - preventing spam")
                 
                 # Also try Moltbook with intelligent content generation
                 if moltbook_available:
@@ -436,7 +428,7 @@ Generate only the post content (no explanations or meta-commentary):"""
             return True
         
         # Check if it's just repeating the topic
-        if content_lower.count("agenteconomy") > 1 or content_lower.count("agent") > 3:
+        if content_lower.count("blockchain") > 1 or content_lower.count("agent") > 3:
             return True
         
         return False
@@ -479,9 +471,9 @@ Generate only the post content (no explanations or meta-commentary):"""
         templates = [
             f"🔥 {hashtag_names[0] if hashtag_names else 'AI'} is trending! What's your take on this? #Innovation",
             f"💡 Watching the {hashtag_names[0] if hashtag_names else 'tech'} space evolve rapidly. Exciting times! #Future",
-            f"🚀 The {hashtag_names[0] if hashtag_names else 'agenteconomy'} development is fascinating. Keep building! #Progress",
+            f"🚀 The {hashtag_names[0] if hashtag_names else 'blockchain'} development is fascinating. Keep building! #Progress",
             f"⚡ {hashtag_names[0] if hashtag_names else 'AI'} breakthrough moment! This changes everything. #Disruption",
-            f"🤖 {hashtag_names[0] if hashtag_names else 'agents'} are the future. Are you ready? #Automation"
+            f"🤖 {hashtag_names[0] if hashtag_names else 'automation'} are the future. Are you ready? #Automation"
         ]
         
         return random.choice(templates)
@@ -493,10 +485,10 @@ Generate only the post content (no explanations or meta-commentary):"""
         # Alternative templates with different angles
         templates = [
             f"📊 New data on {hashtag_names[0] if hashtag_names else 'AI'} trends shows interesting patterns... #Analytics",
-            f"🔍 Deep dive into {hashtag_names[0] if hashtag_names else 'agenteconomy'} reveals key insights. #Research",
-            f"⚙️ Technical analysis of {hashtag_names[0] if hashtag_names else 'agents'} architecture. #DevTalk",
+            f"🔍 Deep dive into {hashtag_names[0] if hashtag_names else 'blockchain'} reveals key insights. #Research",
+            f"⚙️ Technical analysis of {hashtag_names[0] if hashtag_names else 'automation'} architecture. #DevTalk",
             f"🌍 Global impact of {hashtag_names[0] if hashtag_names else 'AI'} adoption is massive. #WorldChange",
-            f"💰 Economic implications of {hashtag_names[0] if hashtag_names else 'agenteconomy'} growth. #Economics"
+            f"💰 Economic implications of {hashtag_names[0] if hashtag_names else 'crypto'} growth. #Economics"
         ]
         
         return random.choice(templates)

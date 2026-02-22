@@ -483,7 +483,7 @@ PLUGIN_INFO = {
 }
 
 def create_plugin(config=None):
-    return PluginNamePlugin(config or {})
+    return PluginNamePlugin(config or {{}})
 ```
 
 CRITICAL ALLEYBOT PLUGIN CONVENTIONS:
@@ -493,16 +493,26 @@ CRITICAL ALLEYBOT PLUGIN CONVENTIONS:
 - super().__init__(config) MUST be called with config, NOT plugin_manager
 - NEVER use self.plugin_manager - it doesn't exist
 - Use print() for logging, NOT self.plugin_manager.logger
-- Plugin MUST have create_plugin() function: def create_plugin(config=None): return PluginNamePlugin(config or {})
-- Plugin MUST have PLUGIN_INFO dict: PLUGIN_INFO = {"name": "plugin_name", "version": "1.0.0", ...}
+- Plugin MUST have create_plugin() function: def create_plugin(config=None): return PluginNamePlugin(config or {{}})
+- Plugin MUST have PLUGIN_INFO dict: PLUGIN_INFO = {{"name": "plugin_name", "version": "1.0.0", ...}}
 - Plugin MUST have get_commands() method returning dict of commands
 - Command methods MUST return strings, NOT async
 - Keep plugins under 200 lines (excluding docstrings and imports)
 - For file paths, use os.path.join(__file__, "..", "filename") for plugin-relative paths
 
+__init__.py CONVENTIONS (CRITICAL):
+- __init__.py MUST use ABSOLUTE imports, NEVER relative imports
+- CORRECT: from plugins.plugin_name.plugin_name import create_plugin, PLUGIN_INFO
+- WRONG: from .plugin_name import create_plugin, PLUGIN_INFO  (relative import - NEVER do this)
+- __init__.py should be minimal: just import and re-export create_plugin and PLUGIN_INFO
+- Example __init__.py:
+    from plugins.plugin_name.plugin_name import create_plugin, PLUGIN_INFO
+    __all__ = ["create_plugin", "PLUGIN_INFO"]
+
 WARNING: DO NOT USE plugin_manager parameter or attribute - it doesn't exist in AlleyBotPlugin!
 WARNING: DO NOT use self.plugin_manager.logger - use print() instead!
 WARNING: DO NOT return class from create_plugin() - return instance with config!
+WARNING: NEVER use relative imports (from .module import ...) - always use absolute imports!
 
 Generate clean, production-ready Python code that follows the SOP exactly and passes syntax validation on first try."""
 
@@ -547,22 +557,40 @@ Generate clean, production-ready Python code that follows the SOP exactly and pa
         text = raw.strip()
 
         # If the response contains a fenced code block, extract just the code
+        # Try python/py fence first, then any fence
         fence_match = re.search(r'```(?:python|py)?\s*\n(.*?)```', text, re.DOTALL)
         if fence_match:
             text = fence_match.group(1)
         else:
-            # Fallback: strip leading/trailing fences
-            text = re.sub(r'^```(?:python|py)?\s*\n', '', text)
-            text = re.sub(r'\n```\s*$', '', text)
+            # Try any generic fence
+            fence_match = re.search(r'```\s*\n(.*?)```', text, re.DOTALL)
+            if fence_match:
+                text = fence_match.group(1)
+            else:
+                # Fallback: strip leading/trailing fences line by line
+                text = re.sub(r'^```(?:python|py)?\s*\n?', '', text)
+                text = re.sub(r'\n?```\s*$', '', text)
 
-        # Strip any leading prose before the first import/def/class/#
+        # Remove any remaining fence markers that may appear mid-text
+        text = re.sub(r'```(?:python|py)?\s*\n?', '', text)
+        text = re.sub(r'\n?```', '', text)
+
+        # Strip any leading prose before the first code line
+        code_starters = ('import ', 'from ', 'def ', 'class ', '#', '"""', "'''", '@',
+                         'try:', 'try :', 'if __', 'PLUGIN_INFO', 'plugin_info')
         lines = text.split('\n')
         code_start = 0
         for i, line in enumerate(lines):
             stripped = line.strip()
-            if stripped and (stripped.startswith(('import ', 'from ', 'def ', 'class ',
-                                                  '#', '"""', "'''", '@'))
-                            or stripped[0].isalpha() and '=' in stripped):
+            if not stripped:
+                continue
+            if stripped.startswith(code_starters):
+                code_start = i
+                break
+            # Catch module-level assignments like PLUGIN_INFO = { or VAR = "..."
+            # but NOT prose sentences like "Here is the fixed code:"
+            if (stripped[0].isupper() and '=' in stripped and
+                    not stripped.endswith(':') and len(stripped.split()) <= 5):
                 code_start = i
                 break
         text = '\n'.join(lines[code_start:])
@@ -854,7 +882,7 @@ Return ONLY valid JSON, no markdown or explanation."""
             })
 
         # Step 2: Validate all generated code (with syntax-fix retry)
-        max_syntax_retries = 2
+        max_syntax_retries = 3
         for syntax_attempt in range(max_syntax_retries + 1):
             all_issues = []
             syntax_issues = []
@@ -889,10 +917,19 @@ Return ONLY valid JSON, no markdown or explanation."""
             print(f"🔧 Syntax error detected — asking AI to fix (attempt {syntax_attempt + 1}/{max_syntax_retries})...")
             for gf, issue in syntax_issues:
                 fix_prompt = (
-                    f"This Python code has a syntax error:\n{issue}\n\n"
-                    f"```python\n{gf['code'][:6000]}\n```\n\n"
-                    f"Fix the syntax error and return ONLY the complete corrected Python file. "
-                    f"No markdown fences, no explanations."
+                    "This Python file has a syntax error that must be fixed:\n"
+                    "Error: " + str(issue) + "\n\n"
+                    "File path: " + gf['path'] + "\n\n"
+                    "Current code:\n"
+                    + gf['code'][:6000] + "\n\n"
+                    "Common syntax mistakes to check and fix:\n"
+                    '- Empty try/except/if/else/for blocks: always add \'pass\' if body is empty\n'
+                    '- Dictionary keys must use colon syntax: {"key": value}\n'
+                    '- f-string braces: use {{ }} to escape literal braces inside f-strings\n'
+                    "- Missing colons after def/class/if/for/while/try/except/else/elif\n"
+                    "- Indentation errors: use 4 spaces consistently\n"
+                    "- NEVER use relative imports (from .module import ...) - use absolute imports\n\n"
+                    "Return ONLY the complete corrected Python file. No markdown fences, no explanations, no comments about the fix."
                 )
                 fixed = self._generate_code_with_ai(fix_prompt, max_tokens=6000)
                 if fixed:
@@ -916,15 +953,15 @@ Return ONLY valid JSON, no markdown or explanation."""
             print(f"⚠️  {len(sandbox_failures)} file(s) failed sandbox check, asking AI to fix...")
             for gf, err in sandbox_failures:
                 fix_prompt = (
-                    f"This Python file failed a sandbox check with this error:\n{err}\n\n"
-                    f"File: {gf['path']}\n"
-                    f"```python\n{gf['code'][:6000]}\n```\n\n"
-                    f"IMPORTANT: The project root is on PYTHONPATH. Use imports like:\n"
-                    f"  from plugins.brain.brain import BrainPlugin\n"
-                    f"  from grok_ai import grok_ai\n"
-                    f"  import requests\n"
-                    f"NEVER use relative imports. Wrap uncertain imports in try/except.\n\n"
-                    f"Fix the code and return ONLY the complete corrected Python file."
+                    "This Python file failed a sandbox check with this error:\n" + str(err) + "\n\n"
+                    "File: " + gf['path'] + "\n\n"
+                    + gf['code'][:6000] + "\n\n"
+                    "IMPORTANT: The project root is on PYTHONPATH. Use imports like:\n"
+                    "  from plugins.brain.brain import BrainPlugin\n"
+                    "  from grok_ai import grok_ai\n"
+                    "  import requests\n"
+                    "NEVER use relative imports. Wrap uncertain imports in try/except.\n\n"
+                    "Fix the code and return ONLY the complete corrected Python file. No markdown fences."
                 )
                 fixed = self._generate_code_with_ai(fix_prompt, max_tokens=6000)
                 if fixed:
@@ -1022,83 +1059,30 @@ Return ONLY valid JSON, no markdown or explanation."""
             path = gf['path']
             current_code = gf['code']
 
-            fix_prompt = f"""The following Python code was generated for AlleyBot but FAILED tests.
-
-FILE: {path}
-PLAN: {plan.get('summary', '?')}
-
-CURRENT CODE:
-```python
-{current_code[:6000]}
-```
-
-TEST ERROR OUTPUT:
-```
-{error_output[-1500:]}
-```
-
-Fix the code so the tests pass. Common issues:
-- Import errors (wrong module path, missing import)
-- Attribute errors (wrong method name, missing self parameter)
-- Type errors (wrong argument count, wrong types)
-- Logic errors (wrong return value, missing edge case)
-
-ALLEYBOT PLUGIN SOP (STANDARD OPERATING PROCEDURE):
-Follow this exact template for all plugin development:
-
-```python
-# plugins/plugin_name/plugin_name.py
-from plugin_manager import AlleyBotPlugin
-
-class PluginNamePlugin(AlleyBotPlugin):
-    def __init__(self, config):
-        super().__init__(config)
-        self.name = "plugin_name"
-        self.version = "1.0.0"
-        # Initialize plugin state here
-    
-    def get_commands(self) -> Dict[str, callable]:
-        return {
-            "command_name": self.command_method,
-        }
-    
-    def command_method(self, args: list) -> str:
-        return "Command result"
-
-PLUGIN_INFO = {
-    "name": "plugin_name",
-    "version": "1.0.0",
-    "description": "Plugin description",
-    "author": "AlleyBot"
-}
-
-def create_plugin(config=None):
-    return PluginNamePlugin(config or {})
-```
-
-CRITICAL ALLEYBOT PLUGIN CONVENTIONS:
-- Plugin classes MUST inherit from AlleyBotPlugin: from plugin_manager import AlleyBotPlugin
-- NEVER use BasePlugin, use AlleyBotPlugin instead
-- Constructor MUST be: def __init__(self, config): NOT plugin_manager
-- super().__init__(config) MUST be called with config, NOT plugin_manager
-- NEVER use self.plugin_manager - it doesn't exist
-- Use print() for logging, NOT self.plugin_manager.logger
-- Plugin MUST have create_plugin() function: def create_plugin(config=None): return PluginNamePlugin(config or {})
-- Plugin MUST have PLUGIN_INFO dict: PLUGIN_INFO = {"name": "plugin_name", "version": "1.0.0", ...}
-- Plugin MUST have get_commands() method returning dict of commands
-- Command methods MUST return strings, NOT async
-- Keep plugins under 200 lines (excluding docstrings and imports)
-- For file paths, use os.path.join(__file__, "..", "filename") for plugin-relative paths
-
-WARNING: DO NOT USE plugin_manager parameter or attribute - it doesn't exist in AlleyBotPlugin!
-WARNING: DO NOT use self.plugin_manager.logger - use print() instead!
-WARNING: DO NOT return class from create_plugin() - return instance with config!
-- Project root is on PYTHONPATH. Use: from plugins.x.y import Z
-- For AI: from grok_ai import grok_ai / from deepseek_ai import deepseek_ai
-- For HTTP: import requests
-- NEVER use relative imports. Wrap uncertain imports in try/except.
-
-Return ONLY the complete fixed Python file that follows the SOP exactly. No explanations, no markdown fences."""
+            fix_prompt = (
+                "The following Python code was generated for AlleyBot but FAILED tests.\n\n"
+                "FILE: " + path + "\n"
+                "PLAN: " + plan.get('summary', '?') + "\n\n"
+                "CURRENT CODE:\n"
+                + current_code[:6000] + "\n\n"
+                "TEST ERROR OUTPUT:\n"
+                + error_output[-1500:] + "\n\n"
+                "Fix the code so the tests pass. Common issues:\n"
+                "- Import errors (wrong module path, missing import)\n"
+                "- Attribute errors (wrong method name, missing self parameter)\n"
+                "- Type errors (wrong argument count, wrong types)\n"
+                "- Logic errors (wrong return value, missing edge case)\n\n"
+                "ALLEYBOT PLUGIN SOP:\n"
+                "- from plugin_manager import AlleyBotPlugin\n"
+                "- def __init__(self, config): super().__init__(config)\n"
+                "- def get_commands(self): return {'cmd': self.method}\n"
+                "- def create_plugin(config=None): return PluginNamePlugin(config or {})\n"
+                "- PLUGIN_INFO = {'name': ..., 'version': ..., 'description': ..., 'author': ...}\n"
+                "- __init__.py: use absolute imports only (from plugins.x.y import ...)\n"
+                "- NEVER use self.plugin_manager, use print() for logging\n"
+                "- NEVER use relative imports (from .module import ...)\n\n"
+                "Return ONLY the complete fixed Python file. No markdown fences, no explanations."
+            )
 
             fixed_code = self._generate_code_with_ai(fix_prompt, max_tokens=6000)
 

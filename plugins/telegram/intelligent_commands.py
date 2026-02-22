@@ -24,19 +24,78 @@ class IntelligentTelegramCommands:
         return self.telegram.core
 
     def _generate_fallback_post(self, topic_direction: str) -> str:
-        """Generate fallback post content when AI fails"""
-        import random
+        """Generate intelligent fallback post content using DeepSeek AI or Sentence Transformers"""
+        try:
+            # Try DeepSeek AI first for intelligent response
+            from deepseek_ai import deepseek_ai
+            
+            prompt = f"""Generate a natural, human-like social media response about: {topic_direction}
+
+Requirements:
+- Be conversational and natural, not robotic
+- Avoid repetitive phrases like "fascinating" or "love this"
+- Reference the specific topic context
+- Keep it under 280 characters
+- Include 1-2 relevant hashtags
+- Sound like a real person sharing thoughts
+
+Topic: {topic_direction}
+
+Response:"""
+            
+            response = deepseek_ai.generate(prompt, max_tokens=100, temperature=0.7)
+            if response and len(response.strip()) > 10:
+                return response.strip()
+                
+        except Exception as e:
+            print(f"⚠️  DeepSeek fallback failed: {e}")
         
-        # Simple templates based on topic keywords
-        templates = [
-            f"🚀 {topic_direction} - This is fascinating! The future is here. #AI #Innovation",
-            f"💡 Thinking about {topic_direction}... What are your thoughts? #Tech #Future",
-            f"🔥 {topic_direction} is changing everything! Are you ready? #Disruption #Progress",
-            f"🤖 {topic_direction} and AI - a powerful combination! #Automation #Efficiency",
-            f"⚡ {topic_direction} breakthrough! This could be huge. #Innovation #Tech"
-        ]
-        
-        return random.choice(templates)
+        # Fallback to Sentence Transformers for diverse responses
+        try:
+            from plugins.telegram.intent_classifier import get_sentence_model
+            import random
+            
+            # Use shared singleton model (loaded once at startup)
+            model = get_sentence_model()
+            
+            # Generate diverse template variations based on topic
+            topic_embeddings = model.encode([topic_direction])
+            
+            # Context-aware templates
+            templates = [
+                f"🚀 {topic_direction} - Some interesting developments here. #Innovation",
+                f"💡 {topic_direction} raises some good questions. What's your take? #Tech",
+                f"🔥 Watching {topic_direction} evolve could be significant. #Future",
+                f"🤖 {topic_direction} + AI creates interesting possibilities. #Automation",
+                f"⚡ {topic_direction} might be more important than we think. #Tech",
+                f"🔍 The patterns in {topic_direction} are worth noting. #Analysis",
+                f"⚙️ Technical aspects of {topic_direction} deserve attention. #Dev",
+                f"🌊 {topic_direction} is having interesting effects. #Impact"
+            ]
+            
+            # Use embedding similarity to select most appropriate template
+            template_embeddings = model.encode(templates)
+            similarities = model.similarity(topic_embeddings, template_embeddings)[0]
+            
+            # Select from top 3 most similar templates to add variety
+            top_indices = similarities.argsort()[-3:][::-1]
+            selected_template = random.choice([templates[i] for i in top_indices])
+            
+            return selected_template
+            
+        except Exception as e:
+            print(f"⚠️  Sentence transformer fallback failed: {e}")
+            
+            # Final simple fallback (non-repetitive)
+            import random
+            simple_responses = [
+                f"🚀 {topic_direction} - worth keeping an eye on. #Tech",
+                f"💡 {topic_direction} brings up interesting points. #Future",
+                f"🔥 {topic_direction} developments could be significant. #Innovation",
+                f"🤖 {topic_direction} intersects with AI in interesting ways. #Automation"
+            ]
+            
+            return random.choice(simple_responses)
     
     def _is_generic_content(self, content: str) -> bool:
         """Check if content is too generic or repetitive"""

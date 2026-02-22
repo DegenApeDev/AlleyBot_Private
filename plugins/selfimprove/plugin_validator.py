@@ -54,14 +54,18 @@ def validate_plugin_structure(plugin_path: str) -> Dict[str, Any]:
                     if isinstance(target, ast.Name) and target.id == 'PLUGIN_INFO':
                         has_plugin_info = True
         
-        if not has_plugin_class:
-            result['warnings'].append("No class inheriting from AlleyBotPlugin found")
+        # __init__.py is a re-export file — don't require plugin class/functions in it
+        is_init_file = Path(plugin_path).name == '__init__.py'
         
-        if not has_create_plugin:
-            result['warnings'].append("No create_plugin function found")
-        
-        if not has_plugin_info:
-            result['warnings'].append("No PLUGIN_INFO metadata found")
+        if not is_init_file:
+            if not has_plugin_class:
+                result['warnings'].append("No class inheriting from AlleyBotPlugin found")
+            
+            if not has_create_plugin:
+                result['warnings'].append("No create_plugin function found")
+            
+            if not has_plugin_info:
+                result['warnings'].append("No PLUGIN_INFO metadata found")
         
         return result
         
@@ -73,6 +77,12 @@ def validate_plugin_structure(plugin_path: str) -> Dict[str, Any]:
 def validate_plugin_imports(plugin_path: str) -> Dict[str, Any]:
     """Validate that the plugin can be imported and instantiated"""
     result = {'valid': True, 'errors': [], 'warnings': []}
+    
+    # __init__.py uses relative imports which can't be validated standalone
+    # It's a re-export file — skip import validation for it
+    if Path(plugin_path).name == '__init__.py':
+        result['warnings'].append("Skipped import validation for __init__.py (re-export file)")
+        return result
     
     try:
         # Get plugin directory

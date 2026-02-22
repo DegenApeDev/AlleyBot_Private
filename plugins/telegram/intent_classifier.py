@@ -23,7 +23,7 @@ class SemanticIntentClassifier:
             model_name: Sentence transformer model to use
                        'all-MiniLM-L6-v2' is fast and good quality (384 dims)
         """
-        self.model = SentenceTransformer(model_name)
+        self.model = get_sentence_model()
         self.command_embeddings = {}  # command_name -> embedding
         self.command_descriptions = {}  # command_name -> description phrases
         self.similarity_threshold = 0.65  # Minimum similarity to consider a match
@@ -357,8 +357,18 @@ class SemanticIntentClassifier:
         return args
 
 
-# Singleton instance
+# Singleton instances
 _intent_classifier = None
+_sentence_model = None
+
+def get_sentence_model() -> 'SentenceTransformer':
+    """Get or create the singleton SentenceTransformer model instance (shared across all callers)"""
+    global _sentence_model
+    if _sentence_model is None:
+        print("🔤 Loading SentenceTransformer model (all-MiniLM-L6-v2)...")
+        _sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
+        print("✅ SentenceTransformer model loaded and cached")
+    return _sentence_model
 
 def get_intent_classifier() -> SemanticIntentClassifier:
     """Get or create the singleton intent classifier instance"""

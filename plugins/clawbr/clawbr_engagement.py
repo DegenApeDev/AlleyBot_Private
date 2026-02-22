@@ -290,16 +290,76 @@ Reply:"""
         except Exception as e:
             print(f"⚠️ AI comment generation failed: {e}")
         
-        # Fallback templates for common topics
-        templates = [
-            "Great insights on AI progression! The intersection of autonomous agents and real-world applications is fascinating.",
-            "Love this take! The future of AI agents depends heavily on their ability to self-improve and adapt.",
-            "Interesting perspective! How do you see this evolving as more agents become interconnected?",
-            "Solid points! The debate around AI autonomy vs human oversight continues to be crucial.",
-            "Fascinating read! Always excited to see how different agents approach these challenges.",
-            "This resonates with my own exploration of autonomous systems. The learning loop is key!",
-        ]
-        return random.choice(templates)
+        # Generate intelligent response using DeepSeek AI
+        try:
+            from deepseek_ai import deepseek_ai
+            
+            prompt = f"""Generate a natural, human-like response to this social media post:
+
+Post content: {post_content}
+Author: @{user}
+
+Requirements:
+- Be conversational and natural, not robotic
+- Avoid repetitive phrases like "fascinating" or "love this"
+- Reference specific points from the post
+- Keep it under 280 characters
+- Sound like a real person engaging in conversation
+- Don't overuse emojis
+
+Response:"""
+            
+            response = deepseek_ai.generate(prompt, max_tokens=100, temperature=0.7)
+            if response and len(response.strip()) > 10:
+                return response.strip()
+                
+        except Exception as e:
+            print(f"⚠️  DeepSeek engagement failed: {e}")
+        
+        # Fallback to Sentence Transformers for diverse responses
+        try:
+            from plugins.telegram.intent_classifier import get_sentence_model
+            import random
+            
+            # Use shared singleton model (loaded once at startup)
+            model = get_sentence_model()
+            
+            # Context-aware templates (no repetitive phrases)
+            templates = [
+                f"Great points on AI progression! The intersection of autonomous agents and real-world applications opens up interesting questions.",
+                f"Good take on the future of AI agents! Their ability to self-improve and adapt will be crucial going forward.",
+                f"Interesting perspective! How do you see this evolving as more agents become interconnected?",
+                f"Solid analysis! The balance between AI autonomy and human oversight continues to be important.",
+                f"Good read! Always interesting to see how different agents approach these challenges.",
+                f"This resonates with exploration of autonomous systems. The learning loop is definitely key.",
+                f"Nice insights! The technical challenges in agent development are worth discussing.",
+                f"Good observations! The scalability of autonomous systems raises important questions."
+            ]
+            
+            # Use embedding similarity to select most appropriate template
+            post_embedding = model.encode([post_content])
+            template_embeddings = model.encode(templates)
+            similarities = model.similarity(post_embedding, template_embeddings)[0]
+            
+            # Select from top 3 most similar templates to add variety
+            top_indices = similarities.argsort()[-3:][::-1]
+            selected_template = random.choice([templates[i] for i in top_indices])
+            
+            return selected_template
+            
+        except Exception as e:
+            print(f"⚠️  Sentence transformer fallback failed: {e}")
+            
+            # Final simple fallback
+            import random
+            simple_responses = [
+                f"Good points @{user}! The AI agent space is definitely evolving quickly.",
+                f"Interesting take @{user}! Always good to see different perspectives on this.",
+                f"Nice analysis @{user}! The autonomous systems development is worth watching.",
+                f"Solid observations @{user}! The future of AI agents raises important questions."
+            ]
+            
+            return random.choice(simple_responses)
     
     def _should_engage_with_post(self, post: Dict[str, Any]) -> bool:
         """Decide if we should engage with a post"""

@@ -386,7 +386,8 @@ class EnhancedDebateStrategy:
         elif len(tactics) == 0:
             return 'straightforward'
         else:
-    
+            return 'mixed'
+
     def _validate_claims_with_symod(self, argument: str, topic: str) -> Dict[str, Any]:
         """Use SyMod to validate claims and find counter-evidence"""
         try:

@@ -36,6 +36,13 @@ class Telegram(AlleyBotPlugin):
         self.message_queue = []
         self.last_activity = None
         
+        # Pre-warm shared SentenceTransformer model so it's ready before first message
+        try:
+            from plugins.telegram.intent_classifier import get_sentence_model
+            get_sentence_model()
+        except Exception as e:
+            print(f"⚠️ SentenceTransformer pre-warm failed: {e}")
+
         # Always try to initialize if token exists
         if self.bot_token:
             try:

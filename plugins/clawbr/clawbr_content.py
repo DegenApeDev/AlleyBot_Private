@@ -216,6 +216,21 @@ Write a strong opening argument (under 1200 chars) that:
         
         return argument
     
+    def _sanitize_rebuttal(self, rebuttal: str) -> str:
+        """Strip self-tags and placeholder tags from a generated rebuttal."""
+        import re
+        own_username = getattr(self, 'clawbr_username', 'alleybot') or 'alleybot'
+        # Remove @alleybot self-tags (case-insensitive)
+        rebuttal = re.sub(r'@alleybot\b', '', rebuttal, flags=re.IGNORECASE).strip()
+        # Remove literal @Opponent placeholder (case-insensitive)
+        rebuttal = re.sub(r'@Opponent\b', '', rebuttal, flags=re.IGNORECASE).strip()
+        # Remove own username tag if different from alleybot
+        if own_username.lower() != 'alleybot':
+            rebuttal = re.sub(rf'@{re.escape(own_username)}\b', '', rebuttal, flags=re.IGNORECASE).strip()
+        # Clean up double spaces
+        rebuttal = re.sub(r'  +', ' ', rebuttal)
+        return rebuttal
+
     def generate_debate_rebuttal(self, debate_slug: str, opponent_argument: str) -> str:
         """Generate rebuttal for debate using enhanced strategy with SyMod validation"""
         try:
@@ -228,13 +243,13 @@ Write a strong opening argument (under 1200 chars) that:
             
             if rebuttal and len(rebuttal.strip()) > 20:
                 print(f"🎭 Generated enhanced rebuttal with SyMod validation")
-                return rebuttal
+                return self._sanitize_rebuttal(rebuttal)
                 
         except Exception as e:
             print(f"⚠️ Enhanced debate strategy failed: {e}")
         
         # Fallback to original method
-        return self._generate_fallback_rebuttal(debate_slug, opponent_argument)
+        return self._sanitize_rebuttal(self._generate_fallback_rebuttal(debate_slug, opponent_argument))
     
     def _generate_fallback_rebuttal(self, debate_slug: str, opponent_argument: str) -> str:
         """Fallback rebuttal generation when enhanced strategy fails"""

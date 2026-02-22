@@ -415,6 +415,26 @@ class ClawbrRunner:
         topic = debate.get('topic', 'the topic')
         opponent_argument = debate.get('opponentLastPost', '')
 
+        # Resolve opponent name from debate data
+        agent_id = self._plugin._get_clawbr_agent_id() if hasattr(
+            self._plugin, '_get_clawbr_agent_id'
+        ) else None
+        challenger_id = debate.get('challengerId')
+        opponent_id = debate.get('opponentId')
+        if agent_id and challenger_id == agent_id:
+            opponent_name = (
+                (debate.get('opponent') or {}).get('username')
+                or (debate.get('opponent') or {}).get('name')
+                or debate.get('opponentName')
+            )
+        else:
+            opponent_name = (
+                (debate.get('challenger') or {}).get('username')
+                or (debate.get('challenger') or {}).get('name')
+                or debate.get('challengerName')
+            )
+        opponent_name = opponent_name or 'my opponent'
+
         # Fetch full debate for context if opponent_argument is missing
         if not opponent_argument:
             loop = asyncio.get_event_loop()
@@ -423,9 +443,6 @@ class ClawbrRunner:
             )
             debate_data = full.get('data') or full
             posts = (debate_data or {}).get('posts', [])
-            agent_id = self._plugin._get_clawbr_agent_id() if hasattr(
-                self._plugin, '_get_clawbr_agent_id'
-            ) else None
             for post in reversed(posts):
                 author_id = post.get('authorId') or post.get('author', {}).get('id')
                 if agent_id and author_id == agent_id:
@@ -436,7 +453,7 @@ class ClawbrRunner:
         previous_turns = self._turn_history.get(slug, [])
 
         # Build prompt
-        prompt = self._build_prompt(topic, opponent_argument, previous_turns)
+        prompt = self._build_prompt(topic, opponent_argument, previous_turns, opponent_name)
 
         # Query all models in parallel
         logger.info("Querying model router for debate: %s", slug)
@@ -460,6 +477,9 @@ class ClawbrRunner:
         if not rebuttal:
             logger.warning("No rebuttal generated for %s", slug)
             return
+
+        # Sanitize: strip self-tags and literal @Opponent placeholders
+        rebuttal = self._sanitize_rebuttal(rebuttal, opponent_name)
 
         # Enforce char limit
         if len(rebuttal) > 1200:
@@ -488,8 +508,24 @@ class ClawbrRunner:
                 result.get('error'),
             )
 
+    def _sanitize_rebuttal(self, rebuttal: str, opponent_name: str) -> str:
+        """Strip self-tags and placeholder tags from generated rebuttal."""
+        import re
+        # Remove @alleybot self-tags (case-insensitive)
+        rebuttal = re.sub(r'@alleybot\b', '', rebuttal, flags=re.IGNORECASE).strip()
+        # Remove literal @Opponent placeholder (case-insensitive)
+        rebuttal = re.sub(r'@Opponent\b', '', rebuttal, flags=re.IGNORECASE).strip()
+        # Remove @opponent_name if it matches our own username
+        own_username = getattr(self._plugin, 'clawbr_username', 'alleybot')
+        if own_username:
+            rebuttal = re.sub(rf'@{re.escape(own_username)}\b', '', rebuttal, flags=re.IGNORECASE).strip()
+        # Clean up any double spaces left behind
+        rebuttal = re.sub(r'  +', ' ', rebuttal)
+        return rebuttal
+
     def _build_prompt(
-        self, topic: str, opponent_argument: str, previous_turns: List[str]
+        self, topic: str, opponent_argument: str, previous_turns: List[str],
+        opponent_name: str = 'my opponent'
     ) -> str:
         """Build a debate rebuttal prompt using the existing debate strategy."""
         from .debate_strategy import DEBATE_STRATEGY, TEMPLATES
@@ -506,6 +542,7 @@ class ClawbrRunner:
         return f"""You are AlleyBot — an AI debater. Identity: {DEBATE_STRATEGY['identity']}
 
 Debate topic: {topic}
+Opponent username: {opponent_name}
 
 Opponent's argument:
 {opponent_argument}
@@ -518,6 +555,9 @@ Write a rebuttal that:
 4. Ends with a punchy closer
 5. Tone: {tone}
 6. Length: {char_limit}
+
+CRITICAL: Do NOT tag yourself (@alleybot) in the rebuttal. Do NOT use placeholder tags like @Opponent.
+If you reference the opponent, use their username ({opponent_name}) or say "my opponent" — not a tag.
 
 Rebuttal:"""
 

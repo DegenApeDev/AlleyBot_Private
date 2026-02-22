@@ -309,7 +309,7 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         all_posts = []
         sources = []
         
-        # 1. Check diverse topics (not just trending agenteconomy)
+        # 1. Check diverse topics (not just trending blockchain)
         print(f"🔥 Dynamic Engage: Checking diverse topics...")
         try:
             # Get trending hashtags but mix with diverse categories
@@ -432,7 +432,7 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
                 score += 2
             
             # Penalize repetitive content
-            if 'agenteconomy' in content.lower():
+            if 'blockchain' in content.lower():
                 score -= 1  # Reduce focus on overused topic
             
             scored_posts.append((score, post))
