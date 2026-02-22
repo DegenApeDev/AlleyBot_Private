@@ -265,6 +265,20 @@ class AutonomousCoderMixin:
                     self.core,
                 )
                 print(f"  🔌 Hot-loaded plugin: {plugin_name}")
+
+                # Register new commands with intent classifier so they're
+                # available via natural language immediately
+                try:
+                    from plugins.telegram.intent_classifier import get_intent_classifier
+                    classifier = get_intent_classifier()
+                    plugin = plugin_manager.plugins.get(plugin_name)
+                    if plugin:
+                        for cmd_name, func in plugin.get_commands().items():
+                            doc = (func.__doc__ or f"Execute {cmd_name}").split('\n')[0].strip()
+                            classifier.register_command(cmd_name, doc)
+                            print(f"  🎯 Registered '{cmd_name}' with intent classifier")
+                except Exception as e:
+                    print(f"  ⚠️ Intent classifier update failed: {e}")
             except Exception as e:
                 print(f"  ⚠️ Hot-load failed for '{plugin_name}': {e}")
 
