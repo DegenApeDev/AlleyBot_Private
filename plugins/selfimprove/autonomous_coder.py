@@ -1342,7 +1342,7 @@ Return ONLY valid JSON, no markdown or explanation."""
         if not args:
             return "❌ Usage: improve_self_update <task description>"
 
-        task = ' '.join(args)
+        task = ' '.join(str(a) for a in args)
         
         # NEW: Confirmation gate - require explicit approval
         # Check if this is a confirmation call
@@ -1381,8 +1381,8 @@ Return ONLY valid JSON, no markdown or explanation."""
         """Confirm a pending self-update. Usage: improve_self_update_confirm <confirm_id>"""
         if not args:
             return "❌ Usage: improve_self_update_confirm <confirm_id>\n\nUse improve_drafts to see pending updates."
-        
-        confirm_id = args[0]
+
+        confirm_id = args[0] if args else None
         
         if not hasattr(self, '_pending_self_updates') or confirm_id not in self._pending_self_updates:
             return f"❌ No pending self-update found with ID: {confirm_id}\nUpdates expire after 10 minutes."
