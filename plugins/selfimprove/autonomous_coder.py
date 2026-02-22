@@ -235,6 +235,39 @@ class AutonomousCoderMixin:
                 return f"{path}: {e}"
         return None
 
+    def _hot_load_new_plugins(self, generated_files: List[Dict], plan: Dict):
+        """Hot-load newly generated plugins into the running bot without restart.
+        Only loads plugins that are new (not already registered in plugin_manager)."""
+        try:
+            plugin_manager = self.core.plugin_manager
+        except AttributeError:
+            print("  ⚠️ No plugin_manager on core, skipping hot-load")
+            return
+
+        # Collect unique plugin names from generated paths like plugins/<name>/<name>.py
+        plugin_names = set()
+        for gf in generated_files:
+            path = gf.get('path', '')
+            parts = path.replace('\\', '/').split('/')
+            # Expect: plugins/<plugin_name>/...
+            if len(parts) >= 2 and parts[0] == 'plugins':
+                plugin_names.add(parts[1])
+
+        for plugin_name in plugin_names:
+            if plugin_name in plugin_manager.plugins:
+                print(f"  ℹ️  Plugin '{plugin_name}' already loaded, skipping hot-load")
+                continue
+            try:
+                plugin_manager.load_plugin(
+                    plugin_name,
+                    {'config': {}, 'enabled': True},
+                    self.api,
+                    self.core,
+                )
+                print(f"  🔌 Hot-loaded plugin: {plugin_name}")
+            except Exception as e:
+                print(f"  ⚠️ Hot-load failed for '{plugin_name}': {e}")
+
     def _try_template_generation(self, task: str, path: str) -> Optional[str]:
         """Try to generate code using templates for common simple tasks.
         
@@ -1044,6 +1077,8 @@ Return ONLY valid JSON, no markdown or explanation."""
                     results['error'] = f"Plugin crashes on load: {crash_error}"
                     return results
                 results['applied'] = True
+                # Hot-load the new plugin into the running bot so it's usable immediately
+                self._hot_load_new_plugins(results['generated_files'], plan)
                 print(f"✅ Update applied: {plan.get('summary', '?')} (plugin validation passed)")
                 return results
             else:
