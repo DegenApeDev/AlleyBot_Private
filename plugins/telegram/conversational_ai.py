@@ -505,12 +505,9 @@ Remember: ONLY use [EXECUTE:...] when the user wants you to DO something. For qu
         try:
             print(f"🔧 Executing command from natural language: {cmd_name} {cmd_args}")
             func = self.core.plugin_manager.commands[cmd_name]
-            if cmd_args:
-                # Pass as a single string — commands that need word-splitting
-                # do so internally via *args + ' '.join(args)
-                result = func(cmd_args)
-            else:
-                result = func()
+            # Always pass a list — all plugin commands expect args: list
+            args_list = cmd_args.split() if cmd_args else []
+            result = func(args_list)
 
             # Build response: AI's explanation + command result
             clean_response = re.sub(r'\[EXECUTE:[^\]]+\]', '', ai_response).strip()
