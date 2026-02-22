@@ -990,6 +990,20 @@ Return ONLY valid JSON, no markdown or explanation."""
         max_fix_attempts = 3
         attempt = 0
 
+        # If _scope_test_modules already ran plugin validation and returned a result dict,
+        # use it directly — don't pass a dict into run_test_suite as module names
+        if isinstance(test_modules, dict):
+            results['tests'] = test_modules
+            if test_modules.get('success'):
+                results['applied'] = True
+                print(f"✅ Update applied: {plan.get('summary', '?')} (plugin validation passed)")
+                return results
+            else:
+                print(f"❌ Plugin validation failed, reverting...")
+                self._revert_changes(results['generated_files'])
+                results['error'] = f"Plugin validation failed: {test_modules.get('errors', '?')}"
+                return results
+
         while True:
             print(f"🧪 Running test suite{f' (fix attempt {attempt})' if attempt > 0 else ''}...")
             test_result = self.run_test_suite(test_modules)
