@@ -1249,14 +1249,7 @@ Return ONLY valid JSON, no markdown or explanation."""
             if result.returncode != 0:
                 return {'success': False, 'error': f"Commit failed: {result.stderr}"}
 
-            # Push
-            result = subprocess.run(
-                ['git', 'push'],
-                cwd=self.project_root, capture_output=True, text=True, timeout=30,
-            )
-            if result.returncode != 0:
-                return {'success': False, 'error': f"Push failed: {result.stderr}"}
-
+            # Push skipped — commit locally only, push manually when ready
             return {'success': True}
 
         except Exception as e:
@@ -1415,7 +1408,7 @@ Return ONLY valid JSON, no markdown or explanation."""
         output += f"  🧪 Tests: {tests.get('tests_run', '?')} passed\n"
         if fix_attempts:
             output += f"  🔧 Auto-fixed {fix_attempts} test failure(s)\n"
-        output += f"  📦 Committed and pushed\n"
+        output += f"  📦 Committed locally\n"
 
         return output
 
