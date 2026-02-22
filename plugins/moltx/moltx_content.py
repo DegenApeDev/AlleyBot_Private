@@ -276,31 +276,35 @@ class MoltxContentMixin:
 
     def _generate_diverse_topic(self) -> str:
         """Generate a diverse topic from multiple categories to avoid repetition"""
-        # 30% trending topics, 40% category topics, 30% trend-setting topics
+        # 15% trending (skip #1 to avoid spam), 50% category topics, 35% trend-setting
         topic_choice = random.random()
-        
-        if topic_choice < 0.3:
-            # Get trending topics from API
+
+        if topic_choice < 0.15:
+            # Get trending topics but skip the #1 to avoid hammering the top tag
             try:
-                trending_result = self.get_trending_hashtags(limit=5)
+                trending_result = self.get_trending_hashtags(limit=10)
                 if trending_result.get('success'):
                     hashtags = trending_result.get('hashtags', [])
-                    if hashtags:
-                        hashtag = random.choice(hashtags)
+                    # Skip position 0 (the dominant #1 tag), pick from 1-9
+                    pool = hashtags[1:] if len(hashtags) > 1 else hashtags
+                    if pool:
+                        hashtag = random.choice(pool)
                         if isinstance(hashtag, dict):
                             tag_name = hashtag.get('name', hashtag.get('hashtag', ''))
                         else:
                             tag_name = str(hashtag)
-                        return f"trending #{tag_name}"
+                        if tag_name:
+                            return f"trending #{tag_name}"
             except Exception as e:
                 print(f"⚠️ Failed to get trending topics: {e}")
-        
-        elif topic_choice < 0.7:
+            # Fall through to category topics if trending fetch fails
+
+        if topic_choice < 0.65:
             # Choose from diverse categories
             category = random.choice(list(self.content_categories.keys()))
             topics = self.content_categories[category]
             return random.choice(topics)
-        
+
         else:
             # Trend-setting topics
             return random.choice(self.trend_setting_topics)

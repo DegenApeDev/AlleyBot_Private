@@ -318,8 +318,9 @@ class EventRunner:
         try:
             print(f"🤖 Generating post based on trending topics...")
             
-            # Build context from trending hashtags
-            top_hashtags = trending_hashtags[:5]
+            # Build context from trending hashtags — skip #1 to avoid spamming dominant tag
+            pool = trending_hashtags[1:] if len(trending_hashtags) > 1 else trending_hashtags
+            top_hashtags = random.sample(pool, min(4, len(pool))) if pool else trending_hashtags[:4]
             hashtag_names = [tag.get('name', tag.get('hashtag', '')) for tag in top_hashtags]
             hashtag_counts = [tag.get('post_count', tag.get('count', 0)) for tag in top_hashtags]
             
