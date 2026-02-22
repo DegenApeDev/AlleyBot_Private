@@ -194,6 +194,47 @@ class AutonomousCoderMixin:
             except Exception:
                 pass
 
+    def _crash_test_plugins(self, generated_files: List[Dict]) -> Optional[str]:
+        """Try importing each generated plugin file in a subprocess.
+        Returns an error string if any plugin crashes on load, None if all are clean."""
+        venv_python = os.path.join(self.project_root, 'venv', 'bin', 'python')
+        python_cmd = venv_python if os.path.exists(venv_python) else 'python3'
+        env = os.environ.copy()
+        env['PYTHONPATH'] = self.project_root + ':' + env.get('PYTHONPATH', '')
+
+        for gf in generated_files:
+            path = gf.get('path', '')
+            if not path.endswith('.py'):
+                continue
+            # Convert file path to dotted module name
+            module = path.replace('/', '.').replace('\\', '.').removesuffix('.py')
+            check = (
+                "import sys, importlib\n"
+                "sys.path.insert(0, r'" + self.project_root + "')\n"
+                "try:\n"
+                "    importlib.import_module('" + module + "')\n"
+                "    print('OK')\n"
+                "except SystemExit:\n"
+                "    print('OK')  # SystemExit on import is acceptable\n"
+                "except Exception as e:\n"
+                "    print(f'CRASH:{e}')\n"
+                "    sys.exit(1)\n"
+            )
+            try:
+                result = subprocess.run(
+                    [python_cmd, '-c', check],
+                    capture_output=True, text=True, timeout=20, env=env,
+                )
+                if result.returncode != 0:
+                    output = result.stdout.strip() or result.stderr.strip()
+                    return f"{path}: {output[-300:]}"
+                print(f"  ✅ Crash-load test passed: {path}")
+            except subprocess.TimeoutExpired:
+                return f"{path}: crash-load test timed out"
+            except Exception as e:
+                return f"{path}: {e}"
+        return None
+
     def _try_template_generation(self, task: str, path: str) -> Optional[str]:
         """Try to generate code using templates for common simple tasks.
         
@@ -995,6 +1036,13 @@ Return ONLY valid JSON, no markdown or explanation."""
         if isinstance(test_modules, dict):
             results['tests'] = test_modules
             if test_modules.get('success'):
+                # Final gate: try importing the plugin in a subprocess to catch crash-on-load
+                crash_error = self._crash_test_plugins(results['generated_files'])
+                if crash_error:
+                    print(f"❌ Plugin crashes on load, reverting: {crash_error}")
+                    self._revert_changes(results['generated_files'])
+                    results['error'] = f"Plugin crashes on load: {crash_error}"
+                    return results
                 results['applied'] = True
                 print(f"✅ Update applied: {plan.get('summary', '?')} (plugin validation passed)")
                 return results
