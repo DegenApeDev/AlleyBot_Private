@@ -46,6 +46,18 @@ class ConversationalAI:
         except Exception as e:
             print(f"⚠️  Failed to initialize intent classifier: {e}")
             self.intent_classifier = None
+
+    def prewarm_intent_classifier(self):
+        """Pre-warm intent classifier in background so first message has no delay"""
+        import threading
+        def _warm():
+            try:
+                print("🔤 Pre-warming intent classifier in background...")
+                self._init_intent_classifier()
+                print("✅ Intent classifier ready")
+            except Exception as e:
+                print(f"⚠️ Intent classifier pre-warm failed: {e}")
+        threading.Thread(target=_warm, daemon=True).start()
     
     @property
     def core(self):

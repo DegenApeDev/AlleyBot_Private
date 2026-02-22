@@ -419,6 +419,9 @@ class Telegram(AlleyBotPlugin):
         
         # Message handler for natural language (admin only, conversational AI)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.conversational_ai.handle_message))
+
+        # Pre-warm intent classifier in background so first message has no delay
+        self.conversational_ai.prewarm_intent_classifier()
     
     async def _handle_reload(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /reload command - reload all plugins without restart"""
