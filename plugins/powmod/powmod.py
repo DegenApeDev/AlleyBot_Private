@@ -42,10 +42,10 @@ class PowModPlugin(AlleyBotPlugin):
         exponent = b
         
         while exponent > 0:
-            if exponent & 1:
+            if exponent % 2 == 1:
                 result = (result * base) % m
             base = (base * base) % m
-            exponent >>= 1
+            exponent //= 2
         
         return str(result)
 
