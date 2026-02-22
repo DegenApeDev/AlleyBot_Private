@@ -39,6 +39,7 @@ from pathlib import Path
 from enum import Enum
 
 # Import all 14 phases
+from src.agentic.symod_core import get_symod_manager
 from src.autonomy.inference_engine import get_inference_engine
 from src.agentic.causal_engine import get_causal_engine
 from src.agentic.research_engine import get_research_engine
@@ -128,12 +129,24 @@ class AGIOrchestrator:
         # Core reference for plugin access
         self.core = core
         
+        # SyMod mathematical validation layer — physics-based truth framework
+        self.symod = get_symod_manager(core)
+        if self.symod.enabled:
+            self.symod.register_plugin('agi_orchestrator', {'capabilities': ['observe', 'validate', 'reflect']})
+            logger.info("🔢 AGIOrchestrator: SyMod physics validation ACTIVE")
+        else:
+            logger.warning("⚠️ AGIOrchestrator: SyMod not available — running without physics validation")
+
         # Share state with AGIKernel so learning accumulates in one place
         try:
             from src.agentic.agi_kernel import get_agi_kernel
             self.agi_kernel = get_agi_kernel(core)
             # Override goal manager with kernel's shared instance
             self.goals = self.agi_kernel.goal_manager
+            # Also share symod instance so both use the same world model
+            if self.agi_kernel.symod and self.agi_kernel.symod.enabled:
+                self.symod = self.agi_kernel.symod
+                logger.info("🔗 AGIOrchestrator: using AGIKernel's SyMod instance (unified world model)")
             logger.info("🔗 AGIOrchestrator linked to AGIKernel (shared goal manager + episodic memory)")
         except Exception as e:
             self.agi_kernel = None
@@ -174,8 +187,19 @@ class AGIOrchestrator:
         detection_result = self._run_phase_7_detection()
         phases_executed.append(detection_result)
         
-        if not detection_result.success or not detection_result.output:
-            logger.info("📭 No patterns detected, cycle complete")
+        # Only abort if truly no signal at all — SyMod field state alone is enough to proceed
+        symod_field = detection_result.output.get('symod_field', {}) if detection_result.output else {}
+        has_any_signal = (
+            detection_result.success and
+            detection_result.output and
+            (
+                detection_result.output.get('has_detection') or
+                symod_field.get('enabled') or
+                symod_field.get('entity_count', 0) > 0
+            )
+        )
+        if not has_any_signal:
+            logger.info("📭 No patterns detected and SyMod has no signal, cycle complete")
             return AGICycleResult(
                 cycle_id=cycle_id,
                 triggered_by=trigger,
@@ -183,6 +207,10 @@ class AGIOrchestrator:
                 final_action=None,
                 learnings=["no_patterns_detected"]
             )
+        logger.info(f"🔢 SyMod field: {symod_field.get('field_status','?')} | "
+                    f"impedance={symod_field.get('impedance',0):.2e} | "
+                    f"topics={len(symod_field.get('top_topics',[]))} | "
+                    f"entities={symod_field.get('entity_count',0)}")
         
         # Phase 10: Understand causality of detected patterns
         causal_result = self._run_phase_10_causal(detection_result.output)
@@ -251,6 +279,40 @@ class AGIOrchestrator:
             learnings=learnings
         )
     
+    def _get_symod_field_state(self) -> Dict:
+        """Get current SyMod field state for physics-based validation."""
+        if not self.symod or not self.symod.enabled:
+            return {'field_status': 'unknown', 'top_topics': [], 'entity_count': 0, 'enabled': False}
+        try:
+            state = self.symod.get_unified_state()
+            # Get live field status by vectorizing a probe observation
+            field_status = 'Stable'  # default
+            impedance = 0.0
+            digital_root = 0
+            try:
+                from src.synergy import get_c2v_bridge, get_symod
+                c2v = get_c2v_bridge()
+                symod_math = get_symod()
+                probe = f"agi_cycle_{datetime.now().strftime('%H%M%S')}"
+                vec = c2v.vectorize_debate_context(probe, raw_math_value=len(state.get('top_topics', [])))
+                field_status = vec.synergy_field_status
+                impedance = vec.logical_impedance
+                digital_root = symod_math.D(len(state.get('top_topics', [])))
+            except Exception:
+                pass
+            return {
+                'enabled': True,
+                'field_status': field_status,
+                'impedance': impedance,
+                'digital_root': digital_root,
+                'top_topics': state.get('top_topics', []),
+                'entity_count': state.get('entities', 0),
+                'total_actions': state.get('total_actions', 0),
+            }
+        except Exception as e:
+            logger.warning(f"⚠️ SyMod field state query failed: {e}")
+            return {'field_status': 'unknown', 'top_topics': [], 'entity_count': 0, 'enabled': False}
+
     def _run_phase_7_detection(self) -> PhaseResult:
         """Phase 7: World State Intelligence - Detect patterns with world model validation"""
         start = datetime.now()
@@ -264,6 +326,29 @@ class AGIOrchestrator:
             
             # Find cross-platform patterns
             patterns = self.inference.find_cross_platform_patterns(hours=48)
+
+            # === SyMod fallback: use persisted topic weights when world state DB is sparse ===
+            # SyMod.topics is built from every observe() call across all brain cycles
+            symod_field = self._get_symod_field_state()
+            symod_topics = symod_field.get('top_topics', [])  # [(topic, weight), ...]
+            
+            if not trends and symod_topics:
+                # Synthesize trend objects from SyMod's accumulated topic weights
+                from src.autonomy.inference_engine import Trend
+                for topic_name, weight in symod_topics[:3]:
+                    if weight > 0.05:  # only topics with meaningful weight
+                        trends.append(Trend(
+                            topic=topic_name,
+                            direction='rising' if weight > 0.3 else 'stable',
+                            strength=min(1.0, weight),
+                            velocity=weight * 0.5,
+                            acceleration=0.0,
+                            data_points=max(5, int(weight * 50)),
+                            start_time=datetime.now(),
+                            confidence=min(0.8, weight + 0.3),
+                        ))
+                if trends:
+                    logger.info(f"🔢 SyMod provided {len(trends)} topic signals (world state DB still warming up)")
             
             # Use world state manager to validate and score patterns (optional)
             validated_trends = []
@@ -364,6 +449,7 @@ class AGIOrchestrator:
                 'patterns': [{'type': p['type'], 'platforms': p['platforms'], 'wm_confidence': p['wm_confidence']} 
                             for p in validated_patterns],
                 'has_detection': bool(validated_trends or validated_anomalies or validated_patterns),
+                'symod_field': symod_field,
                 'world_model_insights': {
                     'validated_trends': len(validated_trends),
                     'validated_anomalies': len(validated_anomalies),
@@ -786,7 +872,44 @@ class AGIOrchestrator:
                 calibrated_confidence * 0.7 +  # Original metacognition weight
                 wm_confidence_calibration.get('adjusted_confidence', calibrated_confidence) * 0.3  # World model weight
             )
-            
+
+            # === SyMod Physics Validation — ground confidence in impedance/field state ===
+            symod_field = self._get_symod_field_state()
+            field_status = symod_field.get('field_status', 'unknown')
+            impedance = symod_field.get('impedance', 0.0)
+            digital_root = symod_field.get('digital_root', 0)
+
+            # Field status multiplier: Stable boosts, Volatile reduces, Collapse blocks
+            field_multiplier = 1.0
+            if field_status == 'Stable':
+                field_multiplier = 1.15
+            elif field_status == 'Volatile':
+                field_multiplier = 0.85
+            elif field_status == 'Collapse':
+                field_multiplier = 0.0  # Hard block on collapsed field
+
+            # Impedance penalty: high impedance = high resistance = lower confidence
+            # Impedance is typically in range 1e-30 to 1e-25; normalize to 0-1 penalty
+            impedance_penalty = 0.0
+            if impedance > 0:
+                import math
+                # Map impedance log scale: 1e-30 -> 0 penalty, 1e-25 -> 0.3 penalty
+                log_imp = math.log10(max(impedance, 1e-35))
+                impedance_penalty = max(0.0, min(0.3, (log_imp + 30) / 16.67))
+
+            # Digital root harmony: roots 3,6,9 are harmonious in SyMod
+            dr_bonus = 0.05 if digital_root in (3, 6, 9) else 0.0
+
+            symod_confidence = (world_model_adjusted_confidence * field_multiplier) - impedance_penalty + dr_bonus
+            symod_confidence = max(0.0, min(1.0, symod_confidence))
+
+            logger.info(
+                f"🔢 SyMod metacognition: field={field_status} (x{field_multiplier}), "
+                f"impedance={impedance:.2e} (-{impedance_penalty:.3f}), "
+                f"DR={digital_root} (+{dr_bonus:.2f}), "
+                f"base={world_model_adjusted_confidence:.2f} → symod={symod_confidence:.2f}"
+            )
+
             # Validate resource constraints with world model (optional)
             wm_constraint_validation = {}
             
@@ -806,53 +929,67 @@ class AGIOrchestrator:
                 'wm_constraint_confidence': wm_constraint_validation.get('overall_confidence', 0.5)
             }
             
-            # Decide whether to proceed with world model-informed decision
-            # Lower threshold for manual triggers to be more responsive
+            # Decide whether to proceed — SyMod physics confidence is the primary gate
+            # Collapse field is an absolute block regardless of threshold
             confidence_threshold = 0.35 if trigger == "manual" else 0.45
             
             proceed = (
-                world_model_adjusted_confidence > confidence_threshold and
+                field_status != 'Collapse' and
+                symod_confidence > confidence_threshold and
                 enhanced_constraints.get('can_continue', True) and
                 social.get('proceed_recommended', True)
             )
-            
-            # World model validation of social prediction (optional)
-            if social and social.get('predicted_reaction'):
+
+            # Reflect this cycle observation back into SyMod world model
+            if self.symod and self.symod.enabled:
                 try:
-                    if hasattr(self.world_state, 'validate_social_prediction'):
-                        wm_social_validation = self.world_state.validate_social_prediction(
-                            social_data=social['predicted_reaction'],
-                            context={'content_type': 'generated_content'}
-                        )
-                        social_confidence = wm_social_validation.get('validation_confidence', 0.5)
-                        proceed = proceed and (social_confidence > 0.4)
+                    from src.agentic.symod_core import SyModObservation
+                    cycle_obs = SyModObservation(
+                        observation_type='agi_metacognition',
+                        source_plugin='agi_orchestrator',
+                        data={
+                            'content': f"AGI metacognition cycle: confidence={symod_confidence:.2f} field={field_status}",
+                            'confidence': symod_confidence,
+                            'field_status': field_status,
+                            'proceed': proceed,
+                        }
+                    )
+                    self.symod.observe(cycle_obs)
                 except Exception as e:
-                    logger.debug(f"World state social validation failed: {e}")
-                    social_confidence = 0.5
+                    logger.debug(f"SyMod metacognition reflect failed: {e}")
             
             output = {
                 'proceed': proceed,
-                'confidence': world_model_adjusted_confidence,
+                'confidence': symod_confidence,
                 'constraints': enhanced_constraints,
                 'capabilities_known': meta_summary.get('capabilities_known', 0),
+                'symod_validation': {
+                    'field_status': field_status,
+                    'impedance': impedance,
+                    'digital_root': digital_root,
+                    'field_multiplier': field_multiplier,
+                    'impedance_penalty': impedance_penalty,
+                    'dr_bonus': dr_bonus,
+                    'base_confidence': world_model_adjusted_confidence,
+                    'symod_confidence': symod_confidence,
+                },
                 'world_model_calibration': {
                     'original_confidence': calibrated_confidence,
                     'wm_adjusted_confidence': world_model_adjusted_confidence,
                     'calibration_factor': wm_confidence_calibration.get('calibration_factor', 1.0),
                     'validation_quality': wm_meta_validation.get('validation_quality', 'unknown')
                 },
-                'rationale': f"WM-Calibrated Confidence: {world_model_adjusted_confidence:.1%}, "
-                           f"Original: {calibrated_confidence:.1%}, "
-                           f"Constraints: {len(enhanced_constraints.get('constraints', []))}, "
-                           f"Social: {social.get('predicted_reaction', {}).get('predicted_sentiment', 'unknown')}, "
-                           f"WM Validation: {wm_meta_validation.get('validation_quality', 'unknown')}"
+                'rationale': (
+                    f"SyMod: field={field_status} impedance={impedance:.2e} DR={digital_root} "
+                    f"confidence={symod_confidence:.1%} (base={calibrated_confidence:.1%})"
+                )
             }
             
             return PhaseResult(
                 phase=Phase.METACOGNITION,
                 success=True,
                 output=output,
-                confidence=world_model_adjusted_confidence,
+                confidence=symod_confidence,
                 duration_seconds=(datetime.now() - start).total_seconds(),
                 triggered_phases=[Phase.MULTI_STEP_PLANNING] if proceed else []
             )

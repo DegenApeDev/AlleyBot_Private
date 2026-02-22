@@ -452,7 +452,7 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             return f"❌ AGI cycle failed: {e}\n{traceback.format_exc()[-500:]}"
 
     def agi_status_command(self, *args):
-        """Show AGI orchestrator and kernel status"""
+        """Show AGI orchestrator and kernel status including SyMod physics state"""
         try:
             from src.agentic.agi_orchestrator import get_agi_orchestrator
             from src.agentic.agi_kernel import get_agi_kernel
@@ -461,7 +461,6 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             summary = orchestrator.get_orchestrator_summary()
             introspection = kernel.get_introspection()
             mental = introspection.get('mental_state', {})
-            ws_stats = summary.get('inference_summary', {})
             output = "🧠 AGI System Status\n\n"
             output += f"  Mood: {mental.get('mood_description', '?')} ({mental.get('mood', 0):.2f})\n"
             output += f"  Active Goals: {mental.get('active_goal_count', 0)}\n"
@@ -470,6 +469,25 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             output += f"  Kernel linked: {'✅' if orchestrator.agi_kernel else '❌'}\n"
             output += f"  Last post: {orchestrator.last_post_time.strftime('%H:%M') if orchestrator.last_post_time else 'never'}\n"
             output += f"  Posts today: {orchestrator.daily_post_count}/{orchestrator.max_daily_posts}\n"
+            # SyMod physics state
+            try:
+                symod_field = orchestrator._get_symod_field_state()
+                field_status = symod_field.get('field_status', 'unknown')
+                field_icon = '🟢' if field_status == 'Stable' else '🟡' if field_status == 'Volatile' else '🔴' if field_status == 'Collapse' else '⚪'
+                output += f"\n🔢 SyMod Physics\n"
+                output += f"  {field_icon} Field: {field_status}\n"
+                output += f"  Impedance: {symod_field.get('impedance', 0):.2e}\n"
+                output += f"  Digital Root: {symod_field.get('digital_root', 0)}\n"
+                output += f"  Entities tracked: {symod_field.get('entity_count', 0)}\n"
+                output += f"  Total actions: {symod_field.get('total_actions', 0)}\n"
+                top_topics = symod_field.get('top_topics', [])[:5]
+                if top_topics:
+                    output += f"  Top topics: {', '.join(f'{t}({w:.2f})' for t, w in top_topics)}\n"
+                else:
+                    output += f"  Top topics: (warming up — run brain cycles to populate)\n"
+                output += f"  SyMod active: {'✅' if symod_field.get('enabled') else '❌'}\n"
+            except Exception as e:
+                output += f"\n🔢 SyMod: ❌ {e}\n"
             return output
         except Exception as e:
             return f"❌ AGI status failed: {e}"
