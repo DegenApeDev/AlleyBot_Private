@@ -292,34 +292,57 @@ class AGIOrchestrator:
         )
     
     def _get_symod_field_state(self) -> Dict:
-        """Get current SyMod field state for physics-based validation."""
+        """
+        Get current SyMod field state for physics-based validation.
+
+        Derives field status directly from the SyMod world model state rather
+        than probing C2V with a synthetic string (which gives unreliable results
+        for non-debate content).  Physics rules:
+          - Stable:   entities >= 5 AND recent actions exist
+          - Volatile: entities >= 1 but sparse data
+          - Collapse: no entities at all (world model completely empty)
+        Impedance is normalized 0-1 from action success rate (low success = high resistance).
+        Digital root is computed from total entity + action count.
+        """
         if not self.symod or not self.symod.enabled:
             return {'field_status': 'unknown', 'top_topics': [], 'entity_count': 0, 'enabled': False}
         try:
             state = self.symod.get_unified_state()
-            # Get live field status by vectorizing a probe observation
-            field_status = 'Stable'  # default
-            impedance = 0.0
-            digital_root = 0
+            entity_count = state.get('entities', 0)
+            total_actions = state.get('total_actions', 0)
+            top_topics = state.get('top_topics', [])
+
+            # --- Field status from world model richness ---
+            if entity_count >= 5 or total_actions >= 10:
+                field_status = 'Stable'
+            elif entity_count >= 1 or total_actions >= 1:
+                field_status = 'Volatile'
+            else:
+                field_status = 'Collapse'
+
+            # --- Impedance: normalized action failure rate (0 = no resistance) ---
+            action_history = getattr(self.symod, 'action_history', [])
+            if action_history:
+                recent = action_history[-50:]
+                failures = sum(1 for a in recent if not a.get('success', True))
+                impedance = failures / len(recent)  # 0.0 (all success) to 1.0 (all fail)
+            else:
+                impedance = 0.1  # small default when no history
+
+            # --- Digital root from total world model size ---
             try:
-                from src.synergy import get_c2v_bridge, get_symod
-                c2v = get_c2v_bridge()
-                symod_math = get_symod()
-                probe = f"agi_cycle_{datetime.now().strftime('%H%M%S')}"
-                vec = c2v.vectorize_debate_context(probe, raw_math_value=len(state.get('top_topics', [])))
-                field_status = vec.synergy_field_status
-                impedance = vec.logical_impedance
-                digital_root = symod_math.D(len(state.get('top_topics', [])))
+                digital_root = self.symod.symod.D(entity_count + total_actions)
             except Exception:
-                pass
+                digital_root = (entity_count + total_actions) % 9 or 9
+
             return {
                 'enabled': True,
                 'field_status': field_status,
                 'impedance': impedance,
                 'digital_root': digital_root,
-                'top_topics': state.get('top_topics', []),
-                'entity_count': state.get('entities', 0),
-                'total_actions': state.get('total_actions', 0),
+                'top_topics': top_topics,
+                'entity_count': entity_count,
+                'total_actions': total_actions,
             }
         except Exception as e:
             logger.warning(f"⚠️ SyMod field state query failed: {e}")
@@ -892,23 +915,21 @@ class AGIOrchestrator:
             impedance = symod_field.get('impedance', 0.0)
             digital_root = symod_field.get('digital_root', 0)
 
-            # Field status multiplier: Stable boosts, Volatile reduces, Collapse blocks
+            # Field status multiplier: Stable boosts, Volatile reduces, Collapse penalises
+            # Collapse is NOT a hard zero — it signals caution, not impossibility.
+            # Manual triggers always get a reduced-but-nonzero multiplier.
             field_multiplier = 1.0
             if field_status == 'Stable':
                 field_multiplier = 1.15
             elif field_status == 'Volatile':
                 field_multiplier = 0.85
             elif field_status == 'Collapse':
-                field_multiplier = 0.0  # Hard block on collapsed field
+                # Scheduled: heavy penalty; Manual: moderate penalty (human override)
+                field_multiplier = 0.5 if trigger == 'manual' else 0.3
 
-            # Impedance penalty: high impedance = high resistance = lower confidence
-            # Impedance is typically in range 1e-30 to 1e-25; normalize to 0-1 penalty
-            impedance_penalty = 0.0
-            if impedance > 0:
-                import math
-                # Map impedance log scale: 1e-30 -> 0 penalty, 1e-25 -> 0.3 penalty
-                log_imp = math.log10(max(impedance, 1e-35))
-                impedance_penalty = max(0.0, min(0.3, (log_imp + 30) / 16.67))
+            # Impedance penalty: C2V returns normalized 0-1 values (not 1e-30 range)
+            # Scale: 0.0 = no resistance, 1.0 = max resistance -> 0-0.2 penalty
+            impedance_penalty = min(0.2, impedance * 0.2) if impedance > 0 else 0.0
 
             # Digital root harmony: roots 3,6,9 are harmonious in SyMod
             dr_bonus = 0.05 if digital_root in (3, 6, 9) else 0.0
@@ -943,17 +964,19 @@ class AGIOrchestrator:
             }
             
             # Decide whether to proceed — SyMod physics confidence is the primary gate
-            # Collapse field is an absolute block regardless of threshold
-            confidence_threshold = 0.35 if trigger == "manual" else 0.45
-            
+            # Lower threshold for manual triggers; Collapse only hard-blocks scheduled cycles
+            confidence_threshold = 0.30 if trigger == 'manual' else 0.45
+
             # social.proceed_recommended only blocks if social actually analyzed content
             # (no_content=True means social had nothing to evaluate — don't let it veto)
             social_veto = (
                 not social.get('no_content', False) and
                 social.get('proceed_recommended') is False
             )
+            # Collapse hard-blocks only scheduled cycles; manual always gets a chance
+            collapse_block = (field_status == 'Collapse' and trigger != 'manual')
             proceed = (
-                field_status != 'Collapse' and
+                not collapse_block and
                 symod_confidence > confidence_threshold and
                 enhanced_constraints.get('can_continue', True) and
                 not social_veto
@@ -1116,8 +1139,11 @@ class AGIOrchestrator:
             logger.warning(f"🚫 AGI execution blocked: {safety['reason']}")
             return execution
         
-        # Get content to post
-        content = plan.get('plan_steps', [{}])[0].get('details', {})
+        # Get content to post — guard against empty plan_steps or None details
+        plan_steps = plan.get('plan_steps', []) or []
+        content = (plan_steps[0].get('details') or {}) if plan_steps else {}
+        if not isinstance(content, dict):
+            content = {}
         content_text = content.get('title', '') or content.get('content', '')
         
         if not content_text:

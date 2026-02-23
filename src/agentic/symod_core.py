@@ -207,12 +207,20 @@ class SyModCoreManager:
             entity['observations'].append(observation.observation_type)
             entity['last_seen'] = datetime.now().isoformat()
             
-            # Update topics
-            topics = observation.data.get('topics', []) or observation.data.get('hashtags', [])
+            # Update topics — ensure we always have a list of strings, not chars
+            raw_topics = observation.data.get('topics', []) or observation.data.get('hashtags', [])
+            if isinstance(raw_topics, str):
+                raw_topics = [t.strip() for t in raw_topics.split(',') if t.strip()]
+            topics = [t for t in raw_topics if isinstance(t, str) and len(t) > 1]
             entity['topics'] = list(set(entity.get('topics', []) + topics))
         
-        # Update topic weights
-        for topic in observation.data.get('topics', []) or observation.data.get('hashtags', []):
+        # Update topic weights — same guard: skip single chars and non-strings
+        raw_tw = observation.data.get('topics', []) or observation.data.get('hashtags', [])
+        if isinstance(raw_tw, str):
+            raw_tw = [t.strip() for t in raw_tw.split(',') if t.strip()]
+        for topic in raw_tw:
+            if not isinstance(topic, str) or len(topic) <= 1:
+                continue
             topic_key = topic.lower().lstrip('#')
             current = self.topics.get(topic_key, 0.0)
             # Boost based on field stability
@@ -464,7 +472,9 @@ class SyModCoreManager:
                     data = json.load(f)
                 
                 self.entities = data.get('entities', {})
-                self.topics = data.get('topics', {})
+                # Purge single-char garbage topics (caused by string iteration bug)
+                raw_topics = data.get('topics', {})
+                self.topics = {k: v for k, v in raw_topics.items() if isinstance(k, str) and len(k) > 1}
                 self.action_history = data.get('action_history', [])
                 self.registered_plugins = data.get('registered_plugins', {})
                 
