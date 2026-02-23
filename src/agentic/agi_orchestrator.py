@@ -729,12 +729,18 @@ class AGIOrchestrator:
                 )
                 concepts.append({
                     'title': concept.title,
+                    'content': getattr(concept, 'content_draft', None) or concept.description or concept.title,
                     'novelty': concept.novelty_score,
                     'estimated_impact': concept.estimated_impact
                 })
             
             # Cross-domain inspiration
             inspired = self.creative.cross_domain_inspire('gaming', 'finance')
+            inspired_content = {
+                'title': inspired.title,
+                'content': getattr(inspired, 'content_draft', None) or inspired.description or inspired.title,
+                'description': inspired.description
+            }
             
             # Build story arc if multiple concepts
             story = None
@@ -744,17 +750,23 @@ class AGIOrchestrator:
                     posts=min(3, len(concepts))
                 )
             
+            # Best content: prefer trend concept with real content, fall back to cross-domain
+            best_content = None
+            for c in concepts:
+                if c.get('content') and c['content'] != c['title']:
+                    best_content = c
+                    break
+            if not best_content:
+                best_content = inspired_content if inspired_content.get('content') else (concepts[0] if concepts else inspired_content)
+
             output = {
                 'concepts': concepts,
-                'cross_domain_inspiration': {
-                    'title': inspired.title,
-                    'description': inspired.description
-                },
+                'cross_domain_inspiration': inspired_content,
                 'story_arc': {
                     'title': story.title,
                     'posts': len(story.posts)
                 } if story else None,
-                'recommended_content': concepts[0] if concepts else None
+                'recommended_content': best_content
             }
             
             return PhaseResult(
@@ -1144,7 +1156,7 @@ class AGIOrchestrator:
         content = (plan_steps[0].get('details') or {}) if plan_steps else {}
         if not isinstance(content, dict):
             content = {}
-        content_text = content.get('title', '') or content.get('content', '')
+        content_text = content.get('content', '') or content.get('title', '') or content.get('description', '')
         
         if not content_text:
             execution['action_taken'] = 'no_content'

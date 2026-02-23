@@ -654,6 +654,7 @@ class Metacognition:
                                confidence: float) -> None:
         """Record outcome of using a strategy"""
         with sqlite3.connect(self.DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
             existing = conn.execute(
                 '''SELECT * FROM strategy_performances 
                    WHERE strategy_name = ? AND context_type = ?''',
