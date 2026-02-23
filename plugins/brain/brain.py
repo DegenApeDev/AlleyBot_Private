@@ -48,6 +48,7 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         self.autonomous_thread = None
         self.cycle_count = 0
         self.cycle_interval = config.get('cycle_interval', 300)  # 5 min default
+        self._autonomous_brain = None  # AutonomousBrain instance (unified loop)
 
     def initialize(self, api, core):
         """Initialize brain plugin"""
@@ -70,6 +71,18 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         # Install self-improvement hooks
         install_self_improvement_hooks(self)
 
+        # Wire up AutonomousBrain for unified loop
+        try:
+            from src.agentic.autonomous_brain import AutonomousBrain
+            self._autonomous_brain = AutonomousBrain(
+                core=core,
+                plugin_manager=core.plugin_manager if core else None,
+            )
+            print("🔗 BrainPlugin: AutonomousBrain unified loop ready")
+        except Exception as e:
+            self._autonomous_brain = None
+            print(f"⚠️ BrainPlugin: AutonomousBrain not available, using legacy loop: {e}")
+
         # Auto-start if configured
         if self.config.get('auto_start', False):
             self.start_autonomous()
@@ -77,13 +90,41 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         print("🧠 Brain plugin ready")
 
     def think(self) -> Dict[str, Any]:
-        """Run one think cycle: gather context → decide → execute"""
+        """Run one think cycle — delegates to AutonomousBrain if available, else legacy pipeline"""
         self.cycle_count += 1
 
-        # 1. Gather context
-        context = self.gather_full_context()
+        # === Unified path: delegate to AutonomousBrain._execute_cycle() ===
+        if self._autonomous_brain is not None:
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Schedule as a coroutine task (non-blocking)
+                    asyncio.ensure_future(self._autonomous_brain._execute_cycle())
+                    return {
+                        'cycle': self.cycle_count,
+                        'action': 'agi_cycle',
+                        'platform': 'all',
+                        'reason': 'Delegated to AutonomousBrain unified cycle',
+                        'success': True,
+                        'output': 'AGI cycle scheduled',
+                    }
+                else:
+                    loop.run_until_complete(self._autonomous_brain._execute_cycle())
+                    return {
+                        'cycle': self.cycle_count,
+                        'action': 'agi_cycle',
+                        'platform': 'all',
+                        'reason': 'AutonomousBrain unified cycle complete',
+                        'success': True,
+                        'output': 'AGI cycle complete',
+                    }
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"AutonomousBrain cycle failed, falling back: {e}")
 
-        # 2. Decide next action
+        # === Legacy fallback: original BrainPlugin pipeline ===
+        context = self.gather_full_context()
         action = self.decide_next_action(context)
 
         if not action:
@@ -93,10 +134,8 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
                 'reason': 'No actions available (all on cooldown or plugins not loaded)',
             }
 
-        # 3. Execute
         result = self.execute_action(action)
 
-        # 4. Notify via Telegram if configured
         if self.config.get('telegram_notify', False) and result.get('success'):
             self._notify_telegram(action, result)
 
@@ -110,14 +149,38 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         }
 
     def start_autonomous(self):
-        """Start the autonomous brain loop in a background thread"""
+        """Start the autonomous brain loop — uses AutonomousBrain if available"""
         if self.autonomous_running:
             return "⚠️  Brain already running"
 
+        # === Unified path: start AutonomousBrain async loop in a background thread ===
+        if self._autonomous_brain is not None:
+            import asyncio
+            self.autonomous_running = True
+
+            def _run_unified_loop():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(
+                        self._autonomous_brain.start(mode=self.config.get('mode', 'normal'))
+                    )
+                    loop.run_forever()
+                except Exception as e:
+                    print(f"🧠 AutonomousBrain loop error: {e}")
+                finally:
+                    loop.close()
+                    self.autonomous_running = False
+
+            self.autonomous_thread = threading.Thread(target=_run_unified_loop, daemon=True)
+            self.autonomous_thread.start()
+            return "🧠 Autonomous brain started (unified AutonomousBrain loop)"
+
+        # === Legacy fallback ===
         self.autonomous_running = True
 
         def brain_loop():
-            print(f"🧠 Autonomous brain started (cycle every {self.cycle_interval}s)")
+            print(f"🧠 Autonomous brain started (legacy, cycle every {self.cycle_interval}s)")
             while self.autonomous_running:
                 try:
                     result = self.think()
@@ -127,7 +190,6 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
                 except Exception as e:
                     print(f"🧠 Brain cycle error: {e}")
 
-                # Sleep in small increments so we can stop quickly
                 for _ in range(self.cycle_interval):
                     if not self.autonomous_running:
                         break
@@ -137,11 +199,19 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
 
         self.autonomous_thread = threading.Thread(target=brain_loop, daemon=True)
         self.autonomous_thread.start()
-        return "🧠 Autonomous brain started"
+        return "🧠 Autonomous brain started (legacy loop)"
 
     def stop_autonomous(self):
         """Stop the autonomous brain loop"""
         self.autonomous_running = False
+        if self._autonomous_brain is not None:
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.ensure_future(self._autonomous_brain.stop())
+            except Exception:
+                pass
         return "🧠 Brain stopping..."
 
     def _notify_telegram(self, action: Dict, result: Dict):
