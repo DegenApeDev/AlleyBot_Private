@@ -498,27 +498,29 @@ class Telegram(AlleyBotPlugin):
             orchestrator = get_agi_orchestrator(core=self.core)
             result = orchestrator.run_cycle(trigger="manual")
             
-            # Format result message
-            msg = f"✅ **AGI Cycle Complete**\n\n"
-            msg += f"**Cycle ID:** `{result.cycle_id}`\n"
-            msg += f"**Trigger:** {result.triggered_by}\n"
-            msg += f"**Phases Executed:** {len(result.phases_executed)}\n\n"
-            
+            # Format result message — plain text to avoid Markdown parse errors
+            msg = f"\u2705 AGI Cycle Complete\n\n"
+            msg += f"Cycle ID: {result.cycle_id}\n"
+            msg += f"Trigger: {result.triggered_by}\n"
+            msg += f"Phases Executed: {len(result.phases_executed)}\n\n"
+
             # Show phase summary
             for phase_result in result.phases_executed:
-                status = "✅" if phase_result.success else "❌"
+                status = "\u2705" if phase_result.success else "\u274c"
                 phase_name = phase_result.phase.name.replace('_', ' ').title()
                 msg += f"{status} {phase_name} ({phase_result.duration_seconds:.1f}s)\n"
-            
+
             if result.final_action:
-                msg += f"\n**Action:** {result.final_action.get('action_taken', 'None')}\n"
+                msg += f"\nAction: {result.final_action.get('action_taken', 'None')}\n"
                 if result.final_action.get('content_preview'):
-                    msg += f"**Content:** {result.final_action['content_preview'][:50]}...\n"
-            
+                    preview = str(result.final_action['content_preview'])[:60]
+                    msg += f"Content: {preview}\n"
+
             if result.learnings:
-                msg += f"\n**Learnings:** {', '.join(result.learnings[:3])}\n"
-            
-            await update.message.reply_text(msg, parse_mode='Markdown')
+                learnings_str = ', '.join(str(l) for l in result.learnings[:3])
+                msg += f"\nLearnings: {learnings_str}\n"
+
+            await update.message.reply_text(msg)
             
             self._log_activity("command", {
                 "command": "agi_cycle", 
@@ -527,8 +529,9 @@ class Telegram(AlleyBotPlugin):
             })
             
         except Exception as e:
-            logger.error(f"Error in agi_cycle: {e}")
-            await update.message.reply_text(f"❌ Error running AGI cycle: {e}")
+            import logging as _logging
+            _logging.getLogger(__name__).error(f"Error in agi_cycle: {e}")
+            await update.message.reply_text(f"\u274c Error running AGI cycle: {str(e)[:200]}")
     
     async def _handle_multi_platform(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /multi_platform command - blast content to multiple platforms"""
