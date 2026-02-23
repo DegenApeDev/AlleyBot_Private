@@ -57,7 +57,7 @@ class SemanticIntentClassifier:
         Args:
             plugin_manager: The plugin manager with registered commands
         """
-        for cmd_name, func in plugin_manager.commands.items():
+        for cmd_name, func in list(plugin_manager.commands.items()):
             # Get docstring as description
             doc = (func.__doc__ or f"Execute {cmd_name}").split('\n')[0].strip()
             
