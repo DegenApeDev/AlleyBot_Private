@@ -40,6 +40,7 @@ from enum import Enum
 
 # Import all 14 phases
 from src.agentic.symod_core import get_symod_manager
+from src.agentic.memory_bridge import run_memory_bridge
 from src.autonomy.inference_engine import get_inference_engine
 from src.agentic.causal_engine import get_causal_engine
 from src.agentic.research_engine import get_research_engine
@@ -182,7 +183,18 @@ class AGIOrchestrator:
         learnings = []
         
         logger.info(f"🚀 Starting AGI cycle {cycle_id} (trigger: {trigger})")
-        
+
+        # === Memory Bridge: pump all existing memory stores into world_state.facts ===
+        # This ensures detect_trends() has real signal from platform interactions,
+        # action history, and creative concepts — not just an empty DB.
+        try:
+            bridge_summary = run_memory_bridge()
+            total_imported = sum(v for v in bridge_summary.values() if isinstance(v, int))
+            if total_imported > 0:
+                logger.info(f"🔗 Memory bridge imported {total_imported} new records into world_state.facts")
+        except Exception as e:
+            logger.warning(f"⚠️ Memory bridge failed (non-fatal): {e}")
+
         # Phase 7: Detect patterns in world state
         detection_result = self._run_phase_7_detection()
         phases_executed.append(detection_result)
