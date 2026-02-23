@@ -758,15 +758,16 @@ class AGIOrchestrator:
             content = recommended_content.get('title') or recommended_content.get('content') or ''
             
             if not content:
-                # No content to analyze
+                # No content to analyze yet — don't block, let metacognition decide
                 return PhaseResult(
                     phase=Phase.SOCIAL_INTELLIGENCE,
                     success=True,
                     output={
                         'predicted_reaction': {},
-                        'risk_assessment': 'unknown',
+                        'risk_assessment': 'low',
                         'entities_tracked': 0,
-                        'proceed_recommended': False
+                        'proceed_recommended': True,
+                        'no_content': True,
                     },
                     confidence=0.5,
                     duration_seconds=(datetime.now() - start).total_seconds(),
@@ -933,11 +934,17 @@ class AGIOrchestrator:
             # Collapse field is an absolute block regardless of threshold
             confidence_threshold = 0.35 if trigger == "manual" else 0.45
             
+            # social.proceed_recommended only blocks if social actually analyzed content
+            # (no_content=True means social had nothing to evaluate — don't let it veto)
+            social_veto = (
+                not social.get('no_content', False) and
+                social.get('proceed_recommended') is False
+            )
             proceed = (
                 field_status != 'Collapse' and
                 symod_confidence > confidence_threshold and
                 enhanced_constraints.get('can_continue', True) and
-                social.get('proceed_recommended', True)
+                not social_veto
             )
 
             # Reflect this cycle observation back into SyMod world model
