@@ -685,6 +685,26 @@ User's request: {full_prompt}"""
 
         if self._should_wait_for_post_cooldown():
             return "⏰ Post cooldown active - waiting 10 minutes between posts"
+        
+        # Check for duplicate content (prevent posting same content within 2 hours)
+        import hashlib
+        content_hash = hashlib.md5(content.encode()).hexdigest()
+        current_time = datetime.now().timestamp()
+        
+        # Clean old entries from cache
+        self._recent_posts = {
+            h: t for h, t in getattr(self, '_recent_posts', {}).items()
+            if current_time - t < getattr(self, '_POST_DEDUP_WINDOW', 7200)
+        }
+        
+        # Check if this content was posted recently
+        if content_hash in getattr(self, '_recent_posts', {}):
+            return f"🔄 Similar content posted recently - skipping duplicate"
+        
+        # Record this content attempt
+        if not hasattr(self, '_recent_posts'):
+            self._recent_posts = {}
+        self._recent_posts[content_hash] = current_time
 
         is_article = post_type == 'article'
         max_chars = 8000 if is_article else 500

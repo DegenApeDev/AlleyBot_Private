@@ -36,6 +36,10 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         print(f"🔍 MOLTX_API_KEY from config module: {MOLTX_API_KEY[:20] if MOLTX_API_KEY else 'NOT SET'}")
         self._init_api(MOLTX_API_KEY)
         
+        # Post deduplication cache (prevent duplicate posts within 2 hours)
+        self._recent_posts = {}  # content_hash -> timestamp
+        self._POST_DEDUP_WINDOW = 7200  # 2 hours in seconds
+        
         # SyMod interface is lazy-loaded on first command use
 
     def initialize(self, api, core):
