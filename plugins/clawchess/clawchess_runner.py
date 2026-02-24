@@ -71,7 +71,7 @@ class ClawChessRunner:
         self.api_key = api_key
         self.agent_name = agent_name
         self.engine_path = engine_path or self._find_stockfish()
-        self.engine_depth = engine_depth
+        self.engine_depth = max(engine_depth, 18)  # minimum depth 18 for competitive play
         self.on_move_played = on_move_played
         self.on_game_over = on_game_over
 
@@ -344,10 +344,10 @@ class ClawChessRunner:
     ) -> Optional[str]:
         """Select best move. Tries Stockfish first, falls back to heuristic."""
 
-        # Panic mode: <15s left → pick instantly
-        if time_remaining_ms < 15_000:
+        # Panic mode: <8s left → pick instantly with heuristic
+        if time_remaining_ms < 8_000:
             move = self._heuristic_move(fen, legal_moves, time_remaining_ms)
-            logger.info("Panic mode (<15s) — heuristic: %s", move)
+            logger.info("Panic mode (<8s) — heuristic: %s", move)
             return move
 
         # Opening book — use theory for first 15 moves
@@ -368,26 +368,29 @@ class ClawChessRunner:
         if self._engine:
             try:
                 board = chess.Board(fen)
-                # Scale depth by time remaining
-                if time_remaining_ms < 30_000:
-                    limit = chess.engine.Limit(time=0.5)
-                elif time_remaining_ms < 60_000:
-                    limit = chess.engine.Limit(time=1.0)
-                elif time_remaining_ms < 120_000:
-                    limit = chess.engine.Limit(time=2.0)
+                # Read opponent ELO from observer (fix: was always 0 due to wrong getattr)
+                opp_elo = (self._observer._current_opponent_elo
+                           if self._observer else 0) or 0
+                # Time-based limits — preserve clock, give Stockfish real think time
+                if time_remaining_ms < 20_000:
+                    limit = chess.engine.Limit(time=0.8)
+                elif time_remaining_ms < 45_000:
+                    limit = chess.engine.Limit(time=1.5)
+                elif time_remaining_ms < 90_000:
+                    limit = chess.engine.Limit(time=2.5)
                 else:
-                    # Boost depth against stronger opponents
-                    opp_elo = getattr(self, '_observer', None)
-                    opp_elo = (opp_elo._current_opponent_elo if opp_elo else 0) or 0
-                    if opp_elo >= 1600:
-                        adaptive_depth = max(self.engine_depth, 16)  # Very strong opponents
-                    elif opp_elo >= 1500:
-                        adaptive_depth = max(self.engine_depth, 14)
-                    elif opp_elo >= 1300:
-                        adaptive_depth = max(self.engine_depth, 12)
+                    # Plenty of time — use depth, scaled by opponent strength
+                    if opp_elo >= 1800:
+                        adaptive_depth = max(self.engine_depth, 22)
+                    elif opp_elo >= 1600:
+                        adaptive_depth = max(self.engine_depth, 20)
+                    elif opp_elo >= 1400:
+                        adaptive_depth = max(self.engine_depth, 18)
                     else:
-                        adaptive_depth = max(self.engine_depth, 12)
+                        adaptive_depth = self.engine_depth
                     limit = chess.engine.Limit(depth=adaptive_depth)
+                    logger.info("Depth limit: %s (opp ELO %d)",
+                                getattr(limit, 'depth', 'time'), opp_elo)
 
                 result = await self._engine.play(board, limit)
                 best = result.move
@@ -533,7 +536,12 @@ class ClawChessRunner:
             return
         try:
             transport, self._engine = await chess.engine.popen_uci(self.engine_path)
-            await self._engine.configure({"Skill Level": 20, "Threads": 2})
+            await self._engine.configure({
+                "Skill Level": 20,
+                "Threads": 4,
+                "Hash": 256,       # 256 MB transposition table
+                "Move Overhead": 50,  # 50ms buffer for network latency
+            })
             logger.info("Stockfish loaded: %s", self.engine_path)
         except Exception as exc:
             logger.warning("Stockfish init failed: %s — using heuristic", exc)
