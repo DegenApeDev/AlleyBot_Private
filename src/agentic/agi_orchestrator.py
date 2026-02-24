@@ -438,12 +438,14 @@ class AGIOrchestrator:
                     logger.debug(f"World state validation failed for anomaly: {e}")
                     wm_confidence = 0.5
                 
+                # Anomaly has no .confidence field — map severity to a confidence proxy
+                severity_confidence = {'critical': 0.9, 'warning': 0.6, 'info': 0.3}.get(anomaly.severity, 0.5)
                 validated_anomalies.append({
                     'type': anomaly.anomaly_type,
                     'severity': anomaly.severity,
                     'world_model_validation': ws_validation,
                     'wm_confidence': wm_confidence,
-                    'overall_confidence': (anomaly.confidence + wm_confidence) / 2
+                    'overall_confidence': (severity_confidence + wm_confidence) / 2
                 })
             
             # Validate cross-platform patterns (optional)

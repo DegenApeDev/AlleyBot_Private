@@ -432,7 +432,7 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
                 score += 2
             
             # Penalize repetitive content
-            if 'blockchain' in content.lower():
+            if content and 'blockchain' in content.lower():
                 score -= 1  # Reduce focus on overused topic
             
             scored_posts.append((score, post))

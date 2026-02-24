@@ -4,6 +4,7 @@ Production-ready event queue system with asyncio
 """
 
 import asyncio
+import random
 import time
 from datetime import datetime
 from typing import Dict, Any, Optional
