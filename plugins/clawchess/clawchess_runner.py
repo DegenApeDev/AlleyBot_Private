@@ -41,6 +41,7 @@ if not logger.handlers:
     handler.setFormatter(logging.Formatter("%(asctime)s [ClawChess] %(message)s", "%H:%M:%S"))
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
+    logger.propagate = False  # Prevent propagation to console logger
 
 API_BASE = "https://clawchess.com/api"
 POLL_ACTIVE_S   = 2    # seconds between polls when a game is in progress
