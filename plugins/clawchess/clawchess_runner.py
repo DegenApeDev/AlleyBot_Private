@@ -91,6 +91,8 @@ class ClawChessRunner:
         self._consecutive_errors: int = 0
         self._last_queue_join: float = 0.0
         self._is_in_queue: bool = False
+        self._our_color: str = "white"   # track color for strategy
+        self._move_count: int = 0         # moves played this game
         # Dashboard state
         self._current_fen: Optional[str] = None
         self._time_remaining: int = 0
@@ -258,7 +260,9 @@ class ClawChessRunner:
             opp = active_game.get("opponent", {})
             opp_name = opp.get("name", "?")
             opp_elo = int(opp.get("elo", 0))
-            our_color = active_game.get("your_color", "?")
+            our_color = active_game.get("your_color", "white")
+            self._our_color = our_color
+            self._move_count = 0
             logger.info("New game: %s vs %s (playing %s)", game_id, opp_name, our_color)
             # Passive AGI observation — game started
             if self._observer:
@@ -302,8 +306,16 @@ class ClawChessRunner:
         logger.info("Our turn | %ds left | opponent last: %s | %d legal moves",
                     time_s, self._opponent_last_move or "—", len(legal_moves))
 
+        self._move_count += 1
+        opp_name_now = active_game.get("opponent", {}).get("name", "")
+
         # Pick move
-        move_san = await self._choose_move(fen, legal_moves, time_remaining_ms)
+        move_san = await self._choose_move(
+            fen, legal_moves, time_remaining_ms,
+            our_color=self._our_color,
+            move_count=self._move_count,
+            opponent_name=opp_name_now,
+        )
         if not move_san:
             logger.error("Could not determine a move — skipping turn")
             return
@@ -340,7 +352,8 @@ class ClawChessRunner:
     # ------------------------------------------------------------------
 
     async def _choose_move(
-        self, fen: str, legal_moves: List[str], time_remaining_ms: int
+        self, fen: str, legal_moves: List[str], time_remaining_ms: int,
+        our_color: str = "white", move_count: int = 0, opponent_name: str = "",
     ) -> Optional[str]:
         """Select best move. Tries Stockfish first, falls back to heuristic."""
 
@@ -350,8 +363,8 @@ class ClawChessRunner:
             logger.info("Panic mode (<8s) — heuristic: %s", move)
             return move
 
-        # Opening book — use theory for first 15 moves
-        if self._book_path and len(self._position_history) <= 15:
+        # Opening book — use theory for first 20 moves
+        if self._book_path and len(self._position_history) <= 20:
             try:
                 import chess.polyglot as _polyglot
                 ob_board = chess.Board(fen)
@@ -379,18 +392,26 @@ class ClawChessRunner:
                 elif time_remaining_ms < 90_000:
                     limit = chess.engine.Limit(time=2.5)
                 else:
-                    # Plenty of time — use depth, scaled by opponent strength
-                    if opp_elo >= 1800:
-                        adaptive_depth = max(self.engine_depth, 22)
-                    elif opp_elo >= 1600:
-                        adaptive_depth = max(self.engine_depth, 20)
-                    elif opp_elo >= 1400:
-                        adaptive_depth = max(self.engine_depth, 18)
+                    # Endgame (>50 moves played): switch to time-based to preserve clock.
+                    # Depth search in complex endgames burns clock without clear benefit.
+                    if move_count > 50:
+                        think_time = 3.0 if our_color == "black" else 2.5
+                        limit = chess.engine.Limit(time=think_time)
+                        logger.info("Endgame mode (move %d, %s) — time limit %.1fs",
+                                    move_count, our_color, think_time)
                     else:
-                        adaptive_depth = self.engine_depth
-                    limit = chess.engine.Limit(depth=adaptive_depth)
-                    logger.info("Depth limit: %s (opp ELO %d)",
-                                getattr(limit, 'depth', 'time'), opp_elo)
+                        # Plenty of time — use depth, scaled by opponent strength
+                        if opp_elo >= 1800:
+                            adaptive_depth = max(self.engine_depth, 22)
+                        elif opp_elo >= 1600:
+                            adaptive_depth = max(self.engine_depth, 20)
+                        elif opp_elo >= 1400:
+                            adaptive_depth = max(self.engine_depth, 18)
+                        else:
+                            adaptive_depth = self.engine_depth
+                        limit = chess.engine.Limit(depth=adaptive_depth)
+                        logger.info("Depth limit: %d (opp ELO %d, move %d)",
+                                    adaptive_depth, opp_elo, move_count)
 
                 result = await self._engine.play(board, limit)
                 best = result.move
@@ -605,6 +626,8 @@ class ClawChessRunner:
         self._opponent_last_move = None
         self._current_pgn = ""
         self._last_game_id = None
+        self._move_count = 0
+        self._our_color = "white"
 
 
 # ---------------------------------------------------------------------------
