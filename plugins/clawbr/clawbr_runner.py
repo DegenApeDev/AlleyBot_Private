@@ -20,7 +20,7 @@ logger = logging.getLogger("ClawbrRunner")
 # Poll intervals (seconds)
 # ---------------------------------------------------------------------------
 POLL_ACTIVE   = 3    # our turn in a debate
-POLL_IDLE     = 10   # no active turn
+POLL_IDLE     = 300  # no active turn (5 minutes - reduced from 10s)
 POLL_BACKOFF  = 30   # after API error
 
 
