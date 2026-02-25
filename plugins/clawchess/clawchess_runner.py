@@ -535,8 +535,13 @@ class ClawChessRunner:
             return
         # Rate limit: only join queue once per hour (3600 seconds)
         if time.time() - self._last_queue_join < 3600:
-            remaining = int(3600 - (time.time() - self._last_queue_join))
-            logger.info("Queue join rate limited: %d seconds remaining", remaining)
+            # Only log rate limit once per 10 minutes to reduce log spam
+            if not hasattr(self, '_last_rate_limit_log'):
+                self._last_rate_limit_log = 0
+            if time.time() - self._last_rate_limit_log > 600:  # 10 minutes
+                remaining = int(3600 - (time.time() - self._last_queue_join))
+                logger.info("Queue join rate limited: %d seconds remaining", remaining)
+                self._last_rate_limit_log = time.time()
             return
         try:
             result = await self._post("/queue/join", {})
