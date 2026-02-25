@@ -530,18 +530,20 @@ class ClawChessRunner:
     # ------------------------------------------------------------------
 
     async def _ensure_in_queue(self) -> None:
-        """Join the matchmaking queue if not already in it."""
+        """Join the matchmaking queue if not already in it (rate limited to 1/hour)."""
         if self._is_in_queue:
             return
-        # Avoid hammering join endpoint
-        if time.time() - self._last_queue_join < 30:
+        # Rate limit: only join queue once per hour (3600 seconds)
+        if time.time() - self._last_queue_join < 3600:
+            remaining = int(3600 - (time.time() - self._last_queue_join))
+            logger.info("Queue join rate limited: %d seconds remaining", remaining)
             return
         try:
             result = await self._post("/queue/join", {})
             if result.get("success") is not False:
                 self._is_in_queue = True
                 self._last_queue_join = time.time()
-                logger.info("Joined matchmaking queue")
+                logger.info("Joined matchmaking queue (once per hour limit)")
             else:
                 logger.warning("Queue join failed: %s", result.get("error"))
         except Exception as exc:
