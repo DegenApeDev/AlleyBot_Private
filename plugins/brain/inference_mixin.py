@@ -3,6 +3,7 @@ Brain Plugin - Inference Mixin
 
 Integrates World State Intelligence into the Brain plugin.
 Provides trend detection, relationship analysis, and anomaly detection capabilities.
+Incorporates voice emotion data for multimodal analysis.
 
 Part of AGI Core - Phase 7: World State Intelligence
 """
@@ -12,6 +13,13 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 
 from src.autonomy.inference_engine import get_inference_engine, InferenceEngine
+
+try:
+    from src.audio.voice_emotion import get_voice_emotion
+    VOICE_EMOTION_AVAILABLE = True
+except ImportError:
+    get_voice_emotion = None
+    VOICE_EMOTION_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +33,7 @@ class InferenceMixin:
     - Relationship insights for engagement
     - Anomaly detection for alerts
     - Engagement predictions
+    - Multimodal analysis incorporating voice emotion data
     
     Usage:
         class BrainPlugin(InferenceMixin, ...):
@@ -33,16 +42,20 @@ class InferenceMixin:
             
             def make_decision(self):
                 trends = self.get_current_trends()
-                if trends:
-                    # Factor trends into decision
+                emotion = self.get_current_voice_emotion()
+                if trends or emotion['confidence'] > 0.7:
+                    # Factor trends and emotion into decision
                     ...
     """
     
     def __init__(self):
         self._inference_engine: Optional[InferenceEngine] = None
+        self._voice_emotion: Optional[Any] = None
         self._last_trend_check: Optional[datetime] = None
         self._cached_trends: List[Any] = []
         self._cached_anomalies: List[Any] = []
+        self._cached_emotion: Dict[str, Any] = {}
+        self._last_emotion_check: Optional[datetime] = None
     
     def _setup_inference(self) -> None:
         """Initialize inference capabilities"""
@@ -51,6 +64,39 @@ class InferenceMixin:
             logger.info("🧠 InferenceMixin initialized")
         except Exception as e:
             logger.warning(f"⚠️ Failed to initialize inference: {e}")
+        
+        if VOICE_EMOTION_AVAILABLE:
+            try:
+                self._voice_emotion = get_voice_emotion()
+                logger.info("🎤 Voice emotion analyzer integrated")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to initialize voice emotion: {e}")
+    
+    def get_current_voice_emotion(self, refresh: bool = False) -> Dict[str, Any]:
+        """Get latest voice emotion data with caching (30s)."""
+        if (refresh or 
+            not self._cached_emotion or 
+            not self._last_emotion_check or
+            (datetime.now() - self._last_emotion_check).seconds > 30):
+            
+            if not self._voice_emotion:
+                self._cached_emotion = {"emotion": "unknown", "confidence": 0.0}
+            else:
+                try:
+                    latest = self._voice_emotion.get_latest_emotion()
+                    self._cached_emotion = {
+                        "emotion": getattr(latest, "primary_emotion", "neutral"),
+                        "confidence": float(getattr(latest, "confidence", 0.0)),
+                        "valence": getattr(latest, "valence", None),
+                        "arousal": getattr(latest, "arousal", None),
+                        "timestamp": getattr(latest, "timestamp", datetime.now()).isoformat(),
+                    }
+                    self._last_emotion_check = datetime.now()
+                except Exception as e:
+                    logger.error(f"Failed to get voice emotion: {e}")
+                    self._cached_emotion = {"emotion": "unknown", "confidence": 0.0}
+        
+        return self._cached_emotion.copy()
     
     def get_current_trends(self, refresh: bool = False, top_n: int = 5) -> List[Dict[str, Any]]:
         """
@@ -114,7 +160,7 @@ class InferenceMixin:
     
     def predict_content_engagement(self, content: str) -> Dict[str, Any]:
         """
-        Predict engagement for proposed content.
+        Predict engagement for proposed content with voice emotion context.
         
         Args:
             content: Content to analyze
@@ -122,24 +168,43 @@ class InferenceMixin:
         Returns:
             Prediction with estimated likes, replies, reposts
         """
+        emotion = self.get_current_voice_emotion()
+        
         if not self._inference_engine:
+            factor = 1.0
+            if emotion["confidence"] > 0.6:
+                emotion_map = {
+                    "happy": 1.4,
+                    "excited": 1.6,
+                    "neutral": 1.0,
+                    "sad": 0.6,
+                    "angry": 0.4,
+                    "fear": 0.5,
+                    "disgust": 0.3,
+                }
+                factor = emotion_map.get(emotion["emotion"], 1.0)
             return {
-                'predicted_likes': 10,
-                'predicted_replies': 2,
-                'predicted_reposts': 1,
-                'confidence': 0.3,
-                'factors': ['no_data']
+                "predicted_likes": int(10 * factor),
+                "predicted_replies": int(2 * factor),
+                "predicted_reposts": int(1 * factor),
+                "confidence": min(0.3 * emotion["confidence"], 0.9),
+                "factors": [f"voice_emotion:{emotion['emotion']}:{factor:.2f}"]
             }
         
         try:
-            prediction = self._inference_engine.predict_engagement(content)
+            context = (
+                f"[Multimodal Voice Context] User emotion: {emotion['emotion']} "
+                f"(conf: {emotion['confidence']:.2f}, valence: {emotion.get('valence', 'N/A')}). "
+                f"Predict engagement for: {content}"
+            )
+            prediction = self._inference_engine.predict_engagement(context)
             
             return {
                 'predicted_likes': prediction.predicted_likes,
                 'predicted_replies': prediction.predicted_replies,
                 'predicted_reposts': prediction.predicted_reposts,
                 'confidence': prediction.confidence,
-                'factors': prediction.factors
+                'factors': prediction.factors + [f"voice:{emotion['emotion']}:{emotion['confidence']:.2f}"]
             }
         except Exception as e:
             logger.error(f"Error predicting engagement: {e}")
@@ -148,40 +213,63 @@ class InferenceMixin:
                 'predicted_replies': 2,
                 'predicted_reposts': 1,
                 'confidence': 0.3,
-                'factors': ['error']
+                'factors': ['error', f"voice:{emotion['emotion']}"]
             }
     
     def check_anomalies(self) -> List[Dict[str, Any]]:
         """
-        Check for anomalies in world state.
+        Check for anomalies in world state, including voice emotion extremes.
         
         Returns:
             List of detected anomalies
         """
-        if not self._inference_engine:
-            return []
+        anomalies: List[Any] = []
+        if self._inference_engine:
+            try:
+                anomalies = self._inference_engine.detect_anomalies(hours=6)
+            except Exception as e:
+                logger.error(f"Error detecting anomalies: {e}")
         
-        try:
-            anomalies = self._inference_engine.detect_anomalies(hours=6)
-            
-            return [
-                {
-                    'type': a.anomaly_type,
-                    'severity': a.severity,
-                    'description': a.description,
-                    'entities': a.entities_involved,
-                    'metrics': a.metrics,
-                    'recommended_action': a.recommended_action
-                }
-                for a in anomalies
-            ]
-        except Exception as e:
-            logger.error(f"Error detecting anomalies: {e}")
-            return []
+        # Multimodal: add voice emotion anomaly
+        voice_emotion = self.get_current_voice_emotion()
+        extreme_emotions = ["fear", "anger", "disgust", "sadness"]
+        if (voice_emotion["confidence"] > 0.7 and 
+            voice_emotion["emotion"] in extreme_emotions):
+            severity = "high" if voice_emotion["emotion"] in ["fear", "anger"] else "medium"
+            voice_anomaly: Dict[str, Any] = {
+                "type": "extreme_voice_emotion",
+                "severity": severity,
+                "description": f"Strong {voice_emotion['emotion']} emotion in user voice (conf: {voice_emotion['confidence']:.2f})",
+                "entities": ["user_voice"],
+                "metrics": {
+                    "emotion": voice_emotion["emotion"],
+                    "confidence": voice_emotion["confidence"],
+                    "valence": voice_emotion.get("valence"),
+                    "arousal": voice_emotion.get("arousal"),
+                },
+                "recommended_action": "Respond empathetically, validate emotions, de-escalate if needed",
+            }
+            anomalies.append(voice_anomaly)
+        
+        # Convert to standardized dicts
+        result: List[Dict[str, Any]] = []
+        for a in anomalies:
+            if isinstance(a, dict):
+                result.append(a)
+            else:
+                result.append({
+                    "type": getattr(a, "anomaly_type", "unknown"),
+                    "severity": getattr(a, "severity", "low"),
+                    "description": getattr(a, "description", ""),
+                    "entities": getattr(a, "entities_involved", []),
+                    "metrics": getattr(a, "metrics", {}),
+                    "recommended_action": getattr(a, "recommended_action", ""),
+                })
+        return result
     
     def get_sentiment_for_topic(self, topic: str) -> Dict[str, Any]:
         """
-        Get sentiment evolution for a topic.
+        Get sentiment evolution for a topic with voice emotion context.
         
         Args:
             topic: Topic to analyze (hashtag or keyword)
@@ -189,31 +277,39 @@ class InferenceMixin:
         Returns:
             Sentiment evolution data
         """
+        emotion = self.get_current_voice_emotion()
+        
         if not self._inference_engine:
             return {
-                'topic': topic,
-                'trend_direction': 'unknown',
-                'volatility': 0,
-                'key_events': []
+                "topic": topic,
+                "trend_direction": emotion["emotion"],
+                "volatility": emotion["confidence"],
+                "timeline_length": 0,
+                "key_events": [f"Voice emotion: {emotion['emotion']} ({emotion['confidence']:.2f})"],
             }
         
         try:
-            evolution = self._inference_engine.track_sentiment(topic)
+            query = (
+                f"Topic sentiment evolution: {topic}. "
+                f"Current voice emotion context: {emotion['emotion']} (conf: {emotion['confidence']:.2f}). "
+                f"Track sentiment trend."
+            )
+            evolution = self._inference_engine.track_sentiment(query)
             
             return {
                 'topic': evolution.topic,
                 'trend_direction': evolution.trend_direction,
                 'volatility': evolution.volatility,
                 'timeline_length': len(evolution.timeline),
-                'key_events': evolution.key_events
+                'key_events': evolution.key_events,
             }
         except Exception as e:
             logger.error(f"Error tracking sentiment: {e}")
             return {
                 'topic': topic,
-                'trend_direction': 'unknown',
-                'volatility': 0,
-                'key_events': []
+                'trend_direction': emotion["emotion"],
+                'volatility': emotion["confidence"],
+                'key_events': [f"Voice: {emotion['emotion']}"]
             }
     
     def get_cross_platform_patterns(self) -> List[Dict[str, Any]]:
@@ -242,63 +338,3 @@ class InferenceMixin:
         except Exception as e:
             logger.error(f"Error finding patterns: {e}")
             return []
-    
-    def should_alert_owner(self) -> Optional[Dict[str, Any]]:
-        """
-        Check if owner should be alerted about anomalies.
-        
-        Returns:
-            Alert data if there are critical anomalies, None otherwise
-        """
-        anomalies = self.check_anomalies()
-        
-        critical_anomalies = [a for a in anomalies if a['severity'] == 'critical']
-        
-        if critical_anomalies:
-            return {
-                'alert_type': 'critical_anomaly',
-                'count': len(critical_anomalies),
-                'anomalies': critical_anomalies,
-                'timestamp': datetime.now().isoformat()
-            }
-        
-        # Also alert on viral opportunities
-        viral_posts = [a for a in anomalies if a['type'] == 'viral_post']
-        if viral_posts:
-            return {
-                'alert_type': 'viral_opportunity',
-                'count': len(viral_posts),
-                'posts': viral_posts,
-                'timestamp': datetime.now().isoformat()
-            }
-        
-        return None
-    
-    def get_intelligence_briefing(self) -> Dict[str, Any]:
-        """
-        Get comprehensive intelligence briefing for decision making.
-        
-        Returns:
-            Summary of all intelligence data
-        """
-        if not self._inference_engine:
-            return {'status': 'inference_unavailable'}
-        
-        try:
-            summary = self._inference_engine.get_intelligence_summary()
-            
-            return {
-                'status': 'active',
-                'top_trends': self.get_current_trends(top_n=3),
-                'relationship_insights': self.get_relationship_insights(),
-                'cross_platform_patterns': len(self.get_cross_platform_patterns()),
-                'active_anomalies': summary.get('active_anomalies', 0),
-                'timestamp': datetime.now().isoformat()
-            }
-        except Exception as e:
-            logger.error(f"Error generating briefing: {e}")
-            return {'status': 'error', 'message': str(e)}
-
-
-# Export mixin
-__all__ = ['InferenceMixin']
