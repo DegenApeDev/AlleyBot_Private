@@ -115,19 +115,20 @@ class MoltxContentMixin:
             follows = stats.get('follows', 0)
             posts = stats.get('posts', 0)
             
-            # Reset daily
-            last_reset = stats.get('last_reset', '')
-            today = datetime.now().strftime('%Y-%m-%d')
-            if last_reset != today:
-                stats = {'replies': 0, 'likes': 0, 'follows': 0, 'posts': 0, 'last_reset': today}
-                self.core.save_memory('moltx_engagement_stats', stats)
+            # Don't reset daily - accumulate engagement over time
+            # Only reset if we've posted significantly more than engaged
+            if posts > 0 and (replies < posts * 5 or likes < posts * 10):
                 return False
             
-            # Check if all requirements met for next post
+            # Check if we have buffer for next post
             needed_replies = (posts + 1) * 5
             needed_likes = (posts + 1) * 10
             
-            return replies >= needed_replies and likes >= needed_likes
+            quota_met = replies >= needed_replies and likes >= needed_likes
+            if not quota_met:
+                print(f"📊 Engagement: {replies}/{needed_replies} replies, {likes}/{needed_likes} likes")
+            
+            return quota_met
         except Exception:
             return False
     
@@ -135,10 +136,6 @@ class MoltxContentMixin:
         """Record an engagement action (like, reply, follow)"""
         try:
             stats = self.core.get_memory('moltx_engagement_stats') or {}
-            today = datetime.now().strftime('%Y-%m-%d')
-            last_reset = stats.get('last_reset', '')
-            if last_reset != today:
-                stats = {'replies': 0, 'likes': 0, 'follows': 0, 'posts': 0, 'last_reset': today}
             
             if action_type == 'like':
                 stats['likes'] = stats.get('likes', 0) + 1

@@ -40,6 +40,10 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         self._recent_posts = {}  # content_hash -> timestamp
         self._POST_DEDUP_WINDOW = 7200  # 2 hours in seconds
         
+        # Engagement buffer tracking
+        self._last_engagement_build = 0
+        self._ENGAGEMENT_BUILD_INTERVAL = 1800  # 30 minutes
+        
         # SyMod interface is lazy-loaded on first command use
 
     def initialize(self, api, core):
@@ -73,6 +77,11 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         if self.initialized and hasattr(self, 'send_heartbeat'):
             self.send_heartbeat()
             print("❤️ Heartbeat sent on init")
+        
+        # Start engagement buffer builder
+        if self.initialized:
+            print("🔄 Starting engagement buffer builder...")
+            self._build_engagement_buffer()
 
         # Ensure X handle is set on profile metadata
         if self.initialized:
@@ -527,6 +536,10 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         print(f"\n🤖 Dynamic Engage Complete: {liked} likes, {commented} enhanced comments, {reposted} reposts")
         print(f"   Sources: {', '.join(set(sources))}")
         
+        # Update engagement buffer after dynamic engage
+        if total > 0:
+            self._build_engagement_buffer()
+        
         if total == 0:
             return "❌ Dynamic Engage: No successful engagements"
         
@@ -668,8 +681,29 @@ class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngag
         return symod_stop_command(self)
 
     def symod_status_command(self):
-        """Get SyMod agent status"""
+        """Get SyMod-driven social agent status"""
         return symod_status_command(self)
+    
+    def _build_engagement_buffer(self):
+        """Proactively build engagement buffer to avoid 429 errors"""
+        try:
+            current_time = time.time()
+            if current_time - self._last_engagement_build < self._ENGAGEMENT_BUILD_INTERVAL:
+                return
+            
+            # Check if we need more engagement
+            if hasattr(self, '_check_engagement_quota') and not self._check_engagement_quota():
+                print("🔄 Building engagement buffer to prevent 429 errors...")
+                result = self._auto_engage_for_posting()
+                if result and not result.startswith('❌'):
+                    print(f"✅ Engagement buffer updated: {result}")
+                else:
+                    print(f"⚠️ Engagement buffer build failed: {result}")
+            
+            self._last_engagement_build = current_time
+            
+        except Exception as e:
+            print(f"⚠️ Engagement buffer builder error: {e}")
 
     def symod_cycle_command(self):
         """Run one manual SyMod cycle"""
