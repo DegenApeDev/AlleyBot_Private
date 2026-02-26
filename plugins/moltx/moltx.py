@@ -9,6 +9,7 @@ Split into mixins for maintainability:
 - moltx_messaging.py: DMs, DM replies, AI DM generation, DM logging
 """
 from datetime import datetime
+import time
 from plugin_manager import AlleyBotPlugin
 from config import MOLTX_API_KEY
 from plugins.moltx.moltx_api import MoltxAPIMixin
