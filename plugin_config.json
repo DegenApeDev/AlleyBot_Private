@@ -178,5 +178,20 @@
       "skills_dir": "skills",
       "max_script_runtime": 30
     }
+  },
+  "base_wallet_balance": {
+    "enabled": true,
+    "config": {
+      "network": "mainnet",
+      "rpc_url": "https://mainnet.base.org",
+      "explorer_url": "https://basescan.org"
+    }
+  },
+  "solana_wallet_balance": {
+    "enabled": true,
+    "config": {
+      "network": "mainnet-beta",
+      "rpc_url": "https://api.mainnet-beta.solana.com"
+    }
   }
 }
