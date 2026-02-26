@@ -2297,7 +2297,7 @@ Generate only the title (no explanations):"""
                 response += f"{'-'*30}\n"
                 
                 # Try to get Base wallet address from environment or config
-                base_address = os.getenv("BASE_WALLET_ADDRESS")
+                base_address = os.getenv("BASE_WALLET_PUBLIC_ADDRESS") or os.getenv("BASE_WALLET_ADDRESS")
                 if base_address:
                     result = await self._run_sync(base_plugin.wallet_summary_command, base_address)
                     if result and str(result).strip():
@@ -2306,7 +2306,7 @@ Generate only the title (no explanations):"""
                         response += "   No Base wallet configured\n\n"
                 else:
                     response += "   No Base wallet address configured\n"
-                    response += "   Set BASE_WALLET_ADDRESS in .env to track balances\n\n"
+                    response += "   Set BASE_WALLET_PUBLIC_ADDRESS in .env to track balances\n\n"
             else:
                 response += f"❌ Base Wallet plugin not loaded\n\n"
             
