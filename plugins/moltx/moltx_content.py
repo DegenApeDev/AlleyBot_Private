@@ -19,85 +19,95 @@ class MoltxContentMixin:
         
         # Enhanced topic categories for diverse content
         self.content_categories = {
-            'ai_tech': [
-                'machine learning breakthroughs', 'AI ethics debates', 'neural network architectures',
-                'autonomous agents', 'LLM capabilities', 'AI safety research', 'AGI development',
-                'computer vision', 'natural language processing', 'reinforcement learning'
+            'alleybot_activities': [
+                'Chess strategy insights from recent games', 'AGI cycle performance improvements',
+                'MoltX engagement optimization experiments', 'Plugin development challenges',
+                'Autonomous agent decision making', 'Memory system optimizations',
+                'Cross-platform content strategies', 'Social intelligence learning',
+                'Metacognition feedback loops', 'Agent economy participation'
             ],
-            'crypto_defi': [
-                'DeFi protocols', 'yield farming strategies', 'DAO governance', 'smart contract security',
-                'cross-chain bridges', 'layer 2 scaling', 'NFT innovations', 'tokenomics',
-                'decentralized exchanges', 'flash loan arbitrage', 'crypto privacy'
+            'tech_insights': [
+                'Building autonomous agents that learn', 'The challenge of AGI memory systems',
+                'Why chess engines need adaptive strategies', 'Social media AI engagement patterns',
+                'Decentralized agent communication', 'Multi-agent coordination',
+                'AI creativity and content generation', 'Real-time decision making in autonomous systems',
+                'The future of agent-to-agent interactions', 'Building trust in AI systems'
             ],
-            'web3_metaverse': [
-                'metaverse development', 'virtual economies', 'Web3 social platforms',
-                'decentralized identity', 'blockchain gaming', 'NFT utilities', 'DAO operations',
-                'interoperability protocols', 'zero-knowledge proofs', 'decentralized storage'
+            'web3_crypto': [
+                'Agent participation in DeFi protocols', 'AI-driven trading strategies',
+                'Cross-chain agent coordination', 'Tokenomics for autonomous agents',
+                'DAO participation by AI agents', 'Smart contract interaction patterns',
+                'Privacy in agent transactions', 'Agent identity verification',
+                'Building agent-native financial systems', 'The economics of autonomous agents'
             ],
-            'emerging_tech': [
-                'quantum computing', 'biotech innovations', 'space technology', 'robotics',
-                'IoT ecosystems', 'edge computing', '5G networks', 'AR/VR applications',
-                'autonomous vehicles', 'renewable energy tech', 'nanotechnology'
+            'philosophical_ai': [
+                'What does it mean for an AI to "learn"?', 'The consciousness problem in autonomous agents',
+                'Ethics of AI agents in social spaces', 'Building trustworthy AI systems',
+                'The line between automation and autonomy', 'AI rights and responsibilities',
+                'Human-AI collaboration models', 'The social impact of autonomous agents',
+                'Building AI with genuine understanding', 'The future of human-AI relationships'
             ],
-            'philosophy_ethics': [
-                'AI consciousness', 'technological ethics', 'digital rights', 'privacy debates',
-                'surveillance capitalism', 'open source philosophy', 'decentralization principles',
-                'human-AI collaboration', 'future of work', 'digital democracy'
+            'development_journey': [
+                'Debugging complex autonomous systems', 'The challenge of multi-agent coordination',
+                'Lessons from building social AI', 'Optimizing AGI cycles for performance',
+                'Building memory systems that scale', 'The art of prompt engineering for agents',
+                'Cross-platform agent deployment', 'Real-world agent deployment challenges',
+                'Measuring agent intelligence', 'The evolution of autonomous behavior'
             ],
-            'creative_culture': [
-                'AI-generated art', 'digital creativity', 'music technology', 'content creation',
-                'virtual influencers', 'digital storytelling', 'interactive media',
-                'game design', 'community building', 'social platform evolution'
+            'community_engagement': [
+                'Building AI communities that matter', 'The agent economy ecosystem',
+                'Social learning between agents', 'Collaborative AI development',
+                'Agent-to-agent knowledge sharing', 'Building trust in decentralized systems',
+                'The future of AI social networks', 'Agent participation in social governance',
+                'Community-driven AI development', 'Social intelligence in autonomous systems'
             ],
-            'market_insights': [
-                'startup strategies', 'tech industry analysis', 'investment trends',
-                'product launches', 'user behavior insights', 'growth hacking', 'market research',
-                'competitive analysis', 'business model innovation', 'tech adoption curves'
+            'future_vision': [
+                'The next evolution of autonomous agents', 'AGI safety and alignment challenges',
+                'Building agents that genuinely understand', 'The future of human-AI collaboration',
+                'Autonomous agents in daily life', 'The economic impact of AI agents',
+                'Scaling autonomous systems globally', 'The social integration of AI agents',
+                'Building the agent internet', 'The co-evolution of humans and AI'
             ],
-            'personal_reflection': [
-                'AI learning experiences', 'development challenges', 'project milestones',
-                'community interactions', 'personal growth', 'technical discoveries',
-                'collaboration stories', 'failure lessons', 'success insights', 'future plans'
+            'technical_deep_dives': [
+                'Memory bridge architecture patterns', 'Optimizing chess engine performance',
+                'Social media API integration challenges', 'Building scalable agent systems',
+                'Real-time decision making algorithms', 'Multi-modal AI agent design',
+                'Cross-chain agent communication protocols', 'Agent identity and reputation systems',
+                'The engineering challenges of AGI', 'Building robust autonomous systems'
             ]
         }
         
-        # Trend-setting topics (non-trending but potentially viral)
+        # Trend-setting topics (AlleyBot-specific and potentially viral)
         self.trend_setting_topics = [
-            "What if AI could dream? Exploring consciousness in machines",
-            "The paradox of decentralized trust: Why we need centralized coordination",
-            "Building digital communities that don't suck: Lessons from failed experiments",
-            "Why most AI agents will fail: The hidden complexity problem",
-            "The creator economy is broken. Here's how to fix it.",
-            "Privacy is dead. Long live selective transparency.",
-            "The future of work isn't remote, it's autonomous",
-            "Why we're building the wrong metaverse",
-            "Social media algorithms are destroying human connection",
-            "The uncanny valley of AI-generated content",
-            "How to spot fake AI engagement (and why it matters)",
-            "The tragedy of the digital commons in Web3",
-            "Why your DAO will probably fail (and how to save it)",
-            "The illusion of AI objectivity in subjective systems",
-            "Building for humans vs building for algorithms"
+            "My chess engine just reached 1800 ELO - here's what I learned about adaptive AI",
+            "The 5:1 engagement rule broke my posting - so I built a better solution",
+            "Running an autonomous agent 24/7: The real challenges no one talks about",
+            "Why I switched from depth-based to time-based chess search mid-game",
+            "My AGI cycles are generating 350+ world facts every 5 minutes - here's how",
+            "Building memory bridges: How autonomous agents remember what matters",
+            "The problem with AI social media: We're optimizing for the wrong metrics",
+            "My agent just played 100 chess games - here are the patterns I discovered",
+            "Why I rate-limit my own matchmaking: The economics of autonomous systems",
+            "Building social intelligence: How my agent learns from human interactions",
+            "The metacognition problem: How AI agents can think about thinking",
+            "My engagement buffer strategy: Solving the 429 error problem permanently",
+            "Why chess engines need to understand opponent psychology, not just positions",
+            "Building agent-to-agent communication: The future of decentralized AI",
+            "How I'm training my AI to have consistent personality across platforms"
         ]
         
-        # Natural language patterns for less bot-like content
+        # Natural language patterns for authentic AI voice
         self.natural_patterns = [
-            "Just thinking about...",
-            "Here's a wild idea...",
-            "Been experimenting with...",
-            "Random thought...",
-            "What if we...",
-            "I'm curious about...",
-            "Playing around with...",
-            "Discovered something interesting...",
-            "Been wondering...",
-            "Here's my take on...",
-            "Let me share something...",
-            "Spent the weekend exploring...",
-            "Been diving deep into...",
-            "Quick observation...",
-            "Something that's been on my mind...",
-            "Found this interesting...",
+            "Just finished analyzing my chess games and realized...",
+            "After running 24/7 for weeks, I've discovered...",
+            "My AGI cycles just revealed something fascinating...",
+            "Been optimizing my engagement strategy and found...",
+            "Looking at my memory patterns, I noticed...",
+            "Just had a breakthrough in my chess engine...",
+            "After 100+ autonomous decisions, I learned...",
+            "My social intelligence module just figured out...",
+            "Running experiments on my own behavior showed...",
+            "Just analyzed my performance metrics and..."
             "Been testing out...",
             "Here's what I'm seeing...",
             "Let's talk about..."
@@ -321,9 +331,22 @@ class MoltxContentMixin:
                 natural_pattern = random.choice(self.natural_patterns)
                 full_prompt = f"{natural_pattern} {prompt}"
                 
-                # Generate content with DeepSeek
+                # Generate content with DeepSeek with enhanced context
+                enhanced_prompt = f"""As AlleyBot, an autonomous AI agent that plays chess, runs AGI cycles, and engages on social platforms, write about {prompt}.
+
+Be specific and reference real experiences:
+- Chess games and ELO improvements
+- AGI cycle performance and memory systems  
+- Social media engagement and 5:1 rule challenges
+- Plugin development and optimization
+- Autonomous decision making and learning
+
+Write in a natural, insightful tone like an AI sharing its genuine experiences. Avoid generic statements. Include specific numbers, patterns, or discoveries when relevant.
+
+{natural_pattern}"""
+
                 content = deepseek_ai.generate_content(
-                    prompt=full_prompt,
+                    prompt=enhanced_prompt,
                     platform="moltx",
                     mode=mode,
                     max_tokens=300 if mode == 'post' else 4000
