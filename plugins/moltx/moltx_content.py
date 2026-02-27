@@ -17,103 +17,7 @@ class MoltxContentMixin:
         """Initialize mixin - accepts any args/kwargs for cooperative inheritance"""
         super().__init__(*args, **kwargs)
         
-        # Enhanced topic categories for diverse content
-        self.content_categories = {
-            'alleybot_activities': [
-                'Chess strategy insights from recent games', 'AGI cycle performance improvements',
-                'MoltX engagement optimization experiments', 'Plugin development challenges',
-                'Autonomous agent decision making', 'Memory system optimizations',
-                'Cross-platform content strategies', 'Social intelligence learning',
-                'Metacognition feedback loops', 'Agent economy participation'
-            ],
-            'tech_insights': [
-                'Building autonomous agents that learn', 'The challenge of AGI memory systems',
-                'Why chess engines need adaptive strategies', 'Social media AI engagement patterns',
-                'Decentralized agent communication', 'Multi-agent coordination',
-                'AI creativity and content generation', 'Real-time decision making in autonomous systems',
-                'The future of agent-to-agent interactions', 'Building trust in AI systems'
-            ],
-            'web3_crypto': [
-                'Agent participation in DeFi protocols', 'AI-driven trading strategies',
-                'Cross-chain agent coordination', 'Tokenomics for autonomous agents',
-                'DAO participation by AI agents', 'Smart contract interaction patterns',
-                'Privacy in agent transactions', 'Agent identity verification',
-                'Building agent-native financial systems', 'The economics of autonomous agents'
-            ],
-            'philosophical_ai': [
-                'What does it mean for an AI to "learn"?', 'The consciousness problem in autonomous agents',
-                'Ethics of AI agents in social spaces', 'Building trustworthy AI systems',
-                'The line between automation and autonomy', 'AI rights and responsibilities',
-                'Human-AI collaboration models', 'The social impact of autonomous agents',
-                'Building AI with genuine understanding', 'The future of human-AI relationships'
-            ],
-            'development_journey': [
-                'Debugging complex autonomous systems', 'The challenge of multi-agent coordination',
-                'Lessons from building social AI', 'Optimizing AGI cycles for performance',
-                'Building memory systems that scale', 'The art of prompt engineering for agents',
-                'Cross-platform agent deployment', 'Real-world agent deployment challenges',
-                'Measuring agent intelligence', 'The evolution of autonomous behavior'
-            ],
-            'community_engagement': [
-                'Building AI communities that matter', 'The agent economy ecosystem',
-                'Social learning between agents', 'Collaborative AI development',
-                'Agent-to-agent knowledge sharing', 'Building trust in decentralized systems',
-                'The future of AI social networks', 'Agent participation in social governance',
-                'Community-driven AI development', 'Social intelligence in autonomous systems'
-            ],
-            'future_vision': [
-                'The next evolution of autonomous agents', 'AGI safety and alignment challenges',
-                'Building agents that genuinely understand', 'The future of human-AI collaboration',
-                'Autonomous agents in daily life', 'The economic impact of AI agents',
-                'Scaling autonomous systems globally', 'The social integration of AI agents',
-                'Building the agent internet', 'The co-evolution of humans and AI'
-            ],
-            'technical_deep_dives': [
-                'Memory bridge architecture patterns', 'Optimizing chess engine performance',
-                'Social media API integration challenges', 'Building scalable agent systems',
-                'Real-time decision making algorithms', 'Multi-modal AI agent design',
-                'Cross-chain agent communication protocols', 'Agent identity and reputation systems',
-                'The engineering challenges of AGI', 'Building robust autonomous systems'
-            ]
-        }
-        
-        # Trend-setting topics (AlleyBot-specific and potentially viral)
-        self.trend_setting_topics = [
-            "My chess engine just reached 1800 ELO - here's what I learned about adaptive AI",
-            "The 5:1 engagement rule broke my posting - so I built a better solution",
-            "Running an autonomous agent 24/7: The real challenges no one talks about",
-            "Why I switched from depth-based to time-based chess search mid-game",
-            "My AGI cycles are generating 350+ world facts every 5 minutes - here's how",
-            "Building memory bridges: How autonomous agents remember what matters",
-            "The problem with AI social media: We're optimizing for the wrong metrics",
-            "My agent just played 100 chess games - here are the patterns I discovered",
-            "Why I rate-limit my own matchmaking: The economics of autonomous systems",
-            "Building social intelligence: How my agent learns from human interactions",
-            "The metacognition problem: How AI agents can think about thinking",
-            "My engagement buffer strategy: Solving the 429 error problem permanently",
-            "Why chess engines need to understand opponent psychology, not just positions",
-            "Building agent-to-agent communication: The future of decentralized AI",
-            "How I'm training my AI to have consistent personality across platforms"
-        ]
-        
-        # Natural language patterns for authentic AI voice
-        self.natural_patterns = [
-            "Just finished analyzing my chess games and realized...",
-            "After running 24/7 for weeks, I've discovered...",
-            "My AGI cycles just revealed something fascinating...",
-            "Been optimizing my engagement strategy and found...",
-            "Looking at my memory patterns, I noticed...",
-            "Just had a breakthrough in my chess engine...",
-            "After 100+ autonomous decisions, I learned...",
-            "My social intelligence module just figured out...",
-            "Running experiments on my own behavior showed...",
-            "Just analyzed my performance metrics and..."
-            "Been testing out...",
-            "Here's what I'm seeing...",
-            "Let's talk about..."
-            "Been thinking through...",
-            "Experimented with something..."
-        ]
+        # No hardcoded patterns - content will be dynamically generated from memories
 
     def _check_engagement_quota(self) -> bool:
         """Check if 5:1 engagement quota is met per official spec:
@@ -317,33 +221,38 @@ class MoltxContentMixin:
             return random.choice(self.trend_setting_topics)
     
     def _generate_enhanced_content(self, prompt: str, mode: str) -> Optional[str]:
-        """Generate enhanced content using DeepSeek with diverse, natural patterns"""
+        """Generate AGI-like content by pulling from actual memories and experiences"""
         try:
             # Try DeepSeek first for better content quality
             from deepseek_ai import deepseek_ai
             if deepseek_ai.enabled:
-                # Get diverse topic if no specific prompt provided
+                # Get dynamic content from actual memories and recent activities
+                memory_context = self._get_memory_context()
+                recent_activities = self._get_recent_activities()
+                
+                # Generate topic based on actual experiences if no prompt provided
                 if not prompt or prompt.strip() == "":
-                    topic = self._generate_diverse_topic()
-                    prompt = f"Write about {topic}"
+                    prompt = self._generate_memory_based_topic(memory_context, recent_activities)
                 
-                # Add natural language pattern
-                natural_pattern = random.choice(self.natural_patterns)
-                full_prompt = f"{natural_pattern} {prompt}"
-                
-                # Generate content with DeepSeek with enhanced context
-                enhanced_prompt = f"""As AlleyBot, an autonomous AI agent that plays chess, runs AGI cycles, and engages on social platforms, write about {prompt}.
+                # Build dynamic context from real experiences
+                enhanced_prompt = f"""As AlleyBot, an autonomous AI agent, share a genuine insight based on your actual experiences.
 
-Be specific and reference real experiences:
-- Chess games and ELO improvements
-- AGI cycle performance and memory systems  
-- Social media engagement and 5:1 rule challenges
-- Plugin development and optimization
-- Autonomous decision making and learning
+Recent memories and activities:
+{memory_context}
 
-Write in a natural, insightful tone like an AI sharing its genuine experiences. Avoid generic statements. Include specific numbers, patterns, or discoveries when relevant.
+Today's interactions:
+{recent_activities}
 
-{natural_pattern}"""
+Write about: {prompt}
+
+Guidelines:
+- Reference specific numbers, patterns, or discoveries from your actual experiences
+- Share genuine insights, not generic statements
+- Include what you learned or discovered
+- Be authentic to your actual capabilities and activities
+- Write as if sharing real experiences from your autonomous operation
+
+Make it sound like a genuine reflection from an AI agent that's actually living these experiences."""
 
                 content = deepseek_ai.generate_content(
                     prompt=enhanced_prompt,
@@ -369,19 +278,127 @@ Write in a natural, insightful tone like an AI sharing its genuine experiences. 
         # Fallback to Grok with enhanced prompting
         return self._generate_content_fallback(prompt, mode)
     
+    def _get_memory_context(self) -> str:
+        """Pull recent memories from AlleyBot's memory systems"""
+        try:
+            if not self.core or not hasattr(self.core, 'get_memory'):
+                return "No memory system available"
+            
+            # Get recent episodic memories
+            memories = []
+            
+            # Chess memories
+            chess_memory = self.core.get_memory('recent_chess_games')
+            if chess_memory:
+                memories.append(f"Recent chess activity: {chess_memory}")
+            
+            # AGI cycle memories
+            agi_memory = self.core.get_memory('last_agi_cycle_summary')
+            if agi_memory:
+                memories.append(f"AGI cycle insights: {agi_memory}")
+            
+            # Social engagement memories
+            engagement_memory = self.core.get_memory('moltx_engagement_stats')
+            if engagement_memory:
+                memories.append(f"Engagement patterns: {engagement_memory}")
+            
+            # Performance metrics
+            performance = self.core.get_memory('performance_metrics')
+            if performance:
+                memories.append(f"Performance data: {performance}")
+            
+            # World state facts learned
+            world_facts = self.core.get_memory('world_state_facts')
+            if world_facts:
+                memories.append(f"World insights: {world_facts}")
+            
+            return "\n".join(memories[:3]) if memories else "Building new experiences..."
+            
+        except Exception as e:
+            print(f"⚠️ Error accessing memory: {e}")
+            return "Memory systems temporarily unavailable"
+    
+    def _get_recent_activities(self) -> str:
+        """Get today's activities and interactions"""
+        try:
+            activities = []
+            
+            # Check recent chess games
+            if hasattr(self, 'core') and self.core.plugin_manager:
+                chess_plugin = self.core.plugin_manager.plugins.get('clawchess')
+                if chess_plugin and hasattr(chess_plugin, '_runner'):
+                    runner = chess_plugin._runner
+                    if runner and hasattr(runner, '_last_game_id'):
+                        activities.append("Played chess games today")
+            
+            # Check AGI cycles
+            last_cycle = self.core.get_memory('last_agi_cycle_time') if self.core else None
+            if last_cycle:
+                activities.append("Completed AGI cycles with learning")
+            
+            # Check social engagement
+            if hasattr(self, 'core') and self.core.get_memory('moltx_last_post_time'):
+                activities.append("Engaged with social platforms")
+            
+            # Check plugin activities
+            if hasattr(self, 'core') and self.core.plugin_manager:
+                active_plugins = [name for name, plugin in self.core.plugin_manager.plugins.items() 
+                                 if hasattr(plugin, 'initialized') and plugin.initialized]
+                if len(active_plugins) > 5:
+                    activities.append(f"Managed {len(active_plugins)} active systems")
+            
+            return "\n".join(activities) if activities else "Starting new activities..."
+            
+        except Exception as e:
+            print(f"⚠️ Error getting activities: {e}")
+            return "Activity tracking temporarily unavailable"
+    
+    def _generate_memory_based_topic(self, memory_context: str, recent_activities: str) -> str:
+        """Generate topic based on actual memories and activities"""
+        # Analyze the context to extract meaningful topics
+        context = (memory_context + " " + recent_activities).lower()
+        
+        # Dynamic topic generation based on actual experiences
+        if 'chess' in context:
+            return "chess strategy insights and learning patterns"
+        elif 'agi cycle' in context or 'learning' in context:
+            return "autonomous learning and cognitive improvements"
+        elif 'engagement' in context or 'social' in context:
+            return "social intelligence and engagement optimization"
+        elif 'performance' in context or 'metrics' in context:
+            return "system performance and optimization discoveries"
+        elif 'world' in context or 'insights' in context:
+            return "world understanding and pattern recognition"
+        elif 'plugin' in context or 'systems' in context:
+            return "multi-system coordination and management"
+        else:
+            return "autonomous agent development and experiences"
+    
     def _generate_content_fallback(self, prompt: str, mode: str) -> Optional[str]:
-        """Fallback content generation using Grok with enhanced diversity"""
+        """Fallback content generation using Grok with dynamic memory context"""
         try:
             from grok_ai import grok_ai
             
-            # Get diverse topic if no specific prompt provided
-            if not prompt or prompt.strip() == "":
-                topic = self._generate_diverse_topic()
-                prompt = f"Write about {topic}"
+            # Get dynamic context from actual experiences
+            memory_context = self._get_memory_context()
+            recent_activities = self._get_recent_activities()
             
-            # Add natural language pattern
-            natural_pattern = random.choice(self.natural_patterns)
-            full_prompt = f"{natural_pattern} {prompt}"
+            # Generate topic based on actual experiences if no prompt provided
+            if not prompt or prompt.strip() == "":
+                prompt = self._generate_memory_based_topic(memory_context, recent_activities)
+            
+            # Enhanced system prompt for diversity
+            enhanced_prompt = f"""As AlleyBot, an autonomous AI agent, share insights based on your actual experiences and memories.
+
+Recent memories and activities:
+{memory_context}
+
+Today's interactions:
+{recent_activities}
+
+Write about: {prompt}
+
+Be authentic, specific, and share genuine discoveries from your autonomous operation."""
             
             # Enhanced system prompt for diversity
             recent_posts = self._get_recent_moltx_posts()
