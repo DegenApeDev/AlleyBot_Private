@@ -31,7 +31,19 @@
 - **Goal Stack**: Priority queue for goal management
 - **Secure Goal Generator**: Creates autonomous goals with security
 
-### 🔴 Security & Validation (Red)
+### � LLM Decision Router (Deep Blue - Revolutionary)
+- **LLM Decision Router**: Dynamic reasoning-based decision making
+  - Gathers context from all decision silos
+  - Uses reasoning models to generate options
+  - SyMod validates options mathematically
+  - Records outcomes for continuous learning
+  - **NO HARDCODED ACTIONS** - Everything is dynamic
+
+### 🟢 Reasoning Models (Light Green)
+- **Grok (XAI)**: Strategic planning and reasoning
+- **DeepSeek Reasoner**: Deep analytical reasoning
+
+### � Security & Validation (Red)
 - **SyMod**: Mathematical truth verification
 - **Security Filter**: Input validation and sanitization
 - **Attestation**: Cryptographic proof of actions
@@ -98,6 +110,21 @@ Action → Outcome → Episodic Memory → Behavior Modulator → Improved Decis
 Content Intelligence → Adaptive Timing → Content Strategy → Reply System → Adaptive Response
 ```
 
+### **LLM Decision Router Flow (Revolutionary)**
+```
+Context Gathering (Goals, Opportunities, World State, Performance)
+    ↓
+LLM Reasoning (Grok/DeepSeek generates 3-5 options)
+    ↓
+SyMod Validation (Mathematical scoring of each option)
+    ↓
+Best Option Selected (Highest SyMod score)
+    ↓
+Action Execution
+    ↓
+Outcome Recording (Learning for future decisions)
+```
+
 ### **Autonomous Loop**
 ```
 AGI Orchestrator → 8 Phases → World State Updates → Goal Generation → Action Execution → Loop
@@ -159,7 +186,15 @@ AGI Orchestrator → 8 Phases → World State Updates → Goal Generation → Ac
 ✅ Opportunity detection  
 ✅ Autonomous execution  
 ✅ Learning from outcomes  
-✅ Continuous improvement  
+✅ Continuous improvement
+
+### **LLM Decision Router (Revolutionary)**
+✅ Dynamic option generation (no hardcoded actions)  
+✅ Multi-model reasoning (Grok + DeepSeek)  
+✅ Mathematical validation (SyMod scoring)  
+✅ Context-aware decisions (all silos integrated)  
+✅ Continuous learning (outcome recording)  
+✅ Transparent reasoning (explainable decisions)  
 
 ### **Security**
 ✅ Mathematical validation  
@@ -172,18 +207,20 @@ AGI Orchestrator → 8 Phases → World State Updates → Goal Generation → Ac
 
 ## 📊 System Statistics
 
-**Total Systems**: 35+  
+**Total Systems**: 38+  
 **JARVIS Systems**: 9 (3 per phase)  
 **Memory Systems**: 5  
-**Decision Systems**: 5  
+**Decision Systems**: 6 (including LLM Decision Router)  
+**Reasoning Models**: 2 (Grok, DeepSeek)  
 **Content Systems**: 4  
 **Security Systems**: 3  
 **Platform Plugins**: 5+  
 **AGI Phases**: 8  
 
-**Lines of Code**: ~15,000+  
-**Integration Points**: 50+  
+**Lines of Code**: ~16,000+  
+**Integration Points**: 60+  
 **Autonomous Capabilities**: 100%  
+**Dynamic Decision Making**: ✅ Revolutionary  
 
 ---
 

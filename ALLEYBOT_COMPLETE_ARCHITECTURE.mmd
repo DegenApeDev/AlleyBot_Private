@@ -35,11 +35,17 @@ graph TB
     end
     
     subgraph "🧩 Decision & Action Systems"
+        LLM_ROUTER[🧠 LLM Decision Router<br/>Dynamic reasoning-based decisions]
         ACTION_ROUTER[⚡ Action Router<br/>Execute actions]
         DECISION[🎲 Decision Engine<br/>Choose actions]
         GOAL_DRIVEN[🎯 Goal-Driven Cycle<br/>Goal execution]
         GOAL_STACK[📋 Goal Stack<br/>Priority queue]
         GOAL_GEN[🎯 Secure Goal Generator<br/>Autonomous goals]
+    end
+    
+    subgraph "🤖 Reasoning Models"
+        GROK[🔮 Grok (XAI)<br/>Strategic reasoning]
+        DEEPSEEK[🧬 DeepSeek Reasoner<br/>Analytical reasoning]
     end
     
     subgraph "🧠 Memory & Learning Systems"
@@ -152,6 +158,37 @@ graph TB
     EMOTION --> ADAPTIVE
     CONTEXT_AWARE --> ADAPTIVE
     INTENT --> ADAPTIVE
+    
+    %% ============================================================================
+    %% LLM Decision Router Flow (Revolutionary Decision Making)
+    %% ============================================================================
+    
+    KERNEL --> LLM_ROUTER
+    
+    %% Context gathering from decision silos
+    GOAL_STACK --> LLM_ROUTER
+    OPP_DETECT --> LLM_ROUTER
+    PREDICT --> LLM_ROUTER
+    CONTENT_STRAT --> LLM_ROUTER
+    WORLD_STATE --> LLM_ROUTER
+    EPISODIC --> LLM_ROUTER
+    
+    %% LLM reasoning models generate options
+    LLM_ROUTER --> GROK
+    LLM_ROUTER --> DEEPSEEK
+    GROK --> LLM_ROUTER
+    DEEPSEEK --> LLM_ROUTER
+    
+    %% SyMod validates options mathematically
+    LLM_ROUTER --> SYMOD
+    SYMOD --> LLM_ROUTER
+    
+    %% Best option selected and executed
+    LLM_ROUTER --> ACTION_ROUTER
+    
+    %% Learning loop: outcomes recorded
+    ACTION_ROUTER --> LLM_ROUTER
+    LLM_ROUTER --> EPISODIC
     
     %% ============================================================================
     %% Decision & Action Flow
@@ -285,6 +322,8 @@ graph TB
     classDef jarvisPhase3 fill:#f3e5f5,stroke:#4a148c,stroke-width:3px
     classDef memory fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
     classDef decision fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef llmRouter fill:#e3f2fd,stroke:#0d47a1,stroke-width:4px
+    classDef reasoningModel fill:#f1f8e9,stroke:#33691e,stroke-width:3px
     classDef content fill:#fce4ec,stroke:#880e4f,stroke-width:2px
     classDef security fill:#ffebee,stroke:#b71c1c,stroke-width:2px
     classDef plugin fill:#e0f2f1,stroke:#004d40,stroke-width:2px
@@ -296,6 +335,8 @@ graph TB
     class PERSONALITY,EMOTION,ADAPTIVE jarvisPhase3
     class EPISODIC,BEHAVIOR_MOD,UNIFIED_MEM,WORLD_STATE,WORLD_BRIDGE memory
     class ACTION_ROUTER,DECISION,GOAL_DRIVEN,GOAL_STACK,GOAL_GEN decision
+    class LLM_ROUTER llmRouter
+    class GROK,DEEPSEEK reasoningModel
     class CONTENT_INTEL,ADAPTIVE_TIME,CONTENT_STRAT,REPLY_SYS content
     class SYMOD,SECURITY,ATTESTATION security
     class MOLTX_PLUGIN,TELEGRAM_PLUGIN,CLAWBR_PLUGIN,BRAIN_PLUGIN,ONCHAIN_PLUGIN plugin
