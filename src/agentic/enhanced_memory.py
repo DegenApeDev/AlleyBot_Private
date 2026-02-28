@@ -130,7 +130,8 @@ class VectorMemoryStore:
         if not VECTOR_DB_AVAILABLE:
             raise ImportError("Vector DB dependencies not available")
         
-        self.model = SentenceTransformer(embedding_model)
+        from src.utils.embedding_model import get_sentence_transformer
+        self.model = get_sentence_transformer(embedding_model)
         self.dimension = 384  # Dimension for all-MiniLM-L6-v2
         self.index = faiss.IndexFlatL2(self.dimension)
         self.memories: List[Memory] = []

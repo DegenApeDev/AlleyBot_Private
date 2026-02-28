@@ -90,11 +90,11 @@ class ContentDiversityMonitor:
     def _calculate_similarities(self, posts: List[str]) -> List[float]:
         """Calculate pairwise similarities between posts"""
         try:
-            from sentence_transformers import SentenceTransformer
+            from src.utils.embedding_model import get_sentence_transformer
             from sklearn.metrics.pairwise import cosine_similarity
             import numpy as np
             
-            model = SentenceTransformer('all-MiniLM-L6-v2')
+            model = get_sentence_transformer('all-MiniLM-L6-v2')
             embeddings = model.encode(posts)
             
             similarities = []
@@ -126,23 +126,24 @@ class ContentDiversityMonitor:
         
         return similarities
     
-    def should_block_post(self, platform: str, new_content: str, recent_posts: List[str]) -> tuple[bool, str]:
-        """Check if a post should be blocked due to repetition"""
-        if not recent_posts:
-            return False, "No recent posts to compare"
-        
+    def check_against_recent(self, new_content: str, recent_posts: List[str]) -> Dict[str, Any]:
+        """Check if new content is too similar to recent posts"""
         try:
-            from sentence_transformers import SentenceTransformer
+            from src.utils.embedding_model import get_sentence_transformer
             from sklearn.metrics.pairwise import cosine_similarity
             import numpy as np
             
-            model = SentenceTransformer('all-MiniLM-L6-v2')
+            model = get_sentence_transformer('all-MiniLM-L6-v2')
             new_embedding = model.encode([new_content])
             recent_embeddings = model.encode(recent_posts[-5:])  # Check last 5 posts
             
             similarities = cosine_similarity(new_embedding, recent_embeddings)[0]
             max_similarity = np.max(similarities)
             
+            return {
+                'similarities': similarities,
+                'max_similarity': max_similarity
+            }
             if max_similarity >= self.diversity_thresholds['similarity_block']:
                 return True, f"Content too similar (similarity: {max_similarity:.2f}) to recent posts"
             
