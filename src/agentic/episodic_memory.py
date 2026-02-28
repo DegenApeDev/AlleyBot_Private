@@ -220,7 +220,7 @@ class EpisodicMemoryStore:
             
             # Generate lesson from memory
             valence_word = "worked well" if memory.emotional_valence > 0 else "didn't work"
-            lesson = f"When {memory.context}, {memory.action} {valence_valence} (outcome: {memory.outcome})"
+            lesson = f"When {memory.context}, {memory.action} {valence_word} (outcome: {memory.outcome})"
             
             if topic and topic.lower() in lesson.lower():
                 lessons.append(lesson)
@@ -330,6 +330,74 @@ class BehaviorModulator:
             style_parts.append("simple")
         
         return ", ".join(style_parts) if style_parts else "balanced"
+    
+    def modulate_action(self, action_spec: Dict, context: Dict) -> Dict:
+        """
+        Modify action based on past experiences BEFORE execution.
+        
+        This is the core learning loop - every action is informed by
+        similar past actions and their outcomes.
+        
+        Args:
+            action_spec: Action to execute {plugin, action_type, params, ...}
+            context: Current context {hour, platform, user_id, ...}
+            
+        Returns:
+            Modified action_spec with learned optimizations
+        """
+        # Build context string for memory recall
+        context_str = f"{action_spec.get('plugin')}:{action_spec.get('action_type')}"
+        if context.get('platform'):
+            context_str += f" on {context['platform']}"
+        if context.get('hour'):
+            context_str += f" at hour {context['hour']}"
+        
+        # Recall similar past actions
+        similar_episodes = self.episodic.recall_relevant(context_str, k=5)
+        
+        if not similar_episodes:
+            # No past experience, return unmodified
+            return action_spec
+        
+        # Separate successful and failed patterns
+        successful = [e for e in similar_episodes if e.emotional_valence > 0.3]
+        failed = [e for e in similar_episodes if e.emotional_valence < -0.3]
+        
+        # Apply learned modifications
+        modified_spec = action_spec.copy()
+        warnings = []
+        
+        # Learn from successful patterns
+        for episode in successful:
+            # Extract timing patterns
+            if 'hour' in episode.context and context.get('hour'):
+                # If successful action was at similar time, boost confidence
+                modified_spec['confidence_boost'] = modified_spec.get('confidence_boost', 0) + 0.1
+        
+        # Avoid failed patterns
+        for episode in failed:
+            # Check if current context matches failed context
+            current_hour = context.get('hour')
+            if current_hour and f"hour {current_hour}" in episode.context:
+                warnings.append(f"⚠️ Similar action failed at this hour: {episode.outcome}")
+            
+            # Check if same platform had failures
+            current_platform = context.get('platform')
+            if current_platform and current_platform in episode.context:
+                warnings.append(f"⚠️ Similar action failed on {current_platform}: {episode.outcome}")
+        
+        # Add warnings to action spec
+        if warnings:
+            modified_spec['episodic_warnings'] = warnings
+            modified_spec['risk_level'] = 'medium'
+        
+        # Add learned insights
+        if successful:
+            modified_spec['episodic_insights'] = [
+                f"✓ {len(successful)} similar successful actions recalled"
+            ]
+        
+        return modified_spec
     
     def record_outcome(self, context: str, action: str, outcome: str,
                       success: bool, user_id: Optional[str] = None):

@@ -569,7 +569,7 @@ class WorldStateManager:
             print(f"❌ Failed to add event: {e}")
             return False
 
-    def get_events(self, event_type: str = None, unprocessed_only: bool = False, since: str = None, limit: int = 100) -> List[Event]:
+    def get_events(self, event_type: str = None, actor_id: str = None, unprocessed_only: bool = False, since: str = None, limit: int = 100) -> List[Event]:
         """Get events, optionally filtered"""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -580,6 +580,10 @@ class WorldStateManager:
             if event_type:
                 sql += " AND event_type = ?"
                 params.append(event_type)
+            
+            if actor_id:
+                sql += " AND actor_id = ?"
+                params.append(actor_id)
 
             if unprocessed_only:
                 sql += " AND processed = 0"

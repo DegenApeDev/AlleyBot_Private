@@ -77,9 +77,29 @@ class ActionRouter:
                 'action_id': action_id
             }
         
-        # Step 2: SyMod verification (for high-impact actions)
-        if action_spec.get('context', {}).get('impact') == 'high':
-            symod_check = self._verify_with_symod(action_spec, validation)
+        # Step 2: Apply episodic learning modulation
+        modulated_action = action_spec
+        if hasattr(self.agi, 'behavior_modulator'):
+            context = {
+                'hour': datetime.now().hour,
+                'platform': action_spec.get('plugin'),
+                'user_id': action_spec.get('context', {}).get('user_id')
+            }
+            modulated_action = self.agi.behavior_modulator.modulate_action(action_spec, context)
+            
+            # Log episodic warnings if present
+            if modulated_action.get('episodic_warnings'):
+                for warning in modulated_action['episodic_warnings']:
+                    print(warning)
+            
+            # Log episodic insights if present
+            if modulated_action.get('episodic_insights'):
+                for insight in modulated_action['episodic_insights']:
+                    print(insight)
+        
+        # Step 3: SyMod verification (for high-impact actions)
+        if modulated_action.get('context', {}).get('impact') == 'high':
+            symod_check = self._verify_with_symod(modulated_action, validation)
             if not symod_check['approved']:
                 return {
                     'success': False,
@@ -89,12 +109,27 @@ class ActionRouter:
                     'symod_details': symod_check
                 }
         
-        # Step 3: Execute via plugin
+        # Step 4: Execute via plugin
         try:
-            result = await self._execute_via_plugin(action_spec)
+            result = await self._execute_via_plugin(modulated_action)
             
-            # Step 4: Reflect and learn
-            await self._reflect_on_outcome(action_spec, result, validation)
+            # Step 5: Record episode for future learning
+            if hasattr(self.agi, 'behavior_modulator'):
+                context_str = f"{action_spec.get('plugin')}:{action_spec.get('action_type')} at hour {datetime.now().hour}"
+                action_str = str(action_spec.get('params', {}))[:100]
+                outcome_str = str(result)[:100]
+                success = result.get('success', False)
+                
+                self.agi.behavior_modulator.record_outcome(
+                    context=context_str,
+                    action=action_str,
+                    outcome=outcome_str,
+                    success=success,
+                    user_id=action_spec.get('context', {}).get('user_id')
+                )
+            
+            # Step 6: Reflect and learn
+            await self._reflect_on_outcome(modulated_action, result, validation)
             
             # Add metadata
             result['action_id'] = action_id
