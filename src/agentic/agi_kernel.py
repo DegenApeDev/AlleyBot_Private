@@ -110,6 +110,12 @@ class AGIKernel:
         # OpenHome converter (plugin sharing)
         self.openhome_converter = None  # Initialized with AGI Kernel
         
+        # Content intelligence (cross-platform content optimization)
+        self.content_intelligence = None  # Initialized with memory systems
+        
+        # Adaptive timing (intelligent engagement timing)
+        self.adaptive_timing = None  # Initialized with memory systems
+        
         print("✅ AGI Kernel ready")
     
     def _get_onchain_plugin(self):
@@ -146,6 +152,11 @@ class AGIKernel:
             from src.agentic.goal_driven_cycle import create_goal_driven_cycle
             self.goal_driven_cycle = create_goal_driven_cycle(self)
             print("✅ Goal-Driven Cycle integrated into AGI Kernel (autonomous goal pursuit active)")
+        
+        if not self.openhome_converter:
+            from src.agentic.openhome_converter import create_openhome_converter
+            self.openhome_converter = create_openhome_converter(self)
+            print("✅ OpenHome Converter integrated into AGI Kernel (plugin sharing enabled)")
         
         if not self.context_system:
             self.context_system = create_context_system(self, plugin_manager)
