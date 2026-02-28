@@ -35,6 +35,21 @@ class GrokAI:
             self.enabled = True
             print("✅ Grok AI initialized")
     
+    async def reason(self, prompt: str, temperature: float = 0.7, max_tokens: int = 1500) -> Optional[str]:
+        """
+        Use Grok's reasoning model for complex decision-making.
+        
+        Args:
+            prompt: The reasoning prompt
+            temperature: Creativity level (0.0-1.0)
+            max_tokens: Max response length
+        
+        Returns:
+            Reasoning output or None on failure
+        """
+        model = self.MODELS['reasoning']  # Use reasoning model
+        return self.chat(prompt, max_tokens=max_tokens, model=model, temperature=temperature)
+    
     def route_task(self, task_type: str, prompt: str, max_tokens: int = 500, **kwargs) -> Optional[str]:
         """Route task to appropriate model based on task type
         

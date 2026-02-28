@@ -146,6 +146,10 @@ class AGIKernel:
         # Adaptive response (perfectly-tuned responses)
         self.adaptive_response = None  # Initialized in decision systems
         
+        # === LLM Decision Router (Revolutionary Decision Making) ===
+        # Uses reasoning models to generate dynamic options, validated by SyMod
+        self.llm_decision_router = None  # Initialized in decision systems
+        
         print("✅ AGI Kernel ready")
     
     def _get_onchain_plugin(self):
@@ -279,6 +283,12 @@ class AGIKernel:
                 intent_recognizer=self.intent_recognizer
             )
             print("✅ Adaptive Response integrated into AGI Kernel (JARVIS-style responses active)")
+        
+        # === LLM Decision Router ===
+        if not self.llm_decision_router:
+            from src.agentic.llm_decision_router import create_llm_decision_router
+            self.llm_decision_router = create_llm_decision_router(self)
+            print("✅ LLM Decision Router integrated into AGI Kernel (dynamic reasoning-based decisions active)")
         
         if not self.context_system:
             self.context_system = create_context_system(self, plugin_manager)

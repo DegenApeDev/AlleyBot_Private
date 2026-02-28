@@ -56,6 +56,14 @@ from src.agentic.multi_platform_engine import get_multi_platform_engine, Platfor
 
 logger = logging.getLogger(__name__)
 
+# Import LLM planning extension
+try:
+    from src.agentic.agi_orchestrator_llm import run_phase_9_planning_with_llm
+    LLM_PLANNING_AVAILABLE = True
+except ImportError:
+    LLM_PLANNING_AVAILABLE = False
+    logger.warning("LLM planning extension not available")
+
 
 class Phase(Enum):
     """The 14 AGI phases"""
@@ -326,10 +334,12 @@ class AGIOrchestrator:
                 learnings=learnings
             )
         
-        # Phase 9: Plan execution
-        plan_result = self._run_phase_9_planning(
+        # Phase 9: Plan execution (with LLM Decision Router)
+        # Use LLM reasoning to generate dynamic action options
+        plan_result = await self._run_phase_9_planning_with_llm(
             creative_result.output,
-            meta_result.output
+            meta_result.output,
+            detection_result.output
         )
         phases_executed.append(plan_result)
         

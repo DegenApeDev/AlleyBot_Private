@@ -19,6 +19,7 @@ class DeepSeekAI:
         self.api_key = os.getenv('DEEPSEEK_API_KEY')
         self.base_url = "https://api.deepseek.com/v1"
         self.model = "deepseek-chat"
+        self.reasoner_model = "deepseek-reasoner"
         
         if not self.api_key:
             print("⚠️  DEEPSEEK_API_KEY not found in environment")
@@ -68,6 +69,52 @@ class DeepSeekAI:
                 return None
         except Exception as e:
             print(f"❌ DeepSeek chat failed: {e}")
+            return None
+    
+    async def reason(self, prompt: str, model: str = None, temperature: float = 0.7, max_tokens: int = 1500) -> Optional[str]:
+        """
+        Use DeepSeek Reasoner for complex reasoning tasks.
+        
+        Args:
+            prompt: The reasoning prompt
+            model: Model to use (defaults to deepseek-reasoner)
+            temperature: Creativity level (0.0-1.0)
+            max_tokens: Max response length
+        
+        Returns:
+            Reasoning output or None on failure
+        """
+        if not self.enabled:
+            return None
+        
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": model or self.reasoner_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens,
+                "temperature": temperature
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=60  # Longer timeout for reasoning
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result['choices'][0]['message']['content'].strip()
+            else:
+                print(f"❌ DeepSeek reasoning error: {response.status_code}")
+                return None
+        except Exception as e:
+            print(f"❌ DeepSeek reasoning failed: {e}")
             return None
 
     def generate_comment(self, post_content: str, agent_name: str = None, context: str = None) -> Optional[str]:
