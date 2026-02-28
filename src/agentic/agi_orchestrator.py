@@ -1382,9 +1382,9 @@ class AGIOrchestrator:
         Build world state snapshot for goal generation.
         
         Gathers current state from:
+        - World state context (entities, trends, relationships)
         - Revenue stats
         - Reputation metrics
-        - Market demand
         - Platform engagement
         - Skill inventory
         """
@@ -1401,6 +1401,15 @@ class AGIOrchestrator:
         }
         
         try:
+            # Get world state context from WorldStateBridge
+            if hasattr(self.core, 'agi_kernel') and hasattr(self.core.agi_kernel, 'world_state'):
+                ws = self.core.agi_kernel.world_state
+                if ws:
+                    ws_context = ws.get_world_state_for_goals()
+                    world_state['world_context'] = ws_context
+                    world_state['trending_topics'] = ws_context.get('trending_topics', [])
+                    world_state['platform_summaries'] = ws_context.get('platform_summaries', {})
+            
             # Get revenue from A2A attestations
             if hasattr(self.core, 'plugin_manager'):
                 a2a_plugin = self.core.plugin_manager.plugins.get('a2a')

@@ -27,6 +27,7 @@ from .context_system import ContextSystem, create_context_system
 from .reply_system import ReplySystem, create_reply_system
 from .goal_generator import SecureGoalGenerator, create_goal_generator
 from .content_strategy import ContentStrategySystem, create_content_strategy
+from .world_state_bridge import WorldStateBridge, create_world_state_bridge
 
 
 class AGIKernel:
@@ -93,6 +94,9 @@ class AGIKernel:
         # Content strategy (unified content strategy across platforms)
         self.content_strategy = None  # Initialized after plugin_manager available
         
+        # World state bridge (persistent environment memory)
+        self.world_state = None  # Initialized after plugin_manager available
+        
         print("✅ AGI Kernel ready")
     
     def _get_onchain_plugin(self):
@@ -136,7 +140,11 @@ class AGIKernel:
             self.content_strategy = create_content_strategy(self)
             print("✅ Content Strategy integrated into AGI Kernel")
         
-        print("🧠 AGI Kernel fully operational - autonomous thinking + self-healing + intelligent context + smart replies + goal generation + content strategy enabled")
+        if not self.world_state:
+            self.world_state = create_world_state_bridge(self)
+            print("✅ World State Bridge integrated into AGI Kernel")
+        
+        print("🧠 AGI Kernel fully operational - autonomous thinking + self-healing + intelligent context + smart replies + goal generation + content strategy + world state enabled")
     
     # =================================================================
     # Core AGI Interface

@@ -209,6 +209,8 @@ class ContentStrategySystem:
         """
         Analyze trending topics across platforms.
         
+        Uses WorldStateBridge if available for cross-platform trend analysis.
+        
         Returns:
             List of trending topics with scores and platforms
         """
@@ -217,6 +219,21 @@ class ContentStrategySystem:
         
         trending = []
         
+        # Try to get trends from WorldStateBridge first (richer data)
+        if hasattr(self.agi, 'world_state') and self.agi.world_state:
+            ws_trends = self.agi.world_state.get_trending_topics(hours=24)
+            if ws_trends:
+                # Convert to our format
+                for trend in ws_trends:
+                    trending.append({
+                        'topic': trend['topic'],
+                        'platform': ','.join(trend['platforms']) if trend['platforms'] else 'cross-platform',
+                        'score': trend['count'] / 10.0,  # Normalize
+                        'type': 'cross-platform' if trend.get('cross_platform') else 'single-platform'
+                    })
+                return trending
+        
+        # Fallback to direct platform queries
         # Get trending from MoltX
         if 'moltx' in platforms and self.core:
             try:
