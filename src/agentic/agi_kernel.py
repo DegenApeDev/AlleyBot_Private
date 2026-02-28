@@ -136,6 +136,16 @@ class AGIKernel:
         # Opportunity detector (spot opportunities)
         self.opportunity_detector = None  # Initialized in decision systems
         
+        # === JARVIS Phase 3: Personality & Emotional Intelligence ===
+        # Personality engine (consistent character)
+        self.personality_engine = None  # Initialized in decision systems
+        
+        # Emotional intelligence (empathy and emotion detection)
+        self.emotional_intelligence = None  # Initialized in decision systems
+        
+        # Adaptive response (perfectly-tuned responses)
+        self.adaptive_response = None  # Initialized in decision systems
+        
         print("✅ AGI Kernel ready")
     
     def _get_onchain_plugin(self):
@@ -216,6 +226,35 @@ class AGIKernel:
                 intent_recognizer=self.intent_recognizer
             )
             print("✅ Dialogue Manager integrated into AGI Kernel (JARVIS-style conversation active)")
+        
+        # === JARVIS Phase 2: Proactive Intelligence ===
+        if not self.predictive_suggestions:
+            from src.agentic.predictive_suggestions import create_predictive_suggestions
+            self.predictive_suggestions = create_predictive_suggestions(
+                episodic_memory=self.behavior_modulator.episodic if self.behavior_modulator else None,
+                goal_manager=self.goal_stack,
+                world_state=self.world_state.world_state if self.world_state else None,
+                content_intelligence=self.content_intelligence
+            )
+            print("✅ Predictive Suggestions integrated into AGI Kernel (proactive assistance active)")
+        
+        if not self.contextual_awareness:
+            from src.agentic.contextual_awareness import create_contextual_awareness
+            self.contextual_awareness = create_contextual_awareness(
+                world_state=self.world_state.world_state if self.world_state else None,
+                conversational_memory=self.conversational_memory,
+                goal_manager=self.goal_stack
+            )
+            print("✅ Contextual Awareness integrated into AGI Kernel (situational understanding active)")
+        
+        if not self.opportunity_detector:
+            from src.agentic.opportunity_detector import create_opportunity_detector
+            self.opportunity_detector = create_opportunity_detector(
+                world_state=self.world_state.world_state if self.world_state else None,
+                content_intelligence=self.content_intelligence,
+                adaptive_timing=self.adaptive_timing
+            )
+            print("✅ Opportunity Detector integrated into AGI Kernel (opportunity awareness active)")
         
         if not self.context_system:
             self.context_system = create_context_system(self, plugin_manager)
