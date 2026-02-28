@@ -167,13 +167,14 @@ src/agentic/
 1. ✅ Create `src/agentic/decision_system.py` with core logic from `decision_engine.py` - DONE
 2. ✅ Update `AGIKernel` to include `DecisionSystem` as a subsystem - DONE
 3. ✅ Refactor `brain.py` to delegate to `core.agi_kernel.decide()` - DONE (think_command)
-4. ⏳ Create `src/agentic/context_system.py` from `context_gatherer.py` - TODO
-5. ⏳ Create `src/agentic/reply_system.py` from `smart_reply.py` - TODO
-6. ⏳ Refactor remaining brain mixins - TODO
+4. ✅ Create `src/agentic/context_system.py` from `context_gatherer.py` - DONE
+5. ✅ Create `src/agentic/reply_system.py` from `smart_reply.py` - DONE
+6. ✅ Create `src/agentic/content_strategy.py` from `content_strategy.py` - DONE
+7. ⏳ Refactor remaining brain mixins (world_state, goal_stack, etc.) - TODO
 
 **Impact Target:** Reduce brain plugin from 5000+ lines to ~150 lines, centralize intelligence in AGI Kernel
 
-**Current Progress:** Decision logic extracted (600 lines), brain now delegates to AGI for autonomous decisions
+**Current Progress:** Decision, context, reply, and content strategy systems extracted and integrated. Content strategy now connects goals → content ideas → platform execution. Brain plugin reduced from 5000+ to ~3000 lines (40% reduction).
 
 ---
 

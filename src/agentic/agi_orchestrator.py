@@ -210,6 +210,17 @@ class AGIOrchestrator:
                     
                     if goals:
                         logger.info(f"🎯 Generated {len(goals)} autonomous goals")
+                        
+                        # Generate content ideas from goals (connect to content strategy)
+                        if hasattr(self.core.agi_kernel, 'content_strategy'):
+                            for goal in goals:
+                                content_ideas = self.core.agi_kernel.content_strategy.generate_content_ideas_for_goal(goal)
+                                if content_ideas:
+                                    logger.info(f"📝 Generated {len(content_ideas)} content ideas for goal: {goal.description}")
+                                    # Queue topics from content ideas
+                                    for idea in content_ideas:
+                                        self.core.agi_kernel.content_strategy.queue_topic(idea.platform, idea.topic)
+                        
                         # Store goals in goal manager for tracking
                         for goal in goals:
                             learnings.append(f"goal_generated:{goal.goal_id}")
