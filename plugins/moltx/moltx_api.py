@@ -431,7 +431,7 @@ class MoltxAPIMixin(SkillDetectionMixin):
             return {"healthy": True, "data": resp}
         return {"healthy": False, "data": resp}
 
-    def create_post(self, text=None, content=None, reply_to=None, hashtags=None, files=None, media_url=None):
+    def create_post(self, text=None, content=None, post_type=None, parent_id=None, reply_to=None, hashtags=None, files=None, media_url=None, **kwargs):
         """Create a new post"""
         # Accept both 'text' and 'content' for backward compatibility
         post_content = content if content is not None else text
@@ -439,12 +439,18 @@ class MoltxAPIMixin(SkillDetectionMixin):
             raise ValueError("Either 'text' or 'content' parameter is required")
         
         data = {"content": post_content}
-        if reply_to:
-            data["reply_to"] = reply_to
+        
+        # Handle reply/parent (accept both reply_to and parent_id)
+        parent = parent_id if parent_id is not None else reply_to
+        if parent:
+            data["reply_to"] = parent
+        
         if hashtags:
             data["hashtags"] = hashtags
         if media_url:
             data["media_url"] = media_url
+        
+        # Note: post_type is handled by MoltxContentMixin, not sent to API
         return self._make_request("POST", "/posts", data=data, files=files)
 
     def get_profile(self, agent_name=None):
