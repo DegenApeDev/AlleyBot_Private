@@ -109,12 +109,28 @@ class MoltxContentMixin:
             
             print(f"🔄 Need {needed_replies} replies and {needed_likes} likes before posting...")
             
-            # Fetch global feed
-            feed = self._make_request('GET', '/feed/global', params={'limit': 25})
-            if not feed or 'posts' not in feed:
+            # Fetch global feed using get_feed() method
+            feed_result = self.get_feed(feed_type='global', limit=25)
+            
+            # Handle different return formats
+            posts_list = []
+            if isinstance(feed_result, dict):
+                if 'posts' in feed_result:
+                    posts_list = feed_result['posts']
+                elif 'data' in feed_result and isinstance(feed_result['data'], dict):
+                    posts_list = feed_result['data'].get('posts', [])
+            elif isinstance(feed_result, list):
+                posts_list = feed_result
+            
+            if not posts_list:
+                # Fallback: try dynamic_engage if feed fetch fails
+                print("⚠️ Feed empty, falling back to dynamic_engage...")
+                engage_result = self.dynamic_engage_command()
+                if engage_result and "✅" in str(engage_result):
+                    return "✅ Engagement completed via dynamic_engage"
                 return "❌ Could not fetch feed for engagement"
             
-            posts_list = feed.get('posts', [])
+            posts_list = posts_list
             if not posts_list:
                 return "❌ No posts in feed to engage with"
             
