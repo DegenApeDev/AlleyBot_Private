@@ -107,6 +107,9 @@ class AGIKernel:
         # Goal-driven cycle (autonomous goal pursuit)
         self.goal_driven_cycle = None  # Initialized after goal_stack available
         
+        # OpenHome converter (plugin sharing)
+        self.openhome_converter = None  # Initialized with AGI Kernel
+        
         print("✅ AGI Kernel ready")
     
     def _get_onchain_plugin(self):
