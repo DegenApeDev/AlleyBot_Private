@@ -142,6 +142,8 @@ class ContentStrategySystem:
         """
         Generate content ideas aligned with a goal.
         
+        Uses cross-platform insights to optimize content for audience preferences.
+        
         Args:
             goal: Goal object from goal_generator
             
@@ -149,6 +151,13 @@ class ContentStrategySystem:
             List of content ideas optimized for goal achievement
         """
         ideas = []
+        
+        # Get cross-platform insights to inform content strategy
+        cross_platform_profile = None
+        preferred_topics = []
+        if hasattr(self.agi, 'unified_memory'):
+            cross_platform_profile = self.agi.unified_memory.get_cross_platform_user_profile('global')
+            preferred_topics = cross_platform_profile.get('topic_interests', [])
         
         # Analyze goal to determine content strategy
         goal_desc = goal.description.lower()
@@ -175,17 +184,30 @@ class ContentStrategySystem:
                 hashtags=['Blockchain', 'DeFi', 'Analysis']
             ))
         
-        # Engagement goals → interactive content
+        # Engagement goals → interactive content (use learned topic preferences)
         if 'engagement' in goal_desc or 'platform' in goal_desc:
+            # Use cross-platform learned topics if available
+            topic = 'Hot take on trending topic'
+            hashtags = []
+            if preferred_topics:
+                topic = f"Hot take on {preferred_topics[0]}"
+                hashtags = preferred_topics[:3]
+            
             ideas.append(ContentIdea(
-                topic='Hot take on trending topic',
+                topic=topic,
                 platform='moltx',
                 content_type='post',
                 priority=0.7,
-                goal_id=goal.goal_id
+                goal_id=goal.goal_id,
+                hashtags=hashtags
             ))
+            
+            debate_topic = 'Debate trending crypto topic'
+            if preferred_topics:
+                debate_topic = f"Debate: {preferred_topics[0]}"
+            
             ideas.append(ContentIdea(
-                topic='Debate trending crypto topic',
+                topic=debate_topic,
                 platform='clawbr',
                 content_type='debate',
                 priority=0.7,
@@ -490,12 +512,11 @@ class ContentStrategySystem:
     # =========================================================================
     # Personality System
     # =========================================================================
-    
     def get_personality(self, platform: str) -> Dict:
         """Get the personality profile for a platform"""
         return self._personalities.get(platform, DEFAULT_PERSONALITIES.get(platform, DEFAULT_PERSONALITIES['moltx']))
-    
-    def get_personality_prompt(self, platform: str) -> str:
+
+    def get_personality_prompt(self, platform: str, context: Dict = None, use_cross_platform_insights: bool = True) -> str:
         """Generate a personality instruction block for AI prompts"""
         p = self.get_personality(platform)
         
@@ -540,6 +561,28 @@ class ContentStrategySystem:
         sig = p.get('signature', '')
         if sig:
             parts.append(f"- Sign off with {sig} if space allows")
+        
+        # Add cross-platform insights if available
+        if use_cross_platform_insights and hasattr(self.agi, 'unified_memory'):
+            try:
+                insights = self.agi.unified_memory.get_cross_platform_insights(
+                    platform=platform,
+                    min_confidence=0.6
+                )
+                
+                if insights:
+                    parts.append("\nLEARNED PREFERENCES (cross-platform):")
+                    for insight in insights[:3]:  # Top 3 insights
+                        parts.append(f"- {insight['description']} (confidence: {insight['confidence']:.0%})")
+                
+                # Add audience topic interests
+                profile = self.agi.unified_memory.get_cross_platform_user_profile('global')
+                if profile and profile.get('topic_interests'):
+                    topics = profile['topic_interests'][:5]
+                    parts.append(f"\nAUDIENCE INTERESTS: {', '.join(topics)}")
+            except Exception as e:
+                # Non-fatal, just skip cross-platform enhancement
+                pass
         
         return "\n".join(parts)
     

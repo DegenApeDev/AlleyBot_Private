@@ -298,6 +298,210 @@ class UnifiedMemory:
         return weights
     
     # =================================================================
+    # Cross-Platform Memory Sharing
+    # =================================================================
+    
+    def get_cross_platform_user_profile(self, user_id: str = 'global') -> Dict[str, Any]:
+        """
+        Aggregate user behavior and preferences across ALL platforms.
+        
+        This enables true cross-platform learning:
+        - User engages with DeFi on Telegram → MoltX posts more DeFi content
+        - User prefers technical depth on Clawbr → All platforms adjust tone
+        - User active at 2pm EST → Schedule posts for that time
+        
+        Args:
+            user_id: Specific user ID, or 'global' for aggregate audience profile
+            
+        Returns:
+            Unified profile with preferences, engagement patterns, topics
+        """
+        profile = {
+            'user_id': user_id,
+            'platforms': {},
+            'topic_interests': [],
+            'engagement_patterns': {
+                'best_times': [],
+                'preferred_content_types': [],
+                'avg_response_time': None,
+            },
+            'preferences': {
+                'tone': 'authentic',
+                'technical_depth': 0.5,
+                'emoji_usage': 0.7,
+            },
+            'interaction_count': 0,
+            'last_seen': None,
+        }
+        
+        # Aggregate from World State
+        if self.world_state:
+            # Get entity data
+            entity = self.world_state.get_entity(user_id)
+            if entity:
+                profile['last_seen'] = entity.updated_at
+                profile['platforms'] = entity.attributes.get('platforms', {})
+            
+            # Get interaction events across all platforms
+            events = self.world_state.get_events(actor_id=user_id, limit=100)
+            profile['interaction_count'] = len(events)
+            
+            # Extract topic interests from events
+            topics = set()
+            for event in events:
+                if event.data and 'hashtags' in event.data:
+                    topics.update(event.data['hashtags'])
+                if event.data and 'content' in event.data:
+                    # Simple keyword extraction
+                    content = event.data['content'].lower()
+                    if 'defi' in content or 'crypto' in content:
+                        topics.add('DeFi')
+                    if 'ai' in content or 'agent' in content:
+                        topics.add('AI')
+                    if 'code' in content or 'dev' in content:
+                        topics.add('Development')
+            
+            profile['topic_interests'] = list(topics)[:10]
+            
+            # Analyze engagement patterns by platform
+            platform_events = {}
+            for event in events:
+                platform = event.platform
+                if platform not in platform_events:
+                    platform_events[platform] = []
+                platform_events[platform].append(event)
+            
+            for platform, events_list in platform_events.items():
+                profile['platforms'][platform] = {
+                    'interaction_count': len(events_list),
+                    'last_interaction': events_list[0].timestamp if events_list else None,
+                    'event_types': list(set(e.event_type for e in events_list))
+                }
+        
+        # Aggregate from Phase 12 Learning
+        if self.phase12:
+            phase12_profile = self.phase12.get_user_profile(user_id)
+            if phase12_profile:
+                profile['interaction_count'] += phase12_profile.get('interaction_count', 0)
+                profile['topic_interests'].extend(phase12_profile.get('preferred_topics', []))
+                profile['preferences']['tone'] = phase12_profile.get('sentiment_trend', 'authentic')
+        
+        # Deduplicate topics
+        profile['topic_interests'] = list(set(profile['topic_interests']))[:10]
+        
+        return profile
+    
+    def record_cross_platform_insight(self, insight: Dict[str, Any]) -> bool:
+        """
+        Store insights that apply across platforms.
+        
+        Examples:
+        - "User prefers technical content" (learned from Telegram)
+        - "DeFi topics get 2x engagement" (learned from MoltX)
+        - "Morning posts perform better" (learned from Clawbr)
+        
+        These insights influence content generation on ALL platforms.
+        
+        Args:
+            insight: {
+                'description': str,
+                'platform': str (source platform),
+                'applies_to': str or list (target platforms, or 'all'),
+                'confidence': float (0-1),
+                'insight_type': str ('topic', 'timing', 'tone', 'format'),
+                'data': dict (supporting data)
+            }
+        """
+        try:
+            # Store in unified memory
+            memory_id = self.store(
+                content=insight['description'],
+                memory_type='cross_platform_insight',
+                metadata={
+                    'source_platform': insight.get('platform', 'unknown'),
+                    'applies_to': insight.get('applies_to', 'all'),
+                    'confidence': insight.get('confidence', 0.7),
+                    'insight_type': insight.get('insight_type', 'general'),
+                    'data': insight.get('data', {})
+                }
+            )
+            
+            # Also store as world state fact for persistence
+            if self.world_state:
+                from src.autonomy.world_state import Fact
+                self.world_state.add_fact(Fact(
+                    entity_id='alleybot',
+                    attribute='cross_platform_insight',
+                    value=insight['description'],
+                    source=insight.get('platform', 'unknown'),
+                    confidence=insight.get('confidence', 0.7),
+                    metadata=insight.get('data', {})
+                ))
+            
+            print(f"💡 Cross-platform insight recorded: {insight['description'][:60]}...")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Failed to record cross-platform insight: {e}")
+            return False
+    
+    def get_cross_platform_insights(self, platform: str = None, 
+                                     insight_type: str = None,
+                                     min_confidence: float = 0.5) -> List[Dict]:
+        """
+        Retrieve cross-platform insights for content generation.
+        
+        Args:
+            platform: Filter by target platform (None = all)
+            insight_type: Filter by type ('topic', 'timing', 'tone', 'format')
+            min_confidence: Minimum confidence threshold
+            
+        Returns:
+            List of relevant insights
+        """
+        insights = []
+        
+        # Search enhanced memory
+        if self.enhanced_memory:
+            memories = self.enhanced_memory.search_memories(
+                query='cross_platform insight',
+                memory_type='cross_platform_insight',
+                k=20
+            )
+            
+            for mem in memories:
+                metadata = mem.get('metadata', {})
+                confidence = metadata.get('confidence', 0.5)
+                
+                # Filter by confidence
+                if confidence < min_confidence:
+                    continue
+                
+                # Filter by platform
+                applies_to = metadata.get('applies_to', 'all')
+                if platform and applies_to != 'all':
+                    if isinstance(applies_to, list) and platform not in applies_to:
+                        continue
+                    elif isinstance(applies_to, str) and applies_to != platform:
+                        continue
+                
+                # Filter by type
+                if insight_type and metadata.get('insight_type') != insight_type:
+                    continue
+                
+                insights.append({
+                    'description': mem.get('content'),
+                    'confidence': confidence,
+                    'source_platform': metadata.get('source_platform'),
+                    'insight_type': metadata.get('insight_type'),
+                    'data': metadata.get('data', {})
+                })
+        
+        # Sort by confidence
+        insights.sort(key=lambda x: x['confidence'], reverse=True)
+        return insights
+    
+    # =================================================================
     # Goal & Intention Management
     # =================================================================
     
