@@ -98,6 +98,9 @@ class AGIKernel:
         # World state bridge (persistent environment memory)
         self.world_state = None  # Initialized after plugin_manager available
         
+        # Goal stack (persistent goal tracking and execution)
+        self.goal_stack = None  # Initialized after plugin_manager available
+        
         print("✅ AGI Kernel ready")
     
     def _get_onchain_plugin(self):

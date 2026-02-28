@@ -193,6 +193,15 @@ class UnifiedMemory:
         
         return context
     
+    def get(self, key: str, default=None) -> Any:
+        """
+        Backward compatibility method for core.get_memory() calls.
+        Retrieves data from core memory system.
+        """
+        if self.core and hasattr(self.core, 'memory') and hasattr(self.core.memory, 'get'):
+            return self.core.memory.get(key, default)
+        return default
+    
     # =================================================================
     # Learning & Adaptation
     # =================================================================
