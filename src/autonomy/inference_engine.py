@@ -77,6 +77,7 @@ class CrossPlatformPattern:
     strength: float
     entities_involved: List[str]
     time_window: Tuple[datetime, datetime]
+    confidence: float = 0.0  # Confidence score 0-1
 
 
 @dataclass
