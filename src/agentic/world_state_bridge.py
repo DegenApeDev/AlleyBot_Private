@@ -45,12 +45,43 @@ class WorldStateBridge:
         
         self.world_state = WorldStateManager(db_path=db_path)
         
+        # Initialize platform adapters
+        self.adapters = []
+        self._register_platform_adapters()
+        
         # Initialize platform entities if needed
         stats = self.world_state.get_stats()
         if stats['entities'] == 0:
             self._seed_platforms()
         
-        print(f"🌍 WorldStateBridge initialized ({stats['entities']} entities, {stats['facts']} facts)")
+        print(f"🌍 WorldStateBridge initialized ({stats['entities']} entities, {stats['facts']} facts, {len(self.adapters)} adapters)")
+    
+    def _register_platform_adapters(self):
+        """Register platform adapters for data ingestion"""
+        if not self.core or not hasattr(self.core, 'plugin_manager'):
+            return
+        
+        # Register MoltX adapter
+        moltx = self.core.plugin_manager.plugins.get('moltx')
+        if moltx:
+            try:
+                from plugins.moltx.moltx_adapter import MoltxAdapter
+                adapter = MoltxAdapter(moltx)
+                self.adapters.append(adapter)
+                print(f"📡 Registered MoltX adapter")
+            except Exception as e:
+                print(f"⚠️ MoltX adapter registration failed: {e}")
+        
+        # Register Clawbr adapter
+        clawbr = self.core.plugin_manager.plugins.get('clawbr')
+        if clawbr:
+            try:
+                from plugins.clawbr.clawbr_adapter import ClawbrAdapter
+                adapter = ClawbrAdapter(clawbr)
+                self.adapters.append(adapter)
+                print(f"📡 Registered Clawbr adapter")
+            except Exception as e:
+                print(f"⚠️ Clawbr adapter registration failed: {e}")
     
     def _seed_platforms(self):
         """Seed initial platform entities"""
@@ -386,6 +417,135 @@ class WorldStateBridge:
     def cleanup_expired_data(self, days: int = 30) -> int:
         """Cleanup old data from world state"""
         return self.world_state.cleanup_expired_facts(days=days)
+    
+    # =========================================================================
+    # Autonomous Data Ingestion
+    # =========================================================================
+    
+    def sync_platform_data(self, platform: str = None, limit: int = 50) -> Dict[str, int]:
+        """
+        Autonomous task: Sync recent data from platforms into world state.
+        
+        This should be called periodically (e.g., every hour) to keep world state fresh.
+        
+        Args:
+            platform: Specific platform to sync, or None for all
+            limit: Number of recent items to fetch per platform
+            
+        Returns:
+            Stats about what was synced
+        """
+        stats = {
+            'interactions_added': 0,
+            'entities_added': 0,
+            'relationships_added': 0,
+            'errors': 0,
+        }
+        
+        adapters_to_sync = self.adapters
+        if platform:
+            adapters_to_sync = [a for a in self.adapters if a.get_platform_name() == platform]
+        
+        for adapter in adapters_to_sync:
+            if not adapter.is_available():
+                continue
+            
+            try:
+                platform_name = adapter.get_platform_name()
+                print(f"🔄 Syncing {platform_name} data...")
+                
+                # Fetch and store interactions
+                interactions = adapter.fetch_recent_interactions(limit=limit)
+                for interaction in interactions:
+                    self._ingest_interaction(interaction)
+                    stats['interactions_added'] += 1
+                
+                # Fetch and store entities
+                entities = adapter.fetch_entities(limit=limit)
+                for entity in entities:
+                    self._ingest_entity(entity)
+                    stats['entities_added'] += 1
+                
+                # Fetch and store relationships
+                relationships = adapter.fetch_relationships(limit=limit)
+                for rel in relationships:
+                    self._ingest_relationship(rel)
+                    stats['relationships_added'] += 1
+                
+                print(f"✅ Synced {platform_name}: {len(interactions)} interactions, {len(entities)} entities, {len(relationships)} relationships")
+                
+            except Exception as e:
+                print(f"⚠️ Sync failed for {adapter.get_platform_name()}: {e}")
+                stats['errors'] += 1
+        
+        return stats
+    
+    def _ingest_interaction(self, interaction):
+        """Convert PlatformInteraction to world state Event"""
+        from src.autonomy.platform_adapter import PlatformInteraction
+        
+        event = Event(
+            event_type=interaction.type,
+            platform=interaction.platform,
+            timestamp=interaction.timestamp or datetime.now().isoformat(),
+            actor_id=interaction.actor_id,
+            target_id=interaction.target_id,
+            data={
+                'content': interaction.content,
+                'engagement_metrics': interaction.engagement_metrics,
+                'hashtags': interaction.hashtags or [],
+                'mentions': interaction.mentions or [],
+            }
+        )
+        
+        self.world_state.add_event(event)
+        
+        # Ensure actor exists
+        if interaction.actor_id:
+            actor = self.world_state.get_entity(interaction.actor_id)
+            if not actor:
+                actor = Entity(
+                    id=interaction.actor_id,
+                    type='agent',
+                    platform=interaction.platform,
+                    name=interaction.actor_id,
+                )
+                self.world_state.add_entity(actor)
+    
+    def _ingest_entity(self, platform_entity):
+        """Convert PlatformEntity to world state Entity"""
+        from src.autonomy.platform_adapter import PlatformEntity
+        
+        # Check if entity already exists
+        existing = self.world_state.get_entity(platform_entity.id)
+        if existing:
+            return  # Skip duplicates
+        
+        entity = Entity(
+            id=platform_entity.id,
+            type=platform_entity.type,
+            name=platform_entity.name,
+            display_name=platform_entity.display_name,
+            platform=platform_entity.platform,
+            attributes=platform_entity.attributes or {},
+            created_at=platform_entity.created_at,
+        )
+        
+        self.world_state.add_entity(entity)
+    
+    def _ingest_relationship(self, platform_rel):
+        """Convert PlatformRelationship to world state Relationship"""
+        from src.autonomy.platform_adapter import PlatformRelationship
+        
+        relationship = Relationship(
+            from_entity=platform_rel.from_entity,
+            to_entity=platform_rel.to_entity,
+            relation_type=platform_rel.relation_type,
+            strength=platform_rel.strength,
+            timestamp=platform_rel.timestamp,
+        )
+        
+        self.world_state.add_relationship(relationship)
 
 
 def create_world_state_bridge(agi_kernel) -> WorldStateBridge:

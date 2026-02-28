@@ -195,6 +195,17 @@ class AGIOrchestrator:
         except Exception as e:
             logger.warning(f"⚠️ Memory bridge failed (non-fatal): {e}")
 
+        # === World State Sync: Sync platform data into world state ===
+        # This runs every hour to keep world state fresh with recent platform data
+        try:
+            if hasattr(self.core, 'agi_kernel') and hasattr(self.core.agi_kernel, 'world_state'):
+                sync_stats = self.core.agi_kernel.world_state.sync_platform_data(limit=50)
+                if sync_stats['interactions_added'] > 0 or sync_stats['entities_added'] > 0:
+                    logger.info(f"🌍 World state synced: {sync_stats['interactions_added']} interactions, {sync_stats['entities_added']} entities, {sync_stats['relationships_added']} relationships")
+                    learnings.append(f"world_state_synced:{sync_stats['interactions_added']}i_{sync_stats['entities_added']}e")
+        except Exception as e:
+            logger.warning(f"⚠️ World state sync failed (non-fatal): {e}")
+        
         # === Goal Generation: Generate autonomous goals from world state ===
         # This runs every 6 hours to create new goals based on current state
         try:
