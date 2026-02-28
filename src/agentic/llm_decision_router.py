@@ -349,7 +349,10 @@ class LLMDecisionRouter:
             try:
                 recent = self.episodic_memory.get_recent_episodes(limit=10)
                 if recent:
-                    success_rate = sum(e.success for e in recent) / len(recent)
+                    # EpisodicMemory uses emotional_valence (-1 to 1), not success boolean
+                    # Positive valence = success, negative = failure
+                    positive_outcomes = sum(1 for e in recent if e.emotional_valence > 0)
+                    success_rate = positive_outcomes / len(recent) if recent else 0.5
                     context['performance'] = {
                         'recent_success_rate': success_rate,
                         'total_actions': len(recent)
