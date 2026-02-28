@@ -729,7 +729,7 @@ class AutonomousBrain(AGISocialMixin):
         
         try:
             # Run full AGI cycle
-            cycle_result = self.agi_orchestrator.run_cycle(trigger="brain_cycle")
+            cycle_result = await self.agi_orchestrator.run_cycle(trigger="brain_cycle")
             
             # Check if cycle was successful (AGICycleResult doesn't have success attribute)
             # Success is determined by having phases executed and not just early termination

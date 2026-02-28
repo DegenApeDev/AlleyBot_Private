@@ -176,7 +176,7 @@ class AGIOrchestrator:
         logger.info("🧠 AGI Orchestrator initialized - 14 phases ready")
         logger.info(f"🌐 Multi-Platform Engine: {len([p for p, a in self.multi_platform.available_platforms.items() if a])} platforms available")
     
-    def run_cycle(self, trigger: str = "scheduled") -> AGICycleResult:
+    async def run_cycle(self, trigger: str = "scheduled") -> AGICycleResult:
         """
         Run a complete AGI cycle through all relevant phases.
         
@@ -1131,6 +1131,14 @@ class AGIOrchestrator:
                 duration_seconds=(datetime.now() - start).total_seconds(),
                 triggered_phases=[]
             )
+    
+    async def _run_phase_9_planning_with_llm(self, creative: Dict, meta: Dict, detection: Dict) -> PhaseResult:
+        """Phase 9: Multi-Step Planning with LLM Decision Router"""
+        if LLM_PLANNING_AVAILABLE:
+            return await run_phase_9_planning_with_llm(self, creative, meta, detection)
+        else:
+            # Fallback to standard planning
+            return self._run_phase_9_planning(creative, meta)
     
     def _run_phase_9_planning(self, creative: Dict, meta: Dict) -> PhaseResult:
         """Phase 9: Multi-Step Planning - Create execution plan"""
