@@ -170,11 +170,13 @@ class MoltxContentMixin:
                 
                 # Then likes (need 10)
                 if like_count < needed_likes:
-                    result = self._make_request('POST', f'/v1/posts/{post_id}/like')
-                    if result:
+                    result = self._make_request('POST', f'/posts/{post_id}/like')
+                    if result and isinstance(result, dict) and result.get('success'):
                         self._record_engagement('like')
                         like_count += 1
                         print(f"  👍 Liked post: {post_id[:12]}...")
+                    elif result:
+                        print(f"  ⚠️ Like failed for {post_id[:12]}: {result.get('error', 'Unknown error')}")
                 
                 # Check if we're done
                 if reply_count >= needed_replies and like_count >= needed_likes:
