@@ -496,7 +496,7 @@ class Telegram(AlleyBotPlugin):
             await update.message.reply_text("🧠 Running full AGI cycle through all 14 phases...")
             
             orchestrator = get_agi_orchestrator(core=self.core)
-            result = orchestrator.run_cycle(trigger="manual")
+            result = await orchestrator.run_cycle(trigger="manual")
             
             # Format result message — plain text to avoid Markdown parse errors
             msg = f"\u2705 AGI Cycle Complete\n\n"

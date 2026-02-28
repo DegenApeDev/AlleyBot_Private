@@ -249,6 +249,23 @@ class EpisodicMemoryStore:
         except Exception as e:
             print(f"⚠️ Failed to load episodic memory: {e}")
     
+    def get_recent_episodes(self, limit: int = 10) -> List[EpisodicMemory]:
+        """
+        Get most recent episodic memories.
+        
+        Args:
+            limit: Maximum number of memories to return
+        
+        Returns:
+            List of recent episodic memories, sorted by timestamp (newest first)
+        """
+        sorted_memories = sorted(
+            self.memories,
+            key=lambda m: m.timestamp,
+            reverse=True
+        )
+        return sorted_memories[:limit]
+    
     def get_stats(self) -> Dict:
         """Get statistics about episodic memory"""
         if not self.memories:

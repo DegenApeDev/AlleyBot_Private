@@ -475,7 +475,7 @@ class CreativeEngine:
         # Store story arc
         with sqlite3.connect(self.DB_PATH) as conn:
             conn.execute('''
-                INSERT INTO story_arcs
+                INSERT OR REPLACE INTO story_arcs
                 (id, title, theme, posts, estimated_duration_days, engagement_goal, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
