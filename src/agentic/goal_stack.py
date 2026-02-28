@@ -216,9 +216,9 @@ class GoalStackBridge:
                 priority=gen_goal.priority,
                 deadline=datetime.fromisoformat(gen_goal.deadline) if gen_goal.deadline else None,
                 context={
-                    'type': gen_goal.goal_type,
+                    'type': getattr(gen_goal, 'goal_type', 'autonomous'),  # Default to 'autonomous' if not present
                     'actions': gen_goal.actions,
-                    'success_criteria': gen_goal.success_criteria,
+                    'success_criteria': getattr(gen_goal, 'success_criteria', None),  # May not exist
                     'generated_by': 'SecureGoalGenerator',
                     'trust_score': gen_goal.trust_score,
                 }
