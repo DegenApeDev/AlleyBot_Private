@@ -58,10 +58,10 @@ class TestSelfImprovePlugin(unittest.TestCase):
             self.assertIn(cmd, cmds, f"Missing command: {cmd}")
 
     def test_command_count(self):
-        """Should have 27 commands (21 + 4 autonomous coder + 2 ERC-8004)"""
+        """Should have 30 commands (21 + 4 autonomous coder + 2 ERC-8004 + 3 confirmation logic)"""
         from plugins.selfimprove.selfimprove import SelfImprovePlugin
         p = SelfImprovePlugin({})
-        self.assertEqual(len(p.get_commands()), 27)
+        self.assertEqual(len(p.get_commands()), 30)
 
     def test_plugin_config_has_selfimprove(self):
         """plugin_config.json should include selfimprove plugin"""

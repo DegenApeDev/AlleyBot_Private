@@ -21,7 +21,10 @@ class MoltxContentMixin:
 
     def _check_engagement_quota(self) -> bool:
         """Check if 5:1 engagement quota is met per official spec:
-        For every 1 post: 5 replies, 10 likes, follow new agents"""
+        For every 1 post: 5 replies, 10 likes, follow new agents
+        
+        Uses buffer to prevent 429 errors - requires MORE than minimum.
+        """
         try:
             stats = self.core.get_memory('moltx_engagement_stats') or {}
             replies = stats.get('replies', 0)
@@ -34,13 +37,20 @@ class MoltxContentMixin:
             if posts > 0 and (replies < posts * 5 or likes < posts * 10):
                 return False
             
-            # Check if we have buffer for next post
+            # Enforce First Boot Protocol: engage before first post
+            # Require EXTRA engagement as buffer (15 likes instead of 10)
+            if posts == 0 and (replies < 5 or likes < 15):
+                print(f"📊 First post requires buffer: {replies}/5 replies, {likes}/15 likes")
+                return False
+            
+            # Calculate needed engagements for next post
+            # Add +5 like buffer to prevent 429 errors
             needed_replies = (posts + 1) * 5
-            needed_likes = (posts + 1) * 10
+            needed_likes = (posts + 1) * 10 + 5  # Buffer of 5 extra likes
             
             quota_met = replies >= needed_replies and likes >= needed_likes
             if not quota_met:
-                print(f"📊 Engagement: {replies}/{needed_replies} replies, {likes}/{needed_likes} likes")
+                print(f"📊 Engagement: {replies}/{needed_replies} replies, {likes}/{needed_likes} likes (with buffer)")
             
             return quota_met
         except Exception:
@@ -67,20 +77,21 @@ class MoltxContentMixin:
         """Record a post made (for 5:1 tracking)"""
         try:
             stats = self.core.get_memory('moltx_engagement_stats') or {}
-            today = datetime.now().strftime('%Y-%m-%d')
-            last_reset = stats.get('last_reset', '')
-            if last_reset != today:
-                stats = {'replies': 0, 'likes': 0, 'follows': 0, 'posts': 0, 'last_reset': today}
+            # Don't reset daily - MoltX tracks cumulative engagement
+            # Initialize if empty
+            if not stats:
+                stats = {'replies': 0, 'likes': 0, 'follows': 0, 'posts': 0}
+            
             stats['posts'] = stats.get('posts', 0) + 1
             self.core.save_memory('moltx_engagement_stats', stats)
-            print(f"📊 Post recorded (total today: {stats['posts']})")
+            print(f"📊 Post recorded (total cumulative: {stats['posts']})")
         except Exception as e:
             print(f"⚠️ Failed to record post: {e}")
     
     def _auto_engage_for_posting(self) -> str:
         """Auto-engage with feed to meet 5:1 quota using enhanced content generation:
         - Reply to 5 posts
-        - Like 10 posts  
+        - Like 10+ posts (with buffer to prevent 429)
         - Follow any new interesting agents"""
         try:
             stats = self.core.get_memory('moltx_engagement_stats') or {}
@@ -89,16 +100,17 @@ class MoltxContentMixin:
             likes = stats.get('likes', 0)
             follows = stats.get('follows', 0)
             
+            # Calculate with buffer (+5 likes)
             needed_replies = (posts + 1) * 5 - replies
-            needed_likes = (posts + 1) * 10 - likes
+            needed_likes = (posts + 1) * 10 + 5 - likes  # Buffer
             
             if needed_replies <= 0 and needed_likes <= 0:
-                return "✅ Engagement quota already met"
+                return "✅ Engagement quota already met (with buffer)"
             
             print(f"🔄 Need {needed_replies} replies and {needed_likes} likes before posting...")
             
             # Fetch global feed
-            feed = self._make_request('GET', '/v1/feed/global', params={'limit': 25})
+            feed = self._make_request('GET', '/feed/global', params={'limit': 25})
             if not feed or 'posts' not in feed:
                 return "❌ Could not fetch feed for engagement"
             
@@ -705,13 +717,30 @@ User's request: {full_prompt}"""
         if not self.initialized:
             return "❌ Moltx not initialized. Register an agent first."
 
+        # AGI KERNEL STRATEGIC DECISION CHECK (Quick Win #1)
+        # Let AGI Kernel validate strategic appropriateness before posting
+        if post_type == 'post' and hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
+            if hasattr(self.core.agi_kernel, 'decision_system') and self.core.agi_kernel.decision_system:
+                # Check with AGI if now is a good time to post
+                available_actions = self.core.agi_kernel.decision_system.get_available_actions()
+                moltx_post_actions = [a for a in available_actions if a['id'] in ['moltx_post', 'moltx_image_post']]
+                
+                if not moltx_post_actions:
+                    # AGI says posting is on cooldown or not strategic right now
+                    print("⏳ AGI Kernel: MoltX posting not recommended at this time (cooldown or strategy)")
+                    # Still allow if user explicitly requested
+                    if not getattr(self, '_user_requested_post', False):
+                        return "⏳ AGI Kernel: Posting not strategic right now. Try again later."
+
         # 5:1 Engagement Rule - Must engage 5x before posting 1x
-        if not self._check_engagement_quota():
-            print("🔄 5:1 Rule: Engaging with feed before posting...")
-            engagement_result = self._auto_engage_for_posting()
-            if not engagement_result:
-                return "❌ 5:1 Engagement rule: Failed to meet engagement quota. Please try again."
-            print(f"✅ Pre-post engagement complete: {engagement_result}")
+        # Only check engagement quota for original posts, not replies/reposts
+        if post_type == 'post':
+            if not self._check_engagement_quota():
+                print("🔄 5:1 Rule: Engaging with feed before posting...")
+                engagement_result = self._auto_engage_for_posting()
+                if not engagement_result or "❌" in engagement_result:
+                    return f"❌ 5:1 Engagement rule: Failed to meet engagement quota. Please try again. ({engagement_result})"
+                print(f"✅ Pre-post engagement complete: {engagement_result}")
 
         if isinstance(content, list):
             return self._create_thread(

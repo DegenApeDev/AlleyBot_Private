@@ -219,13 +219,38 @@ class AgentCardGenerator:
         return card
 
     def _collect_skills(self) -> List[str]:
-        """Collect OASF skills from all loaded plugins"""
+        """Collect OASF skills from loaded plugins AND skills/ directory"""
         skills = []
         loaded_plugins = self._get_loaded_plugins()
 
+        # 1. Get base skills from loaded plugins (hardcoded map)
         for plugin_name, skill_info in PLUGIN_SKILL_MAP.items():
             if plugin_name in loaded_plugins:
                 skills.extend(skill_info['skills'])
+
+        # 2. NEW: Scan skills/ directory for actual skill files
+        try:
+            from plugins.analytics.skill_scanner import SkillScanner
+            scanner = SkillScanner()
+            discovered_skills = scanner.scan_skills_directory()
+            
+            # 3. NEW: Let AGI Kernel decide which skills to include (if available)
+            if self.core and hasattr(self.core, 'agi_kernel') and hasattr(self.core.agi_kernel, 'skill_manager'):
+                # AGI-powered skill selection (Phase 2)
+                selected_skills = self.core.agi_kernel.skill_manager.decide_skill_offerings(
+                    available_skills=discovered_skills,
+                    context={'market': 'a2a', 'goal': 'maximize_revenue'}
+                )
+                for skill in selected_skills:
+                    skills.extend(skill.get('oasf_skills', []))
+            else:
+                # Fallback: include all discovered skills
+                for skill in discovered_skills:
+                    skills.extend(skill.get('oasf_skills', []))
+            
+            print(f"📊 Agent Card: {len(discovered_skills)} skills discovered from skills/ directory")
+        except Exception as e:
+            print(f"⚠️ Skill scanner failed, using hardcoded skills only: {e}")
 
         # Deduplicate while preserving order
         seen = set()
@@ -237,7 +262,7 @@ class AgentCardGenerator:
         return unique
 
     def _collect_capabilities(self) -> List[str]:
-        """Collect capability strings from loaded plugins"""
+        """Collect capability strings from loaded plugins AND discovered skills"""
         caps = []
         loaded = self._get_loaded_plugins()
 
@@ -264,6 +289,19 @@ class AgentCardGenerator:
         for plugin_name, plugin_caps in capability_map.items():
             if plugin_name in loaded:
                 caps.extend(plugin_caps)
+
+        # NEW: Add capabilities from discovered skills
+        try:
+            from plugins.analytics.skill_scanner import SkillScanner
+            scanner = SkillScanner()
+            discovered_skills = scanner.scan_skills_directory()
+            
+            for skill in discovered_skills:
+                # Add skill name as capability
+                skill_cap = skill['id'].replace('-', '_').replace(' ', '_')
+                caps.append(skill_cap)
+        except Exception as e:
+            print(f"⚠️ Could not add discovered skill capabilities: {e}")
 
         # Always include base capabilities
         caps.extend(['x402_payments', 'erc8004_identity', 'health_monitoring', 'rate_limiting'])
@@ -408,8 +446,10 @@ class AgentCardGenerator:
         }
 
     def _build_a2a_skills(self) -> list:
-        """Build A2A skill objects from the task registry with full schema + pricing."""
+        """Build A2A skill objects from task registry AND discovered skills."""
         a2a_skills = []
+        
+        # 1. Add tasks from A2A task registry
         try:
             from plugins.a2a.a2a_tasks import TASK_REGISTRY
             for task_name, task_def in TASK_REGISTRY.items():
@@ -439,6 +479,42 @@ class AgentCardGenerator:
                 a2a_skills.append(skill)
         except ImportError:
             pass
+        
+        # 2. NEW: Add discovered skills from skills/ directory
+        try:
+            from plugins.analytics.skill_scanner import SkillScanner
+            scanner = SkillScanner()
+            discovered_skills = scanner.get_monetizable_skills()
+            
+            for skill in discovered_skills:
+                # Convert skill to A2A format
+                a2a_skill = {
+                    "id": f"skill.{skill['id']}",
+                    "name": skill['name'],
+                    "description": skill['description'],
+                    "tags": [skill['category'], "discovered"],
+                }
+                
+                # Add pricing
+                pricing = skill.get('pricing', {})
+                if pricing.get('suggested', 0) > 0:
+                    a2a_skill["tags"].append("paid")
+                    a2a_skill["pricing"] = {
+                        "amount": str(pricing['suggested']),
+                        "currency": pricing.get('currency', 'USDC'),
+                        "network": "base",
+                        "chainId": 8453,
+                        "paymentAddress": AGENT_WALLET,
+                    }
+                else:
+                    a2a_skill["tags"].append("free")
+                
+                a2a_skills.append(a2a_skill)
+            
+            print(f"📊 A2A Skills: Added {len(discovered_skills)} discovered skills")
+        except Exception as e:
+            print(f"⚠️ Could not add discovered skills to A2A: {e}")
+        
         return a2a_skills
 
     def _get_loaded_plugins(self) -> set:

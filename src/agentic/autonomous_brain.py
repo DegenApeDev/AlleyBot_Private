@@ -974,6 +974,15 @@ class AutonomousBrain(AGISocialMixin):
         elif action == 'repost' and target_id:
             return plugin.repost_post(target_id)
         elif action == 'post' and content:
+            # 5:1 Engagement Rule: Must engage before posting
+            if hasattr(plugin, '_check_engagement_quota') and not plugin._check_engagement_quota():
+                logger.info("🔄 5:1 Rule: Engaging with feed before posting...")
+                if hasattr(plugin, '_auto_engage_for_posting'):
+                    engagement_result = plugin._auto_engage_for_posting()
+                    if "❌" in engagement_result:
+                        return f"❌ Blocked by 5:1 Engagement Rule: {engagement_result}"
+                    logger.info(f"✅ Pre-post engagement complete: {engagement_result}")
+            
             # Use AI-enhanced posting if available
             if hasattr(plugin, 'create_post'):
                 result = plugin.create_post(

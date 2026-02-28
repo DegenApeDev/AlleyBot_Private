@@ -71,15 +71,36 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             return f"🧠 Brain status: {status}"
         return self.think_command(args)
 
-    def think_command(self, args: list) -> str:
+    def think_command(self, args: list = None) -> str:
+        if args is None:
+            args = []
+        # Use AGI Kernel if available (new autonomous thinking)
+        if hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
+            context = {
+                'time': datetime.datetime.now().isoformat(),
+                'hour': datetime.datetime.now().hour,
+                'platform_states': 'active'
+            }
+            action = self.core.agi_kernel.decide(context)
+            
+            if action:
+                return f"🧠 AGI decided: {action.get('id')} - {action.get('description', '')[:80]}"
+            else:
+                return "🧠 AGI: No action recommended at this time"
+        
+        # Fallback to old think method
         result = self.think()
         success = '✅' if result.get('success') else '⏭️' if not result.get('action') else '❌'
         return f"🧠 Cycle {result['cycle']}: {success} {result.get('action', 'none')} - {result.get('reason', '')[:100]}"
 
-    def start_brain(self, args: list) -> str:
+    def start_brain(self, args: list = None) -> str:
+        if args is None:
+            args = []
         return self.start_autonomous()
 
-    def stop_brain(self, args: list) -> str:
+    def stop_brain(self, args: list = None) -> str:
+        if args is None:
+            args = []
         return self.stop_autonomous()
 
     def initialize(self, api, core):

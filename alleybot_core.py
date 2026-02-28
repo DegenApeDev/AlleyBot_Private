@@ -37,6 +37,14 @@ except ImportError as e:
     TIER2_AVAILABLE = False
     print(f"⚠️ Tier 2 framework unavailable: {e}")
 
+# Import AGI Kernel (Quick Win #2)
+try:
+    from src.agentic.agi_kernel import AGIKernel
+    AGI_KERNEL_AVAILABLE = True
+except ImportError as e:
+    AGI_KERNEL_AVAILABLE = False
+    print(f"⚠️ AGI Kernel unavailable: {e}")
+
 class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
     """Minimal core that orchestrates plugins with SQLite memory"""
     
@@ -75,6 +83,15 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
         else:
             print("ℹ️  Enhanced memory deps not installed, using JSON fallback")
         
+        # AGI Kernel - Autonomous decision-making and learning (Quick Win #2)
+        self.agi_kernel = None
+        if AGI_KERNEL_AVAILABLE:
+            try:
+                self.agi_kernel = AGIKernel(core=self)
+                print("✅ AGI Kernel initialized - autonomous thinking enabled")
+            except Exception as e:
+                print(f"⚠️ AGI Kernel initialization failed: {e}")
+        
         # Load configuration
         self.config = self._load_config()
         
@@ -84,6 +101,13 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
             self.api,
             self
         )
+        
+        # Initialize AGI Kernel decision systems after plugins are loaded
+        if self.agi_kernel:
+            try:
+                self.agi_kernel.initialize_decision_systems(self.plugin_manager)
+            except Exception as e:
+                print(f"⚠️ AGI Kernel decision systems initialization failed: {e}")
 
         # Add core commands
         self._add_core_commands()

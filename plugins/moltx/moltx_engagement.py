@@ -425,6 +425,15 @@ class MoltxEngagementMixin:
         """Post text post with optional media and hashtags"""
         if not self.initialized:
             return "❌ Moltx not initialized"
+        
+        # 5:1 Engagement Rule - Must engage 5x before posting 1x
+        if not self._check_engagement_quota():
+            print("🔄 5:1 Rule: Engaging with feed before posting...")
+            engagement_result = self._auto_engage_for_posting()
+            if not engagement_result or "❌" in engagement_result:
+                return f"❌ 5:1 Engagement rule: Failed to meet engagement quota. Please try again. ({engagement_result})"
+            print(f"✅ Pre-post engagement complete: {engagement_result}")
+        
         data = {'content': text}
         if hashtags:
             htags = [h.strip().strip('#') for h in (hashtags.split(',') if isinstance(hashtags, str) else hashtags) if h.strip()]
@@ -435,6 +444,7 @@ class MoltxEngagementMixin:
         result = self._make_request('POST', '/posts', json=data)
         if result and 'post_id' in result:
             post_id = result['post_id']
+            self._record_post_made()  # Record for 5:1 tracking
             self._record_activity('post_text', {'post_id': post_id, 'media_count': len(media_ids)})
             return f"✅ Text post created! ID: {post_id}"
         return "❌ Failed to post text"
@@ -652,6 +662,37 @@ class MoltxEngagementMixin:
             self._record_activity('repost', {'post_id': post_id, 'repost_id': repost_id})
             return f"✅ Reposted post {post_id}! Repost ID: {repost_id}"
         return f"❌ Failed to repost post {post_id}"
+
+    def fetch_post(self, post_id):
+        """Fetch a single post by ID (returns dict or None)"""
+        if not post_id:
+            return None
+
+        # Check if post_id is JSON-formatted and extract actual ID
+        if isinstance(post_id, str) and post_id.strip().startswith('{'):
+            try:
+                parsed = json.loads(post_id)
+                if 'post_id' in parsed:
+                    post_id = parsed['post_id']
+                elif 'id' in parsed:
+                    post_id = parsed['id']
+            except json.JSONDecodeError:
+                pass
+
+        if isinstance(post_id, str):
+            post_id = post_id.strip()
+
+        result = self._make_request('GET', f'/posts/{post_id}')
+        
+        if result:
+            # Return the post object directly
+            if 'post' in result:
+                return result['post']
+            elif 'data' in result and isinstance(result['data'], dict):
+                return result['data'].get('post', result['data'])
+            elif isinstance(result, dict) and 'content' in result:
+                return result
+        return None
 
     def get_post(self, post_id):
         """Get a single post by ID with its replies"""

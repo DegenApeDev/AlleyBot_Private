@@ -739,10 +739,10 @@ Remember: ONLY use [EXECUTE:...] when the user wants you to DO something. For qu
             if not moltx:
                 return "❌ Moltx plugin not loaded. Check plugin configuration."
             
-            # Check content calendar
+            # Check content calendar (with manual override for user requests)
             brain = self.core.plugin_manager.plugins.get('brain')
             if brain and hasattr(brain, 'should_post_image_now'):
-                check = brain.should_post_image_now('moltx')
+                check = brain.should_post_image_now('moltx', manual_override=True)
                 if not check.get('should_post'):
                     return f"⏳ Image calendar says not now: {check.get('reason', 'unknown')}"
             

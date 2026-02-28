@@ -145,6 +145,7 @@ AUTONOMOUS_ACTIONS = {
         'platform': 'onchain',
         'cooldown_minutes': 10,
         'impact': 'low',
+        'requires': 'onchain',
     },
     'clawbr_engage': {
         'description': 'Browse Clawbr feed and engage (like, reply, join debates)',

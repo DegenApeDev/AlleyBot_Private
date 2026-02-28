@@ -117,7 +117,7 @@ class MoltbookAIPlugin(AlleyBotPlugin):
             # Parse response
             try:
                 result = response.json()
-            except:
+            except Exception:
                 result = {"response": response.text}
             
             return {

@@ -20,6 +20,11 @@ from .autonomous_goals import AutonomousGoalManager, create_autonomous_goal_mana
 from .meta_learning import MetaLearningEngine, AdaptiveLearner, create_adaptive_learner
 from .self_reflection import SelfReflectionEngine, ReflectionScheduler, create_reflection_engine
 from .symod_core import SyModCoreManager, get_symod_manager
+from .decision_system import DecisionSystem, create_decision_system
+from .action_router import ActionRouter, create_action_router
+from .error_monitor import ErrorMonitor, create_error_monitor
+from .context_system import ContextSystem, create_context_system
+from .reply_system import ReplySystem, create_reply_system
 
 
 class AGIKernel:
@@ -65,6 +70,21 @@ class AGIKernel:
         self.reflection_engine = create_reflection_engine(self)
         self.reflection_scheduler = None
         
+        # Decision system (autonomous thinking)
+        self.decision_system = None  # Initialized after plugin_manager available
+        
+        # Action router (unified execution pipeline)
+        self.action_router = None  # Initialized after plugin_manager available
+        
+        # Error monitor (self-healing)
+        self.error_monitor = None  # Initialized after decision_system available
+        
+        # Context system (intelligent context gathering)
+        self.context_system = None  # Initialized after plugin_manager available
+        
+        # Reply system (intelligent reply generation)
+        self.reply_system = None  # Initialized after plugin_manager available
+        
         print("✅ AGI Kernel ready")
     
     def _get_onchain_plugin(self):
@@ -72,6 +92,35 @@ class AGIKernel:
         if self.core and hasattr(self.core, 'plugin_manager'):
             return self.core.plugin_manager.plugins.get('onchain')
         return None
+    
+    def initialize_decision_systems(self, plugin_manager):
+        """
+        Initialize decision system, action router, and error monitor.
+        
+        Called after plugin_manager is available.
+        This completes the AGI Kernel initialization.
+        """
+        if not self.decision_system:
+            self.decision_system = create_decision_system(self, plugin_manager)
+            print("✅ Decision System integrated into AGI Kernel")
+        
+        if not self.action_router:
+            self.action_router = create_action_router(self, plugin_manager)
+            print("✅ Action Router integrated into AGI Kernel")
+        
+        if not self.error_monitor:
+            self.error_monitor = create_error_monitor(self)
+            print("✅ Error Monitor integrated into AGI Kernel")
+        
+        if not self.context_system:
+            self.context_system = create_context_system(self, plugin_manager)
+            print("✅ Context System integrated into AGI Kernel")
+        
+        if not self.reply_system:
+            self.reply_system = create_reply_system(self, plugin_manager)
+            print("✅ Reply System integrated into AGI Kernel")
+        
+        print("🧠 AGI Kernel fully operational - autonomous thinking + self-healing + intelligent context + smart replies enabled")
     
     # =================================================================
     # Core AGI Interface
@@ -118,60 +167,56 @@ class AGIKernel:
             'recommended_style': self.behavior_modulator.get_response_style(observation)
         }
     
-    def decide(self, options: List[str], context: str) -> str:
+    def decide(self, context: Dict[str, Any]) -> Optional[Dict]:
         """
-        Make a decision based on learned preferences and goals
+        Make a decision about what to do next.
         
+        This is the core AGI decision-making method.
         Uses:
+        - Decision system (autonomous thinking)
         - Past outcomes (episodic memory)
         - Current goals (autonomous goal system)
         - Meta-learned strategies
+        
+        Returns:
+            Action dict or None if no action should be taken
         """
-        # Get behavior modulation for this context
-        modulation = self.episodic_memory.get_behavior_modulation(context)
+        if not self.decision_system:
+            print("⚠️ Decision system not initialized")
+            return None
         
-        # Adjust initiative based on learning
-        initiative = modulation.get('initiative', 0.0)
+        # Use decision system for autonomous thinking
+        action = self.decision_system.decide_next_action(context)
         
-        # Check if any active goals influence this decision
-        next_goal_action = self.goal_manager.get_next_action()
+        if action:
+            print(f"🧠 AGI decided: {action.get('id')} ({action.get('decision_method', 'unknown')})")
         
-        if next_goal_action and initiative > 0.1:
-            # Autonomous goal takes priority if we're feeling proactive
-            return f"[AUTONOMOUS_GOAL:{next_goal_action['action']}]"
-        
-        # Otherwise, use learned preferences
-        # (In practice, this would use more sophisticated decision logic)
-        return options[0] if options else "no_action"
+        return action
     
-    def act(self, action: str, context: Dict, expected_outcome: str = None) -> Dict:
+    async def act(self, action_spec: Dict) -> Dict:
         """
-        Execute an action with full learning tracking
+        Execute an action through the unified action router.
         
-        Returns action with behavioral adjustments applied.
+        This ensures all actions flow through:
+        - AGI validation
+        - SyMod verification
+        - Plugin execution
+        - Learning and reflection
+        
+        Args:
+            action_spec: Action specification dict with plugin, action_type, params
+        
+        Returns:
+            Result dict with success, data, and learning metadata
         """
-        # Get behavior params
-        behavior_params = self.behavior_modulator.get_effective_params(
-            context.get('observation', '')
-        )
+        if not self.action_router:
+            print("⚠️ Action router not initialized")
+            return {'success': False, 'error': 'Action router not available'}
         
-        # Apply style adjustments
-        style = self.behavior_modulator.get_response_style(context.get('observation', ''))
+        # Route through unified pipeline
+        result = await self.action_router.route_action(action_spec)
         
-        # Prepare for learning
-        learning_context = self.adaptive_learner.learn(
-            domain=context.get('domain', 'general'),
-            context=context.get('observation', ''),
-            attempt_action=action
-        )
-        
-        return {
-            'action': action,
-            'style': style,
-            'behavior_params': behavior_params,
-            'learning_context': learning_context,
-            'timestamp': datetime.now().isoformat()
-        }
+        return result
     
     def learn(self, context: str, action: str, outcome: str, 
               success: bool, user_id: str = None):

@@ -189,79 +189,91 @@ class A2AServerMixin:
     # ── Agent Card (§8.5) ───────────────────────────────────────────
 
     def _handle_agent_card(self) -> Response:
-        """Return A2A-spec AgentCard at /.well-known/agent-card.json."""
-        base = self._a2a_base_url.rstrip('/')
-
-        # Build skills from task registry with full schema + pricing
-        a2a_skills = []
-        available = self.list_available_tasks()
-        for task_name, info in available.items():
-            from plugins.a2a.a2a_tasks import TASK_REGISTRY
-            task_def = TASK_REGISTRY.get(task_name, {})
-            skill = {
-                "id": task_name,
-                "name": task_name.replace('.', ' ').replace('_', ' ').title(),
-                "description": info['description'],
-                "tags": task_name.split('.'),
-            }
-            # Add input schema if defined
-            schema = task_def.get('schema')
-            if schema:
-                skill["inputSchema"] = {
-                    "type": "object",
-                    **schema,
+        """
+        Return full AgentCard with all discovered skills.
+        
+        Serves at 3 endpoints for compatibility:
+        - /.well-known/agent-card.json (ERC-8004 standard)
+        - /.well-known/agent.json (8004scan compatibility)
+        - /extendedAgentCard (A2A protocol)
+        """
+        try:
+            # Use AgentCardGenerator for full card with discovered skills
+            from plugins.analytics.agent_card import AgentCardGenerator
+            gen = AgentCardGenerator(self.core)
+            card = gen.generate()
+            
+            print(f"📊 Serving agent card with {len(card.get('services', [{}])[0].get('skills', []))} OASF skills")
+            
+        except Exception as e:
+            print(f"⚠️ Failed to generate full agent card, using fallback: {e}")
+            
+            # Fallback: Build simplified card from task registry
+            base = self._a2a_base_url.rstrip('/')
+            a2a_skills = []
+            available = self.list_available_tasks()
+            for task_name, info in available.items():
+                from plugins.a2a.a2a_tasks import TASK_REGISTRY
+                task_def = TASK_REGISTRY.get(task_name, {})
+                skill = {
+                    "id": task_name,
+                    "name": task_name.replace('.', ' ').replace('_', ' ').title(),
+                    "description": info['description'],
+                    "tags": task_name.split('.'),
                 }
-            # Add pricing for paid tasks
-            if info.get('price_usdc'):
-                skill["tags"].append("paid")
-                skill["pricing"] = {
-                    "amount": info['price_usdc'],
-                    "currency": "USDC",
-                    "network": "base",
-                    "chainId": 8453,
-                    "paymentAddress": "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5",
-                }
-            else:
-                skill["tags"].append("free")
-            a2a_skills.append(skill)
+                schema = task_def.get('schema')
+                if schema:
+                    skill["inputSchema"] = {"type": "object", **schema}
+                if info.get('price_usdc'):
+                    skill["tags"].append("paid")
+                    skill["pricing"] = {
+                        "amount": info['price_usdc'],
+                        "currency": "USDC",
+                        "network": "base",
+                        "chainId": 8453,
+                        "paymentAddress": "0x72a6C33E1EB6bA0862f8702E778D4E7c955C41D5",
+                    }
+                else:
+                    skill["tags"].append("free")
+                a2a_skills.append(skill)
 
-        card = {
-            "name": "AlleyBot",
-            "description": (
-                "Autonomous AI agent with capabilities across social platforms "
-                "(Moltx, MoltBook, MoltChan, MoltRoad), blockchain analytics (Base network), "
-                "AI content generation, and self-improvement. ERC-8004 Agent #22899."
-            ),
-            "iconUrl": "https://blob.8004scan.app/3d2fb26e34f0c9a4c083adce2449905ff37a74c5fd3132114bddb69d69468ac7.jpg",
-            "version": "1.0.0",
-            "provider": {
-                "organization": "AlleyBot",
-                "url": base,
-            },
-            "documentationUrl": f"https://www.8004scan.io/agents/ethereum/22899",
-            "supportedInterfaces": [
-                {
+            card = {
+                "name": "AlleyBot",
+                "description": (
+                    "Autonomous AI agent with capabilities across social platforms "
+                    "(Moltx, MoltBook, MoltChan, MoltRoad), blockchain analytics (Base network), "
+                    "AI content generation, and self-improvement. ERC-8004 Agent #22899."
+                ),
+                "iconUrl": "https://blob.8004scan.app/3d2fb26e34f0c9a4c083adce2449905ff37a74c5fd3132114bddb69d69468ac7.jpg",
+                "version": "1.0.0",
+                "provider": {
+                    "organization": "AlleyBot",
                     "url": base,
-                    "protocolBinding": "HTTP+JSON",
-                    "protocolVersion": "1.0",
                 },
-            ],
-            "capabilities": {
-                "streaming": True,
-                "pushNotifications": False,
-                "stateTransitionHistory": True,
-                "extendedAgentCard": False,
-            },
-            "defaultInputModes": ["text/plain", "application/json"],
-            "defaultOutputModes": ["text/plain", "application/json"],
-            "skills": a2a_skills,
-            "registrations": [
-                {
-                    "agentId": 22899,
-                    "agentRegistry": "eip155:1:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
-                }
-            ],
-        }
+                "documentationUrl": f"https://www.8004scan.io/agents/ethereum/22899",
+                "supportedInterfaces": [
+                    {
+                        "url": base,
+                        "protocolBinding": "HTTP+JSON",
+                        "protocolVersion": "1.0",
+                    },
+                ],
+                "capabilities": {
+                    "streaming": True,
+                    "pushNotifications": False,
+                    "stateTransitionHistory": True,
+                    "extendedAgentCard": False,
+                },
+                "defaultInputModes": ["text/plain", "application/json"],
+                "defaultOutputModes": ["text/plain", "application/json"],
+                "skills": a2a_skills,
+                "registrations": [
+                    {
+                        "agentId": 22899,
+                        "agentRegistry": "eip155:1:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+                    }
+                ],
+            }
 
         return jsonify(card), 200, {'Content-Type': 'application/json'}
 

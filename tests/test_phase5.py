@@ -49,18 +49,16 @@ class TestBrainPlugin(unittest.TestCase):
         p = BrainPlugin({})
         cmds = p.get_commands()
         expected = [
-            'brain_think', 'brain_start', 'brain_stop',
-            'brain_context', 'brain_actions', 'brain_history',
-            'brain_status', 'brain_reply',
+            'brain', 'think', 'startbrain', 'stopbrain'
         ]
         for cmd in expected:
             self.assertIn(cmd, cmds, f"Missing command: {cmd}")
 
     def test_command_count(self):
-        """Should have 8 commands"""
+        """Should have 4 commands"""
         from plugins.brain.brain import BrainPlugin
         p = BrainPlugin({})
-        self.assertEqual(len(p.get_commands()), 8)
+        self.assertEqual(len(p.get_commands()), 4)
 
     def test_plugin_config_has_brain(self):
         """plugin_config.json should include brain plugin"""
@@ -197,6 +195,8 @@ class TestDecisionEngine(unittest.TestCase):
         p._init_context_gatherer()
         p._init_decision_engine()
         p._init_smart_reply()
+        p._init_operational_resilience()
+        p._init_goal_stack()
 
         available = p.get_available_actions()
         self.assertEqual(len(available), 0)
@@ -406,8 +406,11 @@ class TestBrainIntegration(unittest.TestCase):
         p._init_context_gatherer()
         p._init_decision_engine()
         p._init_smart_reply()
-
-        action = {'id': 'moltx_engage', 'platform': 'moltx', 'reason': 'test'}
+        p._init_operational_resilience()
+        p._init_goal_stack()
+        p._init_self_reflection()
+        
+        action = {'action': 'moltx_engage', 'platform': 'moltx', 'id': 'moltx_engage'}
         result = p.execute_action(action)
 
         self.assertTrue(result['success'])
@@ -420,15 +423,19 @@ class TestBrainIntegration(unittest.TestCase):
         p = BrainPlugin({})
         p.core = MagicMock()
         p.core.get_memory.return_value = None
-        p.core.enhanced_memory = None
+        p.api = MagicMock()
 
         mock_moltx = MagicMock()
-        mock_moltx.engage_feed_command.return_value = "✅ Engaged"
+        mock_moltx.engage_feed_command.return_value = "✅ Done"
         p.core.plugin_manager.plugins = {'moltx': mock_moltx}
+        
         p._init_context_gatherer()
         p._init_decision_engine()
         p._init_smart_reply()
-
+        p._init_operational_resilience()
+        p._init_goal_stack()
+        p._init_self_reflection()
+        
         result = p.think()
         self.assertIn('cycle', result)
         self.assertIn('action', result)

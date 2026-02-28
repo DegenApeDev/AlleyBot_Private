@@ -197,25 +197,41 @@ class ContentStrategyMixin:
     # Image Post Calendar — separate tracking for image posts (max 3/day)
     # =========================================================================
 
-    def should_post_image_now(self, platform: str) -> Dict[str, Any]:
-        """Check if we should post an image now (separate from text posts, max 3/day)"""
+    def should_post_image_now(self, platform: str, manual_override: bool = False) -> Dict[str, Any]:
+        """Check if we should post an image now (separate from text posts, max 3/day)
+        
+        Args:
+            platform: Platform to check (e.g., 'moltx')
+            manual_override: If True, bypass time window checks (for user-requested posts)
+        """
         now = datetime.datetime.now()
         hour = now.hour
         today_key = now.strftime('%Y-%m-%d')
         
-        # Image posts limited to 3 per day
+        # Image posts limited to 3 per day (always enforced)
         image_posts_today = self._get_image_posts_today(platform, today_key)
         max_image_posts = 3
         
         if image_posts_today >= max_image_posts:
             return {'should_post': False, 'reason': f'Image daily limit reached ({image_posts_today}/{max_image_posts})'}
         
-        # Check time window (same as regular posts)
+        # For manual requests, skip time window checks (golden window, avoid hours, gaps)
+        if manual_override:
+            return {
+                'should_post': True,
+                'quality': 'manual',
+                'score': 1.0,
+                'image_posts_today': image_posts_today,
+                'max_image_posts': max_image_posts,
+                'manual_override': True
+            }
+        
+        # Check time window (same as regular posts) - only for automated posts
         schedule = self._posting_schedule.get(platform, DEFAULT_POSTING_SCHEDULE.get(platform, {}))
         if hour in schedule.get('avoid_hours', []):
             return {'should_post': False, 'reason': f'Avoid hour ({hour}:00 UTC) for images'}
         
-        # Check gap since last image post (minimum 2 hours between image posts)
+        # Check gap since last image post (minimum 2 hours between image posts) - only for automated
         last_image_time = self._get_last_image_post_time(platform)
         if last_image_time:
             gap_hours = (now - last_image_time).total_seconds() / 3600
