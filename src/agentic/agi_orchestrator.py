@@ -211,6 +211,11 @@ class AGIOrchestrator:
                     if goals:
                         logger.info(f"🎯 Generated {len(goals)} autonomous goals")
                         
+                        # Integrate goals into goal stack for execution tracking
+                        if hasattr(self.core.agi_kernel, 'goal_stack'):
+                            added = self.core.agi_kernel.goal_stack.integrate_generated_goals(goals)
+                            logger.info(f"📋 Integrated {added} goals into goal stack")
+                        
                         # Generate content ideas from goals (connect to content strategy)
                         if hasattr(self.core.agi_kernel, 'content_strategy'):
                             for goal in goals:

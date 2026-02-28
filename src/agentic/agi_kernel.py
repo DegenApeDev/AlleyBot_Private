@@ -28,6 +28,7 @@ from .reply_system import ReplySystem, create_reply_system
 from .goal_generator import SecureGoalGenerator, create_goal_generator
 from .content_strategy import ContentStrategySystem, create_content_strategy
 from .world_state_bridge import WorldStateBridge, create_world_state_bridge
+from .goal_stack import GoalStackBridge, create_goal_stack
 
 
 class AGIKernel:
@@ -144,7 +145,11 @@ class AGIKernel:
             self.world_state = create_world_state_bridge(self)
             print("✅ World State Bridge integrated into AGI Kernel")
         
-        print("🧠 AGI Kernel fully operational - autonomous thinking + self-healing + intelligent context + smart replies + goal generation + content strategy + world state enabled")
+        if not self.goal_stack:
+            self.goal_stack = create_goal_stack(self)
+            print("✅ Goal Stack integrated into AGI Kernel")
+        
+        print("🧠 AGI Kernel fully operational - autonomous thinking + self-healing + intelligent context + smart replies + goal generation + content strategy + world state + goal stack enabled")
     
     # =================================================================
     # Core AGI Interface
