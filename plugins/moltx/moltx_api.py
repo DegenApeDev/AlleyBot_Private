@@ -431,9 +431,14 @@ class MoltxAPIMixin(SkillDetectionMixin):
             return {"healthy": True, "data": resp}
         return {"healthy": False, "data": resp}
 
-    def create_post(self, text, reply_to=None, hashtags=None, files=None, media_url=None):
+    def create_post(self, text=None, content=None, reply_to=None, hashtags=None, files=None, media_url=None):
         """Create a new post"""
-        data = {"content": text}
+        # Accept both 'text' and 'content' for backward compatibility
+        post_content = content if content is not None else text
+        if post_content is None:
+            raise ValueError("Either 'text' or 'content' parameter is required")
+        
+        data = {"content": post_content}
         if reply_to:
             data["reply_to"] = reply_to
         if hashtags:

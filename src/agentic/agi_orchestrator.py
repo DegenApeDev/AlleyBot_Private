@@ -206,6 +206,19 @@ class AGIOrchestrator:
         except Exception as e:
             logger.warning(f"⚠️ World state sync failed (non-fatal): {e}")
         
+        # === Cross-Platform Insight Recording: Learn from interactions ===
+        # Analyze platform data and record insights that apply across platforms
+        try:
+            if hasattr(self.core, 'agi_kernel') and hasattr(self.core.agi_kernel, 'unified_memory'):
+                from src.agentic.insight_recorder import create_insight_recorder
+                recorder = create_insight_recorder(self.core.agi_kernel)
+                insights = recorder.analyze_and_record_insights()
+                if insights:
+                    logger.info(f"💡 Recorded {len(insights)} cross-platform insights")
+                    learnings.append(f"insights_recorded:{len(insights)}")
+        except Exception as e:
+            logger.warning(f"⚠️ Insight recording failed (non-fatal): {e}")
+        
         # === Goal Generation: Generate autonomous goals from world state ===
         # This runs every 6 hours to create new goals based on current state
         try:
