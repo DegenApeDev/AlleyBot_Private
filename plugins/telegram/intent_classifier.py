@@ -363,12 +363,9 @@ _sentence_model = None
 
 def get_sentence_model() -> 'SentenceTransformer':
     """Get or create the singleton SentenceTransformer model instance (shared across all callers)"""
-    global _sentence_model
-    if _sentence_model is None:
-        print("🔤 Loading SentenceTransformer model (all-MiniLM-L6-v2)...")
-        _sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
-        print("✅ SentenceTransformer model loaded and cached")
-    return _sentence_model
+    # Use global singleton instead of module-level singleton
+    from src.utils.embedding_model import get_sentence_transformer
+    return get_sentence_transformer('all-MiniLM-L6-v2')
 
 def get_intent_classifier() -> SemanticIntentClassifier:
     """Get or create the singleton intent classifier instance"""
