@@ -155,7 +155,14 @@ class MoltxContentMixin:
                             post_type='reply',
                             parent_id=post_id
                         )
-                        if result and not result.startswith('❌'):
+                        # Handle both dict and string returns
+                        is_success = False
+                        if isinstance(result, dict):
+                            is_success = result.get('success', False)
+                        elif isinstance(result, str):
+                            is_success = not result.startswith('❌')
+                        
+                        if result and is_success:
                             self._record_engagement('reply')
                             reply_count += 1
                             print(f"  💬 Enhanced reply to post: {post_id[:12]}...")
