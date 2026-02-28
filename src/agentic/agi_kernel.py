@@ -126,6 +126,16 @@ class AGIKernel:
         # Dialogue manager (multi-turn conversation orchestration)
         self.dialogue_manager = None  # Initialized in decision systems
         
+        # === JARVIS Phase 2: Proactive Intelligence ===
+        # Predictive suggestions (anticipate user needs)
+        self.predictive_suggestions = None  # Initialized in decision systems
+        
+        # Contextual awareness (situational understanding)
+        self.contextual_awareness = None  # Initialized in decision systems
+        
+        # Opportunity detector (spot opportunities)
+        self.opportunity_detector = None  # Initialized in decision systems
+        
         print("✅ AGI Kernel ready")
     
     def _get_onchain_plugin(self):
