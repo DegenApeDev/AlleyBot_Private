@@ -195,6 +195,27 @@ class AGIOrchestrator:
         except Exception as e:
             logger.warning(f"⚠️ Memory bridge failed (non-fatal): {e}")
 
+        # === Goal Generation: Generate autonomous goals from world state ===
+        # This runs every 6 hours to create new goals based on current state
+        try:
+            if hasattr(self.core, 'agi_kernel') and hasattr(self.core.agi_kernel, 'goal_generator'):
+                # Check if it's time to generate goals (every 6 hours)
+                current_hour = datetime.now().hour
+                if current_hour % 6 == 0:
+                    # Build world state for goal generation
+                    world_state = self._build_world_state_for_goals()
+                    
+                    # Generate goals
+                    goals = self.core.agi_kernel.goal_generator.generate_goals(world_state)
+                    
+                    if goals:
+                        logger.info(f"🎯 Generated {len(goals)} autonomous goals")
+                        # Store goals in goal manager for tracking
+                        for goal in goals:
+                            learnings.append(f"goal_generated:{goal.goal_id}")
+        except Exception as e:
+            logger.warning(f"⚠️ Goal generation failed (non-fatal): {e}")
+
         # Phase 7: Detect patterns in world state
         detection_result = self._run_phase_7_detection()
         phases_executed.append(detection_result)
@@ -1344,6 +1365,53 @@ class AGIOrchestrator:
             'on_chain_signals': len(on_chain_signals),
             'platform_results': {p.value: r for p, r in results.items()}
         }
+    
+    def _build_world_state_for_goals(self) -> Dict[str, Any]:
+        """
+        Build world state snapshot for goal generation.
+        
+        Gathers current state from:
+        - Revenue stats
+        - Reputation metrics
+        - Market demand
+        - Platform engagement
+        - Skill inventory
+        """
+        world_state = {
+            'timestamp': datetime.now().isoformat(),
+            'revenue': 0,
+            'revenue_target': 50,
+            'reputation': 0,
+            'reputation_target': 80,
+            'engagement_rate': 0,
+            'engagement_target': 0.5,
+            'market_demand': {},
+            'current_skills': [],
+        }
+        
+        try:
+            # Get revenue from A2A attestations
+            if hasattr(self.core, 'plugin_manager'):
+                a2a_plugin = self.core.plugin_manager.plugins.get('a2a')
+                if a2a_plugin:
+                    # TODO: Get actual revenue stats from attestations
+                    pass
+            
+            # Get reputation from platforms
+            # TODO: Aggregate reputation across platforms
+            
+            # Get market demand from A2A requests
+            # TODO: Analyze A2A request patterns
+            
+            # Get current skills
+            if hasattr(self.core, 'agi_kernel'):
+                # TODO: Get skill list from skill scanner
+                pass
+        
+        except Exception as e:
+            logger.warning(f"⚠️ Error building world state: {e}")
+        
+        return world_state
 
 
 # Singleton

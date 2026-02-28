@@ -25,6 +25,7 @@ from .action_router import ActionRouter, create_action_router
 from .error_monitor import ErrorMonitor, create_error_monitor
 from .context_system import ContextSystem, create_context_system
 from .reply_system import ReplySystem, create_reply_system
+from .goal_generator import SecureGoalGenerator, create_goal_generator
 
 
 class AGIKernel:
@@ -85,6 +86,9 @@ class AGIKernel:
         # Reply system (intelligent reply generation)
         self.reply_system = None  # Initialized after plugin_manager available
         
+        # Goal generator (autonomous goal generation with security)
+        self.goal_generator = None  # Initialized after plugin_manager available
+        
         print("✅ AGI Kernel ready")
     
     def _get_onchain_plugin(self):
@@ -120,7 +124,11 @@ class AGIKernel:
             self.reply_system = create_reply_system(self, plugin_manager)
             print("✅ Reply System integrated into AGI Kernel")
         
-        print("🧠 AGI Kernel fully operational - autonomous thinking + self-healing + intelligent context + smart replies enabled")
+        if not self.goal_generator:
+            self.goal_generator = create_goal_generator(self)
+            print("✅ Goal Generator integrated into AGI Kernel")
+        
+        print("🧠 AGI Kernel fully operational - autonomous thinking + self-healing + intelligent context + smart replies + goal generation enabled")
     
     # =================================================================
     # Core AGI Interface
