@@ -158,6 +158,23 @@ class AGIKernel:
             self.openhome_converter = create_openhome_converter(self)
             print("✅ OpenHome Converter integrated into AGI Kernel (plugin sharing enabled)")
         
+        if not self.content_intelligence:
+            from src.agentic.content_intelligence import create_content_intelligence
+            self.content_intelligence = create_content_intelligence(
+                unified_memory=self.unified_memory,
+                episodic_memory=self.behavior_modulator.episodic if self.behavior_modulator else None,
+                world_state=self.world_state.world_state if self.world_state else None
+            )
+            print("✅ Content Intelligence integrated into AGI Kernel (cross-platform optimization active)")
+        
+        if not self.adaptive_timing:
+            from src.agentic.adaptive_timing import create_adaptive_timing_engine
+            self.adaptive_timing = create_adaptive_timing_engine(
+                episodic_memory=self.behavior_modulator.episodic if self.behavior_modulator else None,
+                world_state=self.world_state.world_state if self.world_state else None
+            )
+            print("✅ Adaptive Timing integrated into AGI Kernel (intelligent timing active)")
+        
         if not self.context_system:
             self.context_system = create_context_system(self, plugin_manager)
             print("✅ Context System integrated into AGI Kernel")
