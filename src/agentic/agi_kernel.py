@@ -116,6 +116,16 @@ class AGIKernel:
         # Adaptive timing (intelligent engagement timing)
         self.adaptive_timing = None  # Initialized with memory systems
         
+        # === JARVIS Phase 1: Natural Conversation ===
+        # Conversational memory (multi-turn dialogue tracking)
+        self.conversational_memory = None  # Initialized in decision systems
+        
+        # Intent recognition (deep intent understanding)
+        self.intent_recognizer = None  # Initialized in decision systems
+        
+        # Dialogue manager (multi-turn conversation orchestration)
+        self.dialogue_manager = None  # Initialized in decision systems
+        
         print("✅ AGI Kernel ready")
     
     def _get_onchain_plugin(self):
@@ -174,6 +184,28 @@ class AGIKernel:
                 world_state=self.world_state.world_state if self.world_state else None
             )
             print("✅ Adaptive Timing integrated into AGI Kernel (intelligent timing active)")
+        
+        # === JARVIS Phase 1: Natural Conversation ===
+        if not self.conversational_memory:
+            from src.agentic.conversational_memory import create_conversational_memory
+            self.conversational_memory = create_conversational_memory(
+                max_turns=50,
+                context_window=10
+            )
+            print("✅ Conversational Memory integrated into AGI Kernel (multi-turn dialogue active)")
+        
+        if not self.intent_recognizer:
+            from src.agentic.intent_recognition import create_intent_recognizer
+            self.intent_recognizer = create_intent_recognizer()
+            print("✅ Intent Recognizer integrated into AGI Kernel (deep intent understanding active)")
+        
+        if not self.dialogue_manager:
+            from src.agentic.dialogue_manager import create_dialogue_manager
+            self.dialogue_manager = create_dialogue_manager(
+                conversational_memory=self.conversational_memory,
+                intent_recognizer=self.intent_recognizer
+            )
+            print("✅ Dialogue Manager integrated into AGI Kernel (JARVIS-style conversation active)")
         
         if not self.context_system:
             self.context_system = create_context_system(self, plugin_manager)
