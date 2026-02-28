@@ -481,11 +481,12 @@ class WorldStateManager:
                 data = relationship.to_dict()
 
                 if existing:
-                    # Update existing relationship
-                    data['id'] = existing['id']
+                    # Update existing relationship (existing is a tuple, not dict)
+                    existing_id = existing[0]
+                    data['id'] = existing_id
                     conn.execute(
                         "UPDATE relationships SET strength = ?, timestamp = ?, context = ? WHERE id = ?",
-                        (data['strength'], data['timestamp'], data['context'], existing['id'])
+                        (data['strength'], data['timestamp'], data['context'], existing_id)
                     )
                 else:
                     # Create new relationship
