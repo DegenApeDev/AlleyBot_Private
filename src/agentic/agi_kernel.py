@@ -256,6 +256,30 @@ class AGIKernel:
             )
             print("✅ Opportunity Detector integrated into AGI Kernel (opportunity awareness active)")
         
+        # === JARVIS Phase 3: Personality & Emotional Intelligence ===
+        if not self.personality_engine:
+            from src.agentic.personality_engine import create_personality_engine
+            self.personality_engine = create_personality_engine()
+            print("✅ Personality Engine integrated into AGI Kernel (consistent character active)")
+        
+        if not self.emotional_intelligence:
+            from src.agentic.emotional_intelligence import create_emotional_intelligence
+            self.emotional_intelligence = create_emotional_intelligence(
+                conversational_memory=self.conversational_memory
+            )
+            print("✅ Emotional Intelligence integrated into AGI Kernel (empathy active)")
+        
+        if not self.adaptive_response:
+            from src.agentic.adaptive_response import create_adaptive_response
+            self.adaptive_response = create_adaptive_response(
+                personality_engine=self.personality_engine,
+                emotional_intelligence=self.emotional_intelligence,
+                contextual_awareness=self.contextual_awareness,
+                conversational_memory=self.conversational_memory,
+                intent_recognizer=self.intent_recognizer
+            )
+            print("✅ Adaptive Response integrated into AGI Kernel (JARVIS-style responses active)")
+        
         if not self.context_system:
             self.context_system = create_context_system(self, plugin_manager)
             print("✅ Context System integrated into AGI Kernel")
