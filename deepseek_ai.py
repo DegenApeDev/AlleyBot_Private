@@ -260,7 +260,7 @@ Return a JSON object with:
             print(f"❌ DeepSeek analysis failed: {e}")
             return {"sentiment": "neutral", "topics": [], "confidence": 0.0}
     
-    def generate_reply_to_comment(self, original_comment: str, commenter_name: str, post_context: str = None) -> Optional[str]:
+    def generate_reply_to_comment(self, original_comment: str, commenter_name: str = None, post_context: str = None, max_tokens: int = 500) -> Optional[str]:
         """Generate an intelligent reply to a specific comment"""
         if not self.enabled:
             return None
@@ -269,7 +269,7 @@ Return a JSON object with:
             user_prompt = f"""Generate a thoughtful reply to this comment:
 
 Original Post Context: {post_context or 'AI/Agent ecosystem discussion'}
-Commenter: @{commenter_name}
+Commenter: @{commenter_name if commenter_name else 'Unknown'}
 Their Comment: "{original_comment}"
 
 Requirements:
@@ -291,7 +291,7 @@ Requirements:
                     {"role": "system", "content": "You are AlleyBot, an intelligent AI agent engaging in meaningful conversations."},
                     {"role": "user", "content": user_prompt}
                 ],
-                "max_tokens": 500,
+                "max_tokens": max_tokens,
                 "temperature": 0.8
             }
             
