@@ -104,6 +104,9 @@ class AGIKernel:
         # Behavior modulator (episodic learning feedback loop)
         self.behavior_modulator = None  # Initialized with episodic memory
         
+        # Goal-driven cycle (autonomous goal pursuit)
+        self.goal_driven_cycle = None  # Initialized after goal_stack available
+        
         print("✅ AGI Kernel ready")
     
     def _get_onchain_plugin(self):
@@ -135,6 +138,11 @@ class AGIKernel:
             from src.agentic.episodic_memory import create_behavior_modulator
             self.behavior_modulator = create_behavior_modulator()
             print("✅ Behavior Modulator integrated into AGI Kernel (episodic learning active)")
+        
+        if not self.goal_driven_cycle:
+            from src.agentic.goal_driven_cycle import create_goal_driven_cycle
+            self.goal_driven_cycle = create_goal_driven_cycle(self)
+            print("✅ Goal-Driven Cycle integrated into AGI Kernel (autonomous goal pursuit active)")
         
         if not self.context_system:
             self.context_system = create_context_system(self, plugin_manager)

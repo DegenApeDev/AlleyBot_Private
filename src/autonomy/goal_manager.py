@@ -183,6 +183,24 @@ class GoalStackManager:
             print(f"❌ Failed to activate goal: {e}")
             return False
     
+    def add_goal_from_autonomous(self, autonomous_goal) -> bool:
+        """
+        Add a goal from autonomous goal generator.
+        
+        Converts AutonomousGoal to Goal for tracking.
+        """
+        try:
+            goal = Goal(
+                id=autonomous_goal.goal_id,
+                description=autonomous_goal.description,
+                priority=int(autonomous_goal.priority),
+                context=autonomous_goal.context or {}
+            )
+            return self.add_goal(goal)
+        except Exception as e:
+            print(f"❌ Failed to add autonomous goal: {e}")
+            return False
+    
     def complete_goal(self, goal_id: str) -> bool:
         """Mark a goal as completed"""
         try:
