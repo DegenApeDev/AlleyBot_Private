@@ -130,6 +130,10 @@ class Telegram(AlleyBotPlugin):
         from plugins.telegram.synergy_commands import SynergyCommands
         self.synergy_commands = SynergyCommands(self)
         
+        # Import trading commands
+        from plugins.telegram.trading_commands import TradingCommands
+        self.trading_commands = TradingCommands(self)
+        
         # Import inline menu system
         from plugins.telegram.menu_handlers import MenuHandlers
         self.menu_handlers = MenuHandlers(self)
@@ -176,6 +180,12 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("skills", self.intelligent_commands.skills))
         self.application.add_handler(CommandHandler("skill", self.intelligent_commands.execute_skill))
         self.application.add_handler(CommandHandler("token_stats", self.intelligent_commands.token_stats))
+        
+        # Solana commands
+        self.application.add_handler(CommandHandler("add_solana_token", self.intelligent_commands.add_solana_token))
+        
+        # Clawbr auto-debate
+        self.application.add_handler(CommandHandler("clawbr_auto_debate", self.intelligent_commands.clawbr_auto_debate))
         
         # Crypto price commands
         self.application.add_handler(CommandHandler("crypto_price", self.intelligent_commands.crypto_price))
@@ -400,6 +410,12 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("integrity", self.synergy_commands.integrity))
         self.application.add_handler(CommandHandler("attest", self.synergy_commands.attest))
         self.application.add_handler(CommandHandler("synergy", self.synergy_commands.synergy_status))
+        
+        # Trading commands
+        self.application.add_handler(CommandHandler("swap_sol", self.trading_commands.swap_sol))
+        self.application.add_handler(CommandHandler("swap_base", self.trading_commands.swap_base))
+        self.application.add_handler(CommandHandler("sol_price", self.trading_commands.sol_price))
+        self.application.add_handler(CommandHandler("base_price", self.trading_commands.base_price))
         
         # AGI Meta-Brain command
         self.application.add_handler(CommandHandler("agi_cycle", self._handle_agi_cycle))

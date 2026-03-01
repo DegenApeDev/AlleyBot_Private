@@ -1,0 +1,12 @@
+# Trading Dependencies
+
+# Solana
+solders>=0.18.0
+solana>=0.30.0
+
+# Base/Ethereum
+web3>=6.0.0
+eth-account>=0.9.0
+
+# General
+requests>=2.31.0
