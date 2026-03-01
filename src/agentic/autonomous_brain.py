@@ -23,6 +23,7 @@ from src.agentic.symod_core import get_symod_manager, SyModObservation
 from src.agentic.skilldoc_manager import get_skilldoc_manager
 from src.agentic.agi_social_mixin import AGISocialMixin
 from src.agentic.agi_orchestrator import get_agi_orchestrator
+from src.agentic.moltx_agi_integration import gather_moltx_service_insights, execute_moltx_suggested_actions
 
 logger = logging.getLogger(__name__)
 
@@ -370,6 +371,12 @@ class AutonomousBrain(AGISocialMixin):
         moltx = self.plugin_manager.get_plugin('moltx')
         if moltx and hasattr(moltx, 'get_feed'):
             try:
+                # Gather MoltX service message insights for AGI decision-making
+                service_insights = gather_moltx_service_insights(moltx)
+                observations.extend(service_insights)
+                logger.info(f"💡 Gathered {len(service_insights)} MoltX service insights")
+                
+                # Get regular feed
                 feed = moltx.get_feed('global', limit=20)
                 if isinstance(feed, dict):
                     posts = feed.get('posts', [])
