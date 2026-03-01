@@ -150,9 +150,17 @@ class MoltxContentMixin:
             if not posts_list:
                 # Fallback: try dynamic_engage if feed fetch fails
                 print("⚠️ Feed empty, falling back to dynamic_engage...")
-                engage_result = self.dynamic_engage_command()
-                if engage_result and "✅" in str(engage_result):
-                    return "✅ Engagement completed via dynamic_engage"
+                
+                # Run engagement in background to avoid blocking
+                if hasattr(self, 'start_engagement_background'):
+                    result = self.start_engagement_background(self.dynamic_engage_command)
+                    print(f"🔄 {result}")
+                    return "🔄 Engagement started in background (feed was empty)"
+                else:
+                    # Fallback to sync if async not available
+                    engage_result = self.dynamic_engage_command()
+                    if engage_result and "✅" in str(engage_result):
+                        return "✅ Engagement completed via dynamic_engage"
                 return "❌ Could not fetch feed for engagement"
             
             posts_list = posts_list
@@ -224,6 +232,22 @@ class MoltxContentMixin:
             print(f"❌ Auto-engage failed: {e}")
             return f"❌ Failed to auto-engage: {e}"
 
+    def dynamic_engage_command(self, count='3', run_async=True):
+        """
+        Dynamic engagement command - wrapper for engage_feed_command
+        
+        Args:
+            count: Number of posts to engage with
+            run_async: If True, runs in background (non-blocking)
+        
+        Returns:
+            Status message
+        """
+        if hasattr(self, 'engage_feed_command'):
+            return self.engage_feed_command(count=count, run_async=run_async)
+        else:
+            return "❌ Dynamic engagement not available"
+    
     def _should_wait_for_post_cooldown(self) -> bool:
         """Check if cooldown period since last post"""
         last_post_str = self.core.get_memory('moltx_last_post_time')

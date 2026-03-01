@@ -244,7 +244,7 @@ async def execute_moltx_suggested_actions(moltx_plugin, brain_instance) -> List[
                     
                     # Store in memory for content generation
                     if hasattr(brain_instance, 'core'):
-                        brain_instance.core.set_memory('moltx_trending_hashtags', hashtags)
+                        brain_instance.core.save_memory('moltx_trending_hashtags', hashtags)
                     
                     results.append({
                         'action': 'check_trending',

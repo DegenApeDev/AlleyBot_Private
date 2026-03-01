@@ -27,9 +27,11 @@ from plugins.moltx.moltx_symod_interface import (
 )
 from plugins.moltx.moltx_service_messages import MoltxServiceMessagesMixin
 from plugins.moltx.moltx_quote_posts import MoltxQuotePostsMixin
+from plugins.moltx.moltx_async_engagement import MoltxAsyncEngagementMixin
 
 class MoltxPlugin(
-    MoltxServiceMessagesMixin,  # Add first for service message parsing
+    MoltxAsyncEngagementMixin,  # Async engagement (non-blocking)
+    MoltxServiceMessagesMixin,  # Service message parsing
     MoltxQuotePostsMixin,       # Quote-posting capability
     MoltxAPIMixin,
     MoltxWalletMixin,
@@ -318,8 +320,22 @@ class MoltxPlugin(
 
         return output
 
-    def engage_feed_command(self, count='3'):
-        """Dynamic engagement: check trending, find interesting topics, like AND comment on quality posts."""
+    def engage_feed_command(self, count='3', run_async=True):
+        """Dynamic engagement: check trending, find interesting topics, like AND comment on quality posts.
+        
+        Args:
+            count: Number of posts to engage with
+            run_async: If True, runs in background (non-blocking). Set False for sync execution.
+        """
+        # If async requested and available, run in background
+        if run_async and hasattr(self, 'start_engagement_background'):
+            return self.start_engagement_background(self._engage_feed_sync, count)
+        
+        # Otherwise run synchronously
+        return self._engage_feed_sync(count)
+    
+    def _engage_feed_sync(self, count='3'):
+        """Synchronous version of engage_feed - actual implementation"""
         import random
         
         try:
