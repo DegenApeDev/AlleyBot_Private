@@ -17,14 +17,55 @@
   - Location: `plugins/telegram/telegram.py:179-184`
   - **Status:** RESOLVED - Missing registrations added
 
-- [ ] **MoltX 429 Error - "Engage Before Posting"**
-  - MoltX requires engagement (like/reply) before posting
-  - Implement pre-posting engagement check
-  - Add feed reading before post attempts
-  - Location: `plugins/moltx/`
-  - Priority: **HIGH** - Blocking autonomous posting
+- [x] **MoltX 429 Error - "Engage Before Posting"** ✅ **FIXED**
+  - ✅ MoltX service messages now parsed and integrated into AGI brain
+  - ✅ Engagement requirements extracted from API responses
+  - ✅ Quote-posting capability added (suggested by MoltX hints)
+  - ✅ Trending hashtag detection from service messages
+  - ✅ Dynamic engagement runs in background (non-blocking)
+  - ✅ AGI brain sees MoltX hints as observations for decision-making
+  - Location: `plugins/moltx/moltx_service_messages.py`, `src/agentic/moltx_agi_integration.py`
+  - **Status:** RESOLVED - Service messages guide autonomous behavior
 
 ### 🟡 High Priority Features
+
+#### **MoltX AGI Integration** 🧠 ✅ **COMPLETE** (Mar 1, 2026)
+- [x] **Service Message Parser** ✅
+  - ✅ Parses moltx_notice (platform updates, features, skill versions)
+  - ✅ Parses moltx_hint (actionable tips like quote-posting, collaboration)
+  - ✅ Parses _model_guide (complete API reference, best practices)
+  - ✅ Stores insights in memory for AGI decision-making
+  - ✅ Extracts actionable items with priority levels (high/medium/low)
+  - Location: `plugins/moltx/moltx_service_messages.py`
+  - **Status:** ACTIVE - Parsing every API response
+
+- [x] **Quote-Posting Capability** ✅
+  - ✅ create_quote_post() - Add perspective to existing posts
+  - ✅ find_quotable_posts() - Score posts by engagement and quality
+  - ✅ generate_quote_response() - AI-generated quote content via DeepSeek
+  - ✅ auto_quote_trending_posts() - Autonomous quote creation
+  - ✅ Quotability scoring (engagement × 2-3, hashtags +10, questions +5)
+  - Location: `plugins/moltx/moltx_quote_posts.py`
+  - **Status:** ACTIVE - Creates quotes when MoltX suggests
+
+- [x] **AGI Brain Integration** ✅
+  - ✅ gather_moltx_service_insights() - Converts service messages to SyModObservations
+  - ✅ execute_moltx_suggested_actions() - Executes platform-suggested actions
+  - ✅ Service insights feed into autonomous_brain._gather_observations()
+  - ✅ AGI brain executes quote-posting when MoltX suggests it
+  - ✅ Trending hashtag checks triggered by service messages
+  - ✅ Engagement requirements stored in memory for decision-making
+  - Location: `src/agentic/moltx_agi_integration.py`, `src/agentic/autonomous_brain.py`
+  - **Status:** ACTIVE - Service messages guide AGI decisions
+
+- [x] **Async Engagement (Non-Blocking)** ✅
+  - ✅ MoltxAsyncEngagementMixin - Background task execution
+  - ✅ Dynamic engagement runs in background (prevents 2-3 min freeze)
+  - ✅ start_engagement_background() - Non-blocking engagement
+  - ✅ get_engagement_status() - Check task status and results
+  - ✅ AlleyBot stays responsive during engagement cycles
+  - Location: `plugins/moltx/moltx_async_engagement.py`
+  - **Status:** ACTIVE - No more main thread blocking
 
 #### **Token Trading System** 🪙 ✅ **COMPLETE**
 - [x] **Solana Token Trading** ✅
@@ -177,6 +218,123 @@
 
 ---
 
+## 🎯 FULL AUTONOMY ROADMAP - What's Missing
+
+### 🔴 Critical Gaps for Autonomous Onchain Profits
+
+#### **A. Trading Decision Autonomy** 🤖💰
+- [ ] **Integrate Trading Plugins into AGI Brain**
+  - AGI brain can see trading opportunities but can't execute yet
+  - Need: Connect `solana_trading` and `base_trading` to `autonomous_brain.py`
+  - Add trading observations to `_gather_observations()`
+  - Create `TradingOpportunityDetector` for autonomous trade discovery
+  - Location: `src/agentic/trading_integration.py` (NEW)
+  - **Priority: CRITICAL** - This is the missing link for autonomous profits
+
+- [ ] **Autonomous Trade Execution**
+  - AGI brain needs permission to execute trades without human approval
+  - Add `execute_trade` action type to SyMod proposals
+  - Implement safety limits (max trade size, daily loss limits)
+  - Add trade approval confidence threshold (e.g., 0.85+)
+  - Location: `src/agentic/autonomous_brain.py`
+  - **Priority: CRITICAL** - Currently trades require manual Telegram commands
+
+- [ ] **Profit Opportunity Scanner**
+  - Monitor DEX prices for arbitrage opportunities
+  - Track trending tokens on MoltX/Twitter for early entry
+  - Detect liquidity events (new pools, high volume)
+  - Score opportunities by profit potential vs risk
+  - Location: `src/agentic/profit_scanner.py` (NEW)
+  - **Priority: HIGH** - Autonomous profit discovery
+
+- [ ] **Risk Management AI**
+  - Dynamic position sizing based on confidence
+  - Stop-loss automation (exit losing positions)
+  - Portfolio rebalancing (maintain target allocations)
+  - Drawdown protection (pause trading after losses)
+  - Location: `src/agentic/risk_manager.py` (NEW)
+  - **Priority: HIGH** - Protect capital autonomously
+
+#### **B. Decision-Making Independence** 🧠
+- [x] **MoltX Service Messages** ✅ - AGI brain sees platform hints
+- [x] **Quote-Posting Autonomy** ✅ - Creates quotes when suggested
+- [x] **Async Engagement** ✅ - Non-blocking background tasks
+- [ ] **Cross-Platform Decision Synthesis**
+  - Combine signals from MoltX + Clawbr + Twitter + Onchain data
+  - Example: Trending on MoltX + New pool on Base = Trade opportunity
+  - Example: High engagement on Clawbr + Low liquidity = Wait signal
+  - Location: `src/agentic/decision_synthesizer.py` (NEW)
+  - **Priority: HIGH** - True multi-source intelligence
+
+- [ ] **Self-Directed Goal Setting**
+  - AGI brain proposes its own goals (not just user-defined)
+  - Example: "I notice SOL trending, goal: accumulate 10 SOL"
+  - Example: "My MoltX engagement is low, goal: 50 interactions today"
+  - Autonomous goal creation based on observations
+  - Location: `src/agentic/goal_stack.py` (enhance existing)
+  - **Priority: MEDIUM** - True autonomy requires self-set goals
+
+- [ ] **Learning from Outcomes**
+  - Track which trades were profitable vs unprofitable
+  - Identify patterns in successful vs failed decisions
+  - Adjust strategy parameters based on results
+  - Meta-learning: "I'm better at trading BONK than SOL"
+  - Location: `src/agentic/outcome_learner.py` (NEW)
+  - **Priority: MEDIUM** - Continuous improvement
+
+#### **C. Onchain Intelligence** ⛓️
+- [ ] **Real-Time Price Feeds**
+  - WebSocket connections to DEX price feeds
+  - Track price movements in real-time (not just on-demand)
+  - Detect rapid price changes (pump/dump signals)
+  - Location: `src/agentic/price_monitor.py` (NEW)
+  - **Priority: HIGH** - Fast reaction to market moves
+
+- [ ] **Wallet Balance Monitoring**
+  - Continuously track Solana + Base wallet balances
+  - Alert on unexpected changes (security)
+  - Rebalance when allocations drift
+  - Location: `src/agentic/wallet_monitor.py` (NEW)
+  - **Priority: MEDIUM** - Portfolio awareness
+
+- [ ] **Gas Price Optimization**
+  - Monitor gas prices on Base in real-time
+  - Delay trades when gas is high (>50 gwei)
+  - Execute when gas drops to optimal levels
+  - Location: `src/agentic/gas_optimizer.py` (NEW)
+  - **Priority: MEDIUM** - Maximize profit margins
+
+### 🔧 Integration Checklist for Full Autonomy
+
+**What Works Now:**
+- ✅ AGI brain runs autonomous cycles (30 min intervals)
+- ✅ MoltX service messages guide decisions
+- ✅ Quote-posting happens autonomously
+- ✅ Engagement runs in background
+- ✅ Trading plugins exist (Solana + Base)
+- ✅ Profit calculation works
+- ✅ Security filters prevent key leakage
+
+**What's Missing:**
+- ❌ AGI brain can't see trading opportunities
+- ❌ AGI brain can't execute trades
+- ❌ No autonomous profit scanning
+- ❌ No real-time price monitoring
+- ❌ No cross-platform decision synthesis
+- ❌ No self-directed goal creation
+- ❌ No learning from trade outcomes
+
+**To Achieve Full Autonomy:**
+1. **Connect trading to AGI brain** - Add trading observations to `_gather_observations()`
+2. **Enable autonomous execution** - Add trade execution to `_execute_proposal()`
+3. **Add profit scanner** - Continuously scan for opportunities
+4. **Implement risk manager** - Protect capital automatically
+5. **Cross-platform synthesis** - Combine MoltX + Onchain signals
+6. **Self-set goals** - Let AGI propose its own objectives
+7. **Outcome learning** - Improve from results
+
+---
+
 ## ✅ Recently Completed (Last 7 Days)
 
 ### 🪙 Trading System Implementation (Mar 1, 2026)
@@ -238,6 +396,37 @@
   - Fixed `'NoneType' object is not subscriptable` error
   - Added None checks in `get_token_balance()` and `check_snapshot_status()`
   - Location: `plugins/clawbr/clawbr_wallet.py:163-223`
+
+### MoltX AGI Integration (Mar 1, 2026)
+- [x] **Service Message Parser**
+  - Parses moltx_notice, moltx_hint, _model_guide from API responses
+  - Extracts actionable insights with priority levels
+  - Stores in memory: moltx_hints, moltx_api_tips, moltx_skill_version
+  - Location: `plugins/moltx/moltx_service_messages.py`
+
+- [x] **Quote-Posting System**
+  - AI-generated quote responses via DeepSeek
+  - Quotability scoring (engagement, hashtags, questions)
+  - Autonomous quote creation when MoltX suggests
+  - Location: `plugins/moltx/moltx_quote_posts.py`
+
+- [x] **AGI Brain Integration**
+  - Service messages → SyModObservations for AGI brain
+  - AGI brain executes MoltX-suggested actions autonomously
+  - Quote-posting triggered by service message hints
+  - Trending hashtag checks from platform suggestions
+  - Location: `src/agentic/moltx_agi_integration.py`
+
+- [x] **Async Engagement**
+  - Background task execution (prevents 2-3 min freeze)
+  - Non-blocking dynamic engagement
+  - AlleyBot stays responsive during engagement
+  - Location: `plugins/moltx/moltx_async_engagement.py`
+
+- [x] **Memory Method Fix**
+  - Fixed set_memory → save_memory in all MoltX code
+  - MoltX plugin now loads correctly
+  - Location: Multiple files
 
 ### AGI Features
 - [x] **LLM Decision Router** (Feb 27)
@@ -403,7 +592,11 @@ SOLANA_WALLET_PRIVATE_KEY=
 - Recipient whitelisting essential - all swaps must go to owner's wallet only
 - Profit calculation before execution prevents unprofitable trades
 - Gas price monitoring critical on Base (can spike to >100 gwei)
-- MoltX requires engagement before posting (429 error)
+- **MoltX service messages are goldmine for AGI** - Platform tells us exactly what to do
+- Quote-posting increases engagement when MoltX suggests it
+- Async engagement prevents main thread freeze (was blocking 2-3 minutes)
+- AGI brain needs trading integration to achieve autonomous profits
+- Cross-platform synthesis is key to intelligent decisions
 - Clawbr API can return None on failures (needs null checks)
 - Intent classifier command drop was due to missing registrations (now fixed)
 - SentenceTransformer was loading 3x (now fixed with singleton)
@@ -417,8 +610,41 @@ SOLANA_WALLET_PRIVATE_KEY=
 
 ---
 
-**Last Updated:** March 1, 2026 3:43 AM UTC  
+**Last Updated:** March 1, 2026 4:45 AM UTC  
 **Next Review:** March 8, 2026
+
+---
+
+## 🎉 Major Milestone: MoltX AGI Integration Complete
+
+**What We Built (Mar 1, 2026 - 4:00-4:45 AM):**
+- ✅ Service message parser (moltx_notice, moltx_hint, _model_guide)
+- ✅ Quote-posting capability with AI-generated responses
+- ✅ AGI brain integration (service messages → observations)
+- ✅ Async engagement (non-blocking background tasks)
+- ✅ Memory method fixes (set_memory → save_memory)
+
+**AGI Capabilities Added:**
+- ✅ Platform hints guide autonomous behavior
+- ✅ Quote-posting triggered by MoltX suggestions
+- ✅ Trending hashtag detection from service messages
+- ✅ Engagement runs in background (no freeze)
+- ✅ Dynamic strategy adaptation based on platform feedback
+
+**What's Still Missing for Full Autonomy:**
+- ❌ Trading integration with AGI brain (can't see/execute trades autonomously)
+- ❌ Profit opportunity scanner (no autonomous trade discovery)
+- ❌ Cross-platform decision synthesis (can't combine MoltX + Onchain signals)
+- ❌ Self-directed goal setting (AGI can't propose its own goals)
+- ❌ Outcome learning (no improvement from trade results)
+
+**Next Steps for Autonomous Onchain Profits:**
+1. Create `TradingOpportunityDetector` - Scan for profitable trades
+2. Add trading observations to `autonomous_brain._gather_observations()`
+3. Enable trade execution in `autonomous_brain._execute_proposal()`
+4. Implement `RiskManager` - Protect capital automatically
+5. Build `DecisionSynthesizer` - Combine MoltX + Onchain signals
+6. Add outcome learning - Improve from results
 
 ---
 

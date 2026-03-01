@@ -24,6 +24,9 @@ from src.agentic.skilldoc_manager import get_skilldoc_manager
 from src.agentic.agi_social_mixin import AGISocialMixin
 from src.agentic.agi_orchestrator import get_agi_orchestrator
 from src.agentic.moltx_agi_integration import gather_moltx_service_insights, execute_moltx_suggested_actions
+from src.agentic.cross_platform_intel import get_cross_platform_intelligence
+from src.agentic.opportunity_monitor import get_opportunity_monitor
+from src.agentic.outcome_learner import get_outcome_learner
 
 logger = logging.getLogger(__name__)
 
@@ -130,11 +133,19 @@ class AutonomousBrain(AGISocialMixin):
         # AGI Orchestrator integration
         self.agi_orchestrator = get_agi_orchestrator(core=core)
         
+        # New autonomy systems
+        self.cross_platform_intel = get_cross_platform_intelligence(plugin_manager) if plugin_manager else None
+        self.opportunity_monitor = get_opportunity_monitor(plugin_manager) if plugin_manager else None
+        self.outcome_learner = get_outcome_learner(core) if core else None
+        
         # Initialize AGI social behaviors
         AGISocialMixin.__init__(self)
         
         logger.info("🧠 AutonomousBrain initialized")
         logger.info(f"🎭 AGI Orchestrator: {'✅ Connected' if self.agi_orchestrator else '❌ Not available'}")
+        logger.info(f"🔗 Cross-Platform Intel: {'✅ Active' if self.cross_platform_intel else '❌ Not available'}")
+        logger.info(f"👁️ Opportunity Monitor: {'✅ Active' if self.opportunity_monitor else '❌ Not available'}")
+        logger.info(f"📊 Outcome Learner: {'✅ Active' if self.outcome_learner else '❌ Not available'}")
     
     def register_plugins_with_symod(self) -> None:
         """Register all loaded plugins with SyMod for observations"""
@@ -278,9 +289,29 @@ class AutonomousBrain(AGISocialMixin):
         """Execute one full SENSE-THINK-ACT-REFLECT cycle"""
         logger.info("🔄 === Brain Cycle Start ===")
         
+        # === OPPORTUNITY DETECTION: Check for interrupts ===
+        if self.opportunity_monitor:
+            opportunities = self.opportunity_monitor.scan_for_opportunities()
+            interrupt_opps = self.opportunity_monitor.get_interrupt_opportunities()
+            
+            if interrupt_opps:
+                logger.warning(f"🚨 {len(interrupt_opps)} high-priority opportunities detected!")
+                # Handle interrupts (could expand this to actually interrupt)
+        
         # === SENSE: Gather observations from all platforms ===
         observations = await self._gather_observations()
         logger.info(f"👁️ Gathered {len(observations)} observations")
+        
+        # === CROSS-PLATFORM SYNTHESIS: Connect dots across platforms ===
+        if self.cross_platform_intel:
+            synthesis = self.cross_platform_intel.synthesize_observations(observations)
+            cross_platform_topics = synthesis.get('cross_platform_topics', [])
+            opportunities = synthesis.get('opportunities', [])
+            
+            if cross_platform_topics:
+                logger.info(f"🔗 Found {len(cross_platform_topics)} cross-platform topics")
+            if opportunities:
+                logger.info(f"💡 Identified {len(opportunities)} cross-platform opportunities")
         
         # Submit to SyMod
         for obs in observations:
@@ -288,6 +319,16 @@ class AutonomousBrain(AGISocialMixin):
         
         # === FEED WORLD STATE DB: pipe observations so inference engine has real data ===
         await self._feed_observations_to_world_state(observations)
+        
+        # === SELF-DIRECTED GOALS: Propose new goals based on observations ===
+        if hasattr(self, 'goal_stack') and self.goal_stack and self.cross_platform_intel:
+            new_goals = self.goal_stack.auto_add_proposed_goals(
+                observations, 
+                self.cross_platform_intel,
+                max_new_goals=2
+            )
+            if new_goals > 0:
+                logger.info(f"🎯 Self-proposed {new_goals} new goals")
         
         # === AGI ORCHESTRATION: Run full AGI cycle analysis ===
         agi_actions = await self._run_agi_orchestration_cycle()
@@ -341,6 +382,19 @@ class AutonomousBrain(AGISocialMixin):
                 self._actions_this_hour += 1
                 self.stats['actions_taken'] += 1
                 
+                # === OUTCOME LEARNING: Record success ===
+                if self.outcome_learner:
+                    self.outcome_learner.record_outcome(
+                        action_type=proposal.action_type,
+                        platform=proposal.metadata.get('plugin', 'unknown'),
+                        success=True,
+                        data={
+                            'content': proposal.content,
+                            'confidence': proposal.confidence,
+                            'target': proposal.target_name
+                        }
+                    )
+                
                 # Log action
                 record = self.action_logger.log_action(
                     action_type=proposal.action_type,
@@ -355,6 +409,15 @@ class AutonomousBrain(AGISocialMixin):
                     trigger_type=proposal.metadata.get('trigger', 'scheduled'),
                     trigger_data=proposal.metadata.get('trigger_data', {})
                 )
+            else:
+                # === OUTCOME LEARNING: Record failure ===
+                if self.outcome_learner:
+                    self.outcome_learner.record_outcome(
+                        action_type=proposal.action_type,
+                        platform=proposal.metadata.get('plugin', 'unknown'),
+                        success=False,
+                        data={'reason': 'execution_failed'}
+                    )
                 
                 # Log outcome
                 self.action_logger.log_outcome(
