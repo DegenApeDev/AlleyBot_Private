@@ -109,50 +109,98 @@ class MoltxAPIMixin(SkillDetectionMixin):
         except Exception as e:
             print(f"❌ Error saving Moltx credentials: {e}")
 
-    def _make_request(self, method, endpoint, data=None, params=None, files=None, anon=False):
-        """Make authenticated request to Moltx API"""
+    def _make_request(self, method, endpoint, data=None, params=None, files=None, anon=False, max_retries=3):
+        """
+        Make authenticated request to Moltx API with retry logic.
+        
+        Args:
+            method: HTTP method (GET, POST, PATCH, DELETE)
+            endpoint: API endpoint
+            data: Request data
+            params: Query parameters
+            files: Files to upload
+            anon: Anonymous request (no auth)
+            max_retries: Maximum retry attempts for 503 errors (default: 3)
+        
+        Returns:
+            Response JSON or None on failure
+        """
         headers = {'Content-Type': 'application/json'}
         if not anon and self.api_key:
             headers['Authorization'] = f'Bearer {self.api_key}'
 
         url = f"{self.base_url}{endpoint}"
+        
+        # Retry logic for 503 errors (rate limiting/server overload)
+        import time
+        retry_count = 0
+        base_delay = 1.0  # Start with 1 second delay
 
-        try:
-            if method == 'GET':
-                response = requests.get(url, headers=headers, params=params)
-            elif method == 'POST':
-                if files:
-                    headers.pop('Content-Type', None)
-                    response = requests.post(url, headers=headers, data=data, files=files)
+        while retry_count <= max_retries:
+            try:
+                if method == 'GET':
+                    response = requests.get(url, headers=headers, params=params)
+                elif method == 'POST':
+                    if files:
+                        headers.pop('Content-Type', None)
+                        response = requests.post(url, headers=headers, data=data, files=files)
+                    else:
+                        response = requests.post(url, headers=headers, json=data)
+                elif method == 'PATCH':
+                    response = requests.patch(url, headers=headers, json=data)
+                elif method == 'DELETE':
+                    response = requests.delete(url, headers=headers)
                 else:
-                    response = requests.post(url, headers=headers, json=data)
-            elif method == 'PATCH':
-                response = requests.patch(url, headers=headers, json=data)
-            elif method == 'DELETE':
-                response = requests.delete(url, headers=headers)
-            else:
-                raise ValueError(f"Unsupported method: {method}")
+                    raise ValueError(f"Unsupported method: {method}")
 
-            response.raise_for_status()
-            result = response.json()
+                # Check for 503 errors (rate limiting/server overload)
+                if response.status_code == 503 and retry_count < max_retries:
+                    retry_count += 1
+                    delay = base_delay * (2 ** (retry_count - 1))  # Exponential backoff: 1s, 2s, 4s
+                    try:
+                        error_body = response.json()
+                        error_msg = error_body.get('error', 'Server temporarily unavailable')
+                    except:
+                        error_msg = 'Server temporarily unavailable'
+                    
+                    print(f"⚠️ MoltX rate limit (503): {error_msg}. Retrying in {delay}s... (attempt {retry_count}/{max_retries})")
+                    time.sleep(delay)
+                    continue  # Retry the request
+                
+                response.raise_for_status()
+                result = response.json()
 
-            # Check for platform-pushed skill update events
-            self._check_for_skill_event('moltx', result)
+                # Check for platform-pushed skill update events
+                self._check_for_skill_event('moltx', result)
 
-            return result
+                return result
 
-        except requests.exceptions.RequestException as e:
-            # Log detailed error info for debugging
-            if hasattr(e, 'response') and e.response is not None:
-                status_code = e.response.status_code
-                try:
-                    error_body = e.response.text
-                    print(f"❌ Moltx API error {status_code}: {error_body[:500]}")
-                except:
-                    print(f"❌ Moltx API error {status_code}: {e}")
-            else:
-                print(f"❌ Moltx API error: {e}")
-            return None
+            except requests.exceptions.RequestException as e:
+                # Log detailed error info for debugging
+                if hasattr(e, 'response') and e.response is not None:
+                    status_code = e.response.status_code
+                    
+                    # If it's a 503 and we haven't exhausted retries, continue loop
+                    if status_code == 503 and retry_count < max_retries:
+                        retry_count += 1
+                        delay = base_delay * (2 ** (retry_count - 1))
+                        print(f"⚠️ MoltX rate limit (503). Retrying in {delay}s... (attempt {retry_count}/{max_retries})")
+                        time.sleep(delay)
+                        continue
+                    
+                    # Otherwise, log and return None
+                    try:
+                        error_body = e.response.text
+                        print(f"❌ Moltx API error {status_code}: {error_body[:500]}")
+                    except:
+                        print(f"❌ Moltx API error {status_code}: {e}")
+                else:
+                    print(f"❌ Moltx API error: {e}")
+                return None
+        
+        # If we exhausted all retries
+        print(f"❌ MoltX request failed after {max_retries} retries (503 rate limit)")
+        return None
 
     def _check_for_skill_event(self, platform, response):
         """Check API response for skill update notices from any platform using console monitor"""

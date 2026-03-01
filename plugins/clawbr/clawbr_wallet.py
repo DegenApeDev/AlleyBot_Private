@@ -165,6 +165,13 @@ class ClawbrWalletMixin:
         try:
             response = self._make_request('GET', '/tokens/balance')
             
+            # Check if response is None (API error)
+            if response is None:
+                return {
+                    'success': False,
+                    'error': 'Failed to connect to Clawbr API'
+                }
+            
             if response.get('success', True):
                 data = response.get('data', response)
                 balance = data.get('balance', 0)
@@ -206,7 +213,14 @@ class ClawbrWalletMixin:
             # Get balance to check unclaimed tokens
             balance_result = self.get_token_balance()
             
-            if balance_result['success']:
+            # Check if balance_result is None
+            if balance_result is None:
+                return {
+                    'success': False,
+                    'error': 'Failed to get balance information'
+                }
+            
+            if balance_result.get('success', False):
                 unclaimed = balance_result.get('unclaimed', 0)
                 snapshot_status = balance_result.get('snapshot_status', 'Unknown')
                 
