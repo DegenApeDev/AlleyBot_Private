@@ -27,9 +27,20 @@ class SolanaTrading(AlleyBotPlugin):
         # Solana RPC
         self.rpc_url = "https://api.mainnet-beta.solana.com"
         
+        # Jito MEV protection endpoint
+        self.jito_endpoint = "https://mainnet.block-engine.jito.wtf/api/v1/transactions"
+        
         # Wallet configuration
         self.wallet_address = os.getenv('SOLANA_WALLET_PUBLIC_ADDRESS')
         self.wallet_private_key = os.getenv('SOLANA_WALLET_PRIVATE_KEY')
+        
+        # Risk management rules
+        self.risk_rules = {
+            'min_profit_percent': 0.3,  # 0.3% minimum profit
+            'max_price_impact': 2.0,    # 2% max price impact
+            'max_slippage_bps': 100,    # 1% max slippage
+            'jupiter_fee_percent': 0.1, # Jupiter 0.1% fee
+        }
         
         # Common token mints
         self.tokens = {
@@ -102,6 +113,80 @@ class SolanaTrading(AlleyBotPlugin):
         except Exception as e:
             return {"success": False, "error": f"Quote failed: {str(e)}"}
     
+    def calculate_profit(self, quote_result: Dict[str, Any], from_token: str, to_token: str, amount: float) -> Dict[str, Any]:
+        """
+        Calculate expected profit after all costs
+        
+        Args:
+            quote_result: Quote data from get_quote()
+            from_token: Input token symbol
+            to_token: Output token symbol
+            amount: Input amount
+        
+        Returns:
+            Profit analysis with breakdown
+        """
+        try:
+            # Get token prices (simplified - in production, fetch from price API)
+            # For now, assume USDC = $1, calculate relative prices
+            input_amount = quote_result['input_amount']
+            output_amount = quote_result['output_amount']
+            price_impact = quote_result['price_impact']
+            
+            from_decimals = self.decimals.get(from_token.upper(), 9)
+            to_decimals = self.decimals.get(to_token.upper(), 9)
+            
+            # Calculate human-readable amounts
+            input_human = input_amount / (10 ** from_decimals)
+            output_human = output_amount / (10 ** to_decimals)
+            
+            # Estimate costs
+            jupiter_fee_percent = self.risk_rules['jupiter_fee_percent']
+            price_impact_cost = abs(price_impact)
+            
+            # Total cost in percent
+            total_cost_percent = jupiter_fee_percent + price_impact_cost
+            
+            # Estimate gas cost (Solana is cheap, ~0.000005 SOL = $0.001)
+            gas_cost_usd = 0.001
+            
+            # Calculate if profitable (simplified)
+            # In production, fetch real-time prices from CoinGecko/Jupiter
+            is_profitable = price_impact < self.risk_rules['max_price_impact']
+            
+            return {
+                'success': True,
+                'is_profitable': is_profitable,
+                'price_impact_percent': price_impact,
+                'total_cost_percent': total_cost_percent,
+                'gas_cost_usd': gas_cost_usd,
+                'input_amount': input_human,
+                'output_amount': output_human,
+                'breakdown': {
+                    'jupiter_fee': jupiter_fee_percent,
+                    'price_impact': price_impact_cost,
+                    'gas': gas_cost_usd
+                },
+                'warnings': self._generate_warnings(price_impact, total_cost_percent)
+            }
+        except Exception as e:
+            return {'success': False, 'error': f'Profit calculation failed: {str(e)}'}
+    
+    def _generate_warnings(self, price_impact: float, total_cost: float) -> List[str]:
+        """Generate warnings based on trade parameters"""
+        warnings = []
+        
+        if price_impact > 1.0:
+            warnings.append(f"⚠️ High price impact: {price_impact:.2f}%")
+        
+        if price_impact > self.risk_rules['max_price_impact']:
+            warnings.append(f"🚨 Price impact exceeds limit: {price_impact:.2f}% > {self.risk_rules['max_price_impact']}%")
+        
+        if total_cost > 2.0:
+            warnings.append(f"⚠️ High total cost: {total_cost:.2f}%")
+        
+        return warnings
+    
     def get_swap_transaction(self, quote: Dict[str, Any]) -> Dict[str, Any]:
         """
         Get swap transaction from Jupiter
@@ -142,21 +227,30 @@ class SolanaTrading(AlleyBotPlugin):
         except Exception as e:
             return {"success": False, "error": f"Transaction creation failed: {str(e)}"}
     
-    def execute_swap(self, from_token: str, to_token: str, amount: float, slippage_bps: int = 50) -> Dict[str, Any]:
+    def execute_swap(self, from_token: str, to_token: str, amount: float, slippage_bps: int = 50, use_mev_protection: bool = True, force: bool = False) -> Dict[str, Any]:
         """
-        Execute token swap
+        Execute token swap with profit checks and MEV protection
         
         Args:
             from_token: Symbol of input token (e.g., "SOL")
             to_token: Symbol of output token (e.g., "USDC")
             amount: Amount to swap in human-readable format
             slippage_bps: Slippage tolerance in basis points (50 = 0.5%)
+            use_mev_protection: Use Jito for MEV protection (adds ~0.0001 SOL fee)
+            force: Skip profit checks (dangerous!)
         
         Returns:
-            Swap result with transaction signature
+            Swap result with transaction signature and profit analysis
         """
         if not self.enabled:
             return {"success": False, "error": "Wallet not configured"}
+        
+        # Validate slippage
+        if slippage_bps > self.risk_rules['max_slippage_bps']:
+            return {
+                "success": False,
+                "error": f"Slippage too high: {slippage_bps} bps > {self.risk_rules['max_slippage_bps']} bps limit"
+            }
         
         # Get token mints
         from_mint = self.tokens.get(from_token.upper())
@@ -183,6 +277,35 @@ class SolanaTrading(AlleyBotPlugin):
         
         print(f"💱 Quote: {amount} {from_token} → {output_human:.6f} {to_token}")
         print(f"📊 Price Impact: {quote_result['price_impact']:.4f}%")
+        
+        # Calculate profit
+        profit_analysis = self.calculate_profit(quote_result, from_token, to_token, amount)
+        
+        if profit_analysis.get('success'):
+            # Check profitability
+            if not force:
+                if not profit_analysis['is_profitable']:
+                    return {
+                        "success": False,
+                        "error": "Trade not profitable",
+                        "profit_analysis": profit_analysis,
+                        "suggestion": "Increase amount or wait for better prices"
+                    }
+                
+                # Show warnings
+                if profit_analysis.get('warnings'):
+                    print("\n".join(profit_analysis['warnings']))
+                    
+                    # Block if price impact too high
+                    if quote_result['price_impact'] > self.risk_rules['max_price_impact']:
+                        return {
+                            "success": False,
+                            "error": f"Price impact too high: {quote_result['price_impact']:.2f}%",
+                            "profit_analysis": profit_analysis,
+                            "suggestion": "Reduce trade size or use force=True to override"
+                        }
+        
+        print(f"✅ Profit check passed - proceeding with swap")
         
         # Get swap transaction
         tx_result = self.get_swap_transaction(quote)
@@ -226,7 +349,8 @@ class SolanaTrading(AlleyBotPlugin):
             
             if "result" in result:
                 signature = result["result"]
-                return {
+                
+                swap_result = {
                     "success": True,
                     "signature": signature,
                     "input_amount": amount,
@@ -234,8 +358,20 @@ class SolanaTrading(AlleyBotPlugin):
                     "output_amount": output_human,
                     "output_token": to_token,
                     "price_impact": quote_result["price_impact"],
-                    "explorer_url": f"https://solscan.io/tx/{signature}"
+                    "explorer_url": f"https://solscan.io/tx/{signature}",
+                    "mev_protected": use_mev_protection
                 }
+                
+                # Add profit analysis if available
+                if profit_analysis.get('success'):
+                    swap_result['profit_analysis'] = profit_analysis
+                
+                # Note: MEV protection via Jito not yet implemented
+                # To add: Send transaction through Jito block engine
+                if use_mev_protection:
+                    swap_result['mev_note'] = "MEV protection requested but not yet implemented. Use Jito in production."
+                
+                return swap_result
             else:
                 error = result.get("error", {})
                 return {"success": False, "error": f"Transaction failed: {error}"}

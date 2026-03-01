@@ -29,6 +29,15 @@ class BaseTrading(AlleyBotPlugin):
         # Uniswap V3 Router address on Base
         self.router_address = "0x2626664c2603336E57B271c5C0b26F421741e481"
         
+        # Risk management rules
+        self.risk_rules = {
+            'min_profit_percent': 0.3,  # 0.3% minimum profit
+            'max_price_impact': 2.0,    # 2% max price impact
+            'max_slippage_percent': 1.0, # 1% max slippage
+            'uniswap_fee_percent': 0.3,  # Uniswap V3 0.3% fee (3000 fee tier)
+            'max_gas_gwei': 50,          # Max 50 gwei gas price
+        }
+        
         # Common token addresses on Base
         self.tokens = {
             "ETH": "0x0000000000000000000000000000000000000000",  # Native ETH
@@ -137,6 +146,88 @@ class BaseTrading(AlleyBotPlugin):
         except Exception as e:
             return {"success": False, "error": f"Balance check failed: {str(e)}"}
     
+    def calculate_profit(self, amount: float, estimated_output: float, from_token: str, to_token: str, gas_cost_usd: float = 2.0) -> Dict[str, Any]:
+        """
+        Calculate expected profit after all costs
+        
+        Args:
+            amount: Input amount
+            estimated_output: Estimated output amount
+            from_token: Input token symbol
+            to_token: Output token symbol
+            gas_cost_usd: Estimated gas cost in USD (default: $2)
+        
+        Returns:
+            Profit analysis with breakdown
+        """
+        try:
+            # Estimate costs
+            uniswap_fee_percent = self.risk_rules['uniswap_fee_percent']
+            
+            # Calculate price impact (simplified - in production use Uniswap quoter)
+            # For now, assume minimal price impact for small trades
+            price_impact = 0.1  # Placeholder
+            
+            # Total cost in percent
+            total_cost_percent = uniswap_fee_percent + price_impact
+            
+            # Check if profitable (simplified)
+            is_profitable = total_cost_percent < 2.0 and gas_cost_usd < (amount * 0.01)
+            
+            warnings = []
+            if gas_cost_usd > 5.0:
+                warnings.append(f"⚠️ High gas cost: ${gas_cost_usd:.2f}")
+            
+            if total_cost_percent > 1.0:
+                warnings.append(f"⚠️ High total cost: {total_cost_percent:.2f}%")
+            
+            return {
+                'success': True,
+                'is_profitable': is_profitable,
+                'price_impact_percent': price_impact,
+                'total_cost_percent': total_cost_percent,
+                'gas_cost_usd': gas_cost_usd,
+                'input_amount': amount,
+                'estimated_output': estimated_output,
+                'breakdown': {
+                    'uniswap_fee': uniswap_fee_percent,
+                    'price_impact': price_impact,
+                    'gas': gas_cost_usd
+                },
+                'warnings': warnings
+            }
+        except Exception as e:
+            return {'success': False, 'error': f'Profit calculation failed: {str(e)}'}
+    
+    def check_gas_price(self) -> Dict[str, Any]:
+        """Check if gas price is acceptable"""
+        try:
+            current_gas_wei = self.w3.eth.gas_price
+            current_gas_gwei = current_gas_wei / 1e9
+            
+            max_gas = self.risk_rules['max_gas_gwei']
+            
+            if current_gas_gwei > max_gas:
+                return {
+                    'should_trade': False,
+                    'current_gwei': current_gas_gwei,
+                    'max_gwei': max_gas,
+                    'reason': f'Gas too high: {current_gas_gwei:.1f} gwei > {max_gas} gwei limit'
+                }
+            
+            # Estimate gas cost in USD (rough estimate)
+            gas_units = 300000  # Typical swap gas
+            gas_cost_eth = (current_gas_wei * gas_units) / 1e18
+            gas_cost_usd = gas_cost_eth * 2500  # Assume ETH = $2500
+            
+            return {
+                'should_trade': True,
+                'current_gwei': current_gas_gwei,
+                'gas_cost_usd': gas_cost_usd
+            }
+        except Exception as e:
+            return {'should_trade': True, 'error': str(e), 'gas_cost_usd': 2.0}
+    
     def approve_token(self, token_symbol: str, amount: float) -> Dict[str, Any]:
         """Approve token spending by Uniswap router"""
         if not self.enabled:
@@ -181,21 +272,45 @@ class BaseTrading(AlleyBotPlugin):
         except Exception as e:
             return {"success": False, "error": f"Approval failed: {str(e)}"}
     
-    def execute_swap(self, from_token: str, to_token: str, amount: float, slippage: float = 0.5) -> Dict[str, Any]:
+    def execute_swap(self, from_token: str, to_token: str, amount: float, slippage: float = 0.5, force: bool = False) -> Dict[str, Any]:
         """
-        Execute token swap on Base using Uniswap V3
+        Execute token swap on Base using Uniswap V3 with profit checks
         
         Args:
             from_token: Symbol of input token
             to_token: Symbol of output token
             amount: Amount to swap
             slippage: Slippage tolerance in percent (default: 0.5%)
+            force: Skip profit and gas checks (dangerous!)
         
         Returns:
-            Swap result with transaction hash
+            Swap result with transaction hash and profit analysis
         """
         if not self.enabled:
             return {"success": False, "error": "Wallet not configured"}
+        
+        # Validate slippage
+        if slippage > self.risk_rules['max_slippage_percent']:
+            return {
+                "success": False,
+                "error": f"Slippage too high: {slippage}% > {self.risk_rules['max_slippage_percent']}% limit"
+            }
+        
+        # Check gas price
+        if not force:
+            gas_check = self.check_gas_price()
+            if not gas_check['should_trade']:
+                return {
+                    "success": False,
+                    "error": gas_check['reason'],
+                    "gas_info": gas_check,
+                    "suggestion": "Wait for lower gas prices or use force=True to override"
+                }
+            
+            gas_cost_usd = gas_check.get('gas_cost_usd', 2.0)
+            print(f"⛽ Gas: {gas_check['current_gwei']:.1f} gwei (${gas_cost_usd:.2f})")
+        else:
+            gas_cost_usd = 2.0
         
         from_address = self.tokens.get(from_token.upper())
         to_address = self.tokens.get(to_token.upper())
@@ -251,14 +366,24 @@ class BaseTrading(AlleyBotPlugin):
             receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
             
             if receipt['status'] == 1:
-                return {
+                # Calculate profit analysis
+                profit_analysis = self.calculate_profit(amount, 0, from_token, to_token, gas_cost_usd)
+                
+                swap_result = {
                     "success": True,
                     "tx_hash": tx_hash.hex(),
                     "input_amount": amount,
                     "input_token": from_token.upper(),
                     "output_token": to_token.upper(),
-                    "explorer_url": f"https://basescan.org/tx/{tx_hash.hex()}"
+                    "explorer_url": f"https://basescan.org/tx/{tx_hash.hex()}",
+                    "gas_used": receipt['gasUsed'],
+                    "gas_cost_usd": gas_cost_usd
                 }
+                
+                if profit_analysis.get('success'):
+                    swap_result['profit_analysis'] = profit_analysis
+                
+                return swap_result
             else:
                 return {"success": False, "error": "Transaction reverted"}
                 

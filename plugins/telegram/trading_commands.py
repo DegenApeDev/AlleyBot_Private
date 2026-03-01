@@ -72,17 +72,65 @@ class TradingCommands:
         result = solana_trading.execute_swap(from_token, to_token, amount, slippage_bps)
         
         if result.get('success'):
+            # Build success message with profit analysis
             msg = f"""✅ **Swap Successful!**
 
 📥 Input: {result['input_amount']} {result['input_token']}
 📤 Output: {result['output_amount']:.6f} {result['output_token']}
-📊 Price Impact: {result['price_impact']:.4f}%
-🔗 [View on Solscan]({result['explorer_url']})
-
-Signature: `{result['signature'][:16]}...`"""
+📊 Price Impact: {result['price_impact']:.4f}%"""
+            
+            # Add profit analysis if available
+            if 'profit_analysis' in result and result['profit_analysis'].get('success'):
+                pa = result['profit_analysis']
+                msg += f"\n\n� **Cost Breakdown:**"
+                msg += f"\n• Jupiter Fee: {pa['breakdown']['jupiter_fee']}%"
+                msg += f"\n• Price Impact: {pa['breakdown']['price_impact']:.2f}%"
+                msg += f"\n• Gas: ${pa['breakdown']['gas']:.3f}"
+                msg += f"\n• Total Cost: {pa['total_cost_percent']:.2f}%"
+                
+                # Add warnings if any
+                if pa.get('warnings'):
+                    msg += f"\n\n⚠️ **Warnings:**"
+                    for warning in pa['warnings']:
+                        msg += f"\n{warning}"
+            
+            msg += f"\n\n�🔗 [View on Solscan]({result['explorer_url']})"
+            msg += f"\n\nSignature: `{result['signature'][:16]}...`"
+            
             await update.message.reply_text(msg, parse_mode='Markdown', disable_web_page_preview=True)
+            
+            # Record trade in analytics
+            analytics = self.core.plugin_manager.plugins.get('trading_analytics')
+            if analytics:
+                analytics.record_trade({
+                    'chain': 'solana',
+                    'dex': 'jupiter',
+                    'token_in': result['input_token'],
+                    'token_out': result['output_token'],
+                    'amount_in': result['input_amount'],
+                    'amount_out': result['output_amount'],
+                    'price_impact': result['price_impact'],
+                    'slippage_bps': slippage_bps,
+                    'fees_usd': result.get('profit_analysis', {}).get('breakdown', {}).get('jupiter_fee', 0),
+                    'gas_cost_usd': result.get('profit_analysis', {}).get('breakdown', {}).get('gas', 0.001),
+                    'tx_hash': result['signature'],
+                    'mev_protected': result.get('mev_protected', False),
+                    'strategy': 'manual'
+                })
         else:
-            await update.message.reply_text(f"❌ Swap failed: {result.get('error', 'Unknown error')}")
+            error_msg = f"❌ Swap failed: {result.get('error', 'Unknown error')}"
+            
+            # Add profit analysis if trade was rejected for profitability
+            if 'profit_analysis' in result:
+                pa = result['profit_analysis']
+                error_msg += f"\n\n📊 **Analysis:**"
+                error_msg += f"\nPrice Impact: {pa.get('price_impact_percent', 0):.2f}%"
+                error_msg += f"\nTotal Cost: {pa.get('total_cost_percent', 0):.2f}%"
+            
+            if 'suggestion' in result:
+                error_msg += f"\n\n💡 {result['suggestion']}"
+            
+            await update.message.reply_text(error_msg)
     
     async def swap_base(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Swap tokens on Base using Uniswap V3"""
@@ -189,6 +237,116 @@ TX: `{result['tx_hash'][:16]}...`"""
             await update.message.reply_text(msg, parse_mode='Markdown')
         else:
             await update.message.reply_text(f"❌ Price check failed: {result.get('error', 'Unknown error')}")
+    
+    async def trading_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """View trading performance statistics"""
+        if not await self._verify_owner(update):
+            await update.message.reply_text("❌ Owner-only command")
+            return
+        
+        # Get analytics plugin
+        analytics = self.core.plugin_manager.plugins.get('trading_analytics')
+        if not analytics:
+            await update.message.reply_text("❌ Trading analytics plugin not loaded")
+            return
+        
+        # Get days parameter
+        days = 30
+        if context.args and len(context.args) > 0:
+            try:
+                days = int(context.args[0])
+            except ValueError:
+                await update.message.reply_text("❌ Invalid days parameter")
+                return
+        
+        await update.message.reply_text(f"📊 Fetching {days}-day trading stats...")
+        
+        stats = analytics.get_performance_stats(days)
+        
+        if not stats.get('success'):
+            await update.message.reply_text(f"❌ Failed to get stats: {stats.get('error', 'Unknown error')}")
+            return
+        
+        if stats.get('total_trades', 0) == 0:
+            await update.message.reply_text(f"📊 No trades in the last {days} days")
+            return
+        
+        # Build stats message
+        msg = f"""📊 **Trading Performance ({days} days)**
+
+📈 **Overview:**
+• Total Trades: {stats['total_trades']}
+• Profitable: {stats['profitable_trades']} ({stats['win_rate']}%)
+• Win Rate: {stats['win_rate']}%
+
+💰 **Profit & Loss:**
+• Gross Profit: ${stats['total_profit_usd']:.2f}
+• Total Fees: ${stats['total_fees_usd']:.2f}
+• Total Gas: ${stats['total_gas_usd']:.2f}
+• **Net Profit: ${stats['net_profit_usd']:.2f}**
+
+📊 **Performance:**
+• Avg Profit: {stats['avg_profit_percent']:.2f}%
+• Best Trade: ${stats['best_trade_usd']:.2f}
+• Worst Trade: ${stats['worst_trade_usd']:.2f}"""
+        
+        # Add chain breakdown
+        if stats.get('chains'):
+            msg += f"\n\n⛓️ **By Chain:**"
+            for chain, data in stats['chains'].items():
+                msg += f"\n• {chain.title()}: {data['trades']} trades, ${data['profit']:.2f}"
+        
+        # Add strategy breakdown
+        if stats.get('strategies'):
+            msg += f"\n\n🎯 **By Strategy:**"
+            for strategy in stats['strategies'][:3]:  # Top 3
+                msg += f"\n• {strategy['strategy']}: {strategy['trades']} trades, ${strategy['profit']:.2f}"
+        
+        await update.message.reply_text(msg, parse_mode='Markdown')
+    
+    async def recent_trades(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """View recent trades"""
+        if not await self._verify_owner(update):
+            await update.message.reply_text("❌ Owner-only command")
+            return
+        
+        # Get analytics plugin
+        analytics = self.core.plugin_manager.plugins.get('trading_analytics')
+        if not analytics:
+            await update.message.reply_text("❌ Trading analytics plugin not loaded")
+            return
+        
+        # Get limit parameter
+        limit = 10
+        if context.args and len(context.args) > 0:
+            try:
+                limit = int(context.args[0])
+                limit = min(limit, 20)  # Max 20
+            except ValueError:
+                await update.message.reply_text("❌ Invalid limit parameter")
+                return
+        
+        result = analytics.get_recent_trades(limit)
+        
+        if not result.get('success'):
+            await update.message.reply_text(f"❌ Failed to get trades: {result.get('error', 'Unknown error')}")
+            return
+        
+        trades = result.get('trades', [])
+        if not trades:
+            await update.message.reply_text("📊 No recent trades")
+            return
+        
+        msg = f"📜 **Recent Trades ({len(trades)}):**\n\n"
+        
+        for i, trade in enumerate(trades, 1):
+            profit_emoji = "✅" if trade['profit_usd'] > 0 else "❌"
+            msg += f"{i}. {profit_emoji} {trade['pair']} on {trade['chain'].title()}\n"
+            msg += f"   • Amount: {trade['amount_in']:.4f} → {trade['amount_out']:.4f}\n"
+            msg += f"   • Profit: ${trade['profit_usd']:.2f} ({trade['profit_pct']:.2f}%)\n"
+            msg += f"   • TX: `{trade['tx_hash']}`\n\n"
+        
+        await update.message.reply_text(msg, parse_mode='Markdown')
     
     async def base_price(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Get token price on Base"""

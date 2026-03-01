@@ -416,6 +416,8 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("swap_base", self.trading_commands.swap_base))
         self.application.add_handler(CommandHandler("sol_price", self.trading_commands.sol_price))
         self.application.add_handler(CommandHandler("base_price", self.trading_commands.base_price))
+        self.application.add_handler(CommandHandler("trading_stats", self.trading_commands.trading_stats))
+        self.application.add_handler(CommandHandler("recent_trades", self.trading_commands.recent_trades))
         
         # AGI Meta-Brain command
         self.application.add_handler(CommandHandler("agi_cycle", self._handle_agi_cycle))
