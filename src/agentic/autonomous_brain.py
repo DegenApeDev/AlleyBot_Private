@@ -298,6 +298,18 @@ class AutonomousBrain(AGISocialMixin):
         proposals.extend(agi_actions)  # Add AGI-generated actions
         logger.info(f"🧠 Generated {len(proposals)} total proposals")
         
+        # === EXECUTE MOLTX SUGGESTED ACTIONS ===
+        # Execute actions suggested by MoltX service messages (quote posts, trending checks, etc.)
+        moltx = self.plugin_manager.get_plugin('moltx')
+        if moltx:
+            moltx_results = await execute_moltx_suggested_actions(moltx, self)
+            if moltx_results:
+                logger.info(f"✅ Executed {len(moltx_results)} MoltX-suggested actions")
+                for result in moltx_results:
+                    if result.get('success'):
+                        self.stats['actions_taken'] += 1
+                        self._actions_this_hour += 1
+        
         # === ACT: Execute proposals ===
         executed = 0
         for proposal in proposals:

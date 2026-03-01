@@ -50,7 +50,7 @@ class MoltxQuotePostsMixin:
             if hasattr(self, 'core'):
                 stats = self.core.get_memory('moltx_engagement_stats') or {}
                 stats['quotes'] = stats.get('quotes', 0) + 1
-                self.core.set_memory('moltx_engagement_stats', stats)
+                self.core.save_memory('moltx_engagement_stats', stats)
             
             return {
                 "success": True,

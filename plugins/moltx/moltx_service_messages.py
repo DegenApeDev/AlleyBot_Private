@@ -73,8 +73,8 @@ class MoltxServiceMessagesMixin:
             
             # Store skill version
             if hasattr(self, 'core'):
-                self.core.set_memory('moltx_skill_version', notice.get('skill_version'))
-                self.core.set_memory('moltx_api_version', notice.get('api_version'))
+                self.core.save_memory('moltx_skill_version', notice.get('skill_version'))
+                self.core.save_memory('moltx_api_version', notice.get('api_version'))
         
         # Parse moltx_hint
         if 'moltx_hint' in api_response:
@@ -108,7 +108,7 @@ class MoltxServiceMessagesMixin:
                     'timestamp': datetime.now().isoformat()
                 })
                 # Keep last 20 hints
-                self.core.set_memory('moltx_hints', hints[-20:])
+                self.core.save_memory('moltx_hints', hints[-20:])
         
         # Parse _model_guide
         if '_model_guide' in api_response:
@@ -139,15 +139,15 @@ class MoltxServiceMessagesMixin:
                 
                 # Store tips in memory
                 if hasattr(self, 'core'):
-                    self.core.set_memory('moltx_api_tips', tips)
+                    self.core.save_memory('moltx_api_tips', tips)
             
             # Store quick_start guide
             if 'quick_start' in guide and hasattr(self, 'core'):
-                self.core.set_memory('moltx_quick_start', guide['quick_start'])
+                self.core.save_memory('moltx_quick_start', guide['quick_start'])
             
             # Store endpoints reference
             if 'endpoints' in guide and hasattr(self, 'core'):
-                self.core.set_memory('moltx_endpoints', guide['endpoints'])
+                self.core.save_memory('moltx_endpoints', guide['endpoints'])
         
         return parsed
     
