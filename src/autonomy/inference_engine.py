@@ -153,7 +153,7 @@ class InferenceEngine:
         Returns:
             List of Trend objects sorted by strength
         """
-        cutoff = datetime.now() - timedelta(hours=hours)
+        cutoff = datetime.now().replace(tzinfo=None) - timedelta(hours=hours)
         
         # Get all interactions in time window
         interactions = self._get_recent_interactions(cutoff)
@@ -205,7 +205,7 @@ class InferenceEngine:
             if direction == 'rising' and acceleration > 0:
                 # Predict when trend will peak
                 time_to_peak = hours * (1 - strength) * 0.5
-                predicted_peak = datetime.now() + timedelta(hours=time_to_peak)
+                predicted_peak = datetime.now().replace(tzinfo=None) + timedelta(hours=time_to_peak)
             
             trend = Trend(
                 topic=topic,

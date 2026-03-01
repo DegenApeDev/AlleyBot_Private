@@ -450,7 +450,7 @@ class AGIOrchestrator:
                             velocity=weight * 0.5,
                             acceleration=0.0,
                             data_points=max(5, int(weight * 50)),
-                            start_time=datetime.now(),
+                            start_time=datetime.now().replace(tzinfo=None),
                             confidence=min(0.8, weight + 0.3),
                         ))
                 if trends:
