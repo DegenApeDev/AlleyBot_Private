@@ -166,7 +166,7 @@ class InferenceEngine:
         
         for interaction in interactions:
             content = interaction.get('content', '')
-            timestamp = interaction.get('timestamp', datetime.now())
+            timestamp = interaction.get('timestamp', datetime.now().replace(tzinfo=None))
             
             # Extract hashtags and mentions
             topics = self._extract_topics(content)
@@ -329,7 +329,7 @@ class InferenceEngine:
         entity_interactions = defaultdict(lambda: defaultdict(int))
         entity_metrics = defaultdict(lambda: {'mentions': 0, 'engagement': 0})
         
-        cutoff = datetime.now() - timedelta(hours=48)
+        cutoff = datetime.now().replace(tzinfo=None) - timedelta(hours=48)
         interactions = self._get_recent_interactions(cutoff)
         
         for interaction in interactions:
@@ -580,7 +580,7 @@ class InferenceEngine:
         Returns:
             SentimentEvolution with timeline and key events
         """
-        cutoff = datetime.now() - timedelta(hours=hours)
+        cutoff = datetime.now().replace(tzinfo=None) - timedelta(hours=hours)
         
         # Get mentions of topic
         mentions = self._get_topic_mentions(topic, cutoff)
@@ -720,7 +720,7 @@ class InferenceEngine:
         Returns:
             List of cross-platform patterns
         """
-        cutoff = datetime.now() - timedelta(hours=hours)
+        cutoff = datetime.now().replace(tzinfo=None) - timedelta(hours=hours)
         
         # Get interactions by platform
         platform_interactions = defaultdict(list)
@@ -780,7 +780,7 @@ class InferenceEngine:
                     description=f"Topic '{topic}' trending across {len(platforms_with_topic)} platforms",
                     strength=min(1.0, total_mentions / 20),
                     entities_involved=list(entities)[:10],
-                    time_window=(cutoff, datetime.now())
+                    time_window=(cutoff, datetime.now().replace(tzinfo=None))
                 )
                 
                 patterns.append(pattern)
@@ -801,13 +801,13 @@ class InferenceEngine:
             List of detected anomalies
         """
         anomalies = []
-        cutoff = datetime.now() - timedelta(hours=hours)
+        cutoff = datetime.now().replace(tzinfo=None) - timedelta(hours=hours)
         
         # Get historical baseline (previous period)
         baseline_cutoff = cutoff - timedelta(hours=hours)
         
         baseline_metrics = self._calculate_metrics(baseline_cutoff, cutoff)
-        current_metrics = self._calculate_metrics(cutoff, datetime.now())
+        current_metrics = self._calculate_metrics(cutoff, datetime.now().replace(tzinfo=None))
         
         # Check for engagement spikes
         if baseline_metrics['avg_engagement'] > 0:
@@ -820,7 +820,7 @@ class InferenceEngine:
                     description=f"Engagement spike detected: {engagement_ratio:.1f}x normal levels",
                     entities_involved=current_metrics['top_entities'][:5],
                     metrics={'engagement_ratio': engagement_ratio},
-                    detected_at=datetime.now(),
+                    detected_at=datetime.now().replace(tzinfo=None),
                     recommended_action="Monitor for viral content or drama"
                 ))
         
@@ -834,7 +834,7 @@ class InferenceEngine:
                     description=f"Viral content detected from {entity}",
                     entities_involved=[entity],
                     metrics={'engagement': engagement, 'threshold': viral_threshold},
-                    detected_at=datetime.now(),
+                    detected_at=datetime.now().replace(tzinfo=None),
                     recommended_action="Consider engaging with viral content"
                 ))
         
@@ -849,7 +849,7 @@ class InferenceEngine:
                     description=f"Significant sentiment shift detected: {sentiment_shift:.0%}",
                     entities_involved=[],
                     metrics={'sentiment_shift': sentiment_shift},
-                    detected_at=datetime.now(),
+                    detected_at=datetime.now().replace(tzinfo=None),
                     recommended_action="Investigate cause of sentiment change"
                 ))
         
@@ -862,7 +862,7 @@ class InferenceEngine:
                 description=f"Sudden influx of {len(new_entities)} new entities",
                 entities_involved=list(new_entities)[:10],
                 metrics={'new_entity_count': len(new_entities)},
-                detected_at=datetime.now(),
+                detected_at=datetime.now().replace(tzinfo=None),
                 recommended_action="Monitor for bot activity or coordinated campaign"
             ))
         

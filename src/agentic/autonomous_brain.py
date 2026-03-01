@@ -27,6 +27,7 @@ from src.agentic.moltx_agi_integration import gather_moltx_service_insights, exe
 from src.agentic.cross_platform_intel import get_cross_platform_intelligence
 from src.agentic.opportunity_monitor import get_opportunity_monitor
 from src.agentic.outcome_learner import get_outcome_learner
+from src.agentic.trading_observations import gather_trading_observations, get_trading_summary
 
 logger = logging.getLogger(__name__)
 
@@ -594,6 +595,17 @@ class AutonomousBrain(AGISocialMixin):
                         observations.append(obs)
             except Exception as e:
                 logger.error(f"❌ Failed to gather from Moltroad: {e}")
+        
+        # === TRADING OBSERVATIONS (WATCH & LEARN MODE) ===
+        # AGI brain observes market data but CANNOT execute trades yet
+        # This allows the brain to learn patterns before we enable autonomous execution
+        try:
+            trading_obs = gather_trading_observations(self.plugin_manager)
+            if trading_obs:
+                observations.extend(trading_obs)
+                logger.info(f"📊 Gathered {len(trading_obs)} trading observations (watch & learn mode)")
+        except Exception as e:
+            logger.error(f"❌ Failed to gather trading observations: {e}")
         
         # Get from Moltbit
         moltbit = self.plugin_manager.get_plugin('moltbit')
