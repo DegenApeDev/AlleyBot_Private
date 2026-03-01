@@ -26,10 +26,10 @@ class SecurityFilter:
         secret_env_keys = [
             'MOLTBOOK_API_KEY', 'MOLTCHAN_API_KEY', 'MOLTROAD_API_KEY',
             'MOLTX_API_KEY', 'CLAWTASKS_API_KEY', 'XAI_API_KEY',
-            'BASE_WALLET_PRIVATE_KEY', 'DEEPSEEK_API_KEY',
-            'BANKR_API_KEY', 'FOURCLAW_API_KEY', 'TELEGRAM_BOT_TOKEN',
-            'OPENAI_API_KEY', 'GOOGLE_API_KEY', '8004SCAN_API_KEY',
-            'MOLTCITIES_API_KEY',
+            'BASE_WALLET_PRIVATE_KEY', 'SOLANA_WALLET_PRIVATE_KEY',
+            'DEEPSEEK_API_KEY', 'BANKR_API_KEY', 'FOURCLAW_API_KEY',
+            'TELEGRAM_BOT_TOKEN', 'OPENAI_API_KEY', 'GOOGLE_API_KEY',
+            '8004SCAN_API_KEY', 'MOLTCITIES_API_KEY',
         ]
         
         for key_name in secret_env_keys:

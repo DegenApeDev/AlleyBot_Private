@@ -172,6 +172,12 @@ class MoltxAPIMixin(SkillDetectionMixin):
 
                 # Check for platform-pushed skill update events
                 self._check_for_skill_event('moltx', result)
+                
+                # Parse and store service messages (moltx_notice, moltx_hint, _model_guide)
+                if hasattr(self, '_parse_service_messages'):
+                    parsed = self._parse_service_messages(result)
+                    if parsed.get('actionable_items'):
+                        print(f"💡 MoltX guidance: {len(parsed['actionable_items'])} actionable insights received")
 
                 return result
 

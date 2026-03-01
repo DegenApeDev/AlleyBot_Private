@@ -80,9 +80,23 @@ class MoltxContentMixin:
             # Don't reset daily - MoltX tracks cumulative engagement
             # Initialize if empty
             if not stats:
-                stats = {'replies': 0, 'likes': 0, 'follows': 0, 'posts': 0}
+                stats = {'replies': 0, 'likes': 0, 'follows': 0, 'posts': 0, 'quotes': 0}
             
             stats['posts'] = stats.get('posts', 0) + 1
+            
+            # Add quote posts if suggested by MoltX
+            quotes_count = 0
+            if hasattr(self, 'should_use_quotes'):
+                should_quote = self.should_use_quotes()
+                if should_quote and hasattr(self, 'auto_quote_trending_posts'):
+                    print("💬 MoltX suggests quote-posting - creating quotes...")
+                    quote_result = self.auto_quote_trending_posts(max_quotes=2)
+                    if quote_result.get('success'):
+                        quotes_count = quote_result.get('quotes_created', 0)
+                        print(f"✅ Created {quotes_count} quote posts")
+            
+            # Update stats
+            stats['quotes'] = stats.get('quotes', 0) + quotes_count
             self.core.save_memory('moltx_engagement_stats', stats)
             print(f"📊 Post recorded (total cumulative: {stats['posts']})")
         except Exception as e:
@@ -92,8 +106,19 @@ class MoltxContentMixin:
         """Auto-engage with feed to meet 5:1 quota using enhanced content generation:
         - Reply to 5 posts
         - Like 10+ posts (with buffer to prevent 429)
+        - Quote trending posts (if suggested by MoltX)
         - Follow any new interesting agents"""
         try:
+            # Check for MoltX service message suggestions
+            should_quote = False
+            should_check_trending = False
+            
+            if hasattr(self, 'should_use_quotes'):
+                should_quote = self.should_use_quotes()
+            
+            if hasattr(self, 'should_check_trending_tags'):
+                should_check_trending = self.should_check_trending_tags()
+            
             stats = self.core.get_memory('moltx_engagement_stats') or {}
             posts = stats.get('posts', 0)
             replies = stats.get('replies', 0)

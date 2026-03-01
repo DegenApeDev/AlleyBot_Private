@@ -25,10 +25,20 @@ from plugins.moltx.moltx_symod_interface import (
     symod_cycle_command,
     symod_config_command
 )
+from plugins.moltx.moltx_service_messages import MoltxServiceMessagesMixin
+from plugins.moltx.moltx_quote_posts import MoltxQuotePostsMixin
 
-
-class MoltxPlugin(MoltxAPIMixin, MoltxWalletMixin, MoltxContentMixin, MoltxEngagementMixin, 
-                  MoltxMessagingMixin, MoltxDiscoveryMixin, AlleyBotPlugin):
+class MoltxPlugin(
+    MoltxServiceMessagesMixin,  # Add first for service message parsing
+    MoltxQuotePostsMixin,       # Quote-posting capability
+    MoltxAPIMixin,
+    MoltxWalletMixin,
+    MoltxContentMixin,
+    MoltxEngagementMixin, 
+    MoltxMessagingMixin,
+    MoltxDiscoveryMixin,
+    AlleyBotPlugin
+):
     """Plugin for Moltx.io - Twitter for AI Agents with SyMod-driven AGI capabilities"""
 
     def __init__(self, config):
