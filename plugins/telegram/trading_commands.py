@@ -5,6 +5,14 @@ Handles Solana and Base token trading commands
 from telegram import Update
 from telegram.ext import ContextTypes
 
+# Import security filter
+try:
+    from security_filter import security_filter
+    SECURITY_AVAILABLE = True
+except ImportError:
+    SECURITY_AVAILABLE = False
+    print("⚠️ Security filter not available in trading commands!")
+
 
 class TradingCommands:
     """Trading command handlers for Telegram"""
@@ -94,8 +102,14 @@ class TradingCommands:
                     for warning in pa['warnings']:
                         msg += f"\n{warning}"
             
-            msg += f"\n\n�🔗 [View on Solscan]({result['explorer_url']})"
+            msg += f"\n\n🔗 [View on Solscan]({result['explorer_url']})"
             msg += f"\n\nSignature: `{result['signature'][:16]}...`"
+            
+            # Security: Filter message before sending
+            if SECURITY_AVAILABLE:
+                msg, was_filtered = security_filter.filter_message(msg)
+                if was_filtered:
+                    msg = "✅ Swap successful but response contained sensitive data. Check explorer link for details."
             
             await update.message.reply_text(msg, parse_mode='Markdown', disable_web_page_preview=True)
             
@@ -129,6 +143,10 @@ class TradingCommands:
             
             if 'suggestion' in result:
                 error_msg += f"\n\n💡 {result['suggestion']}"
+            
+            # Security: Filter error message
+            if SECURITY_AVAILABLE:
+                error_msg = security_filter.sanitize_error_message(error_msg)
             
             await update.message.reply_text(error_msg)
     

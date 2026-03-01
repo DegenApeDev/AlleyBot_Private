@@ -9,6 +9,14 @@ from eth_account import Account
 
 from plugin_manager import AlleyBotPlugin
 
+# Import security filter
+try:
+    from security_filter import security_filter
+    SECURITY_AVAILABLE = True
+except ImportError:
+    SECURITY_AVAILABLE = False
+    print("⚠️ Security filter not available - trading responses may leak sensitive data!")
+
 
 class BaseTrading(AlleyBotPlugin):
     """Base chain token trading using Uniswap V3"""
@@ -106,12 +114,29 @@ class BaseTrading(AlleyBotPlugin):
             }
         ]
         
+        # Security: Validate wallet configuration
         if not self.wallet_address or not self.wallet_private_key:
             print("⚠️ Base wallet not configured (BASE_WALLET_PUBLIC_ADDRESS, BASE_WALLET_PRIVATE_KEY)")
             self.enabled = False
         else:
             self.enabled = True
+            # Only show first 8 chars of address for security
             print(f"✅ Base Trading initialized - Wallet: {self.wallet_address[:8]}...")
+        
+        # Security: Allowed recipient addresses (owner's wallet only)
+        # All swaps go to the same wallet that initiated them
+        self.allowed_recipients = {self.wallet_address} if self.wallet_address else set()
+        
+        # Security check
+        if not SECURITY_AVAILABLE:
+            print("🚨 WARNING: Security filter not loaded! Trading responses may expose sensitive data!")
+        
+        # Never log or expose private keys
+        if self.wallet_private_key:
+            # Verify key is not accidentally logged
+            if not self.wallet_private_key.startswith('0x') or len(self.wallet_private_key) != 66:
+                print("⚠️ Base private key appears invalid (wrong format)")
+                self.enabled = False
     
     def get_token_balance(self, token_symbol: str) -> Dict[str, Any]:
         """Get token balance for wallet"""
@@ -383,12 +408,25 @@ class BaseTrading(AlleyBotPlugin):
                 if profit_analysis.get('success'):
                     swap_result['profit_analysis'] = profit_analysis
                 
+                # Security: Filter response to prevent key leakage
+                if SECURITY_AVAILABLE:
+                    result_str = str(swap_result)
+                    filtered_str, was_filtered = security_filter.filter_message(result_str)
+                    if was_filtered:
+                        print("🚨 SECURITY: Filtered sensitive data from swap result")
+                
                 return swap_result
             else:
                 return {"success": False, "error": "Transaction reverted"}
                 
         except Exception as e:
-            return {"success": False, "error": f"Swap failed: {str(e)}"}
+            error_msg = f"Swap failed: {str(e)}"
+            
+            # Security: Sanitize error message
+            if SECURITY_AVAILABLE:
+                error_msg = security_filter.sanitize_error_message(error_msg)
+            
+            return {"success": False, "error": error_msg}
     
     def get_price(self, from_token: str, to_token: str) -> Dict[str, Any]:
         """

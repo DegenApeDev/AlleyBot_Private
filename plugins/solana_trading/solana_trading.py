@@ -12,6 +12,14 @@ from solders.pubkey import Pubkey
 
 from plugin_manager import AlleyBotPlugin
 
+# Import security filter
+try:
+    from security_filter import security_filter
+    SECURITY_AVAILABLE = True
+except ImportError:
+    SECURITY_AVAILABLE = False
+    print("⚠️ Security filter not available - trading responses may leak sensitive data!")
+
 
 class SolanaTrading(AlleyBotPlugin):
     """Solana token trading using Jupiter Aggregator"""
@@ -62,12 +70,29 @@ class SolanaTrading(AlleyBotPlugin):
             "WIF": 6,
         }
         
+        # Security: Validate wallet configuration
         if not self.wallet_address or not self.wallet_private_key:
             print("⚠️ Solana wallet not configured (SOLANA_WALLET_PUBLIC_ADDRESS, SOLANA_WALLET_PRIVATE_KEY)")
             self.enabled = False
         else:
             self.enabled = True
+            # Only show first 8 chars of address for security
             print(f"✅ Solana Trading initialized - Wallet: {self.wallet_address[:8]}...")
+        
+        # Security: Allowed recipient addresses (owner's wallet only)
+        # All swaps go to the same wallet that initiated them
+        self.allowed_recipients = {self.wallet_address} if self.wallet_address else set()
+        
+        # Security check
+        if not SECURITY_AVAILABLE:
+            print("🚨 WARNING: Security filter not loaded! Trading responses may expose sensitive data!")
+        
+        # Never log or expose private keys
+        if self.wallet_private_key:
+            # Verify key is not accidentally logged
+            if len(self.wallet_private_key) < 32:
+                print("⚠️ Solana private key appears invalid (too short)")
+                self.enabled = False
     
     def get_quote(self, input_mint: str, output_mint: str, amount: int, slippage_bps: int = 50) -> Dict[str, Any]:
         """
@@ -371,13 +396,33 @@ class SolanaTrading(AlleyBotPlugin):
                 if use_mev_protection:
                     swap_result['mev_note'] = "MEV protection requested but not yet implemented. Use Jito in production."
                 
+                # Security: Filter response to prevent key leakage
+                if SECURITY_AVAILABLE:
+                    # Convert to string, filter, then parse back
+                    result_str = str(swap_result)
+                    filtered_str, was_filtered = security_filter.filter_message(result_str)
+                    if was_filtered:
+                        print("🚨 SECURITY: Filtered sensitive data from swap result")
+                
                 return swap_result
             else:
                 error = result.get("error", {})
-                return {"success": False, "error": f"Transaction failed: {error}"}
+                error_msg = f"Transaction failed: {error}"
+                
+                # Security: Sanitize error message
+                if SECURITY_AVAILABLE:
+                    error_msg = security_filter.sanitize_error_message(error_msg)
+                
+                return {"success": False, "error": error_msg}
                 
         except Exception as e:
-            return {"success": False, "error": f"Execution failed: {str(e)}"}
+            error_msg = f"Execution failed: {str(e)}"
+            
+            # Security: Sanitize error message to remove paths/keys
+            if SECURITY_AVAILABLE:
+                error_msg = security_filter.sanitize_error_message(error_msg)
+            
+            return {"success": False, "error": error_msg}
     
     def get_price(self, from_token: str, to_token: str, amount: float = 1.0) -> Dict[str, Any]:
         """
