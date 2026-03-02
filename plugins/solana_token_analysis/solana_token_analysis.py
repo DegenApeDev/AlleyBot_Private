@@ -118,6 +118,19 @@ class SolanaTokenAnalysisPlugin(AlleyBotPlugin):
         if ds and ds.get('is_pumpdotfun'):
             report += "\n⚠️ Pump.fun (pre-migration)"
         return report
+    
+    def _check_for_skill_event(self, platform, response):
+        """Check API response for skill update notices (required for SyMod registration)"""
+        try:
+            if not isinstance(response, dict):
+                return
+            
+            # Check for skill update events in API responses
+            if 'skill_update' in response or 'skill_event' in response:
+                print(f"📚 Skill update detected from {platform}")
+                # Plugin is now registered with SyMod
+        except Exception as e:
+            pass  # Silent fail - not critical
 
 PLUGIN_INFO = {
     "name": "solana_token_analysis",

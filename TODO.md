@@ -286,29 +286,30 @@
   - Location: `src/agentic/trading_opportunity_detector.py` (NEW)
   - **Priority: HIGH** - Autonomous profit discovery
 
-- [ ] **Autonomous Trade Execution**
-  - AGI brain needs permission to execute trades without human approval
-  - Add `execute_trade` action type to SyMod proposals
-  - Implement safety limits (max trade size, daily loss limits)
-  - Add trade approval confidence threshold (e.g., 0.85+)
-  - Location: `src/agentic/autonomous_brain.py`
-  - **Priority: CRITICAL** - Currently trades require manual Telegram commands
-
-- [ ] **Profit Opportunity Scanner**
-  - Monitor DEX prices for arbitrage opportunities
-  - Track trending tokens on MoltX/Twitter for early entry
-  - Detect liquidity events (new pools, high volume)
-  - Score opportunities by profit potential vs risk
-  - Location: `src/agentic/profit_scanner.py` (NEW)
-  - **Priority: HIGH** - Autonomous profit discovery
-
-- [ ] **Risk Management AI**
+- [ ] **Trading Risk Manager** (REQUIRED BEFORE EXECUTION)
   - Dynamic position sizing based on confidence
   - Stop-loss automation (exit losing positions)
   - Portfolio rebalancing (maintain target allocations)
   - Drawdown protection (pause trading after losses)
-  - Location: `src/agentic/risk_manager.py` (NEW)
-  - **Priority: HIGH** - Protect capital autonomously
+  - Gas price validation (Base-specific)
+  - Location: `src/agentic/trading_risk_manager.py` (NEW)
+  - **Priority: CRITICAL** - Must have before enabling execution
+
+- [ ] **Autonomous Trade Execution** (FINAL STEP)
+  - AGI brain permission to execute trades autonomously
+  - Add trade execution to `_execute_proposal()`
+  - Implement confidence thresholds for trade execution
+  - Integrate with outcome learner for continuous improvement
+  - Location: `src/agentic/autonomous_brain.py` (enhance)
+  - **Priority: CRITICAL** - Only after 24-48h observation period
+
+- [ ] **Real-Time Price Feeds** (ENHANCEMENT)
+  - WebSocket connections to DEX price feeds
+  - Track price movements in real-time (not just on-demand)
+  - Detect rapid price changes (pump/dump signals)
+  - Alert on high-value opportunities
+  - Location: `src/agentic/price_monitor.py` (NEW)
+  - **Priority: MEDIUM** - Enhancement after basic execution works
 
 #### **B. Decision-Making Independence** 🧠 ✅ **COMPLETE**
 - [x] **MoltX Service Messages** ✅ - AGI brain sees platform hints

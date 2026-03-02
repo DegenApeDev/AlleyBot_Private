@@ -260,6 +260,8 @@ graph TB
     MOLTX_PLUGIN --> WORLD_STATE
     CLAWBR_PLUGIN --> WORLD_STATE
     TELEGRAM_PLUGIN --> WORLD_STATE
+    SOLANA_TRADING --> TRADING_OBS
+    BASE_TRADING --> TRADING_OBS
     
     %% ============================================================================
     %% Content & Strategy Flow
@@ -300,6 +302,23 @@ graph TB
     ORCHESTRATOR --> KERNEL
     KERNEL --> ORCHESTRATOR
     
+    %% ============================================================================
+    %% Autonomous Brain Cycle Flow (NEW)
+    %% ============================================================================
+    
+    BRAIN_CYCLE --> STEP1
+    STEP1 --> STEP2
+    STEP2 --> STEP3
+    STEP3 --> STEP4
+    STEP4 --> STEP5
+    STEP5 --> STEP6
+    STEP6 --> STEP7
+    STEP7 --> STEP8
+    STEP8 --> STEP1
+    
+    BRAIN_CYCLE --> KERNEL
+    KERNEL --> BRAIN_CYCLE
+    
     PHASE1 --> WORLD_STATE
     PHASE2 --> WORLD_STATE
     PHASE3 --> WORLD_STATE
@@ -308,6 +327,40 @@ graph TB
     PHASE6 --> BEHAVIOR_MOD
     PHASE7 --> GOAL_GEN
     PHASE8 --> EPISODIC
+    
+    %% ============================================================================
+    %% Proactive Autonomy Systems Flow (NEW)
+    %% ============================================================================
+    
+    %% Opportunity Monitor scans platforms
+    STEP1 --> OPP_MONITOR
+    OPP_MONITOR --> MOLTX_PLUGIN
+    OPP_MONITOR --> CLAWBR_PLUGIN
+    OPP_MONITOR --> TELEGRAM_PLUGIN
+    
+    %% Observations gathered (including trading)
+    STEP2 --> MOLTX_PLUGIN
+    STEP2 --> CLAWBR_PLUGIN
+    STEP2 --> TELEGRAM_PLUGIN
+    STEP2 --> TRADING_OBS
+    TRADING_OBS --> STEP2
+    
+    %% Cross-platform synthesis
+    STEP3 --> CROSS_PLATFORM
+    MOLTX_PLUGIN --> CROSS_PLATFORM
+    CLAWBR_PLUGIN --> CROSS_PLATFORM
+    TELEGRAM_PLUGIN --> CROSS_PLATFORM
+    CROSS_PLATFORM --> WORLD_STATE
+    
+    %% Self-directed goals
+    STEP4 --> SELF_GOALS
+    CROSS_PLATFORM --> SELF_GOALS
+    SELF_GOALS --> GOAL_STACK
+    
+    %% Outcome learning
+    STEP7 --> OUTCOME_LEARNER
+    OUTCOME_LEARNER --> EPISODIC
+    OUTCOME_LEARNER --> BEHAVIOR_MOD
     
     %% ============================================================================
     %% Security Flow
@@ -352,6 +405,9 @@ graph TB
     classDef plugin fill:#e0f2f1,stroke:#004d40,stroke-width:2px
     classDef orchestrator fill:#ede7f6,stroke:#311b92,stroke-width:3px
     classDef kernel fill:#fff8e1,stroke:#ff6f00,stroke-width:4px
+    classDef autonomy fill:#e8eaf6,stroke:#3f51b5,stroke-width:3px
+    classDef brainCycle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px
+    classDef trading fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
     
     class CONV_MEM,INTENT,DIALOGUE jarvisPhase1
     class PREDICT,CONTEXT_AWARE,OPP_DETECT jarvisPhase2
@@ -365,4 +421,7 @@ graph TB
     class MOLTX_PLUGIN,TELEGRAM_PLUGIN,CLAWBR_PLUGIN,BRAIN_PLUGIN,ONCHAIN_PLUGIN plugin
     class ORCHESTRATOR,PHASE1,PHASE2,PHASE3,PHASE4,PHASE5,PHASE6,PHASE7,PHASE8 orchestrator
     class KERNEL kernel
+    class CROSS_PLATFORM,OPP_MONITOR,OUTCOME_LEARNER,SELF_GOALS autonomy
+    class BRAIN_CYCLE,STEP1,STEP2,STEP3,STEP4,STEP5,STEP6,STEP7,STEP8 brainCycle
+    class TRADING_OBS,SOLANA_TRADING,BASE_TRADING trading
 ```

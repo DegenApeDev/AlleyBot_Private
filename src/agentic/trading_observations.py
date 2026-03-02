@@ -72,7 +72,7 @@ def gather_trading_observations(plugin_manager) -> List[Any]:
                                     'to_token': to_token,
                                     'price': price_data.get('price'),
                                     'quote_data': price_data.get('quote'),
-                                    'timestamp': datetime.now().isoformat(),
+                                    'timestamp': datetime.now().replace(tzinfo=None).isoformat(),
                                     'chain': 'solana',
                                     'observation_only': True  # Not for execution
                                 }
@@ -116,7 +116,7 @@ def gather_trading_observations(plugin_manager) -> List[Any]:
                                         'input_amount': profit_analysis.get('input_amount'),
                                         'output_amount': profit_analysis.get('output_amount'),
                                         'warnings': profit_analysis.get('warnings', []),
-                                        'timestamp': datetime.now().isoformat(),
+                                        'timestamp': datetime.now().replace(tzinfo=None).isoformat(),
                                         'observation_only': True,
                                         'execution_enabled': False  # Brain cannot execute yet
                                     }
@@ -149,7 +149,7 @@ def gather_trading_observations(plugin_manager) -> List[Any]:
                                     'token': token,
                                     'balance': balance_data.get('balance'),
                                     'formatted': balance_data.get('formatted'),
-                                    'timestamp': datetime.now().isoformat(),
+                                    'timestamp': datetime.now().replace(tzinfo=None).isoformat(),
                                     'chain': 'base',
                                     'observation_only': True
                                 }
@@ -205,7 +205,7 @@ def gather_trading_observations(plugin_manager) -> List[Any]:
                                     'from_token': from_token,
                                     'to_token': to_token,
                                     'price': price_data.get('price'),
-                                    'timestamp': datetime.now().isoformat(),
+                                    'timestamp': datetime.now().replace(tzinfo=None).isoformat(),
                                     'chain': 'base',
                                     'observation_only': True
                                 }
