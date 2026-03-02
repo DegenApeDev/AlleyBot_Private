@@ -241,9 +241,106 @@ class SolanaWalletBalancePlugin(AlleyBotPlugin):
             "address": address
         }
     
+    def solana_balance_command(self, *args) -> str:
+        """Check Solana wallet balance: solana_balance <address> [token]"""
+        if not args:
+            return """❌ Usage: /solana_balance <address> [token]
+
+Examples:
+  /solana_balance 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU
+  /solana_balance 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU USDC
+  /solana_balance 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU SOL,USDC,RAY"""
+        
+        address = args[0]
+        tokens = args[1].split(",") if len(args) > 1 else None
+        
+        if not self.is_valid_solana_address(address):
+            return f"❌ Invalid Solana address: {address[:8]}..."
+        
+        # Get balances
+        result = self.get_all_balances(address, tokens)
+        
+        if not result.get("success"):
+            return f"❌ Error: {result.get('error', 'Unknown error')}"
+        
+        balances = result["data"]
+        errors = result.get("errors", [])
+        short_addr = f"{address[:4]}...{address[-4:]}"
+        
+        response = f"💰 Solana Wallet: `{short_addr}`\n\n"
+        
+        if not balances:
+            response += "No balances found or all zero.\n"
+        else:
+            # SOL first
+            sol_bal = next((b for b in balances if b["token"] == "SOL"), None)
+            if sol_bal:
+                response += f"🌞 SOL: {sol_bal['formatted']}\n"
+            
+            # Other tokens
+            for bal in balances:
+                if bal["token"] != "SOL":
+                    response += f"🪙 {bal['token']}: {bal['formatted']}\n"
+        
+        if errors:
+            response += f"\n⚠️ Errors: {', '.join(errors)}"
+        
+        return response
+    
+    def solana_supported_tokens_command(self) -> str:
+        """List all supported Solana tokens"""
+        response = "🌞 Supported Solana Tokens:\n\n"
+        
+        for symbol, info in sorted(self.tokens.items()):
+            response += f"**{symbol}** - {info['name']}\n"
+            response += f"   Address: {info['address']}\n"
+            response += f"   Decimals: {info['decimals']}\n\n"
+        
+        response += f"💡 Use /solana_balance <address> <token> to check specific token"
+        
+        return response
+    
+    def add_solana_token_command(self, *args) -> str:
+        """Add custom Solana token"""
+        if len(args) < 4:
+            return "❌ Usage: /add_solana_token <symbol> <address> <name> <decimals>"
+        
+        symbol = args[0].upper()
+        address = args[1]
+        name = args[2]
+        decimals = int(args[3])
+        
+        self.tokens[symbol] = {
+            "address": address,
+            "name": name,
+            "symbol": symbol,
+            "decimals": decimals
+        }
+        
+        response = f"✅ Added {symbol} to supported tokens!\n\n"
+        response += f"Symbol: {symbol}\n"
+        response += f"Name: {name}\n"
+        response += f"Address: {address}\n"
+        response += f"Decimals: {decimals}\n\n"
+        response += f"💡 You can now check balance with: /solana_balance <address> {symbol}"
+        
+        return response
+    
+    def solana_wallet_summary_command(self, *args) -> str:
+        """Get full wallet summary"""
+        if not args:
+            return "❌ Usage: /solana_wallet_summary <address>"
+        
+        address = args[0]
+        return self.solana_balance_command(address)
+    
     def get_commands(self) -> Dict[str, Callable]:
         return {
             "balance": self.balance,
+            "solana_balance": self.solana_balance_command,
+            "solana_supported_tokens": self.solana_supported_tokens_command,
+            "add_solana_token": self.add_solana_token_command,
+            "solana_wallet_summary": self.solana_wallet_summary_command,
         }
     
     def balance(self, args: list) -> str:
