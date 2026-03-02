@@ -432,20 +432,51 @@ class AvaxTrading(AlleyBotPlugin):
     
     def get_price(self, from_token: str, to_token: str) -> Dict[str, Any]:
         """
-        Get price quote (simplified - should use Uniswap quoter in production)
+        Get price quote (simplified - should use Trader Joe quoter in production)
         
         Args:
             from_token: Symbol of input token
             to_token: Symbol of output token
+        
+        Returns:
+            Dict with success status and price data
+        """
+        # Placeholder - would need Trader Joe quoter contract integration
+        return {
+            "success": True,
+            "price": 0.0,
+            "quote": "Price quotes require Trader Joe quoter integration"
+        }
+    
+    def get_commands(self) -> Dict[str, Any]:
+        """Return available commands"""
+        return {
+            "get_price": self.get_price,
+            "calculate_profit": self.calculate_profit,
+            "get_token_balance": self.get_token_balance,
+            "check_gas_price": self.check_gas_price,
+        }
+    
+    def _check_for_skill_event(self, platform, response):
+        """Check API response for skill update notices (required for SyMod registration)"""
+        try:
+            if not isinstance(response, dict):
+                return
+            
+            # Check for skill update events in API responses
+            if 'skill_update' in response or 'skill_event' in response:
+                print(f"📚 Skill update detected from {platform}")
+        except Exception as e:
+            pass  # Silent fail - not critical
 
 
 PLUGIN_INFO = {
     "name": "avax_trading",
     "version": "1.0.0",
-    "description": "Base chain token trading using Uniswap V3",
+    "description": "Avalanche C-Chain token trading using Trader Joe V2 - includes AlleyBot official token",
     "author": "AlleyBot"
 }
 
 
 def create_plugin(config=None):
-    return BaseTrading(config or {})
+    return AvaxTrading(config or {})
