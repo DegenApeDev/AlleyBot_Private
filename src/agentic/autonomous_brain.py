@@ -969,15 +969,22 @@ class AutonomousBrain(AGISocialMixin):
         return proposals
 
     def _generate_post_from_concept(self, concept: str) -> str:
-        """Generate a real social media post from an AGI concept title using DeepSeek/moltx pipeline."""
+        """Generate a real social media post from an AGI concept title using intelligent posting system."""
         try:
-            # Try moltx plugin's AI content generation first
+            # Use new intelligent posting system (prevents spam/repetition)
             if self.plugin_manager:
                 moltx = self.plugin_manager.get_plugin('moltx')
-                if moltx and hasattr(moltx, '_generate_enhanced_content'):
-                    content = moltx._generate_enhanced_content(f"Write about {concept}", mode='post')
-                    if content and len(content.strip()) > 20:
-                        return content.strip()
+                if moltx and hasattr(moltx, 'intelligent_post'):
+                    # Use intelligent_post which uses AGI brain context
+                    result = moltx.intelligent_post(topic=concept)
+                    # Extract content from result if successful
+                    if result and isinstance(result, str) and '✅' in result:
+                        # Extract the content preview from success message
+                        import re
+                        content_match = re.search(r'📝 (.+)$', result, re.MULTILINE)
+                        if content_match:
+                            return content_match.group(1).strip()
+                    return ''  # Failed or on cooldown
             # Fallback: DeepSeek direct
             try:
                 from deepseek_ai import deepseek_ai

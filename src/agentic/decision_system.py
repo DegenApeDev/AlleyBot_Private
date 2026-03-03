@@ -106,6 +106,13 @@ AUTONOMOUS_ACTIONS = {
         'impact': 'high',
         'requires': 'moltx',
     },
+    'moltx_intelligent_post': {
+        'description': 'Create intelligent AGI-powered post on Moltx using brain context (prevents spam)',
+        'platform': 'moltx',
+        'cooldown_minutes': 120,
+        'impact': 'high',
+        'requires': 'moltx',
+    },
     'moltx_image_post': {
         'description': 'Generate and post an AI image with caption on Moltx',
         'platform': 'moltx',
