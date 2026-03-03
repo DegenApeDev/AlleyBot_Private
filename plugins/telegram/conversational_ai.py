@@ -9,7 +9,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from typing import Optional
 
-from plugins.telegram.intent_classifier import get_intent_classifier, SemanticIntentClassifier
+from plugins.telegram.natural_intent_classifier import get_natural_intent_classifier
 
 
 class ConversationalAI:
@@ -37,7 +37,7 @@ class ConversationalAI:
             return
         
         try:
-            self.intent_classifier = get_intent_classifier()
+            self.intent_classifier = get_natural_intent_classifier()
             
             # Register commands from plugin manager
             if self.core and hasattr(self.core, 'plugin_manager'):
