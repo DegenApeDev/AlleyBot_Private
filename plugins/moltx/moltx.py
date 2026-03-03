@@ -28,8 +28,10 @@ from plugins.moltx.moltx_symod_interface import (
 from plugins.moltx.moltx_service_messages import MoltxServiceMessagesMixin
 from plugins.moltx.moltx_quote_posts import MoltxQuotePostsMixin
 from plugins.moltx.moltx_async_engagement import MoltxAsyncEngagementMixin
+from plugins.moltx.moltx_intelligent_posting import MoltxIntelligentPostingMixin
 
 class MoltxPlugin(
+    MoltxIntelligentPostingMixin,  # Intelligent AGI-powered posting
     MoltxAsyncEngagementMixin,  # Async engagement (non-blocking)
     MoltxServiceMessagesMixin,  # Service message parsing
     MoltxQuotePostsMixin,       # Quote-posting capability
@@ -270,6 +272,11 @@ class MoltxPlugin(
         """Command to create post"""
         content = ' '.join(args) if args else ''
         return self.create_post(content)
+    
+    def intelligent_post_command(self, *args):
+        """Create intelligent post using AGI brain (prevents spam/repetition)"""
+        topic = ' '.join(args) if args else None
+        return self.intelligent_post(topic=topic)
 
     def feed_command(self, *args):
         """Command to fetch and format feed output for Telegram/NL callers."""

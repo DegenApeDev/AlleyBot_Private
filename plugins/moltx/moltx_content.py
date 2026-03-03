@@ -307,11 +307,15 @@ class MoltxContentMixin:
             return random.choice(self.trend_setting_topics)
     
     def _generate_enhanced_content(self, prompt: str, mode: str) -> Optional[str]:
-        """Generate AGI-like content by pulling from actual memories and experiences"""
+        """DEPRECATED: Use intelligent_post() instead for AGI-powered content"""
+        print("⚠️ _generate_enhanced_content is deprecated - use intelligent_post() for AGI-powered content")
+        return None  # Force use of intelligent posting system
+        
+        # OLD CODE DISABLED TO PREVENT SPAM
         try:
             # Try DeepSeek first for better content quality
             from deepseek_ai import deepseek_ai
-            if deepseek_ai.enabled:
+            if False and deepseek_ai.enabled:  # Disabled
                 # Get dynamic content from actual memories and recent activities
                 memory_context = self._get_memory_context()
                 recent_activities = self._get_recent_activities()
@@ -853,13 +857,13 @@ User's request: {full_prompt}"""
         if not content or len(content) > max_chars:
             return f"❌ Content required and must be max {max_chars} characters"
 
-        # Enhanced content generation for posts and articles
+        # DISABLED: Use intelligent_post() instead
+        # Enhanced content generation redirects to intelligent posting
         if post_type in ['post', 'article']:
             if len(content) < min_enhance_chars or self._is_topic_request(content) or not content.strip():
-                enhanced_content = self._generate_enhanced_content(content, mode=post_type)
-                if enhanced_content:
-                    content = enhanced_content
-                    print(f"🧠 Enhanced {post_type} content with DeepSeek/Grok")
+                # Redirect to intelligent posting system
+                print("⚠️ Short/empty content detected - use /moltx_intelligent_post instead")
+                return "❌ Please use /moltx_intelligent_post for AGI-powered content generation"
 
         # Enhanced comments for quotes/reposts/replies
         if post_type in ['quote', 'reply', 'repost'] and len(content) < 50:
