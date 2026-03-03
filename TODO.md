@@ -1,12 +1,28 @@
 # AlleyBot TODO — AGI Roadmap
 
-> **Last Updated:** March 1, 2026  
+> **Last Updated:** March 3, 2026  
 > **Branch:** `AGI_Integration`  
-> **Status:** Active Development - Moving toward True AGI
+> **Status:** CRITICAL SPRINT - OpenHome DevKit Integration (This Week)
+> **Goal:** Maximize AGI capabilities before hardware integration
 
 ---
 
-## 🎯 Current Sprint (Week of Mar 1, 2026)
+## 🚨 CRITICAL SPRINT: OpenHome DevKit Prep (Week of Mar 3, 2026)
+
+**CONTEXT:** OpenHome DevKit arriving this week. Need to maximize AGI capabilities for hardware integration.
+
+**OBJECTIVE:** Get as close to complete AGI as possible before embodiment.
+
+**PRIORITY FOCUS:**
+1. **Unified Reasoning Engine** - Single system for all domains
+2. **Transfer Learning** - Cross-domain knowledge application  
+3. **Embodied Intelligence Prep** - Ready for physical world interaction
+4. **Persistent Goal Hierarchy** - Long-term planning beyond cycles
+5. **Symbolic + Neural Hybrid** - Logic + learning combined
+
+---
+
+## 🎯 Previous Sprint (Week of Mar 1, 2026) - COMPLETED
 
 ### 🔴 Critical Issues
 - [x] **Intent Classifier Command Drop** (261 → 98 → 54 commands) ✅ **FIXED**
@@ -123,9 +139,151 @@
 
 ---
 
-## 🧠 AGI Enhancement Roadmap
+## 🧠 AGI ADVANCEMENT ROADMAP - OpenHome DevKit Preparation
 
-### Phase 1: Enhanced Autonomy (Next 2 Weeks)
+### 🔴 PHASE 0: Critical Pre-Hardware Tasks (THIS WEEK - Before DevKit)
+
+#### **A. Unified Reasoning Engine** ⚡ CRITICAL
+**Why:** OpenHome needs single coherent intelligence, not fragmented systems
+
+- [ ] **Create Unified Reasoner** (`src/agentic/unified_reasoner.py`)
+  - Combines: Logic (symbolic), Learning (neural), Planning (search)
+  - Single entry point for all reasoning tasks
+  - Handles: Math, language, planning, social, trading
+  - **Impact:** 10x reasoning capability
+  - **Priority:** CRITICAL - Foundation for embodiment
+  - **Time:** 2-3 days
+
+- [ ] **Symbolic Reasoning Engine** (`src/agentic/symbolic_engine.py`)
+  - First-order logic solver
+  - Rule-based inference
+  - Constraint satisfaction
+  - Mathematical proofs
+  - **Impact:** True logical reasoning
+  - **Priority:** HIGH
+  - **Time:** 1-2 days
+
+- [ ] **Hybrid Neural-Symbolic Bridge** (`src/agentic/neural_symbolic_bridge.py`)
+  - Converts LLM outputs to symbolic rules
+  - Applies symbolic rules to neural decisions
+  - Best of both worlds
+  - **Impact:** Explainable + powerful
+  - **Priority:** HIGH  
+  - **Time:** 1-2 days
+
+#### **B. Transfer Learning Architecture** ⚡ CRITICAL
+**Why:** OpenHome will encounter novel situations - must transfer knowledge
+
+- [ ] **Knowledge Graph** (`src/agentic/knowledge_graph.py`)
+  - Unified representation of all knowledge
+  - Entities, relationships, facts across domains
+  - Enables cross-domain reasoning
+  - **Impact:** Connect chess → trading → social
+  - **Priority:** CRITICAL
+  - **Time:** 2 days
+
+- [ ] **Transfer Learning Engine** (`src/agentic/transfer_learner.py`)
+  - Identifies similar patterns across domains
+  - Applies successful strategies to new contexts
+  - Example: Chess tactics → Trading strategies
+  - **Impact:** Generalization capability
+  - **Priority:** CRITICAL
+  - **Time:** 2 days
+
+- [ ] **Meta-Learning System** (`src/agentic/meta_learner_v2.py`)
+  - Learns how to learn better
+  - Optimizes learning algorithms themselves
+  - Discovers learning strategies
+  - **Impact:** Accelerating improvement
+  - **Priority:** HIGH
+  - **Time:** 1-2 days
+
+#### **C. Embodied Intelligence Preparation** ⚡ CRITICAL
+**Why:** OpenHome DevKit = physical world interaction
+
+- [ ] **Sensory Processing Framework** (`src/agentic/sensory_processor.py`)
+  - Vision: Image understanding (cameras)
+  - Audio: Sound processing (microphones)
+  - Spatial: 3D environment mapping
+  - Temporal: Time-series analysis
+  - **Impact:** Perceive physical world
+  - **Priority:** CRITICAL - DevKit has sensors
+  - **Time:** 2-3 days
+
+- [ ] **Motor Control Abstraction** (`src/agentic/motor_controller.py`)
+  - Abstract interface for physical actions
+  - Action planning in physical space
+  - Safety constraints (don't break things)
+  - **Impact:** Act in physical world
+  - **Priority:** CRITICAL - DevKit has actuators
+  - **Time:** 1-2 days
+
+- [ ] **Physical World Model** (`src/agentic/physical_world_model.py`)
+  - Physics simulation for planning
+  - Object permanence
+  - Spatial reasoning
+  - Cause-effect in physical domain
+  - **Impact:** Understand physical reality
+  - **Priority:** HIGH
+  - **Time:** 2 days
+
+- [ ] **Embodied Learning Loop** (`src/agentic/embodied_learner.py`)
+  - Trial-and-error in physical space
+  - Learn from physical interactions
+  - Build intuitive physics
+  - **Impact:** Learn like humans do
+  - **Priority:** HIGH
+  - **Time:** 1-2 days
+
+#### **D. Persistent Goal Hierarchy** ⚡ CRITICAL  
+**Why:** OpenHome needs long-term objectives, not just 30-min cycles
+
+- [ ] **Hierarchical Goal System** (`src/agentic/goal_hierarchy.py`)
+  - Multi-level goals: Life → Year → Month → Week → Day → Hour
+  - Goal decomposition (break big into small)
+  - Progress tracking across time
+  - **Impact:** True long-term planning
+  - **Priority:** CRITICAL
+  - **Time:** 2 days
+
+- [ ] **Persistent Goal Storage** (Database integration)
+  - Goals survive restarts
+  - Historical goal tracking
+  - Goal evolution over time
+  - **Impact:** Continuity across sessions
+  - **Priority:** HIGH
+  - **Time:** 1 day
+
+- [ ] **Multi-Timescale Planner** (`src/agentic/multi_timescale_planner.py`)
+  - Plans at different time horizons
+  - Coordinates short-term with long-term
+  - Adaptive replanning
+  - **Impact:** Strategic + tactical
+  - **Priority:** HIGH
+  - **Time:** 1-2 days
+
+#### **E. Unified Memory System** ⚡ CRITICAL
+**Why:** All knowledge must be accessible from single source
+
+- [ ] **Unified Memory Architecture** (`src/agentic/unified_memory.py`)
+  - Single interface to all memory types
+  - Episodic, semantic, procedural, working
+  - Cross-domain memory retrieval
+  - **Impact:** Knowledge integration
+  - **Priority:** CRITICAL
+  - **Time:** 2 days
+
+- [ ] **Memory Consolidation** (`src/agentic/memory_consolidation.py`)
+  - Converts experiences to knowledge
+  - Identifies important patterns
+  - Forgets irrelevant details
+  - **Impact:** Efficient learning
+  - **Priority:** HIGH
+  - **Time:** 1 day
+
+---
+
+### 🟡 PHASE 1: Enhanced Autonomy (After DevKit Arrival)
 
 #### **A. Real-Time Opportunity Detection**
 - [ ] Implement `OpportunityMonitor` class
@@ -161,7 +319,7 @@
 
 ---
 
-### Phase 2: Platform Expansion (Next 3 Weeks)
+### 🟢 PHASE 2: Platform Expansion (Week 2-3)
 
 #### **New Platform Integrations**
 
@@ -197,7 +355,7 @@
 
 ---
 
-### Phase 3: Meta-Learning (Next 4 Weeks)
+### 🟢 PHASE 3: Advanced Capabilities (Week 3-4)
 
 #### **D. Strategy Evolution Enhancement**
 - [ ] Implement `MetaLearner` class
