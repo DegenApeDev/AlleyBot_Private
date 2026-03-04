@@ -9,7 +9,7 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
-from plugin_manager import AlleyBotPlugin
+from plugin_manager import AlleyBotPlugin, AsyncPluginMixin
 from plugins.polymarket.autonomous_trading import autonomous_trading_loop
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ class PredictionAnalysis:
     risk_score: float  # 0-1
 
 
-class PolymarketPlugin(AlleyBotPlugin):
+class PolymarketPlugin(AlleyBotPlugin, AsyncPluginMixin):
     """
     Polymarket prediction market trading plugin
     
