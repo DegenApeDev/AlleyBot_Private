@@ -9,7 +9,8 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
-from plugin_manager import AlleyBotPlugin, AsyncPluginMixin
+from plugin_manager import AlleyBotPlugin
+from plugins.base_plugin import AsyncPluginMixin
 from plugins.polymarket.autonomous_trading import autonomous_trading_loop
 
 logger = logging.getLogger(__name__)
