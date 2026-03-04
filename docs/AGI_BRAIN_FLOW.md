@@ -49,11 +49,13 @@ graph TB
     
     ActionType -->|Social| Social[💬 Social Action<br/>Like, Reply, Post]
     ActionType -->|Trading| Trading[💰 Trading Action<br/>Swap, Stake, Yield]
+    ActionType -->|Prediction| Prediction[🎲 Prediction Markets<br/>Polymarket Trading]
     ActionType -->|Content| Content[📝 Content Creation<br/>Intelligent Post]
     ActionType -->|Learning| Learning[📚 Learning Action<br/>Skill Development]
     
     Social --> Success{Success?}
     Trading --> Success
+    Prediction --> Success
     Content --> Success
     Learning --> Success
     
@@ -121,8 +123,8 @@ graph LR
     end
     
     subgraph "📊 Data Flow"
-        Obs[(Observations<br/>Feed, Prices, etc)]
-        Actions[(Actions<br/>Social, Trading)]
+        Obs[(Observations<br/>Feed, Prices, Markets)]
+        Actions[(Actions<br/>Social, Trading, Predictions)]
         Knowledge[(Knowledge<br/>Entities, Patterns)]
         Goals[(Goals<br/>Life → Immediate)]
     end
@@ -262,6 +264,7 @@ graph TD
     subgraph "📥 Output"
         Social[Social actions<br/>5-8/cycle]
         Trading[Trading actions<br/>1-2/cycle]
+        Predictions[Prediction markets<br/>0-2/cycle]
         Content[Content creation<br/>1-2/cycle]
     end
     
@@ -282,6 +285,7 @@ graph TD
     
     Actions --> Social
     Actions --> Trading
+    Actions --> Predictions
     Actions --> Content
     
     Actions --> Outcomes
@@ -293,6 +297,7 @@ graph TD
     
     Social --> Outcomes
     Trading --> Outcomes
+    Predictions --> Outcomes
     Content --> Outcomes
     
     Outcomes --> GH

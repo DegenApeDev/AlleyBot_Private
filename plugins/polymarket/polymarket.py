@@ -275,11 +275,17 @@ class PolymarketPlugin(AlleyBotPlugin):
             
             for market_data in markets_data:
                 try:
+                    # API uses camelCase (endDate) not snake_case (end_date)
+                    end_date_str = market_data.get('endDate') or market_data.get('end_date')
+                    if not end_date_str:
+                        logger.warning(f"⚠️ Market {market_data.get('id')} missing end date, skipping")
+                        continue
+                    
                     market = Market(
                         id=market_data['id'],
                         question=market_data['question'],
                         description=market_data.get('description', ''),
-                        end_date=datetime.fromisoformat(market_data['end_date'].replace('Z', '+00:00')),
+                        end_date=datetime.fromisoformat(end_date_str.replace('Z', '+00:00')),
                         yes_price=float(market_data.get('yes_price', 0.5)),
                         no_price=float(market_data.get('no_price', 0.5)),
                         volume=float(market_data.get('volume', 0)),
