@@ -1249,15 +1249,14 @@ class AGIOrchestrator:
             try:
                 moltx = self.core.plugins['moltx']
                 
-                # Generate full content using creative engine
-                styled_content = self.creative.transfer_style(
-                    content_text, 
-                    target_style='casual'
-                )
-                final_text = styled_content.get('transformed', content_text)
-                
-                # Actually post
-                result = moltx.create_post(final_text)
+                # Use intelligent posting system (prevents spam/repetition)
+                if hasattr(moltx, 'intelligent_post'):
+                    result = moltx.intelligent_post(topic=content_text)
+                    # Parse result to check success
+                    if isinstance(result, str) and '✅' in result:
+                        result = {'success': True, 'data': {'message': result}}
+                    else:
+                        result = {'success': False, 'error': result}
                 
                 if result and result.get('success'):
                     execution['action_taken'] = 'posted_to_moltx'
