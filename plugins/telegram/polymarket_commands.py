@@ -64,8 +64,21 @@ class PolymarketCommands:
                     await update.message.reply_text("❌ Invalid limit. Usage: /polymarket_markets [limit]")
                     return
             
-            result = await polymarket.markets_command(limit=limit)
-            await update.message.reply_text(result)
+            markets = await polymarket.markets_command(limit=limit)
+            
+            # Format markets
+            output = "📊 Top {} Active Markets:\n\n".format(len(markets))
+            
+            for i, market in enumerate(markets, 1):
+                output += f"{i}. {market.question}\n"
+                output += f"   YES: {market.yes_price:.2f} | NO: {market.no_price:.2f}\n"
+                output += f"   Volume: ${market.volume:,.0f} | Liquidity: ${market.liquidity:,.0f}\n"
+                output += f"   Category: {market.category} | Ends: {market.end_date}\n"
+                output += f"   ID: {market.market_id}\n\n"
+            
+            output += "\n💡 To analyze: /polymarket_analyze <market_id>"
+            
+            await update.message.reply_text(output)
             
         except Exception as e:
             logger.error(f"Error in polymarket_markets: {e}")
