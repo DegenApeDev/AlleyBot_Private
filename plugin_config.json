@@ -193,5 +193,16 @@
       "network": "mainnet-beta",
       "rpc_url": "https://api.mainnet-beta.solana.com"
     }
+  },
+  "polymarket": {
+    "enabled": true,
+    "config": {
+      "paper_trading": true,
+      "max_position_size": 0.05,
+      "max_total_exposure": 0.30,
+      "min_edge": 0.05,
+      "min_confidence": 0.75,
+      "max_markets": 10
+    }
   }
 }
