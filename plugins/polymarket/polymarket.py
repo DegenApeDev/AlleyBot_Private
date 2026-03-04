@@ -670,3 +670,29 @@ class PolymarketPlugin(AlleyBotPlugin):
         output += f"Sharpe Ratio: {self.stats['sharpe_ratio']:.2f}\n"
         
         return output
+    
+    def start_autonomous_trading(self):
+        """Start autonomous trading background task"""
+        if self.autonomous_running:
+            logger.info("🎲 Autonomous trading already running")
+            return
+        
+        self.autonomous_running = True
+        
+        # Create background task
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(autonomous_trading_loop(self))
+                logger.info(f"🎲 Autonomous trading started (scanning every {self.scan_interval//60} minutes)")
+            else:
+                logger.warning("⚠️ Event loop not running, autonomous trading will start when loop starts")
+        except Exception as e:
+            logger.error(f"❌ Failed to start autonomous trading: {e}")
+            self.autonomous_running = False
+    
+    def stop_autonomous_trading(self):
+        """Stop autonomous trading"""
+        self.autonomous_running = False
+        logger.info("🎲 Autonomous trading stopped")
+        return "✅ Autonomous trading stopped"
