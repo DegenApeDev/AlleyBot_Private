@@ -434,6 +434,10 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("polymarket_positions", self.polymarket_commands.polymarket_positions))
         self.application.add_handler(CommandHandler("polymarket_stats", self.polymarket_commands.polymarket_stats))
         
+        # Test commands
+        self.application.add_handler(CommandHandler("test_mcp_news", self.test_commands.test_mcp_news))
+        self.application.add_handler(CommandHandler("test_polymarket_analysis", self.test_commands.test_polymarket_analysis))
+        
         # AGI Meta-Brain command
         self.application.add_handler(CommandHandler("agi_cycle", self._handle_agi_cycle))
         self.application.add_handler(CommandHandler("multi_platform", self._handle_multi_platform))
