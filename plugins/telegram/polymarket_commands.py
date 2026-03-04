@@ -79,7 +79,7 @@ class PolymarketCommands:
                 output += f"   YES: {market.yes_price:.2f} | NO: {market.no_price:.2f}\n"
                 output += f"   Volume: ${market.volume:,.0f} | Liquidity: ${market.liquidity:,.0f}\n"
                 output += f"   Category: {market.category} | Ends: {market.end_date.strftime('%Y-%m-%d') if hasattr(market.end_date, 'strftime') else market.end_date}\n"
-                output += f"   📋 ID: `{market.market_id}`\n\n"
+                output += f"   📋 ID: `{market.id}`\n\n"
             
             output += "💡 To analyze: /polymarket_analyze <market_id>\n"
             output += "(Copy the ID from above)"

@@ -7,7 +7,7 @@ import os
 import asyncio
 import logging
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from plugin_manager import AlleyBotPlugin
 
