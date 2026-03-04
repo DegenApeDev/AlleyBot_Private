@@ -64,7 +64,7 @@ class PolymarketCommands:
                     await update.message.reply_text("❌ Invalid limit. Usage: /polymarket_markets [limit]")
                     return
             
-            result = polymarket.markets_command(limit=limit)
+            result = await polymarket.markets_command(limit=limit)
             await update.message.reply_text(result)
             
         except Exception as e:
@@ -90,7 +90,7 @@ class PolymarketCommands:
                 return
             
             market_id = context.args[0]
-            result = polymarket.analyze_command(market_id)
+            result = await polymarket.analyze_command(market_id)
             await update.message.reply_text(result)
             
         except Exception as e:
