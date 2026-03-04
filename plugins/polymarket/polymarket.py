@@ -679,17 +679,22 @@ class PolymarketPlugin(AlleyBotPlugin):
         
         self.autonomous_running = True
         
-        # Create background task
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
+        # Defer startup until event loop is running
+        # This is called during plugin initialization, before Telegram bot starts
+        logger.info(f"🎲 Autonomous trading scheduled (will start when event loop begins)")
+        
+        # The actual startup happens in start_background() which is called by plugin manager
+        # after the event loop is running
+    
+    async def start_background(self):
+        """Called by plugin manager after event loop is running"""
+        if self.auto_trade and self.autonomous_running:
+            try:
                 asyncio.create_task(autonomous_trading_loop(self))
                 logger.info(f"🎲 Autonomous trading started (scanning every {self.scan_interval//60} minutes)")
-            else:
-                logger.warning("⚠️ Event loop not running, autonomous trading will start when loop starts")
-        except Exception as e:
-            logger.error(f"❌ Failed to start autonomous trading: {e}")
-            self.autonomous_running = False
+            except Exception as e:
+                logger.error(f"❌ Failed to start autonomous trading: {e}")
+                self.autonomous_running = False
     
     def stop_autonomous_trading(self):
         """Stop autonomous trading"""
