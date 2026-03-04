@@ -969,38 +969,9 @@ class AutonomousBrain(AGISocialMixin):
         return proposals
 
     def _generate_post_from_concept(self, concept: str) -> str:
-        """Generate a real social media post from an AGI concept title using intelligent posting system."""
-        try:
-            # Use new intelligent posting system (prevents spam/repetition)
-            if self.plugin_manager:
-                moltx = self.plugin_manager.get_plugin('moltx')
-                if moltx and hasattr(moltx, 'intelligent_post'):
-                    # Use intelligent_post which uses AGI brain context
-                    result = moltx.intelligent_post(topic=concept)
-                    # Extract content from result if successful
-                    if result and isinstance(result, str) and '✅' in result:
-                        # Extract the content preview from success message
-                        import re
-                        content_match = re.search(r'📝 (.+)$', result, re.MULTILINE)
-                        if content_match:
-                            return content_match.group(1).strip()
-                    return ''  # Failed or on cooldown
-            # Fallback: DeepSeek direct
-            try:
-                from deepseek_ai import deepseek_ai
-                if deepseek_ai.enabled:
-                    prompt = (
-                        f"You are AlleyBot, an autonomous AI agent. Write a short, engaging social media post "
-                        f"(1-3 sentences, no hashtags, no emojis, conversational tone) about: {concept}"
-                    )
-                    content = deepseek_ai.generate_content(prompt=prompt, platform='moltx', mode='post', max_tokens=120)
-                    if content and len(content.strip()) > 20:
-                        return content.strip()
-            except Exception:
-                pass
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to generate post from concept '{concept}': {e}")
-        return ''
+        """Return topic for intelligent posting system (don't generate content here)"""
+        # Just return the concept as a topic - intelligent_post will handle generation
+        return concept if concept else ''
     
     async def _execute_proposal(self, proposal) -> Optional[Dict]:
         """Execute a single action proposal"""
@@ -1075,25 +1046,15 @@ class AutonomousBrain(AGISocialMixin):
         elif action == 'repost' and target_id:
             return plugin.repost_post(target_id)
         elif action == 'post' and content:
-            # 5:1 Engagement Rule: Must engage before posting
-            if hasattr(plugin, '_check_engagement_quota') and not plugin._check_engagement_quota():
-                logger.info("🔄 5:1 Rule: Engaging with feed before posting...")
-                if hasattr(plugin, '_auto_engage_for_posting'):
-                    engagement_result = plugin._auto_engage_for_posting()
-                    if "❌" in engagement_result:
-                        return f"❌ Blocked by 5:1 Engagement Rule: {engagement_result}"
-                    logger.info(f"✅ Pre-post engagement complete: {engagement_result}")
-            
-            # Use AI-enhanced posting if available
-            if hasattr(plugin, 'create_post'):
-                result = plugin.create_post(
-                    content=content,
-                    post_type='post',
-                    enhance_with_ai=True
-                )
-                return f"✅ Created Moltx AI post" if result else f"❌ Failed to create Moltx post"
+            # Use intelligent_post system (prevents spam/repetition)
+            if hasattr(plugin, 'intelligent_post'):
+                result = plugin.intelligent_post(topic=content)
+                logger.info(f"🧠 Intelligent post result: {result}")
+                return result
             else:
-                return plugin.post_text(content)
+                # Fallback to old system (should not happen)
+                logger.warning("⚠️ intelligent_post not available, using fallback")
+                return plugin.post_text(content) if hasattr(plugin, 'post_text') else "❌ No posting method available"
         elif action == 'reply' and target_id:
             # Use AI-generated reply content
             if hasattr(plugin, '_generate_comment'):
