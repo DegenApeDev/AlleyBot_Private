@@ -10,6 +10,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from plugin_manager import AlleyBotPlugin
+from plugins.polymarket.autonomous_trading import autonomous_trading_loop
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,8 @@ class PolymarketPlugin(AlleyBotPlugin):
         self.min_edge = config.get('min_edge', 0.05)  # 5% minimum edge
         self.min_confidence = config.get('min_confidence', 0.75)  # 75% confidence
         self.max_markets = config.get('max_markets', 10)  # Max concurrent positions
+        self.scan_interval = config.get('scan_interval', 900)  # 15 minutes (900 seconds)
+        self.auto_trade = config.get('auto_trade', True)  # Enable autonomous trading
         
         # Polymarket API
         self.clob_url = "https://clob.polymarket.com"
@@ -107,6 +110,8 @@ class PolymarketPlugin(AlleyBotPlugin):
         self.active_positions: Dict[str, Position] = {}
         self.market_cache: Dict[str, Market] = {}
         self.prediction_history: List[Dict] = []
+        self.autonomous_running = False
+        self.last_scan_time = None
         
         # AGI systems (will be set during initialization)
         self.unified_reasoner = None
@@ -157,6 +162,11 @@ class PolymarketPlugin(AlleyBotPlugin):
         logger.info(f"✅ Polymarket plugin initialized")
         logger.info(f"   Mode: {'PAPER TRADING' if self.paper_trading else 'LIVE TRADING'}")
         logger.info(f"   AGI Systems: {self._check_agi_systems()}")
+        logger.info(f"   Auto-trade: {'ENABLED' if self.auto_trade else 'DISABLED'} (every {self.scan_interval//60} min)")
+        
+        # Start autonomous trading if enabled
+        if self.auto_trade:
+            self.start_autonomous_trading()
     
     def _check_agi_systems(self) -> str:
         """Check which AGI systems are available"""
