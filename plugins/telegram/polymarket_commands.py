@@ -64,19 +64,25 @@ class PolymarketCommands:
                     await update.message.reply_text("❌ Invalid limit. Usage: /polymarket_markets [limit]")
                     return
             
-            markets = await polymarket.markets_command(limit=limit)
+            # Fetch markets directly
+            markets = await polymarket.fetch_markets(limit=limit)
             
-            # Format markets
-            output = "📊 Top {} Active Markets:\n\n".format(len(markets))
+            if not markets:
+                await update.message.reply_text("❌ No markets found")
+                return
+            
+            # Format markets with IDs
+            output = f"📊 Top {len(markets)} Active Markets:\n\n"
             
             for i, market in enumerate(markets, 1):
                 output += f"{i}. {market.question}\n"
                 output += f"   YES: {market.yes_price:.2f} | NO: {market.no_price:.2f}\n"
                 output += f"   Volume: ${market.volume:,.0f} | Liquidity: ${market.liquidity:,.0f}\n"
-                output += f"   Category: {market.category} | Ends: {market.end_date}\n"
-                output += f"   ID: {market.market_id}\n\n"
+                output += f"   Category: {market.category} | Ends: {market.end_date.strftime('%Y-%m-%d') if hasattr(market.end_date, 'strftime') else market.end_date}\n"
+                output += f"   📋 ID: `{market.market_id}`\n\n"
             
-            output += "\n💡 To analyze: /polymarket_analyze <market_id>"
+            output += "💡 To analyze: /polymarket_analyze <market_id>\n"
+            output += "(Copy the ID from above)"
             
             await update.message.reply_text(output)
             
