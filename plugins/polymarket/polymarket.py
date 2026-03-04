@@ -173,11 +173,16 @@ class PolymarketPlugin(AlleyBotPlugin):
         """Initialize Polygon wallet for Polymarket"""
         try:
             # Get private key from environment
-            private_key = os.getenv('POLYGON_PRIVATE_KEY') or os.getenv('WALLET_PRIVATE_KEY')
+            # Try multiple env vars (Polygon-specific, BASE wallet, or generic)
+            private_key = (
+                os.getenv('POLYGON_PRIVATE_KEY') or 
+                os.getenv('BASE_WALLET_PRIVATE_KEY') or 
+                os.getenv('WALLET_PRIVATE_KEY')
+            )
             
             if not private_key:
                 logger.warning("⚠️ No Polygon wallet private key found")
-                logger.warning("   Set POLYGON_PRIVATE_KEY or WALLET_PRIVATE_KEY in .env")
+                logger.warning("   Set POLYGON_PRIVATE_KEY, BASE_WALLET_PRIVATE_KEY, or WALLET_PRIVATE_KEY in .env")
                 self.enabled = False
                 return
             
@@ -186,6 +191,7 @@ class PolymarketPlugin(AlleyBotPlugin):
             self.wallet = Account.from_key(private_key)
             
             logger.info(f"✅ Polygon wallet initialized: {self.wallet.address[:10]}...")
+            logger.info(f"   Using BASE wallet for Polygon (same address on all EVM chains)")
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize wallet: {e}")
