@@ -80,6 +80,14 @@ class TelegramWebhook:
 
             self.telegram_plugin.is_running = True
             print("✅ Telegram bot polling started — commands are live!")
+            
+            # Start all AsyncPluginMixin background tasks now that event loop is running
+            if hasattr(self.telegram_plugin, 'core') and hasattr(self.telegram_plugin.core, 'plugin_manager'):
+                try:
+                    await self.telegram_plugin.core.plugin_manager.start_all_background()
+                    print("▶️  All plugin background tasks started")
+                except Exception as bg_err:
+                    print(f"⚠️  start_all_background error: {bg_err}")
 
             # Send startup notification
             try:
