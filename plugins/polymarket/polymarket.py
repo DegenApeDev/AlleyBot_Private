@@ -461,8 +461,8 @@ class PolymarketPlugin(AlleyBotPlugin):
             result = self.unified_reasoner.reason(reasoning_context)
             
             # Extract prediction
-            # Result contains: conclusion, confidence, explanation, reasoning_path
-            outcome = "YES" if "yes" in result.conclusion.lower() else "NO"
+            # Result contains: decision, confidence, explanation, reasoning_path
+            outcome = "YES" if "yes" in str(result.decision).lower() else "NO"
             probability = result.confidence
             
             return {
