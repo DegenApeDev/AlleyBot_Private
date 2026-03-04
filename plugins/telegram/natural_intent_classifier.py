@@ -138,6 +138,7 @@ class NaturalIntentClassifier:
         Args:
             plugin_manager: The plugin manager with registered commands
         """
+        # Register CLI commands from plugin manager
         for cmd_name, func in list(plugin_manager.commands.items()):
             # Get docstring as description
             doc = func.__doc__
@@ -145,6 +146,19 @@ class NaturalIntentClassifier:
                 doc = doc.split('\n')[0].strip()
             
             self.register_command(cmd_name, doc)
+        
+        # Also register all Telegram bot commands from COMMAND_REGISTRY
+        try:
+            from plugins.telegram.menu_registry import COMMAND_REGISTRY
+            
+            for cmd_name, cmd_data in COMMAND_REGISTRY.items():
+                # cmd_data is (cat_key, desc, usage, args_hint, module)
+                desc = cmd_data[1] if len(cmd_data) > 1 else None
+                
+                # Register command with its description
+                self.register_command(cmd_name, desc)
+        except Exception as e:
+            print(f"⚠️ Could not load Telegram COMMAND_REGISTRY: {e}")
     
     def classify_intent(self, user_input: str) -> Optional[Tuple[str, float]]:
         """
