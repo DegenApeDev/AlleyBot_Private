@@ -525,7 +525,7 @@ class PolymarketPlugin(AlleyBotPlugin):
             'confidence': prediction['confidence'] >= self.min_confidence,
             'liquidity': market.liquidity >= 10000,  # Min $10k liquidity
             'volume': market.volume >= 5000,  # Min $5k volume
-            'time_to_resolution': (market.end_date - datetime.now()).days <= 30,  # Max 30 days
+            'time_to_resolution': (market.end_date - datetime.now(timezone.utc)).days <= 30,  # Max 30 days
             'position_count': len(self.active_positions) < self.max_markets,
             'exposure': self._calculate_total_exposure() < self.max_total_exposure
         }
