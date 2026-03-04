@@ -586,9 +586,9 @@ class PolymarketPlugin(AlleyBotPlugin):
         status += f"  🧠 AGI systems: {self._check_agi_systems()}"
         return status
     
-    def markets_command(self, limit: int = 10):
+    async def markets_command(self, limit: int = 10):
         """List active markets"""
-        markets = asyncio.run(self.fetch_markets(limit=limit))
+        markets = await self.fetch_markets(limit=limit)
         
         if not markets:
             return "❌ No markets found"
@@ -603,14 +603,14 @@ class PolymarketPlugin(AlleyBotPlugin):
         
         return output
     
-    def analyze_command(self, market_id: str):
+    async def analyze_command(self, market_id: str):
         """Analyze a specific market"""
         market = self.market_cache.get(market_id)
         
         if not market:
             return f"❌ Market {market_id} not found. Fetch markets first."
         
-        analysis = asyncio.run(self.analyze_market(market))
+        analysis = await self.analyze_market(market)
         
         output = f"🔍 Market Analysis:\n\n"
         output += f"Question: {market.question}\n\n"
