@@ -138,6 +138,10 @@ class Telegram(AlleyBotPlugin):
         from plugins.telegram.polymarket_commands import PolymarketCommands
         self.polymarket_commands = PolymarketCommands(self)
         
+        # Import test commands
+        from plugins.telegram.test_commands import TestCommands
+        self.test_commands = TestCommands(self)
+        
         # Import inline menu system
         from plugins.telegram.menu_handlers import MenuHandlers
         self.menu_handlers = MenuHandlers(self)
