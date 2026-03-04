@@ -135,13 +135,18 @@ class PolymarketPlugin(AlleyBotPlugin):
         # Get AGI systems from core
         if hasattr(core, 'plugin_manager'):
             brain_plugin = core.plugin_manager.get_plugin('brain')
-            if brain_plugin and hasattr(brain_plugin, 'autonomous_brain'):
-                brain = brain_plugin.autonomous_brain
-                self.unified_reasoner = getattr(brain, 'unified_reasoner', None)
-                self.knowledge_graph = getattr(brain, 'knowledge_graph', None)
-                self.transfer_learner = getattr(brain, 'transfer_learner', None)
-                self.meta_learner = getattr(brain, 'meta_learner', None)
-                self.cross_platform_intel = getattr(brain, 'cross_platform_intel', None)
+            if brain_plugin:
+                # Try to get autonomous brain (stored as _autonomous_brain)
+                brain = getattr(brain_plugin, '_autonomous_brain', None)
+                if brain:
+                    self.unified_reasoner = getattr(brain, 'unified_reasoner', None)
+                    self.knowledge_graph = getattr(brain, 'knowledge_graph', None)
+                    self.transfer_learner = getattr(brain, 'transfer_learner', None)
+                    self.meta_learner = getattr(brain, 'meta_learner', None)
+                    self.cross_platform_intel = getattr(brain, 'cross_platform_intel', None)
+                    logger.info(f"🧠 Connected to AGI systems: reasoner={self.unified_reasoner is not None}, kg={self.knowledge_graph is not None}")
+                else:
+                    logger.warning("⚠️ Brain plugin found but autonomous_brain not initialized")
         
         # Initialize wallet and authentication
         self._init_wallet()
@@ -369,10 +374,10 @@ class PolymarketPlugin(AlleyBotPlugin):
         # 1. Social sentiment from cross-platform intelligence
         if self.cross_platform_intel:
             try:
-                # Search for relevant discussions
-                social_data = self.cross_platform_intel.search_topics(market.question)
-                context['social_sentiment'] = social_data
-                context['sources'].append('social_platforms')
+                # Note: CrossPlatformIntelligence uses synthesize_observations, not search_topics
+                # For now, skip social sentiment until we have observations to synthesize
+                # TODO: Integrate with platform observations
+                pass
             except Exception as e:
                 logger.warning(f"⚠️ Failed to get social sentiment: {e}")
         
@@ -388,14 +393,11 @@ class PolymarketPlugin(AlleyBotPlugin):
         # 3. Historical similar events from Knowledge Graph
         if self.knowledge_graph:
             try:
-                similar = self.knowledge_graph.find_similar_entities(
-                    market.question,
-                    entity_type='event',
-                    limit=5
-                )
-                context['historical'] = similar
-                if similar:
-                    context['sources'].append('knowledge_graph')
+                # Note: KnowledgeGraph doesn't have find_similar_entities method
+                # It has get_related_entities and find_analogies
+                # For now, skip until we implement proper entity matching
+                # TODO: Add market entities to knowledge graph and query them
+                pass
             except Exception as e:
                 logger.warning(f"⚠️ Failed to query knowledge graph: {e}")
         
@@ -445,16 +447,12 @@ class PolymarketPlugin(AlleyBotPlugin):
             from src.agentic.unified_reasoner import ReasoningContext, ReasoningType
             
             # Build reasoning context
+            # Note: ReasoningContext doesn't accept 'context' parameter
+            # It has: problem, domain, reasoning_type, related_domains, constraints, goal
             reasoning_context = ReasoningContext(
-                problem=f"Predict outcome of: {market.question}",
+                problem=f"Predict outcome of: {market.question}. Market data: YES={market.yes_price:.2f}, NO={market.no_price:.2f}, Volume=${market.volume:,.0f}. News: {len(context.get('news', []))} articles found.",
                 domain="prediction_markets",
                 reasoning_type=ReasoningType.CAUSAL,  # Cause-effect analysis
-                context={
-                    'market': market.__dict__,
-                    'social_sentiment': context.get('social_sentiment'),
-                    'news': context.get('news', []),
-                    'historical': context.get('historical', [])
-                },
                 related_domains=['social', 'news', 'events'],
                 goal="Predict most likely outcome with confidence"
             )
