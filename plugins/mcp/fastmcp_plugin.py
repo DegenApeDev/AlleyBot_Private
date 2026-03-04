@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 from plugin_manager import AlleyBotPlugin
+from plugins.mcp.rss_news_fetcher import RSSNewsFetcher
 
 # Try FastMCP first
 try:
@@ -46,6 +47,7 @@ class FastMCPPlugin(AlleyBotPlugin):
         self.mcp_servers = {}
         self.last_research = None
         self.research_cache = {}
+        self.rss_news_fetcher = None
         
     def __str__(self):
         return f"FastMCPPlugin(name={self.name}, connected={len(self.mcp_servers)})"
@@ -74,6 +76,14 @@ class FastMCPPlugin(AlleyBotPlugin):
             for server_name, server_config in enabled_servers.items():
                 if self._connect_server(server_name, server_config):
                     connected_count += 1
+            
+            # Initialize RSS news fetcher
+            try:
+                custom_feeds = self.config.get('rss_feeds', [])
+                self.rss_news_fetcher = RSSNewsFetcher(feeds=custom_feeds if custom_feeds else None)
+                print(f"📰 RSS news fetcher initialized with {len(self.rss_news_fetcher.feeds)} feeds")
+            except Exception as e:
+                print(f"⚠️ RSS news fetcher failed to initialize: {e}")
             
             self.status = f"connected_{connected_count}"
             return f"✅ FastMCP connected to {connected_count} servers"
@@ -804,6 +814,31 @@ class FastMCPPlugin(AlleyBotPlugin):
         except Exception:
             return content
 
+    async def query_news(self, query: str, limit: int = 10) -> list:
+        """
+        Query news from RSS feeds
+        
+        Args:
+            query: Search query
+            limit: Maximum number of articles
+            
+        Returns:
+            List of news articles
+        """
+        if not self.rss_news_fetcher:
+            print("⚠️ RSS news fetcher not initialized")
+            return []
+        
+        try:
+            # RSS fetcher is synchronous, run it directly
+            articles = self.rss_news_fetcher.fetch_news(query, limit=limit)
+            return articles
+        except Exception as e:
+            print(f"❌ Error fetching news: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
     def get_commands(self):
         """Return available commands"""
         return {
@@ -813,6 +848,7 @@ class FastMCPPlugin(AlleyBotPlugin):
             'mcp_analyze': self.analyze_command,
             'mcp_stock_price': self.get_stock_price,
             'mcp_crypto_price': self.get_crypto_price,
+            'query_news': self.query_news,
         }
 
     def cleanup(self):
