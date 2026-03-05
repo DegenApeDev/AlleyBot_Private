@@ -48,7 +48,8 @@ class BrainCommands:
         Modes: conservative, normal (default), aggressive
         """
         # Check owner
-        if not await self._verify_owner(update):
+        if not self._is_owner(update):
+            await update.message.reply_text("⛔ Owner only")
             return
         
         try:
