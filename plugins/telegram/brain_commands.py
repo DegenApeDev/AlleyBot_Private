@@ -69,7 +69,7 @@ class BrainCommands:
                     return
             
             # Start brain
-            brain.start(mode=mode)
+            await brain.start(mode=mode)
             
             # Also start Polymarket autonomous trading if available
             core = self._get_core()
