@@ -48,32 +48,61 @@ class BrainCommands:
         Modes: conservative, normal (default), aggressive
         """
         # Check owner
-        if not self._is_owner(update):
-            await update.message.reply_text("⛔ Owner only")
+        if not await self._verify_owner(update):
             return
         
-        # Get mode argument
-        mode = 'normal'
-        if context.args:
-            mode = context.args[0].lower()
-            if mode not in ['conservative', 'normal', 'aggressive']:
-                await update.message.reply_text(
-                    "❌ Unknown mode. Use: conservative, normal, or aggressive"
-                )
-                return
-        
-        # Initialize brain if needed
-        brain = self._get_brain()
-        if not brain:
-            await update.message.reply_text("❌ Brain not available (core not ready)")
-            return
-        
-        # Start
         try:
-            result = await brain.start(mode)
-            await update.message.reply_text(result)
+            brain = self._get_brain()
+            if not brain:
+                await update.message.reply_text("❌ Brain not available")
+                return
+            
+            # Parse mode
+            mode = 'normal'
+            if context.args:
+                mode = context.args[0].lower()
+                if mode not in ['conservative', 'normal', 'aggressive']:
+                    await update.message.reply_text(
+                        "⚠️ Invalid mode. Use: conservative, normal, or aggressive"
+                    )
+                    return
+            
+            # Start brain
+            brain.start(mode=mode)
+            
+            # Also start Polymarket autonomous trading if available
+            core = self._get_core()
+            polymarket_started = False
+            if core and hasattr(core, 'plugin_manager'):
+                polymarket = core.plugin_manager.get_plugin('polymarket')
+                if polymarket and hasattr(polymarket, 'start_background'):
+                    try:
+                        await polymarket.start_background()
+                        polymarket_started = True
+                        logger.info("🎲 Polymarket autonomous trading started via /brain_start")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to start Polymarket: {e}")
+            
+            response = (
+                f"🧠 **Brain Started**\n\n"
+                f"Mode: {mode.title()}\n"
+                f"Status: 🟢 Running\n\n"
+                f"The autonomous brain is now active and will:\n"
+                f"• Generate and pursue goals\n"
+                f"• Learn from experiences\n"
+                f"• Adapt behavior based on outcomes\n"
+                f"• Execute autonomous tasks\n"
+            )
+            
+            if polymarket_started:
+                response += f"\n🎲 **Polymarket Trading:** Started (scanning every 15 min)\n"
+            
+            response += f"\nUse /brain_stop to pause or /brain_status to check progress."
+            
+            await update.message.reply_text(response)
+            
         except Exception as e:
-            logger.error(f"Brain start error: {e}")
+            logger.error(f"Error starting brain: {e}")
             await update.message.reply_text(f"❌ Error starting brain: {e}")
     
     async def brain_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
