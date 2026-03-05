@@ -65,7 +65,7 @@ class PredictionAnalysis:
     risk_score: float  # 0-1
 
 
-class PolymarketPlugin(AlleyBotPlugin, AsyncPluginMixin):
+class PolymarketPlugin(AsyncPluginMixin, AlleyBotPlugin):
     """
     Polymarket prediction market trading plugin
     
