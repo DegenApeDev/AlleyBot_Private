@@ -164,10 +164,7 @@ class PolymarketPlugin(AsyncPluginMixin, AlleyBotPlugin):
         logger.info(f"   Mode: {'PAPER TRADING' if self.paper_trading else 'LIVE TRADING'}")
         logger.info(f"   AGI Systems: {self._check_agi_systems()}")
         logger.info(f"   Auto-trade: {'ENABLED' if self.auto_trade else 'DISABLED'} (every {self.scan_interval//60} min)")
-        
-        # Start autonomous trading if enabled
-        if self.auto_trade:
-            self.start_autonomous_trading()
+        logger.info(f"   ℹ️  Use /brain_start to activate autonomous trading")
     
     def _check_agi_systems(self) -> str:
         """Check which AGI systems are available"""
