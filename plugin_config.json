@@ -198,6 +198,8 @@
     "enabled": true,
     "config": {
       "paper_trading": true,
+      "auto_trade": true,
+      "scan_interval": 900,
       "max_position_size": 0.05,
       "max_total_exposure": 0.30,
       "min_edge": 0.05,
