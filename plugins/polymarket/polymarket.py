@@ -689,6 +689,8 @@ class PolymarketPlugin(AlleyBotPlugin, AsyncPluginMixin):
     
     async def start_background(self):
         """Called by plugin manager after event loop is running"""
+        logger.info(f"🔍 start_background called: auto_trade={self.auto_trade}, autonomous_running={self.autonomous_running}")
+        
         if self.auto_trade and self.autonomous_running:
             try:
                 asyncio.create_task(autonomous_trading_loop(self))
@@ -696,6 +698,8 @@ class PolymarketPlugin(AlleyBotPlugin, AsyncPluginMixin):
             except Exception as e:
                 logger.error(f"❌ Failed to start autonomous trading: {e}")
                 self.autonomous_running = False
+        else:
+            logger.warning(f"⚠️ Autonomous trading NOT started: auto_trade={self.auto_trade}, autonomous_running={self.autonomous_running}")
     
     def stop_autonomous_trading(self):
         """Stop autonomous trading"""
