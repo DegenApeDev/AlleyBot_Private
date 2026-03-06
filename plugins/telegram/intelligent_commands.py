@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Any, Tuple
 from telegram import Update
 from telegram.ext import ContextTypes
-
+from plugins.telegram.command_wrapper import run_plugin_method, get_plugin_non_blocking
 
 class IntelligentTelegramCommands:
     """Intelligent command handlers for Telegram bot"""
@@ -2480,7 +2480,10 @@ Generate only the title (no explanations):"""
         """Run a blocking synchronous function in a thread executor
         so it doesn't block the Telegram async event loop."""
         import asyncio
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, func, *args)
 
     async def bgstats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -7,6 +7,7 @@ for owner to control Alley's autonomous mode.
 Part of AGI Core - Phase 1
 """
 
+import asyncio
 from telegram import Update
 from telegram.ext import ContextTypes
 import logging
@@ -31,13 +32,17 @@ class BrainCommands:
             self._core = getattr(self.telegram, 'core', None)
         return self._core
     
-    def _get_brain(self):
-        """Lazy-get brain instance"""
+    async def _get_brain(self):
+        """Lazy-get brain instance (non-blocking)"""
         if self._brain is None:
             core = self._get_core()
             if core and hasattr(core, 'plugin_manager'):
-                from src.agentic.autonomous_brain import AutonomousBrain
-                self._brain = AutonomousBrain(core, core.plugin_manager)
+                # Run in executor to avoid blocking
+                loop = asyncio.get_running_loop()
+                def create_brain():
+                    from src.agentic.autonomous_brain import AutonomousBrain
+                    return AutonomousBrain(core, core.plugin_manager)
+                self._brain = await loop.run_in_executor(None, create_brain)
         return self._brain
     
     async def brain_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -53,7 +58,7 @@ class BrainCommands:
             return
         
         try:
-            brain = self._get_brain()
+            brain = await self._get_brain()
             if not brain:
                 await update.message.reply_text("❌ Brain not available")
                 return
@@ -112,7 +117,7 @@ class BrainCommands:
             await update.message.reply_text("⛔ Owner only")
             return
         
-        brain = self._get_brain()
+        brain = await self._get_brain()
         if not brain:
             await update.message.reply_text("⚠️ Brain not running")
             return
@@ -146,7 +151,7 @@ class BrainCommands:
             await update.message.reply_text("⛔ Owner only")
             return
         
-        brain = self._get_brain()
+        brain = await self._get_brain()
         if not brain:
             await update.message.reply_text(
                 "🧠 Brain Status\n\n"
@@ -206,7 +211,7 @@ class BrainCommands:
         
         mode = context.args[0].lower()
         
-        brain = self._get_brain()
+        brain = await self._get_brain()
         if not brain:
             await update.message.reply_text("⚠️ Brain not initialized")
             return
