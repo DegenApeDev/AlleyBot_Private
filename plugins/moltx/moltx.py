@@ -26,15 +26,11 @@ from plugins.moltx.moltx_symod_interface import (
     symod_config_command
 )
 from plugins.moltx.moltx_service_messages import MoltxServiceMessagesMixin
-from plugins.moltx.moltx_quote_posts import MoltxQuotePostsMixin
 from plugins.moltx.moltx_async_engagement import MoltxAsyncEngagementMixin
-from plugins.moltx.moltx_intelligent_posting import MoltxIntelligentPostingMixin
 
 class MoltxPlugin(
-    MoltxIntelligentPostingMixin,  # Intelligent AGI-powered posting
     MoltxAsyncEngagementMixin,  # Async engagement (non-blocking)
     MoltxServiceMessagesMixin,  # Service message parsing
-    MoltxQuotePostsMixin,       # Quote-posting capability
     MoltxAPIMixin,
     MoltxWalletMixin,
     MoltxContentMixin,

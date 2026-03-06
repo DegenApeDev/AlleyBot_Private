@@ -354,31 +354,18 @@ class ConversationalAI:
             except Exception as e:
                 print(f"⚠️  RAG context fetch failed: {e}")
 
-            # Try Grok first (better reasoning for tool use)
-            response_text = None
+            # Use LLM Router with automatic fallback
             try:
-                from grok_ai import grok_ai
-                if grok_ai.enabled:
-                    response_text = grok_ai.chat(
-                        user_prompt,
-                        system_prompt=system_prompt,
-                        max_tokens=1000
-                    )
+                from src.core.llm_router import get_llm_router
+                llm = get_llm_router()
+                response_text = llm.chat(
+                    user_prompt,
+                    system_prompt=system_prompt,
+                    max_tokens=1000,
+                    model='grok-reasoning'
+                )
             except Exception as e:
-                print(f"⚠️  Grok chat failed, trying DeepSeek: {e}")
-
-            # Fallback to DeepSeek
-            if not response_text:
-                try:
-                    from deepseek_ai import deepseek_ai
-                    if deepseek_ai.enabled:
-                        response_text = deepseek_ai.chat(
-                            user_prompt,
-                            system_prompt=system_prompt,
-                            max_tokens=1000
-                        )
-                except Exception as e:
-                    print(f"⚠️  DeepSeek chat also failed: {e}")
+                print(f"⚠️  DeepSeek chat also failed: {e}")
 
             if not response_text:
                 return "🤖 I'm having trouble connecting to my AI. Use /help for available commands."
@@ -751,17 +738,13 @@ Remember: ONLY use [EXECUTE:...] when the user wants you to DO something. For qu
                 if not check.get('should_post'):
                     return f"⏳ Image calendar says not now: {check.get('reason', 'unknown')}"
             
-            # Step 1: Generate text content using AI
-            from grok_ai import grok_ai
-            from deepseek_ai import deepseek_ai
+            # Step 1: Generate text content using LLM Router
+            from src.core.llm_router import get_llm_router
             
-            content = None
+            llm = get_llm_router()
             prompt = f"Write a short, engaging social media post (1-3 sentences, under 280 chars) about {topic}. Be opinionated and authentic. No hashtags. Sign off with 🦞 if short enough."
             
-            if grok_ai.enabled:
-                content = grok_ai.chat(prompt)
-            elif deepseek_ai.enabled:
-                content = deepseek_ai.chat(prompt)
+            content = llm.chat(prompt, model='auto')
             
             if not content:
                 return "❌ Failed to generate post content"
@@ -769,6 +752,7 @@ Remember: ONLY use [EXECUTE:...] when the user wants you to DO something. For qu
             content = content.strip().strip('"').strip("'")
             
             # Step 2: Generate viral image based on content
+            from grok_ai import grok_ai
             image_prompt = f"A viral, eye-catching image about: {topic}. {content[:100]}. Make it visually striking and shareable."
             
             if not grok_ai.enabled:

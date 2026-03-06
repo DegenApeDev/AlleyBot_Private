@@ -100,7 +100,7 @@ class MoltxContentMixin:
             self.core.save_memory('moltx_engagement_stats', stats)
             print(f"📊 Post recorded (total cumulative: {stats['posts']})")
         except Exception as e:
-            print(f"⚠️ Failed to record post: {e}")
+            print(f"⚠️ Failed to save repost history: {e}")
     
     def _auto_engage_for_posting(self) -> str:
         """Auto-engage with feed to meet 5:1 quota using enhanced content generation:
