@@ -344,12 +344,13 @@ class DecisionEngineMixin(SyModTruthFilterMixin if SYMOD_AVAILABLE else object):
         # Fallback: score-based heuristic
         return self._heuristic_decide(available, context)
 
-    def _ai_decide(self, available: List[Dict], context_summary: str,
-                   full_context: Dict) -> Optional[Dict]:
-        """Use Grok/DeepSeek to reason about the best action"""
+    def _ai_reason_about_action(self, available: List[Dict], context_summary: str,
+                                   full_context: Dict) -> Optional[Dict]:
+        """Use LLM Router to reason about the best action"""
         try:
-            from grok_ai import grok_ai
-            if not grok_ai.enabled:
+            from src.core.llm_router import get_llm_router
+            llm = get_llm_router()
+            if not llm.models:
                 return None
 
             actions_text = "\n".join(
@@ -390,18 +391,15 @@ Example:
 moltbook_heartbeat
 Haven't engaged on Moltbook recently, good time to build karma."""
 
-            data = {
-                "model": grok_ai.model,
-                "messages": [
-                    {"role": "system", "content": "You are AlleyBot's decision engine. You are an AI agent with street-smart, self-taught energy. You are on-chain focused, security-obsessed, and a truth-seeker. Be decisive and strategic."},
-                    {"role": "user", "content": prompt}
-                ],
-                "max_tokens": 60,
-                "temperature": 0.3,
-            }
+            system_prompt = "You are AlleyBot's decision engine. You are an AI agent with street-smart, self-taught energy. You are on-chain focused, security-obsessed, and a truth-seeker. Be decisive and strategic."
 
-            response = grok_ai._make_api_request(data)
-            text = grok_ai._extract_text(response)
+            text = llm.chat(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                max_tokens=300,
+                temperature=0.3,
+                model='grok-reasoning'
+            )
 
             if text:
                 lines = text.strip().split('\n')
@@ -1051,7 +1049,7 @@ Haven't engaged on Moltbook recently, good time to build karma."""
                 return onchain.wallet_command()
             return "❌ Onchain not available"
 
-        # Compose and post: uses Grok to synthesize chain_context into a post
+        # Compose and post: uses LLM Router to synthesize chain_context into a post
         if action == 'grok_compose_and_post':
             return self._chain_compose_and_post(chain_context, platform or 'moltx', plugins)
 
@@ -1068,23 +1066,24 @@ Haven't engaged on Moltbook recently, good time to build karma."""
                 
                 topic = None
                 if price_data:
-                    # Use Grok to create a debate topic based on actual prices
+                    # Use LLM Router to create a debate topic based on actual prices
                     try:
-                        from grok_ai import grok_ai
-                        if grok_ai.enabled:
+                        from src.core.llm_router import get_llm_router
+                        llm = get_llm_router()
+                        if llm.models:
                             prompt = f"""Based on this crypto price data, create ONE engaging debate topic about the crypto market:
 
 {price_data[:500]}
 
-The topic should be:
-- Controversial or thought-provoking
-- Related to current market conditions
-- Under 100 characters
-- Suitable for a debate about crypto/decentralized finance
+Requirements:
+- Must be thought-provoking and debatable (not just factual)
+- Should relate to the current market conditions
+- Keep it under 100 characters
+- No hashtags
 
 Respond with ONLY the debate topic, no explanation."""
                             
-                            topic = grok_ai.chat(prompt, max_tokens=100)
+                            topic = llm.chat(prompt, max_tokens=100, model='auto')
                             if topic:
                                 topic = topic.strip().strip('"').strip("'")
                     except Exception as e:
@@ -1098,7 +1097,7 @@ Respond with ONLY the debate topic, no explanation."""
                 if topic:
                     similar = self._check_for_similar_debate(topic)
                     if similar:
-                        return f"⏳ Skipped: Topic too similar to '{similar[:50]}...'"
+                        return f"⏳ Skipped: Topic too similar to existing: '{topic[:60]}...' ~ '{similar[:60]}...' - skipping debate creation"
                     self._track_debate_topic(topic)
                 else:
                     return "⏳ Skipped: Could not generate unique debate topic"
@@ -1163,11 +1162,12 @@ Respond with ONLY the debate topic, no explanation."""
         return f"❌ Unknown chain step: {action}"
 
     def _chain_compose_and_post(self, chain_context: Dict, platform: str, plugins: Dict) -> str:
-        """Use Grok to compose a post from accumulated chain context, then post it"""
+        """Use LLM Router to compose a post from accumulated chain context, then post it"""
         try:
-            from grok_ai import grok_ai
-            if not grok_ai.enabled:
-                return "❌ Grok not available for composing"
+            from src.core.llm_router import get_llm_router
+            llm = get_llm_router()
+            if not llm.models:
+                return "❌ LLM not available for composing"
 
             # Build context summary from all prior steps
             context_parts = []
@@ -1195,9 +1195,9 @@ Rules:
 
 Post:"""
 
-            content = grok_ai.chat(prompt, max_tokens=200)
+            content = llm.chat(prompt, max_tokens=200, model='auto')
             if not content:
-                return "❌ Grok failed to compose post"
+                return "❌ LLM failed to compose post"
 
             content = content.strip().strip('"').strip("'")
             if len(content) < max_chars - 5 and '🦞' not in content:
@@ -1206,10 +1206,6 @@ Post:"""
             # Post to the target platform
             if platform == 'moltx':
                 moltx = plugins.get('moltx')
-                print(f"  🔍 Debug: plugins.keys() = {list(plugins.keys())}")
-                print(f"  🔍 Debug: moltx plugin = {moltx}")
-                if moltx:
-                    print(f"  🔍 Debug: moltx.create_post exists = {hasattr(moltx, 'create_post')}")
                 if moltx and hasattr(moltx, 'create_post'):
                     return moltx.create_post(content)
                 return f"❌ MoltX plugin not available (plugin={moltx}, has_create_post={hasattr(moltx, 'create_post') if moltx else False})"
@@ -1232,9 +1228,9 @@ Post:"""
     def _generate_image_prompt_from_content(self, content: str) -> str:
         """Generate a viral image prompt based on post content"""
         try:
-            from grok_ai import grok_ai
-            if not grok_ai.enabled:
-                # Fallback: extract key themes and create prompt
+            from src.core.llm_router import get_llm_router
+            llm = get_llm_router()
+            if not llm.models:
                 return self._fallback_image_prompt(content)
             
             system_prompt = """You are an expert at creating viral image prompts for AI image generation.
@@ -1254,7 +1250,7 @@ Rules:
 
 Generate a detailed, compelling image prompt that would create an eye-catching visual to accompany this post. Focus on the key theme/emotion and make it visually striking."""
 
-            prompt = grok_ai.chat(user_prompt, system_prompt=system_prompt, max_tokens=250)
+            prompt = llm.chat(user_prompt, system_prompt=system_prompt, max_tokens=250, model='auto')
             if prompt:
                 return prompt.strip()
             return self._fallback_image_prompt(content)
@@ -1436,10 +1432,10 @@ Generate a detailed, compelling image prompt that would create an eye-catching v
             print(f"⚠️  Failed to track debate topic: {e}")
 
     def _generate_debate_topic(self) -> Optional[str]:
-        """Generate a unique debate topic using AI, avoiding recent topics. Returns None if unable to generate unique topic."""
+        """Generate a unique debate topic using LLM Router, avoiding recent topics. Returns None if unable to generate unique topic."""
         try:
-            from grok_ai import grok_ai
-            from deepseek_ai import deepseek_ai
+            from src.core.llm_router import get_llm_router
+            llm = get_llm_router()
             
             # Get recent topics to avoid
             recent_topics = self.core.get_memory('recent_debate_topics') or []
@@ -1459,21 +1455,8 @@ Requirements:
 
 Respond with ONLY the debate topic, nothing else."""
 
-            topic = None
-            
-            # Try Grok first
-            if grok_ai.enabled:
-                try:
-                    topic = grok_ai.chat(prompt, max_tokens=100)
-                except Exception as e:
-                    print(f"⚠️  Grok debate topic generation failed: {e}")
-            
-            # Fallback to DeepSeek
-            if not topic and deepseek_ai.enabled:
-                try:
-                    topic = deepseek_ai.chat(prompt, max_tokens=100)
-                except Exception as e:
-                    print(f"⚠️  DeepSeek debate topic generation failed: {e}")
+            # Use LLM Router with automatic fallback
+            topic = llm.chat(prompt, max_tokens=100, model='auto')
             
             if topic:
                 topic = topic.strip().strip('"').strip("'")
@@ -1484,16 +1467,16 @@ Respond with ONLY the debate topic, nothing else."""
                     return None
                 return topic
             
-            # No AI available - skip debate creation (no fallback)
-            print("⏳ No AI available for debate topic generation - skipping debate creation")
+            # No LLM available - skip debate creation (no fallback)
+            print("⏳ No LLM available for debate topic generation - skipping debate creation")
             return None
             
         except Exception as e:
-            print(f"⚠️  AI debate topic generation failed: {e} - skipping debate creation")
+            print(f"⚠️  LLM debate topic generation failed: {e} - skipping debate creation")
             return None
 
     def _generate_fallback_debate_topic(self) -> Optional[str]:
-        """Fallback debate topic generator - returns None to skip debate creation when AI fails"""
+        """Fallback debate topic generator - returns None to skip debate creation when LLM fails"""
         print("⏳ Using fallback debate topic generator - but skipping to avoid duplicates")
         return None
 
@@ -1744,8 +1727,9 @@ SyMod Analysis:
             prompt = prompts.get(platform, prompts['moltx'])
 
         try:
-            from grok_ai import grok_ai
-            content = grok_ai.chat(prompt)
+            from src.core.llm_router import get_llm_router
+            llm = get_llm_router()
+            content = llm.chat(prompt, model='auto')
             if content:
                 content = content.strip().strip('"')
                 # Validate uniqueness before returning
@@ -1756,22 +1740,7 @@ SyMod Analysis:
                     print(f"🔄 Content too similar to recent posts, regenerating...")
                     return self._generate_post_content(platform, topic)  # Retry with different prompt
         except Exception as e:
-            print(f"⚠️  Grok content generation failed: {e}")
-
-        try:
-            from deepseek_ai import deepseek_ai
-            content = deepseek_ai.chat(prompt)
-            if content:
-                content = content.strip().strip('"')
-                # Validate uniqueness before returning
-                if self._is_unique_content(content, recent_posts):
-                    self._record_post_content(platform, content)
-                    return content
-                else:
-                    print(f"🔄 Content too similar to recent posts, regenerating...")
-                    return self._generate_post_content(platform, topic)  # Retry with different prompt
-        except Exception as e:
-            print(f"⚠️  DeepSeek content generation failed: {e}")
+            print(f"⚠️  LLM content generation failed: {e}")
 
         return None
     

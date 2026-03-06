@@ -215,11 +215,12 @@ class MoltxIntelligentPostingMixin:
             return content
     
     def _generate_with_ai(self, brain_context: Dict[str, Any], topic: Optional[str], context: Optional[Dict[str, Any]]) -> Optional[str]:
-        """Generate content using DeepSeek/Grok with real brain context"""
+        """Generate content using LLM Router with real brain context"""
         try:
-            from deepseek_ai import deepseek_ai
+            from src.core.llm_router import get_llm_router
             
-            if not deepseek_ai.enabled:
+            llm = get_llm_router()
+            if not llm.models:
                 return None
             
             # Build authentic prompt from real experiences
@@ -253,7 +254,7 @@ REQUIREMENTS:
 
 Write the post:"""
 
-            content = deepseek_ai.chat(prompt, max_tokens=150)
+            content = llm.chat(prompt, max_tokens=150, model='auto')
             
             if content and len(content.strip()) > 20:
                 return content.strip()
