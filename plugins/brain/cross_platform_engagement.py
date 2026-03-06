@@ -16,6 +16,11 @@ from datetime import datetime
 class CrossPlatformEngagementMixin:
     """Handles 5:1 engagement rule across all social platforms"""
     
+    # Mixin metadata for documentation and validation
+    REQUIRES = ["world_state"]
+    PROVIDES = ["check_engagement_quota", "track_engagement", "engagement_stats"]
+    INIT_ORDER = 13
+    
     def __init__(self, *args, **kwargs):
         """Initialize mixin - accepts args/kwargs for MRO compatibility with BrainPlugin"""
         # Don't call super().__init__ to avoid MRO issues with AlleyBotPlugin
