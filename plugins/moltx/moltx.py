@@ -353,7 +353,7 @@ class MoltxPlugin(
                 hashtags = trending.get('hashtags', []) or trending.get('data', {}).get('hashtags', [])
             
             # Mix trending with diverse topics
-            if hashtags:
+            if hashtags and isinstance(hashtags, list):
                 # Pick 1-2 trending hashtags to explore
                 explore_tags = hashtags[:2] if len(hashtags) >= 2 else hashtags
                 for tag in explore_tags:
