@@ -134,7 +134,15 @@ class MoltxContentMixin:
             
             print(f"🔄 Need {needed_replies} replies and {needed_likes} likes before posting...")
             
-            # Fetch global feed using get_feed() method
+            # CRITICAL: Run engagement in background to avoid blocking Telegram
+            # This was causing Telegram commands to freeze
+            if hasattr(self, 'start_engagement_background'):
+                print("🔄 Starting engagement in background (non-blocking)...")
+                result = self.start_engagement_background(self.dynamic_engage_command, count='5')
+                return result
+            
+            # Only fetch feed synchronously if async not available (shouldn't happen)
+            print("⚠️ Async not available, running sync engagement (may block)")
             feed_result = self.get_feed(feed_type='global', limit=25)
             
             # Handle different return formats

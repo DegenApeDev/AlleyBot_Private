@@ -54,9 +54,14 @@ class ConversationalAI:
             try:
                 print("🔤 Pre-warming intent classifier in background...")
                 self._init_intent_classifier()
-                print("✅ Intent classifier ready")
+                if self.intent_classifier and self.intent_classifier.command_embeddings:
+                    print(f"✅ Intent classifier ready ({len(self.intent_classifier.command_embeddings)} commands loaded)")
+                else:
+                    print("✅ Intent classifier ready")
             except Exception as e:
                 print(f"⚠️ Intent classifier pre-warm failed: {e}")
+                import traceback
+                traceback.print_exc()
         threading.Thread(target=_warm, daemon=True).start()
     
     @property
