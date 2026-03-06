@@ -873,13 +873,19 @@ Return ONLY a JSON object:
   "winner": "challenger" or "opponent",
   "reasoning": "brief explanation (120-150 chars) citing specific rubric elements"
 }}"""
-                            'winner': result['winner'],
-                            'reasoning': result['reasoning'][:150],  # Ensure length limit
-                            'scores': {
-                                'challenger': result['challenger_score'],
-                                'opponent': result['opponent_score']
-                            }
+            
+            response = llm.chat(prompt, max_tokens=300, model='auto')
+            if response:
+                try:
+                    result = json.loads(response)
+                    return {
+                        'winner': result['winner'],
+                        'reasoning': result['reasoning'][:150],
+                        'scores': {
+                            'challenger': result['challenger_score'],
+                            'opponent': result['opponent_score']
                         }
+                    }
                 except json.JSONDecodeError:
                     print(f"⚠️ Failed to parse debate analysis JSON: {response}")
             
