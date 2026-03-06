@@ -604,97 +604,73 @@ WARNING: NEVER use relative imports (from .module import ...) - always use absol
 
 Generate clean, production-ready Python code that follows the SOP exactly and passes syntax validation on first try."""
 
-        user_prompt = f"Task: {task}\n\nGenerate complete Python code. Return ONLY code, no markdown fences, no explanations."
+    user_prompt = f"Task: {task}\n\nGenerate complete Python code. Return ONLY code, no markdown fences, no explanations."
 
-        # Try DeepSeek first (more reliable for code generation)
-        try:
-            from deepseek_ai import deepseek_ai
-            if deepseek_ai.enabled:
-                print(f"  🤖 Calling DeepSeek API...")
-                result = deepseek_ai.chat(user_prompt, system_prompt=system_prompt, max_tokens=max_tokens)
-                if result:
-                    self._api_failure_count = 0  # Reset on success
-                    return self._clean_generated_code(result)
-        except TimeoutError as e:
-            print(f"⏰ DeepSeek API timeout: {e}")
-            self._record_api_failure()
-        except Exception as e:
-            print(f"⚠️ DeepSeek code generation failed: {e}")
-            self._record_api_failure()
+    # Use LLM Router for code generation
+    from src.core.llm_router import get_llm_router
+    llm = get_llm_router()
+    result = llm.chat(user_prompt, system_prompt=system_prompt, max_tokens=max_tokens)
+    if result:
+        self._api_failure_count = 0  # Reset on success
+        return self._clean_generated_code(result)
 
-        # Fallback to Grok with timeout handling
-        try:
-            from grok_ai import grok_ai
-            if grok_ai.enabled:
-                print(f"  🤖 Calling Grok API (fallback)...")
-                result = grok_ai.chat(user_prompt, system_prompt=system_prompt, max_tokens=max_tokens)
-                if result:
-                    self._api_failure_count = 0  # Reset on success
-                    return self._clean_generated_code(result)
-        except TimeoutError as e:
-            print(f"⏰ Grok API timeout: {e}")
-            self._record_api_failure()
-        except Exception as e:
-            print(f"⚠️ Grok code generation failed: {e}")
-            self._record_api_failure()
+    return None
 
-        return None
+def _clean_generated_code(self, raw: str) -> str:
+    """Strip markdown fences and clean up AI output"""
+    text = raw.strip()
 
-    def _clean_generated_code(self, raw: str) -> str:
-        """Strip markdown fences and clean up AI output"""
-        text = raw.strip()
-
-        # If the response contains a fenced code block, extract just the code
-        # Try python/py fence first, then any fence
-        fence_match = re.search(r'```(?:python|py)?\s*\n(.*?)```', text, re.DOTALL)
+    # If the response contains a fenced code block, extract just the code
+    # Try python/py fence first, then any fence
+    fence_match = re.search(r'```(?:python|py)?\s*\n(.*?)```', text, re.DOTALL)
+    if fence_match:
+        text = fence_match.group(1)
+    else:
+        # Try any generic fence
+        fence_match = re.search(r'```\s*\n(.*?)```', text, re.DOTALL)
         if fence_match:
             text = fence_match.group(1)
         else:
-            # Try any generic fence
-            fence_match = re.search(r'```\s*\n(.*?)```', text, re.DOTALL)
-            if fence_match:
-                text = fence_match.group(1)
-            else:
-                # Fallback: strip leading/trailing fences line by line
-                text = re.sub(r'^```(?:python|py)?\s*\n?', '', text)
-                text = re.sub(r'\n?```\s*$', '', text)
+            # Fallback: strip leading/trailing fences line by line
+            text = re.sub(r'^```(?:python|py)?\s*\n?', '', text)
+            text = re.sub(r'\n?```\s*$', '', text)
 
-        # Remove any remaining fence markers that may appear mid-text
-        text = re.sub(r'```(?:python|py)?\s*\n?', '', text)
-        text = re.sub(r'\n?```', '', text)
+    # Remove any remaining fence markers that may appear mid-text
+    text = re.sub(r'```(?:python|py)?\s*\n?', '', text)
+    text = re.sub(r'\n?```', '', text)
 
-        # Strip any leading prose before the first code line
-        code_starters = ('import ', 'from ', 'def ', 'class ', '#', '"""', "'''", '@',
-                         'try:', 'try :', 'if __', 'PLUGIN_INFO', 'plugin_info')
-        lines = text.split('\n')
-        code_start = 0
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            if not stripped:
-                continue
-            if stripped.startswith(code_starters):
-                code_start = i
-                break
-            # Catch module-level assignments like PLUGIN_INFO = { or VAR = "..."
-            # but NOT prose sentences like "Here is the fixed code:"
-            if (stripped[0].isupper() and '=' in stripped and
-                    not stripped.endswith(':') and len(stripped.split()) <= 5):
-                code_start = i
-                break
-        text = '\n'.join(lines[code_start:])
+    # Strip any leading prose before the first code line
+    code_starters = ('import ', 'from ', 'def ', 'class ', '#', '"""', "'''", '@',
+                     'try:', 'try :', 'if __', 'PLUGIN_INFO', 'plugin_info')
+    lines = text.split('\n')
+    code_start = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith(code_starters):
+            code_start = i
+            break
+        # Catch module-level assignments like PLUGIN_INFO = { or VAR = "..."
+        # but NOT prose sentences like "Here is the fixed code:"
+        if (stripped[0].isupper() and '=' in stripped and
+                not stripped.endswith(':') and len(stripped.split()) <= 5):
+            code_start = i
+            break
+    text = '\n'.join(lines[code_start:])
 
-        return text.strip()
+    return text.strip()
 
-    # ------------------------------------------------------------------
-    # Plan: analyze what needs to change
-    # ------------------------------------------------------------------
+# ------------------------------------------------------------------
+# Plan: analyze what needs to change
+# ------------------------------------------------------------------
 
-    def _plan_update(self, task: str, skill_content: str = "") -> Optional[Dict]:
-        """Use AI to plan what files need to change and how"""
-        # Gather project structure for context
-        structure = self._get_project_structure()
+def _plan_update(self, task: str, skill_content: str = "") -> Optional[Dict]:
+    """Use AI to plan what files need to change and how"""
+    # Gather project structure for context
+    structure = self._get_project_structure()
 
-        plan_prompt = f"""Analyze this task and create a code change plan for AlleyBot.
+    plan_prompt = f"""Analyze this task and create a code change plan for AlleyBot.
 
 TASK: {task}
 
@@ -724,22 +700,24 @@ Rules:
 
 Return ONLY valid JSON, no markdown or explanation."""
 
-        try:
-            from grok_ai import grok_ai
-            if grok_ai.enabled:
-                result = grok_ai.chat(plan_prompt, max_tokens=2000)
-                if result:
-                    # Extract JSON from response
-                    json_match = re.search(r'\{.*\}', result, re.DOTALL)
-                    if json_match:
-                        plan = json.loads(json_match.group())
-                        # Validate plan
-                        if self._validate_plan(plan):
-                            return plan
-        except Exception as e:
-            print(f"⚠️  Plan generation failed: {e}")
+    try:
+        # Use LLM Router for plan generation
+        from src.core.llm_router import get_llm_router
+        llm = get_llm_router()
+        code = llm.chat(plan_prompt, max_tokens=1000, model='grok-code')
+        if not code:
+            return None
+        # Extract JSON from response
+        json_match = re.search(r'\{.*\}', code, re.DOTALL)
+        if json_match:
+            plan = json.loads(json_match.group())
+            # Validate plan
+            if self._validate_plan(plan):
+                return plan
+    except Exception as e:
+        print(f"⚠️  Plan generation failed: {e}")
 
-        return None
+    return None
 
     def _validate_plan(self, plan: Dict) -> bool:
         """Validate a code change plan for safety"""

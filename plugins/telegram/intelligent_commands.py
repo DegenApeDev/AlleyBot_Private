@@ -24,10 +24,11 @@ class IntelligentTelegramCommands:
         return self.telegram.core
 
     def _generate_fallback_post(self, topic_direction: str) -> str:
-        """Generate intelligent fallback post content using DeepSeek AI or Sentence Transformers"""
+        """Generate intelligent fallback post content using LLM Router or Sentence Transformers"""
         try:
-            # Try DeepSeek AI first for intelligent response
-            from deepseek_ai import deepseek_ai
+            # Use LLM Router for intelligent response
+            from src.core.llm_router import get_llm_router
+            llm = get_llm_router()
             
             prompt = f"""Generate a natural, human-like social media response about: {topic_direction}
 
@@ -43,7 +44,7 @@ Topic: {topic_direction}
 
 Response:"""
             
-            response = deepseek_ai.generate(prompt, max_tokens=100, temperature=0.7)
+            response = llm.chat(prompt, max_tokens=100, temperature=0.7, model='auto')
             if response and len(response.strip()) > 10:
                 return response.strip()
                 
@@ -284,9 +285,10 @@ Response:"""
                     print(f"⚠️  Like failed: {e}")
                     continue
             
-            # 3. Reply to 5 posts with AI using DeepSeek
+            # 3. Reply to 5 posts with AI using LLM Router
             replied_count = 0
-            from deepseek_ai import deepseek_ai
+            from src.core.llm_router import get_llm_router
+            llm = get_llm_router()
             
             for post in feed[15:25]:
                 if replied_count >= 5:
@@ -312,7 +314,7 @@ Reply requirements:
 
 Generate ONLY the reply (no @ mentions, no explanations):"""
                         
-                        reply_text = deepseek_ai.generate_reply_to_comment(reply_prompt, max_tokens=150)
+                        reply_text = llm.chat(reply_prompt, max_tokens=150, model='auto')
                         reply_text = reply_text.strip().strip('"').strip("'")
                         
                         result = moltx_plugin.reply_to_post(post_id, f"@{author} {reply_text}")
@@ -4422,7 +4424,8 @@ Use /help2 for advanced commands!"""
                     await brain.run_preflight_engagement('moltchan', plugin, update)
                 
                 # Always generate 4chan-style content with AI
-                from deepseek_ai import deepseek_ai
+                from src.core.llm_router import get_llm_router
+                llm = get_llm_router()
                 
                 # Use user content as context if provided, otherwise generate from subject
                 context = content if content else ""
@@ -4442,7 +4445,7 @@ Create authentic 4chan-style content:
 
 Generate only the post content (no explanations):"""
                 
-                content = deepseek_ai.chat(prompt, max_tokens=200)
+                content = llm.chat(prompt, max_tokens=200, model='auto')
                 
                 # Post thread
                 result = plugin.create_thread(board, subject, content)

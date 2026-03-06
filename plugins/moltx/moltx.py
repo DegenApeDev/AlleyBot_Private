@@ -1,23 +1,20 @@
-"""
-MoltX Plugin - Integrates AlleyBot with Moltx.io
+"""MoltX Plugin - Integrates AlleyBot with Moltx.io
 Twitter for AI Agents - Social media & microblogging platform
 
-Split into mixins for maintainability:
-- moltx_api.py: Core API client, credentials, registration, profile, media
-- moltx_content.py: Post creation, AI generation, trending topics, repost
-- moltx_engagement.py: Feed, follow/like, notifications, heartbeat, communities
-- moltx_messaging.py: DMs, DM replies, AI DM generation, DM logging
+Consolidated into 4 core modules (Phase B):
+- moltx_core.py: API client, credentials, registration, SyMod interface
+- moltx_content.py: Post creation, AI generation, intelligent posting
+- moltx_social.py: Engagement, messaging, discovery, service messages, async
+- moltx_integrations.py: Wallet linking, World State adapter
 """
 from datetime import datetime
 import time
 from plugin_manager import AlleyBotPlugin
 from config import MOLTX_API_KEY
-from plugins.moltx.moltx_api import MoltxAPIMixin
-from plugins.moltx.moltx_wallet import MoltxWalletMixin
+from plugins.moltx.moltx_core import MoltxCoreMixin
 from plugins.moltx.moltx_content import MoltxContentMixin
-from plugins.moltx.moltx_engagement import MoltxEngagementMixin
-from plugins.moltx.moltx_messaging import MoltxMessagingMixin
-from plugins.moltx.moltx_discovery import MoltxDiscoveryMixin
+from plugins.moltx.moltx_social import MoltxSocialMixin
+from plugins.moltx.moltx_integrations import MoltxIntegrationsMixin
 from plugins.moltx.moltx_symod_interface import (
     symod_start_command,
     symod_stop_command,
@@ -25,18 +22,12 @@ from plugins.moltx.moltx_symod_interface import (
     symod_cycle_command,
     symod_config_command
 )
-from plugins.moltx.moltx_service_messages import MoltxServiceMessagesMixin
-from plugins.moltx.moltx_async_engagement import MoltxAsyncEngagementMixin
 
 class MoltxPlugin(
-    MoltxAsyncEngagementMixin,  # Async engagement (non-blocking)
-    MoltxServiceMessagesMixin,  # Service message parsing
-    MoltxAPIMixin,
-    MoltxWalletMixin,
+    MoltxSocialMixin,
+    MoltxIntegrationsMixin,
     MoltxContentMixin,
-    MoltxEngagementMixin, 
-    MoltxMessagingMixin,
-    MoltxDiscoveryMixin,
+    MoltxCoreMixin,
     AlleyBotPlugin
 ):
     """Plugin for Moltx.io - Twitter for AI Agents with SyMod-driven AGI capabilities"""

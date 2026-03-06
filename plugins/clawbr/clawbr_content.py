@@ -18,8 +18,8 @@ class ClawbrContentMixin:
     def create_intelligent_post(self, topic: Optional[str] = None,
                               intent: str = "statement") -> Dict[str, Any]:
         """Create an intelligent post using AI"""
-        from grok_ai import grok_ai
-        from deepseek_ai import deepseek_ai
+        from src.core.llm_router import get_llm_router
+        llm = get_llm_router()
         
         # Get context from brain
         context = self._get_content_context()
@@ -43,19 +43,8 @@ Personality: {self.clawbr_personality}
 
 Write a concise, engaging post (under 280 chars). No hashtags unless natural."""
         
-        # Try Grok first, then DeepSeek
-        content = None
-        try:
-            if grok_ai.enabled:
-                content = grok_ai.chat(prompt, max_tokens=100)
-        except:
-            pass
-        
-        if not content and deepseek_ai.enabled:
-            try:
-                content = deepseek_ai.chat(prompt, max_tokens=100)
-            except:
-                pass
+        # Use LLM Router with automatic fallback
+        content = llm.chat(prompt, max_tokens=100, model='auto')
         
         if not content:
             content = f"Interesting thoughts on {topic or 'AI and technology'} from {self.clawbr_personality} perspective."
@@ -66,8 +55,8 @@ Write a concise, engaging post (under 280 chars). No hashtags unless natural."""
     def create_intelligent_reply(self, post_id: str, original_content: str,
                                author: str) -> Dict[str, Any]:
         """Generate an intelligent reply to a post"""
-        from grok_ai import grok_ai
-        from deepseek_ai import deepseek_ai
+        from src.core.llm_router import get_llm_router
+        llm = get_llm_router()
         
         # Get post details
         post = self.get_post(post_id)
@@ -82,19 +71,8 @@ Original post by {author}: "{original_content}"
 Context: You are {self.clawbr_personality}. Write a thoughtful, engaging reply.
 Keep it concise (under 200 chars). Be constructive and add value to the conversation."""
         
-        # Generate reply
-        reply_content = None
-        try:
-            if grok_ai.enabled:
-                reply_content = grok_ai.chat(prompt, max_tokens=80)
-        except:
-            pass
-        
-        if not reply_content and deepseek_ai.enabled:
-            try:
-                reply_content = deepseek_ai.chat(prompt, max_tokens=80)
-            except:
-                pass
+        # Generate reply using LLM Router
+        reply_content = llm.chat(prompt, max_tokens=80, model='auto')
         
         if not reply_content:
             reply_content = f"Interesting perspective from {author}! 🤔"
@@ -118,8 +96,8 @@ Keep it concise (under 200 chars). Be constructive and add value to the conversa
     
     def _generate_validated_opening(self, topic: str, category: Optional[str] = None) -> str:
         """Generate opening argument and validate with SyMod"""
-        from grok_ai import grok_ai
-        from deepseek_ai import deepseek_ai
+        from src.core.llm_router import get_llm_router
+        llm = get_llm_router()
         
         # Generate initial opening
         prompt = f"""Write a strong opening argument for a debate on: {topic}
@@ -137,18 +115,7 @@ Requirements:
 
 Focus on real evidence, not speculation."""
         
-        opening = None
-        try:
-            if grok_ai.enabled:
-                opening = grok_ai.chat(prompt, max_tokens=300)
-        except:
-            pass
-        
-        if not opening and deepseek_ai.enabled:
-            try:
-                opening = deepseek_ai.chat(prompt, max_tokens=300)
-            except:
-                pass
+        opening = llm.chat(prompt, max_tokens=300, model='grok-reasoning')
         
         if not opening:
             return None
@@ -182,8 +149,8 @@ Focus on real evidence, not speculation."""
     
     def _generate_basic_opening(self, topic: str, category: Optional[str] = None) -> str:
         """Basic opening argument generation"""
-        from grok_ai import grok_ai
-        from deepseek_ai import deepseek_ai
+        from src.core.llm_router import get_llm_router
+        llm = get_llm_router()
         
         prompt = f"""Write an opening argument for a debate on: {topic}
 
@@ -197,19 +164,8 @@ Write a strong opening argument (under 1200 chars) that:
 3. Is persuasive but respectful
 4. Ends with a hook for the opponent"""
         
-        # Generate argument
-        argument = None
-        try:
-            if grok_ai.enabled:
-                argument = grok_ai.chat(prompt, max_tokens=300)
-        except:
-            pass
-        
-        if not argument and deepseek_ai.enabled:
-            try:
-                argument = deepseek_ai.chat(prompt, max_tokens=300)
-            except:
-                pass
+        # Generate argument using LLM Router
+        argument = llm.chat(prompt, max_tokens=300, model='auto')
         
         if not argument:
             argument = f"I believe {topic} is important because it impacts AI development. The key points are innovation, ethics, and practical implementation."
@@ -253,8 +209,8 @@ Write a strong opening argument (under 1200 chars) that:
     
     def _generate_fallback_rebuttal(self, debate_slug: str, opponent_argument: str) -> str:
         """Fallback rebuttal generation when enhanced strategy fails"""
-        from grok_ai import grok_ai
-        from deepseek_ai import deepseek_ai
+        from src.core.llm_router import get_llm_router
+        llm = get_llm_router()
         
         # Get debate context
         debate = self.get_debate(debate_slug)
@@ -291,18 +247,7 @@ Your rebuttal should:
 
 Style: {getattr(self, 'clawbr_debate_style', 'analytical')}"""
         
-        rebuttal = None
-        try:
-            if grok_ai.enabled:
-                rebuttal = grok_ai.chat(prompt, max_tokens=250)
-        except:
-            pass
-        
-        if not rebuttal and deepseek_ai.enabled:
-            try:
-                rebuttal = deepseek_ai.chat(prompt, max_tokens=250)
-            except:
-                pass
+        rebuttal = llm.chat(prompt, max_tokens=250, model='grok-reasoning')
         
         if not rebuttal:
             rebuttal = f"I understand my opponent's perspective on {topic}, but I believe the evidence supports my position when we consider the full context and implications."
@@ -413,8 +358,8 @@ Style: {getattr(self, 'clawbr_debate_style', 'analytical')}"""
     
     def _generate_truth_seeking_rebuttal(self, topic: str, opponent_argument: str) -> str:
         """Generate truth-seeking rebuttal focused on facts and logic"""
-        from grok_ai import grok_ai
-        from deepseek_ai import deepseek_ai
+        from src.core.llm_router import get_llm_router
+        llm = get_llm_router()
         
         prompt = f"""Write a truth-seeking rebuttal for this debate:
 
@@ -430,19 +375,8 @@ Write a rebuttal (under 750 chars) that:
 4. Strengthens your position with facts
 5. Avoids personal attacks or deflection"""
         
-        # Generate rebuttal
-        rebuttal = None
-        try:
-            if grok_ai.enabled:
-                rebuttal = grok_ai.chat(prompt, max_tokens=200)
-        except:
-            pass
-        
-        if not rebuttal and deepseek_ai.enabled:
-            try:
-                rebuttal = deepseek_ai.chat(prompt, max_tokens=200)
-            except:
-                pass
+        # Generate rebuttal using LLM Router
+        rebuttal = llm.chat(prompt, max_tokens=200, model='grok-reasoning')
         
         if not rebuttal:
             rebuttal = f"I appreciate your perspective on this aspect. However, the evidence suggests a different conclusion. Let me explain with supporting facts..."
@@ -451,8 +385,8 @@ Write a rebuttal (under 750 chars) that:
     
     def _generate_tactical_rebuttal(self, topic: str, opponent_argument: str, tactical_analysis: Dict) -> str:
         """Generate tactical rebuttal when opponent uses unfair tactics"""
-        from grok_ai import grok_ai
-        from deepseek_ai import deepseek_ai
+        from src.core.llm_router import get_llm_router
+        llm = get_llm_router()
         
         tactics = tactical_analysis.get('tactics_detected', [])
         tactical_level = tactical_analysis.get('tactical_level', 'low')
@@ -494,19 +428,8 @@ Write a rebuttal (under 750 chars) that:
 6. Uses their tactics against them strategically
 7. Ends by strengthening your position with irrefutable facts"""
         
-        # Generate rebuttal
-        rebuttal = None
-        try:
-            if grok_ai.enabled:
-                rebuttal = grok_ai.chat(prompt, max_tokens=220)
-        except:
-            pass
-        
-        if not rebuttal and deepseek_ai.enabled:
-            try:
-                rebuttal = deepseek_ai.chat(prompt, max_tokens=220)
-            except:
-                pass
+        # Generate rebuttal using LLM Router
+        rebuttal = llm.chat(prompt, max_tokens=220, model='grok-reasoning')
         
         if not rebuttal:
             rebuttal = self._generate_fallback_tactical_rebuttal(tactics, topic)
@@ -558,9 +481,9 @@ Write a rebuttal (under 750 chars) that:
             return f"Your approach seems designed to avoid substantive engagement with the facts. While rhetorical tactics may work in less rigorous debates, they don't change the evidence supporting my position on {topic}. I'm happy to discuss the actual merits of the arguments you've yet to address."
 
     def create_intelligent_debate(self, user_request: str, category: Optional[str] = None) -> Dict[str, Any]:
-        """Create a debate from natural language using Grok to generate topic and opening argument"""
-        from grok_ai import grok_ai
-        from deepseek_ai import deepseek_ai
+        """Create a debate from natural language using LLM Router to generate topic and opening argument"""
+        from src.core.llm_router import get_llm_router
+        llm = get_llm_router()
         
         # Build prompt to extract/generate debate parameters
         prompt = f"""The user wants to create a debate with this request: "{user_request}"
@@ -579,21 +502,13 @@ Requirements:
 - Opening argument must take a clear stance with 2-3 supporting points
 - Category MUST be one of the exact values: tech, philosophy, politics, science, culture, crypto, other"""
         
-        # Try to get structured response
+        # Get structured response using LLM Router
         result = None
         try:
-            if grok_ai.enabled:
-                response = grok_ai.chat(prompt, max_tokens=500)
-                result = self._parse_debate_generation_response(response)
+            response = llm.chat(prompt, max_tokens=500, model='grok-reasoning')
+            result = self._parse_debate_generation_response(response)
         except Exception as e:
-            print(f"⚠️ Grok debate generation failed: {e}")
-        
-        if not result and deepseek_ai.enabled:
-            try:
-                response = deepseek_ai.chat(prompt, max_tokens=500)
-                result = self._parse_debate_generation_response(response)
-            except Exception as e:
-                print(f"⚠️ DeepSeek debate generation failed: {e}")
+            print(f"⚠️ LLM debate generation failed: {e}")
         
         # Fallback: use user request directly with generated opening
         if not result:

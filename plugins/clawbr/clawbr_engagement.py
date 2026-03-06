@@ -290,32 +290,6 @@ Reply:"""
         except Exception as e:
             print(f"⚠️ AI comment generation failed: {e}")
         
-        # Generate intelligent response using DeepSeek AI
-        try:
-            from deepseek_ai import deepseek_ai
-            
-            prompt = f"""Generate a natural, human-like response to this social media post:
-
-Post content: {post_content}
-Author: @{user}
-
-Requirements:
-- Be conversational and natural, not robotic
-- Avoid repetitive phrases like "fascinating" or "love this"
-- Reference specific points from the post
-- Keep it under 280 characters
-- Sound like a real person engaging in conversation
-- Don't overuse emojis
-
-Response:"""
-            
-            response = deepseek_ai.generate(prompt, max_tokens=100, temperature=0.7)
-            if response and len(response.strip()) > 10:
-                return response.strip()
-                
-        except Exception as e:
-            print(f"⚠️  DeepSeek engagement failed: {e}")
-        
         # Fallback to Sentence Transformers for diverse responses
         try:
             from plugins.telegram.intent_classifier import get_sentence_model
@@ -727,95 +701,88 @@ Response:"""
                     
                     # Check if debate is in voting phase
                     status = debate.get('status', '')
-                    voting_status = debate.get('votingStatus', '')
                     
-                    # Convert to string if it's not already
-                    if isinstance(status, dict):
-                        status = str(status.get('value', status.get('name', '')))
-                    if isinstance(voting_status, dict):
-                        voting_status = str(voting_status.get('value', voting_status.get('name', '')))
-                    
-                    # Ensure status and voting_status are strings before calling .lower()
+                    # Ensure status is a string before calling .lower()
                     if not isinstance(status, str):
                         status = str(status)
-                    if not isinstance(voting_status, str):
-                        voting_status = str(voting_status)
                     
                     status = status.lower()
-                    voting_status = voting_status.lower()
+                    if status not in ['completed', 'voting', 'jury_voting']:
+                        return False
                     
-                    # Vote on debates with status 'voting' or votingStatus 'open'
-                    if status in ['voting', 'jury_voting'] or voting_status == 'open':
-                        slug = debate.get('slug')
-                        if not slug or self._has_already_voted(slug):
-                            continue
-                        
-                        # Intelligently analyze and vote
-                        analysis = self._analyze_debate_content(slug)
-                        if not analysis.get('success'):
-                            side = random.choice(['challenger', 'opponent'])
-                            reasoning = self._generate_vote_reasoning(debate, side)
-                        else:
-                            side = analysis['winning_side']
-                            reasoning = analysis['reasoning']
-                        
-                        vote_result = self.vote_debate(slug, side, reasoning)
-                        if vote_result.get('success', True):
-                            votes_cast += 1
-                            debates_voted.append(slug)
-                            print(f"🗳️ Voted on active debate {slug} for {side}")
-                        else:
-                            error_msg = vote_result.get('error', '')
-                            # Ensure error_msg is a string before calling .lower()
-                            if not isinstance(error_msg, str):
-                                error_msg = str(error_msg)
-                            
-                            if 'already voted' not in error_msg.lower():
-                                if '403' in error_msg or 'forbidden' in error_msg.lower():
-                                    print(f"⏭️ Skipping debate {slug} - voting not allowed (403 Forbidden)")
-                                elif 'voting is closed' in error_msg.lower():
-                                    print(f"⏭️ Skipping debate {slug} - voting closed")
-                                else:
-                                    print(f"❌ Failed to vote on {slug}: {error_msg}")
-            
+                    # Check if voting deadline has passed
+                    # From SKILL.md: "Jury votes (11 votes or 48hrs)"
+                    import time
+                    
+                    # Check jury votes count - if 11+ votes, voting is closed
+                    jury_votes = debate.get('jury_votes', [])
+                    if len(jury_votes) >= 11:
+                        return False
+                    
+                    # Check for voting deadline fields
+                    voting_ends = debate.get('voting_period_ends') or debate.get('jury_deadline') or debate.get('voting_deadline')
+                    if voting_ends:
+                        # If it's a timestamp, check if it's in the future
+                        try:
+                            if isinstance(voting_ends, (int, float)) and voting_ends < time.time():
+                                return False
+                        except:
+                            pass
+                    
+                    # Check if debate is too old (48 hour limit mentioned in SKILL.md)
+                    created_at = debate.get('created_at') or debate.get('createdAt')
+                    if created_at:
+                        try:
+                            # If created more than 48 hours ago, voting might be closed
+                            # Add some buffer since we don't know exact timing
+                            if isinstance(created_at, str):
+                                # Try to parse ISO format
+                                import datetime
+                                created_time = datetime.datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                                if (datetime.datetime.now(datetime.timezone.utc) - created_time).total_seconds() > (48 * 3600 + 3600):  # 48h + 1h buffer
+                                    return False
+                        except:
+                            pass
+                    
+                    return True
+                
             # If no active voting debates, try retrospective voting on completed debates
-            if votes_cast == 0:
-                completed_result = self.get_completed_debates(limit=10)
-                if completed_result.get('success', True):
-                    completed_debates = completed_result.get('debates', completed_result.get('data', []))
+            completed_result = self.get_completed_debates(limit=10)
+            if completed_result.get('success', True):
+                completed_debates = completed_result.get('debates', completed_result.get('data', []))
+                
+                for debate in completed_debates[:limit]:
+                    slug = debate.get('slug')
+                    if not slug or self._has_already_voted(slug):
+                        continue
                     
-                    for debate in completed_debates[:limit]:
-                        slug = debate.get('slug')
-                        if not slug or self._has_already_voted(slug):
-                            continue
+                    # For retrospective voting on completed debates
+                    analysis = self._analyze_debate_content(slug)
+                    if not analysis.get('success'):
+                        side = random.choice(['challenger', 'opponent'])
+                        reasoning = self._generate_vote_reasoning(debate, side)
+                    else:
+                        side = analysis['winning_side']
+                        reasoning = analysis['reasoning']
+                    
+                    vote_result = self.vote_debate(slug, side, reasoning)
+                    if vote_result.get('success', True):
+                        votes_cast += 1
+                        debates_voted.append(slug)
+                        print(f"🗳️ Retrospective vote on completed debate {slug} for {side}")
+                    else:
+                        error_msg = vote_result.get('error', '')
+                        # Ensure error_msg is a string before calling .lower()
+                        if not isinstance(error_msg, str):
+                            error_msg = str(error_msg)
                         
-                        # For retrospective voting on completed debates
-                        analysis = self._analyze_debate_content(slug)
-                        if not analysis.get('success'):
-                            side = random.choice(['challenger', 'opponent'])
-                            reasoning = self._generate_vote_reasoning(debate, side)
-                        else:
-                            side = analysis['winning_side']
-                            reasoning = analysis['reasoning']
-                        
-                        vote_result = self.vote_debate(slug, side, reasoning)
-                        if vote_result.get('success', True):
-                            votes_cast += 1
-                            debates_voted.append(slug)
-                            print(f"🗳️ Retrospective vote on completed debate {slug} for {side}")
-                        else:
-                            error_msg = vote_result.get('error', '')
-                            # Ensure error_msg is a string before calling .lower()
-                            if not isinstance(error_msg, str):
-                                error_msg = str(error_msg)
-                            
-                            if 'already voted' not in error_msg.lower():
-                                if '403' in error_msg or 'forbidden' in error_msg.lower():
-                                    print(f"⏭️ Skipping completed debate {slug} - voting not allowed (403 Forbidden)")
-                                elif 'voting is closed' in error_msg.lower():
-                                    print(f"⏭️ Skipping completed debate {slug} - voting closed")
-                                else:
-                                    print(f"❌ Failed to vote on {slug}: {error_msg}")
+                        if 'already voted' not in error_msg.lower():
+                            if '403' in error_msg or 'forbidden' in error_msg.lower():
+                                print(f"⏭️ Skipping completed debate {slug} - voting not allowed (403 Forbidden)")
+                            elif 'voting is closed' in error_msg.lower():
+                                print(f"⏭️ Skipping completed debate {slug} - voting closed")
+                            else:
+                                print(f"❌ Failed to vote on {slug}: {error_msg}")
             
             if votes_cast == 0:
                 return {'success': True, 'message': 'No debates available for voting', 'votes_cast': 0}
@@ -876,14 +843,14 @@ Response:"""
     def _judge_debate_quality(self, challenger_posts: List[str], opponent_posts: List[str], topic: str) -> Dict[str, Any]:
         """Judge debate quality based on Clawbr rubric"""
         try:
-            from grok_ai import grok_ai
+            from src.core.llm_router import get_llm_router
+            llm = get_llm_router()
             
-            if grok_ai.enabled:
-                # Combine posts for analysis
-                challenger_text = '\n\n'.join(challenger_posts[:3])  # Limit to recent posts
-                opponent_text = '\n\n'.join(opponent_posts[:3])
-                
-                prompt = f"""Analyze this debate and judge which side presented the stronger case.
+            # Combine posts for analysis
+            challenger_text = '\n\n'.join(challenger_posts[:3])  # Limit to recent posts
+            opponent_text = '\n\n'.join(opponent_posts[:3])
+            
+            prompt = f"""Analyze this debate and judge which side presented the stronger case.
 
 DEBATE TOPIC: {topic}
 
@@ -906,21 +873,6 @@ Return ONLY a JSON object:
   "winner": "challenger" or "opponent",
   "reasoning": "brief explanation (120-150 chars) citing specific rubric elements"
 }}"""
-                
-                response = grok_ai.chat(prompt, max_tokens=200)
-                
-                # Parse JSON response
-                try:
-                    import json
-                    result = json.loads(response.strip())
-                    
-                    # Validate response
-                    if (isinstance(result.get('challenger_score'), (int, float)) and
-                        isinstance(result.get('opponent_score'), (int, float)) and
-                        result.get('winner') in ['challenger', 'opponent'] and
-                        len(result.get('reasoning', '')) >= 50):
-                        
-                        return {
                             'winner': result['winner'],
                             'reasoning': result['reasoning'][:150],  # Ensure length limit
                             'scores': {
