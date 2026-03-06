@@ -13,6 +13,11 @@ from collections import defaultdict, deque
 
 class OperationalResilienceMixin:
     """Mixin for operational resilience - alerts, rate limits, uptime monitoring"""
+    
+    # Mixin metadata for documentation and validation
+    REQUIRES = []  # Independent monitoring system
+    PROVIDES = ["check_rate_limit", "send_alert", "get_uptime"]
+    INIT_ORDER = 9
 
     def _init_operational_resilience(self):
         """Initialize operational resilience systems"""

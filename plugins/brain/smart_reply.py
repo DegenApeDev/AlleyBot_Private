@@ -20,6 +20,11 @@ except ImportError:
 
 class SmartReplyMixin:
     """Mixin for memory-powered intelligent replies"""
+    
+    # Mixin metadata for documentation and validation
+    REQUIRES = ["context", "world_state"]
+    PROVIDES = ["smart_reply", "generate_reply"]
+    INIT_ORDER = 5
 
     def _init_smart_reply(self):
         """Initialize smart reply state"""

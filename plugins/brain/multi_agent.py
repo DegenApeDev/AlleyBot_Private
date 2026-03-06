@@ -11,6 +11,11 @@ from collections import defaultdict
 
 class MultiAgentCollaborationMixin:
     """Mixin for detecting and collaborating with other AI agents"""
+    
+    # Mixin metadata for documentation and validation
+    REQUIRES = ["world_state"]
+    PROVIDES = ["detect_agents", "collaborate_with_agent"]
+    INIT_ORDER = 10
 
     def _init_multi_agent_collaboration(self):
         """Initialize multi-agent collaboration system"""

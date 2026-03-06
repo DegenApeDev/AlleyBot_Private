@@ -9,6 +9,11 @@ from collections import defaultdict
 
 class ReputationSystemMixin:
     """Mixin for tracking and optimizing reputation across platforms"""
+    
+    # Mixin metadata for documentation and validation
+    REQUIRES = ["world_state"]
+    PROVIDES = ["get_reputation", "update_reputation", "reputation_score"]
+    INIT_ORDER = 11
 
     def _init_reputation_system(self):
         """Initialize reputation tracking system"""

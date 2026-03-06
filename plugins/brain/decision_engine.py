@@ -240,6 +240,11 @@ for chain_id, chain_info in ACTION_CHAINS.items():
 
 class DecisionEngineMixin(SyModTruthFilterMixin if SYMOD_AVAILABLE else object):
     """Mixin for autonomous decision-making with SyMod truth validation"""
+    
+    # Mixin metadata for documentation and validation
+    REQUIRES = ["world_state", "context", "goals"]
+    PROVIDES = ["make_decision", "evaluate_options", "symod_validate"]
+    INIT_ORDER = 4
 
     def _init_decision_engine(self):
         """Initialize decision engine state with SyMod validation"""

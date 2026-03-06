@@ -11,6 +11,14 @@ from collections import defaultdict
 class SelfReflectionMixin:
     """
     Meta-learning through self-reflection.
+    """
+    
+    # Mixin metadata for documentation and validation
+    REQUIRES = ["world_state", "goals"]
+    PROVIDES = ["reflect", "learn_from_experience", "meta_learn"]
+    INIT_ORDER = 12
+    
+    """
     
     Every 24 hours, AlleyBot:
     1. Reviews action history (successes/failures)

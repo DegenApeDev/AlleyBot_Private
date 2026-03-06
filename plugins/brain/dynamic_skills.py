@@ -14,6 +14,11 @@ from pathlib import Path
 
 class DynamicSkillsMixin:
     """Mixin for dynamic skill generation and management"""
+    
+    # Mixin metadata for documentation and validation
+    REQUIRES = ["context"]
+    PROVIDES = ["generate_skill", "execute_skill", "skill_registry"]
+    INIT_ORDER = 8
 
     def _init_dynamic_skills(self):
         """Initialize dynamic skills tracking"""

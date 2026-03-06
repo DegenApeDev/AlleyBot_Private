@@ -63,6 +63,11 @@ DEFAULT_POSTING_SCHEDULE = {
 
 class ContentStrategyMixin:
     """Mixin for content calendar, conversation threading, and personality tuning"""
+    
+    # Mixin metadata for documentation and validation
+    REQUIRES = ["world_state"]
+    PROVIDES = ["content_calendar", "get_personality", "schedule_post"]
+    INIT_ORDER = 7
 
     def _init_content_strategy(self):
         """Initialize content strategy state"""

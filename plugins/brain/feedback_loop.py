@@ -20,6 +20,11 @@ STYLE_TAGS = [
 
 class FeedbackLoopMixin:
     """Mixin for post-engagement tracking and content strategy learning"""
+    
+    # Mixin metadata for documentation and validation
+    REQUIRES = ["world_state"]
+    PROVIDES = ["track_post", "get_engagement_stats", "learn_from_feedback"]
+    INIT_ORDER = 6
 
     def _init_feedback_loop(self):
         """Initialize feedback loop state"""
