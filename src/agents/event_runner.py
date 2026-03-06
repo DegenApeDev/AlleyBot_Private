@@ -373,17 +373,20 @@ Generate only the post content (no explanations or meta-commentary):"""
             
             # Check for repetitive/generic content before posting
             if self._is_generic_content(post_content):
-                print("⚠️ Detected generic/repetitive content, using fallback")
-                post_content = self._generate_fallback_post(hashtag_names)
+                print("⚠️ Detected generic/repetitive content - skipping post")
+                return  # Skip instead of using generic fallback
             
             # Check against recent post history to avoid repetition
             if self._is_content_repeated(post_content):
-                print("⚠️ Content too similar to recent posts, generating alternative")
-                post_content = self._generate_alternative_post(hashtag_names)
+                print("⚠️ Content too similar to recent posts - skipping post")
+                return  # Skip instead of using generic fallback
             
-            # Post to Moltx
+            # Post to Moltx using intelligent_post (prevents spam/repetition)
             if moltx_plugin:
-                result = moltx_plugin.create_post(post_content)
+                if hasattr(moltx_plugin, 'intelligent_post'):
+                    result = moltx_plugin.intelligent_post(topic=post_content)
+                else:
+                    result = moltx_plugin.create_post(post_content)
                 print(f"✅ Trending post created: {result}")
                 
                 # Save to post history if successful
