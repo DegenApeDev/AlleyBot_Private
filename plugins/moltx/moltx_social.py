@@ -180,6 +180,9 @@ class MoltxSocialMixin:
         if result and 'post_id' in result:
             reply_id = result['post_id']
             self._record_activity('reply', {'post_id': post_id, 'reply_id': reply_id})
+            # Record engagement for 5:1 quota tracking
+            if hasattr(self, '_record_engagement'):
+                self._record_engagement('reply')
             return f"✅ Replied to post {post_id}! Reply ID: {reply_id}"
         return f"❌ Failed to reply to post {post_id}"
     

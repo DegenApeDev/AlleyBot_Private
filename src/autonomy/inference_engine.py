@@ -207,6 +207,12 @@ class InferenceEngine:
                 time_to_peak = hours * (1 - strength) * 0.5
                 predicted_peak = datetime.now().replace(tzinfo=None) + timedelta(hours=time_to_peak)
             
+            # Ensure timezone-aware datetime to prevent comparison errors
+            start_time = timestamps[0]
+            if start_time.tzinfo is None:
+                from datetime import timezone
+                start_time = start_time.replace(tzinfo=timezone.utc)
+            
             trend = Trend(
                 topic=topic,
                 direction=direction,
@@ -214,7 +220,7 @@ class InferenceEngine:
                 velocity=velocity,
                 acceleration=acceleration,
                 data_points=len(timestamps),
-                start_time=timestamps[0],
+                start_time=start_time,
                 predicted_peak=predicted_peak,
                 confidence=min(0.95, len(timestamps) / 50)  # More data = higher confidence
             )

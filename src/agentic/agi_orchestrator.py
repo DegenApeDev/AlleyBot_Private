@@ -443,6 +443,7 @@ class AGIOrchestrator:
                 from src.autonomy.inference_engine import Trend
                 for topic_name, weight in symod_topics[:3]:
                     if weight > 0.05:  # only topics with meaningful weight
+                        from datetime import timezone
                         trends.append(Trend(
                             topic=topic_name,
                             direction='rising' if weight > 0.3 else 'stable',
@@ -450,7 +451,7 @@ class AGIOrchestrator:
                             velocity=weight * 0.5,
                             acceleration=0.0,
                             data_points=max(5, int(weight * 50)),
-                            start_time=datetime.now().replace(tzinfo=None),
+                            start_time=datetime.now(timezone.utc),
                             confidence=min(0.8, weight + 0.3),
                         ))
                 if trends:

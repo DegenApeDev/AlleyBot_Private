@@ -168,22 +168,27 @@ class LLMRouter:
                     else:
                         response = None
                     
-                    # Track stats
-                    duration = time.time() - start_time
-                    self.stats[model_name]['calls'] += 1
-                    self.stats[model_name]['tokens'] += len(response) if response else 0
-                    
+                    # Check response and record stats
                     if response:
-                        logger.debug(f"✅ {model_name} responded in {duration:.2f}s")
+                        self.stats[model_name]['calls'] += 1
+                        self.stats[model_name]['tokens'] += len(response)
+                        logger.debug(f"✅ {model_name} responded in {time.time() - start_time:.2f}s")
                         return response
                     else:
                         logger.warning(f"⚠️  {model_name} returned None")
                         last_error = f"{model_name} returned None"
                         break  # Try next model
-                        
+                    
                 except Exception as e:
                     last_error = str(e)
                     self.stats[model_name]['errors'] += 1
+                    
+                    # Check for timeout errors - don't retry, just fallback
+                    error_msg = str(e).lower()
+                    if 'timeout' in error_msg or 'timed out' in error_msg:
+                        logger.warning(f"⏱️  {model_name} timeout, falling back to next model: {e}")
+                        break  # Skip retries, go to next model
+                    
                     logger.warning(f"⚠️  {model_name} error (attempt {attempt + 1}/{max_retries}): {e}")
                     
                     if attempt < max_retries - 1:
