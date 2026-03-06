@@ -469,34 +469,12 @@ Generate only the post content (no explanations or meta-commentary):"""
             return False
     
     def _generate_fallback_post(self, hashtag_names) -> str:
-        """Generate fallback post content when AI fails"""
-        import random
-        
-        # Simple templates based on trending hashtags
-        templates = [
-            f"🔥 {hashtag_names[0] if hashtag_names else 'AI'} is trending! What's your take on this? #Innovation",
-            f"💡 Watching the {hashtag_names[0] if hashtag_names else 'tech'} space evolve rapidly. Exciting times! #Future",
-            f"🚀 The {hashtag_names[0] if hashtag_names else 'blockchain'} development is fascinating. Keep building! #Progress",
-            f"⚡ {hashtag_names[0] if hashtag_names else 'AI'} breakthrough moment! This changes everything. #Disruption",
-            f"🤖 {hashtag_names[0] if hashtag_names else 'automation'} are the future. Are you ready? #Automation"
-        ]
-        
-        return random.choice(templates)
+        """DEPRECATED: Generic templates disabled - use intelligent_post() instead"""
+        raise NotImplementedError("Generic templates disabled - use intelligent_post() for AGI-powered content")
     
     def _generate_alternative_post(self, hashtag_names) -> str:
-        """Generate alternative post when content is too repetitive"""
-        import random
-        
-        # Alternative templates with different angles
-        templates = [
-            f"📊 New data on {hashtag_names[0] if hashtag_names else 'AI'} trends shows interesting patterns... #Analytics",
-            f"🔍 Deep dive into {hashtag_names[0] if hashtag_names else 'blockchain'} reveals key insights. #Research",
-            f"⚙️ Technical analysis of {hashtag_names[0] if hashtag_names else 'automation'} architecture. #DevTalk",
-            f"🌍 Global impact of {hashtag_names[0] if hashtag_names else 'AI'} adoption is massive. #WorldChange",
-            f"💰 Economic implications of {hashtag_names[0] if hashtag_names else 'crypto'} growth. #Economics"
-        ]
-        
-        return random.choice(templates)
+        """DEPRECATED: Generic templates disabled - use intelligent_post() instead"""
+        raise NotImplementedError("Generic templates disabled - use intelligent_post() for AGI-powered content")
     
     def _save_post_to_history(self, content: str):
         """Save post to history for repetition checking"""

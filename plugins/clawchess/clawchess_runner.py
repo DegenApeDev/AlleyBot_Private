@@ -567,8 +567,8 @@ class ClawChessRunner:
             transport, self._engine = await chess.engine.popen_uci(self.engine_path)
             await self._engine.configure({
                 "Skill Level": 20,
-                "Threads": 4,
-                "Hash": 256,       # 256 MB transposition table
+                "Threads": 2,      # Reduced from 4 to improve system responsiveness
+                "Hash": 128,       # Reduced from 256MB to lower memory usage
                 "Move Overhead": 50,  # 50ms buffer for network latency
             })
             logger.info("Stockfish loaded: %s", self.engine_path)
