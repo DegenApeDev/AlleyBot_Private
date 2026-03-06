@@ -291,7 +291,13 @@ class PolymarketPlugin(AsyncPluginMixin, AlleyBotPlugin):
                     # API uses camelCase (endDate) not snake_case (end_date)
                     end_date_str = market_data.get('endDate') or market_data.get('end_date')
                     if not end_date_str:
-                        logger.warning(f"⚠️ Market {market_data.get('id')} missing end date, skipping")
+                        # Only log once per market to avoid spam
+                        market_id = market_data.get('id')
+                        if not hasattr(self, '_logged_missing_dates'):
+                            self._logged_missing_dates = set()
+                        if market_id not in self._logged_missing_dates:
+                            logger.warning(f"⚠️ Market {market_id} missing end date, skipping")
+                            self._logged_missing_dates.add(market_id)
                         continue
                     
                     market = Market(
