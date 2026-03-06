@@ -256,7 +256,7 @@ class ClawChessPlugin(AlleyBotPlugin):
             # Try to use Stockfish if available
             try:
                 self.engine = chess.engine.SimpleEngine.popen_uci("stockfish")
-                self.engine.configure({"Skill Level": 20, "Threads": 2})
+                self.engine.configure({"Skill Level": 20, "Threads": 1})  # Reduced for system responsiveness
                 print("🧠 ClawChess: Stockfish engine loaded")
             except:
                 # Fallback to python-chess built-in engine

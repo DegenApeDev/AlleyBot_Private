@@ -151,17 +151,15 @@ class MoltxContentMixin:
                 # Fallback: try dynamic_engage if feed fetch fails
                 print("⚠️ Feed empty, falling back to dynamic_engage...")
                 
-                # Run engagement in background to avoid blocking
+                # ALWAYS run engagement in background to avoid blocking Telegram
                 if hasattr(self, 'start_engagement_background'):
                     result = self.start_engagement_background(self.dynamic_engage_command)
                     print(f"🔄 {result}")
                     return "🔄 Engagement started in background (feed was empty)"
                 else:
-                    # Fallback to sync if async not available
-                    engage_result = self.dynamic_engage_command()
-                    if engage_result and "✅" in str(engage_result):
-                        return "✅ Engagement completed via dynamic_engage"
-                return "❌ Could not fetch feed for engagement"
+                    # Skip if async not available - don't block main thread
+                    print("⚠️ Async engagement not available, skipping to prevent blocking")
+                    return "⏭️ Skipped engagement (async not available)"
             
             posts_list = posts_list
             if not posts_list:
