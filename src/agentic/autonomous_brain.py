@@ -224,14 +224,23 @@ class AutonomousBrain(AGISocialMixin):
         self.stats['start_time'] = datetime.now()
         self._hour_start = datetime.now()
         
-        # Register all plugins with SyMod
-        self.register_plugins_with_symod()
+        # Register all plugins with SyMod (non-blocking)
+        try:
+            self.register_plugins_with_symod()
+        except Exception as e:
+            logger.warning(f"⚠️ Plugin registration warning: {e}")
         
-        # Start background task
-        self._task = asyncio.create_task(self._brain_loop())
+        # Get or create event loop
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop, create one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
         
-        # Start skill.md periodic check (every 6 hours)
-        self._skilldoc_task = asyncio.create_task(self._skilldoc_check_loop())
+        # Start background tasks in the event loop (non-blocking)
+        self._task = loop.create_task(self._brain_loop())
+        self._skilldoc_task = loop.create_task(self._skilldoc_check_loop())
         
         msg = (
             f"🧠 Autonomous Brain Started\n"
