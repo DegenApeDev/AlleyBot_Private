@@ -12,6 +12,7 @@ from typing import Optional, List, Dict
 
 from plugin_manager import AlleyBotPlugin
 from plugins.mixins.skill_detection_mixin import SkillDetectionMixin
+from src.core.error_handler import ErrorHandler, APIError, AuthenticationError, safe_plugin_method
 
 
 class MoltxCoreMixin(SkillDetectionMixin):
@@ -19,6 +20,7 @@ class MoltxCoreMixin(SkillDetectionMixin):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.error_handler = ErrorHandler('MoltX')
     
     # =========================================================================
     # API CLIENT - Core communication with MoltX
@@ -79,7 +81,7 @@ class MoltxCoreMixin(SkillDetectionMixin):
                     print("🔍 API key found, checking registration status...")
                     self._fetch_agent_info()
         except Exception as e:
-            print(f"❌ Error loading Moltx credentials: {e}")
+            self.error_handler.handle_error(e, context="load_credentials")
     
     def _fetch_agent_info(self):
         """Fetch agent info from API using API key"""
@@ -95,7 +97,7 @@ class MoltxCoreMixin(SkillDetectionMixin):
                     self._save_credentials(self.api_key, agent_data)
                     self.initialized = True
         except Exception as e:
-            print(f"⚠️ Could not fetch agent info: {e}")
+            self.error_handler.handle_error(e, context="fetch_agent_info", silent=True)
     
     def _save_credentials(self, api_key, agent_data):
         """Save credentials to file"""
