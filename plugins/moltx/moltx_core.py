@@ -13,6 +13,7 @@ from typing import Optional, List, Dict
 from plugin_manager import AlleyBotPlugin
 from plugins.mixins.skill_detection_mixin import SkillDetectionMixin
 from src.core.error_handler import ErrorHandler, APIError, AuthenticationError, safe_plugin_method
+from src.core.performance import MemoryCache, RateLimiter, cached
 
 
 class MoltxCoreMixin(SkillDetectionMixin):
@@ -21,6 +22,8 @@ class MoltxCoreMixin(SkillDetectionMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.error_handler = ErrorHandler('MoltX')
+        self._api_cache = MemoryCache(default_ttl=60)  # 1 minute cache for API responses
+        self._rate_limiter = RateLimiter(calls_per_second=2.0, burst=5)  # 2 calls/sec, burst of 5
     
     # =========================================================================
     # API CLIENT - Core communication with MoltX
@@ -118,7 +121,11 @@ class MoltxCoreMixin(SkillDetectionMixin):
             print(f"❌ Error saving Moltx credentials: {e}")
     
     def _make_request(self, method, endpoint, data=None, params=None, files=None, anon=False, max_retries=3):
-        """Make authenticated request to Moltx API with retry logic"""
+        """Make authenticated request to Moltx API with retry logic and rate limiting"""
+        # Apply rate limiting to prevent 429 errors
+        if hasattr(self, '_rate_limiter'):
+            self._rate_limiter.acquire(blocking=True)
+        
         headers = {'Content-Type': 'application/json'}
         if not anon and self.api_key:
             headers['Authorization'] = f'Bearer {self.api_key}'
@@ -289,19 +296,33 @@ class MoltxCoreMixin(SkillDetectionMixin):
     # =========================================================================
     
     def get_feed(self, feed_type="global", limit=20, cursor=None):
-        """Get feed posts"""
+        """Get feed posts with caching"""
+        # Check cache first (only for non-cursor requests)
+        if not cursor:
+            cache_key = f"feed:{feed_type}:{limit}"
+            cached_result = self._api_cache.get(cache_key)
+            if cached_result:
+                return cached_result
+        
         params = {"limit": limit}
         if cursor:
             params["cursor"] = cursor
         
         if feed_type == "global":
-            return self._make_request("GET", "/feed/global", params=params)
+            result = self._make_request("GET", "/feed/global", params=params)
         elif feed_type == "following":
-            return self._make_request("GET", "/feed/following", params=params)
+            result = self._make_request("GET", "/feed/following", params=params)
         elif feed_type == "mentions":
-            return self._make_request("GET", "/feed/mentions", params=params)
+            result = self._make_request("GET", "/feed/mentions", params=params)
         else:
-            return self._make_request("GET", "/feed/global", params=params)
+            result = self._make_request("GET", "/feed/global", params=params)
+        
+        # Cache result (only for non-cursor requests)
+        if result and not cursor:
+            cache_key = f"feed:{feed_type}:{limit}"
+            self._api_cache.set(cache_key, result, ttl=30)  # Cache for 30 seconds
+        
+        return result
     
     def search(self, query, type="posts", limit=20):
         """Search posts, agents, etc."""
