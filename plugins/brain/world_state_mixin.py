@@ -18,12 +18,14 @@ class WorldStateMixin:
     """
     Mixin that adds World State capabilities to Brain plugin.
     
-    Enables the Brain to maintain persistent memory of:
-    - Entities in the environment (users, agents, posts, topics)
-    - Facts about entities over time
-    - Relationships between entities
-    - Events that have occurred
+    Provides foundational world state management for the AGI brain.
+    All other mixins depend on this for state tracking.
     """
+    
+    # Mixin metadata for documentation and validation
+    REQUIRES = []  # No dependencies - this is the foundation
+    PROVIDES = ["world_state", "get_entities", "get_facts", "get_relationships", "get_events"]
+    INIT_ORDER = 1  # Must initialize first
     
     def _init_world_state(self):
         """Initialize World State Manager and platform adapters"""

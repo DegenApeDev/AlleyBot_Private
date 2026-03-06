@@ -9,7 +9,16 @@ from typing import Dict, Any, Optional, List
 
 
 class ContextGathererMixin:
-    """Mixin that gathers context from all available sources"""
+    """
+    Mixin that gathers context from all available sources.
+    
+    Aggregates platform context, memories, and world state for decision making.
+    """
+    
+    # Mixin metadata for documentation and validation
+    REQUIRES = ["world_state"]  # Needs world state to gather context
+    PROVIDES = ["context", "gather_context", "get_platform_context"]
+    INIT_ORDER = 3  # After WorldStateMixin
 
     def _init_context_gatherer(self):
         """Initialize context gathering state"""

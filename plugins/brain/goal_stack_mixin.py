@@ -19,12 +19,13 @@ class GoalStackMixin:
     """
     Mixin that adds persistent goal stack capabilities to Brain plugin.
     
-    Features:
-    - Goal-driven action selection (not just reactive)
-    - Long-term objective tracking
-    - Success/failure evaluation
-    - Integration with existing Brain decision cycle
+    Manages hierarchical goal planning and execution tracking.
     """
+    
+    # Mixin metadata for documentation and validation
+    REQUIRES = ["world_state"]  # Needs world state for goal context
+    PROVIDES = ["goals", "goal_manager", "push_goal", "pop_goal", "get_active_goals"]
+    INIT_ORDER = 2  # After WorldStateMixin
     
     def _init_goal_stack(self):
         """Initialize goal stack manager"""
