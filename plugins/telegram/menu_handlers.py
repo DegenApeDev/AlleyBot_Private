@@ -79,8 +79,11 @@ class MenuHandlers:
 
     async def cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Send a short help intro with an Open Menu button."""
+        logger.info(f"🔍 /help command received from user {update.effective_user.id}")
         if not await self.tg._verify_owner(update):
+            logger.warning(f"⛔ /help rejected - not owner")
             return
+        logger.info("✅ /help verified, sending response...")
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton("📋 Open Command Menu", callback_data="back:main")
         ]])
@@ -93,6 +96,7 @@ class MenuHandlers:
             reply_markup=keyboard,
             parse_mode=ParseMode.MARKDOWN,
         )
+        logger.info("✅ /help response sent successfully")
 
     # ------------------------------------------------------------------
     # /menu_debug — dump full menu structure
