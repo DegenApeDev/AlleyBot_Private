@@ -95,6 +95,13 @@ class TelegramWebhook:
                     self.telegram_plugin._send_startup_notification()
             except Exception:
                 pass
+            
+            # Keep polling alive - this is critical!
+            # The updater runs in background, but we need to keep this coroutine alive
+            # so the event loop doesn't exit
+            import asyncio
+            while self.telegram_plugin.is_running:
+                await asyncio.sleep(1)
 
         except Exception as e:
             print(f"❌ Telegram polling error: {e}")

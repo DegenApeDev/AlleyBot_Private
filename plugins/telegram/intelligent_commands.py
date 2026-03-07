@@ -6,11 +6,14 @@ AI-powered assistant commands integrated with production architecture
 import asyncio
 import os
 import json
+import logging
 from datetime import datetime
 from typing import Any, Tuple
 from telegram import Update
 from telegram.ext import ContextTypes
 from plugins.telegram.command_wrapper import run_plugin_method, get_plugin_non_blocking
+
+logger = logging.getLogger(__name__)
 
 class IntelligentTelegramCommands:
     """Intelligent command handlers for Telegram bot"""
