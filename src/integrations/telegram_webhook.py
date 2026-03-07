@@ -83,10 +83,12 @@ class TelegramWebhook:
             # Start polling in background task
             # NOTE: drop_pending_updates=False so we process commands sent during startup
             from telegram import Update
+            print("  🔄 Starting updater polling...")
             await app.updater.start_polling(
                 drop_pending_updates=False,
                 allowed_updates=Update.ALL_TYPES
             )
+            print("  ✅ Updater polling started")
 
             self.telegram_plugin.is_running = True
             print("✅ Telegram bot polling started — commands are live!")
