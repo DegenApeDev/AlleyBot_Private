@@ -468,9 +468,6 @@ class Telegram(AlleyBotPlugin):
         
         # Message handler for natural language (admin only, conversational AI)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.conversational_ai.handle_message))
-
-        # Pre-warm intent classifier in background so first message has no delay
-        self.conversational_ai.prewarm_intent_classifier()
     
     async def _handle_reload(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /reload command - reload all plugins without restart"""
@@ -1220,6 +1217,11 @@ AlleyBot encountered an issue and needs attention!"""
         super().initialize(api, core)
         if self.enabled:
             print("✅ Telegram plugin ready (polling will start via production mode)")
+            
+            # Pre-warm intent classifier AFTER plugin is fully initialized
+            # so it can access all registered commands
+            if hasattr(self, 'conversational_ai'):
+                self.conversational_ai.prewarm_intent_classifier()
     
     def _send_startup_notification(self):
         """Send startup notification to the owner"""
