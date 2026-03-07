@@ -63,6 +63,10 @@ class TelegramWebhook:
 
             app = self.telegram_plugin.application
             print("📱 Starting Telegram bot polling...")
+            
+            # DEBUG: Check handlers before initialization
+            handler_count = len(app.handlers.get(0, [])) if hasattr(app, 'handlers') else 0
+            print(f"  🔍 Handlers registered before init: {handler_count}")
 
             # Initialize the application (registers handlers)
             await app.initialize()
@@ -71,6 +75,10 @@ class TelegramWebhook:
             # Start the application (enables handlers to process updates)
             await app.start()
             print("  ✅ Application started")
+            
+            # DEBUG: Check if handlers are still registered after start
+            handler_count_after = len(app.handlers.get(0, [])) if hasattr(app, 'handlers') else 0
+            print(f"  🔍 Handlers after start: {handler_count_after}")
 
             # Start polling in background task
             # NOTE: drop_pending_updates=False so we process commands sent during startup
@@ -82,6 +90,16 @@ class TelegramWebhook:
 
             self.telegram_plugin.is_running = True
             print("✅ Telegram bot polling started — commands are live!")
+            
+            # DEBUG: Test if we can get updates
+            try:
+                updates = await app.bot.get_updates(limit=1, timeout=1)
+                if updates:
+                    print(f"  🔍 Test: Found {len(updates)} pending update(s)")
+                else:
+                    print(f"  🔍 Test: No pending updates")
+            except Exception as test_err:
+                print(f"  ⚠️ Test get_updates failed: {test_err}")
             
             # Start all AsyncPluginMixin background tasks now that event loop is running
             if hasattr(self.telegram_plugin, 'core') and hasattr(self.telegram_plugin.core, 'plugin_manager'):
