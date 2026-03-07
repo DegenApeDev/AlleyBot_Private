@@ -228,6 +228,11 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("brain_stop", self.brain_commands.brain_stop))
         self.application.add_handler(CommandHandler("brain_status", self.brain_commands.brain_status))
         self.application.add_handler(CommandHandler("brain_mode", self.brain_commands.brain_mode))
+        
+        # Monitoring dashboard commands
+        from plugins.telegram.monitoring_commands import MonitoringCommands
+        self.monitoring_commands = MonitoringCommands(self)
+        self.monitoring_commands.register_commands(self.application)
         self.application.add_handler(CommandHandler("brain_log", self.brain_commands.brain_log))
         self.application.add_handler(CommandHandler("brain_confidence_debug", self.brain_commands.brain_confidence_debug))
         self.application.add_handler(CommandHandler("brain", self.brain_commands.brain_status))  # alias

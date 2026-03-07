@@ -43,13 +43,13 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class BrainConfig:
-    """Configuration for autonomous brain"""
-    enabled: bool = False
-    mode: str = 'normal'  # 'conservative', 'normal', 'aggressive'
+    """Configuration for autonomous brain operation"""
+    enabled: bool = True
+    mode: str = 'normal'  # conservative, normal, aggressive
     cycle_interval_minutes: int = 30
     max_actions_per_hour: int = 50
     min_confidence: float = 0.6
-    require_owner_approval: bool = False
+    require_owner_approval: bool = False  # Always False - AlleyBot decides autonomously
     
     # Mode-specific overrides
     @classmethod
@@ -61,7 +61,7 @@ class BrainConfig:
                 cycle_interval_minutes=60,
                 max_actions_per_hour=20,
                 min_confidence=0.8,
-                require_owner_approval=True
+                require_owner_approval=False  # High confidence threshold = safe autonomy
             ),
             'normal': cls(
                 enabled=True,
@@ -69,7 +69,7 @@ class BrainConfig:
                 cycle_interval_minutes=30,
                 max_actions_per_hour=50,
                 min_confidence=0.6,
-                require_owner_approval=False
+                require_owner_approval=False  # Balanced autonomous operation
             ),
             'aggressive': cls(
                 enabled=True,
@@ -77,7 +77,7 @@ class BrainConfig:
                 cycle_interval_minutes=15,
                 max_actions_per_hour=100,
                 min_confidence=0.4,
-                require_owner_approval=False
+                require_owner_approval=False  # Maximum autonomy and experimentation
             )
         }
         return configs.get(mode, cls())
@@ -147,6 +147,10 @@ class AutonomousBrain(AGISocialMixin):
         self.cross_platform_intel = get_cross_platform_intelligence(plugin_manager) if plugin_manager else None
         self.opportunity_monitor = get_opportunity_monitor(plugin_manager) if plugin_manager else None
         self.outcome_learner = get_outcome_learner(core) if core else None
+        
+        # Auto skill building
+        from src.agentic.auto_skill_builder import get_auto_skill_builder
+        self.auto_skill_builder = get_auto_skill_builder(core, plugin_manager) if core and plugin_manager else None
         
         # AGI Foundation Systems (85% AGI)
         self.knowledge_graph = get_knowledge_graph()
@@ -289,8 +293,12 @@ class AutonomousBrain(AGISocialMixin):
         return msg
     
     async def _brain_loop(self) -> None:
-        """Main autonomous loop"""
+        """Main autonomous loop with error recovery"""
         logger.info("🔄 Brain loop started")
+        
+        # Get error recovery system
+        from src.agentic.error_recovery import get_error_recovery
+        error_recovery = get_error_recovery(self.plugin_manager)
         
         while self._running:
             try:
@@ -324,6 +332,14 @@ class AutonomousBrain(AGISocialMixin):
             except Exception as e:
                 logger.error(f"❌ Brain loop error: {e}")
                 self.stats['errors'] += 1
+                
+                # Record error and attempt recovery
+                if error_recovery:
+                    error_recovery.record_error('brain', e, severity='high')
+                    recovery_success = await error_recovery.attempt_recovery('brain', e)
+                    if not recovery_success:
+                        logger.warning("⚠️ Recovery failed, continuing with backoff...")
+                
                 await asyncio.sleep(60)  # Brief pause on error
         
         logger.info("🔄 Brain loop stopped")
@@ -362,6 +378,21 @@ class AutonomousBrain(AGISocialMixin):
         
         # === FEED WORLD STATE DB: pipe observations so inference engine has real data ===
         await self._feed_observations_to_world_state(observations)
+        
+        # === AUTO SKILL BUILDING: Detect capability gaps and build new skills ===
+        if self.auto_skill_builder:
+            try:
+                # Detect gaps from observations
+                skill_proposals = await self.auto_skill_builder.detect_capability_gaps(observations)
+                if skill_proposals:
+                    logger.info(f"💡 Detected {len(skill_proposals)} capability gaps")
+                
+                # Auto-build simple skills (max 1 per cycle to avoid overload)
+                built_count = await self.auto_skill_builder.auto_build_simple_skills(max_skills=1)
+                if built_count > 0:
+                    logger.info(f"🔨 Auto-built {built_count} new skill(s)")
+            except Exception as e:
+                logger.warning(f"⚠️ Auto skill building error: {e}")
         
         # === HIERARCHICAL GOALS: Get actionable goals and plan next actions ===
         if self.goal_hierarchy and self.planner:
