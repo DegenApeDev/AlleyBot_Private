@@ -94,6 +94,12 @@ class Telegram(AlleyBotPlugin):
         if not self.application:
             return
         
+        # DEBUG: Add catch-all handler FIRST to trace all updates
+        from telegram.ext import MessageHandler, filters
+        async def debug_all_updates(update, context):
+            print(f"🔔 DEBUG: Received update - type: {update.message.text if update.message else 'N/A'}")
+        self.application.add_handler(MessageHandler(filters.ALL, debug_all_updates), group=-1)
+        
         # Import intelligent commands
         from plugins.telegram.intelligent_commands import IntelligentTelegramCommands
         self.intelligent_commands = IntelligentTelegramCommands(self)
