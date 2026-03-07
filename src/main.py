@@ -80,8 +80,13 @@ class ProductionAlleyBot:
             print("  • Webhook-Ready Integrations")
             print("="*60 + "\n")
             
-            # Start Telegram polling asynchronously
-            await self.telegram_webhook.start_polling_async()
+            # Start Telegram polling as background task (non-blocking)
+            import asyncio
+            polling_task = asyncio.create_task(self.telegram_webhook.start_polling_async())
+            print("📱 Telegram polling started in background")
+            
+            # Give polling a moment to initialize
+            await asyncio.sleep(2)
             
             # Initialize autonomous startup system (auto-start brain)
             from src.agentic.autonomous_startup import get_autonomous_startup
@@ -89,7 +94,7 @@ class ProductionAlleyBot:
             await autonomous_startup.initialize()
             print("✅ Autonomous startup system initialized")
             
-            # Start event runner
+            # Start event runner (this also blocks, so we need to run both concurrently)
             await self.event_runner.start()
             
         except KeyboardInterrupt:

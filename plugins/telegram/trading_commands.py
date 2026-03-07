@@ -405,3 +405,92 @@ TX: `{result['tx_hash'][:16]}...`"""
             await update.message.reply_text(msg, parse_mode='Markdown')
         else:
             await update.message.reply_text(f"❌ Price check failed: {result.get('error', 'Unknown error')}")
+    
+    async def trading_enable(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Enable autonomous trading with SyMod validation"""
+        if not await self._verify_owner(update):
+            await update.message.reply_text("❌ Owner-only command")
+            return
+        
+        from src.agentic.autonomous_trading import get_autonomous_trading
+        trading = get_autonomous_trading()
+        
+        if not trading:
+            await update.message.reply_text("❌ Autonomous trading system not available")
+            return
+        
+        trading.enable_trading(True)
+        
+        status = trading.get_trading_status()
+        
+        msg = f"""✅ **Autonomous Trading ENABLED**
+
+💰 **Configuration:**
+• Capital: ${status['capital']:.2f}
+• Max Position: {status['config']['max_position_size_pct']}% (${status['capital'] * status['config']['max_position_size_pct'] / 100:.2f})
+• Min Confidence: {status['config']['min_confidence']}
+• Min Risk/Reward: {status['config']['min_risk_reward']}:1
+• Daily Loss Limit: {status['config']['daily_loss_limit_pct']}%
+• Max Open Positions: {status['config']['max_open_positions']}
+
+🔢 **SyMod Validation:**
+• Require Stable Field: {'✅' if status['config']['require_stable_field'] else '❌'}
+• Require Golden Window: {'✅' if status['config']['require_golden_window'] else '❌'}
+• Max Impedance: {status['config']['max_impedance']}
+
+⚠️ **CONSERVATIVE MODE**
+Only SyMod-validated trades with 0.8+ confidence will execute.
+AlleyBot will analyze markets every 30 minutes."""
+        
+        await update.message.reply_text(msg, parse_mode='Markdown')
+    
+    async def trading_disable(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Disable autonomous trading"""
+        if not await self._verify_owner(update):
+            await update.message.reply_text("❌ Owner-only command")
+            return
+        
+        from src.agentic.autonomous_trading import get_autonomous_trading
+        trading = get_autonomous_trading()
+        
+        if not trading:
+            await update.message.reply_text("❌ Autonomous trading system not available")
+            return
+        
+        trading.enable_trading(False)
+        await update.message.reply_text("⛔ **Autonomous Trading DISABLED**")
+    
+    async def trading_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Check autonomous trading status"""
+        if not await self._verify_owner(update):
+            await update.message.reply_text("❌ Owner-only command")
+            return
+        
+        from src.agentic.autonomous_trading import get_autonomous_trading
+        trading = get_autonomous_trading()
+        
+        if not trading:
+            await update.message.reply_text("❌ Autonomous trading system not available")
+            return
+        
+        status = trading.get_trading_status()
+        
+        enabled_emoji = "✅" if status['enabled'] else "⛔"
+        
+        msg = f"""{enabled_emoji} **Autonomous Trading Status**
+
+💰 **Capital:** ${status['capital']:.2f}
+📊 **Performance:**
+• Total Trades: {status['total_trades']}
+• Winning Trades: {status['winning_trades']}
+• Win Rate: {status['win_rate']:.1f}%
+• Total Profit: ${status['total_profit']:.2f}
+• Daily P&L: ${status['daily_pnl']:.2f}
+
+📈 **Current:**
+• Open Positions: {status['open_positions']}/{status['config']['max_open_positions']}
+• Status: {'ACTIVE' if status['enabled'] else 'DISABLED'}
+
+Use /trading_enable to start autonomous trading."""
+        
+        await update.message.reply_text(msg, parse_mode='Markdown')
