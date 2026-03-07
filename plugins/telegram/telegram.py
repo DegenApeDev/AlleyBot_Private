@@ -97,8 +97,20 @@ class Telegram(AlleyBotPlugin):
         # DEBUG: Add catch-all handler FIRST to trace all updates
         from telegram.ext import MessageHandler, filters
         async def debug_all_updates(update, context):
-            print(f"🔔 DEBUG: Received update - type: {update.message.text if update.message else 'N/A'}")
+            print(f"🔔 DEBUG HANDLER FIRING: {update.message.text if update.message else 'N/A'}")
+            # Don't block other handlers - this handler just logs
         self.application.add_handler(MessageHandler(filters.ALL, debug_all_updates), group=-1)
+        
+        # Also add a pre-handler callback to trace every update
+        async def trace_handler_callback(update, context):
+            print(f"🔔 TRACE: Handler processing update: {update.message.text if update.message else 'callback'}")
+        
+        # Monkey-patch the application to trace handler calls
+        original_process_update = self.application.process_update
+        async def patched_process_update(update):
+            print(f"🔔 PATCH: process_update called with: {update.message.text if update.message else 'N/A'}")
+            return await original_process_update(update)
+        self.application.process_update = patched_process_update
         
         # Import intelligent commands
         from plugins.telegram.intelligent_commands import IntelligentTelegramCommands
