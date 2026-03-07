@@ -83,6 +83,12 @@ class ProductionAlleyBot:
             # Start Telegram polling asynchronously
             await self.telegram_webhook.start_polling_async()
             
+            # Initialize autonomous startup system (auto-start brain)
+            from src.agentic.autonomous_startup import get_autonomous_startup
+            autonomous_startup = get_autonomous_startup(core, core.plugin_manager)
+            await autonomous_startup.initialize()
+            print("✅ Autonomous startup system initialized")
+            
             # Start event runner
             await self.event_runner.start()
             
