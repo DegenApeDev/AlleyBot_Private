@@ -281,9 +281,15 @@ class BrainCommands:
         # Fallback to env
         if not owner_id:
             import os
-            owner_id = os.getenv('TELEGRAM_ADMIN_CHAT_ID')
+            owner_id = os.getenv('TELEGRAM_ADMIN_CHAT_ID', '6172568442')
         
-        return user_id == str(owner_id)
+        # Ensure owner_id is string
+        owner_id = str(owner_id) if owner_id else None
+        
+        is_owner = user_id == owner_id
+        logger.debug(f"Owner check: user_id={user_id}, owner_id={owner_id}, is_owner={is_owner}")
+        
+        return is_owner
     
     def get_handlers(self):
         """Get command handlers for registration"""
