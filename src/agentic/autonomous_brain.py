@@ -152,6 +152,10 @@ class AutonomousBrain(AGISocialMixin):
         from src.agentic.auto_skill_builder import get_auto_skill_builder
         self.auto_skill_builder = get_auto_skill_builder(core, plugin_manager) if core and plugin_manager else None
         
+        # Autonomous trading (disabled by default, must be explicitly enabled)
+        from src.agentic.autonomous_trading import get_autonomous_trading
+        self.autonomous_trading = get_autonomous_trading(core, plugin_manager) if core and plugin_manager else None
+        
         # AGI Foundation Systems (85% AGI)
         self.knowledge_graph = get_knowledge_graph()
         self.symbolic_engine = get_symbolic_engine()
@@ -393,6 +397,24 @@ class AutonomousBrain(AGISocialMixin):
                     logger.info(f"🔨 Auto-built {built_count} new skill(s)")
             except Exception as e:
                 logger.warning(f"⚠️ Auto skill building error: {e}")
+        
+        # === AUTONOMOUS TRADING: Analyze markets and execute SyMod-validated trades ===
+        if self.autonomous_trading and self.autonomous_trading.config.get('enabled'):
+            try:
+                # Analyze markets with SyMod validation
+                trade_proposals = await self.autonomous_trading.analyze_markets()
+                
+                if trade_proposals:
+                    logger.info(f"💰 Found {len(trade_proposals)} SyMod-validated trade opportunities")
+                    
+                    # Execute best trade (highest confidence)
+                    best_trade = max(trade_proposals, key=lambda t: t.confidence)
+                    trade_outcome = await self.autonomous_trading.execute_trade(best_trade)
+                    
+                    if trade_outcome:
+                        logger.info(f"✅ Executed autonomous trade: {trade_outcome.trade_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ Autonomous trading error: {e}")
         
         # === HIERARCHICAL GOALS: Get actionable goals and plan next actions ===
         if self.goal_hierarchy and self.planner:

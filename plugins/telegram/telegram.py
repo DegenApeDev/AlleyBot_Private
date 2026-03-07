@@ -424,13 +424,20 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("attest", self.synergy_commands.attest))
         self.application.add_handler(CommandHandler("synergy", self.synergy_commands.synergy_status))
         
-        # Trading commands
+        # Trading commands (if trading plugins available)
+        from plugins.telegram.trading_commands import TradingCommands
+        self.trading_commands = TradingCommands(self)
         self.application.add_handler(CommandHandler("swap_sol", self.trading_commands.swap_sol))
         self.application.add_handler(CommandHandler("swap_base", self.trading_commands.swap_base))
         self.application.add_handler(CommandHandler("sol_price", self.trading_commands.sol_price))
         self.application.add_handler(CommandHandler("base_price", self.trading_commands.base_price))
         self.application.add_handler(CommandHandler("trading_stats", self.trading_commands.trading_stats))
         self.application.add_handler(CommandHandler("recent_trades", self.trading_commands.recent_trades))
+        
+        # Autonomous trading commands
+        self.application.add_handler(CommandHandler("trading_enable", self.trading_commands.trading_enable))
+        self.application.add_handler(CommandHandler("trading_disable", self.trading_commands.trading_disable))
+        self.application.add_handler(CommandHandler("trading_status", self.trading_commands.trading_status))
         
         # Polymarket commands
         self.application.add_handler(CommandHandler("polymarket_status", self.polymarket_commands.polymarket_status))

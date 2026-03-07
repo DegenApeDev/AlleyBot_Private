@@ -1,6 +1,6 @@
 """
-Trading Commands for Telegram Bot
-Handles Solana and Base token trading commands
+Trading Commands for Telegram
+Provides trading-related commands and market analysis including autonomous trading
 """
 from telegram import Update
 from telegram.ext import ContextTypes
