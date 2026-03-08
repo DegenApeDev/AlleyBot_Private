@@ -29,6 +29,7 @@ from .goal_generator import SecureGoalGenerator, create_goal_generator
 from .content_strategy import ContentStrategySystem, create_content_strategy
 from .world_state_bridge import WorldStateBridge, create_world_state_bridge
 from .goal_stack import GoalStackBridge, create_goal_stack
+from .planning import get_plan_manager
 
 
 class AGIKernel:
@@ -100,6 +101,7 @@ class AGIKernel:
         
         # Goal stack (persistent goal tracking and execution)
         self.goal_stack = None  # Initialized after plugin_manager available
+        self.plan_manager = get_plan_manager()
         
         # Behavior modulator (episodic learning feedback loop)
         self.behavior_modulator = None  # Initialized with episodic memory
@@ -413,13 +415,43 @@ class AGIKernel:
         return result
     
     def learn(self, context: str, action: str, outcome: str, 
-              success: bool, user_id: str = None):
+              success: bool, user_id: str = None, outcome_record: Dict[str, Any] = None):
         """
         Learn from an experience
         
         This is the key AGI feedback loop - every outcome gets processed
         through all learning systems.
         """
+        outcome_record = outcome_record or {
+            'action_id': context,
+            'action_type': action,
+            'success': success,
+            'result_summary': outcome,
+            'goal_id': None,
+            'trigger': 'unknown',
+        }
+        ranking_evidence = outcome_record.get('ranking_evidence') or {}
+        dispatch_path = str(outcome_record.get('dispatch_path', 'unknown') or 'unknown').lower()
+        legacy_fallback_used = bool(outcome_record.get('legacy_fallback_used', False))
+        fallback_details = outcome_record.get('fallback_details') or {}
+        ranking_learning_summary = {
+            'predicted_value': ranking_evidence.get('predicted_value'),
+            'memory_shaped_adjustment': ranking_evidence.get('memory_shaped_adjustment', 0.0),
+            'used_memory_recall': bool(
+                (ranking_evidence.get('memory_relevance_count', 0) or 0) > 0
+                or ranking_evidence.get('entity_context_found')
+            ),
+            'recent_success_rate': ranking_evidence.get('recent_success_rate'),
+            'recent_mismatch_score': ranking_evidence.get('recent_mismatch_score'),
+            'ranking_alignment': 'helpful' if success else 'needs_recalibration',
+        }
+        dispatch_learning_summary = {
+            'dispatch_path': dispatch_path,
+            'legacy_fallback_used': legacy_fallback_used,
+            'fallback_details': fallback_details,
+            'golden_path_alignment': 'aligned' if dispatch_path == 'golden_path' and not legacy_fallback_used else 'escaped',
+        }
+
         # 1. Record in episodic memory
         self.behavior_modulator.record_outcome(
             context=context,
@@ -428,6 +460,8 @@ class AGIKernel:
             success=success,
             user_id=user_id
         )
+
+        action_family_trust_state = self.plan_manager.get_action_family_states()
         
         # 2. Record in unified memory
         self.unified_memory.store(
@@ -436,25 +470,47 @@ class AGIKernel:
             metadata={
                 'context': context,
                 'success': success,
-                'user_id': user_id
+                'user_id': user_id,
+                'outcome_record': outcome_record,
+                'ranking_learning_summary': ranking_learning_summary,
+                'dispatch_learning_summary': dispatch_learning_summary,
+                'action_family_trust_state': action_family_trust_state,
+                'learning': self.adaptive_learner.get_learning_report(),
+                'action_family_trust_summary': {
+                    'degraded': [family for family, state in action_family_trust_state.items() if state.get('trust_bucket') == 'degraded'],
+                    'cooling_down': [family for family, state in action_family_trust_state.items() if state.get('trust_bucket') == 'cooling_down'],
+                    'recovering': [family for family, state in action_family_trust_state.items() if state.get('trust_bucket') == 'recovering'],
+                    'healthy': [family for family, state in action_family_trust_state.items() if state.get('trust_bucket') == 'healthy'],
+                },
             },
             entity_id=user_id
         )
+
+        if self.world_state and hasattr(self.world_state, 'record_routed_outcome'):
+            try:
+                self.world_state.record_routed_outcome(
+                    outcome_record=outcome_record,
+                    trust_state=action_family_trust_state,
+                )
+            except Exception:
+                pass
         
         # 3. Update goal progress if applicable
-        if success and self.goal_manager:
-            # Try to complete current goal step
-            active = self.goal_manager.get_next_action()
-            if active:
-                self.goal_manager.complete_action(
-                    active['goal_id'],
-                    success=True,
-                    outcome=outcome
-                )
+        goal_id = outcome_record.get('goal_id')
+        if goal_id and self.goal_manager:
+            self.goal_manager.complete_action(
+                goal_id,
+                success=success,
+                outcome=outcome
+            )
         
         # 4. Meta-learning feedback
         self.adaptive_learner.feedback(
-            learning_attempt={'domain': 'general', 'context': context, 'strategy': 'default'},
+            learning_attempt={
+                'domain': outcome_record.get('plugin', 'general'),
+                'context': context,
+                'strategy': outcome_record.get('trigger', 'default'),
+            },
             success=success,
             outcome_description=outcome
         )
@@ -463,9 +519,9 @@ class AGIKernel:
     # Autonomous Operations
     # =================================================================
     
-    async def run_autonomous_cycle(self):
+    async def run_autonomous_goal_cycle(self) -> Optional[Dict]:
         """
-        Run one cycle of autonomous operation
+        Run one cycle of autonomous goal pursuit.
         
         This is where the agent acts on its own goals.
         Call this periodically (e.g., every 5 minutes).
@@ -480,13 +536,21 @@ class AGIKernel:
                 self.goal_manager.approve_goal(goal.id)
         
         # 3. Execute next action from active goals
-        action = self.goal_manager.get_next_action()
+        action = None
+        if self.goal_driven_cycle:
+            action = await self.goal_driven_cycle.get_next_action()
+        if not action:
+            action = self.goal_manager.get_next_action()
         if action:
-            print(f"🎯 Executing autonomous goal: {action['goal_description']}")
-            print(f"   Action: {action['action']}")
+            goal_description = action.get('context', {}).get('goal_description', action.get('goal_description', ''))
+            if goal_description:
+                print(f"🎯 Executing autonomous goal: {goal_description}")
+            if action.get('plugin') and action.get('action_type'):
+                print(f"   Action: {action['plugin']}:{action['action_type']}")
+                return await self.act(action)
+            else:
+                print(f"   Action: {action.get('action')}")
             
-            # In practice, this would actually execute the action
-            # For now, just log it
             return action
         
         return None
@@ -516,6 +580,7 @@ class AGIKernel:
         
         # Get learning insights
         learning_report = self.adaptive_learner.get_learning_report()
+        action_family_trust_state = self.plan_manager.get_action_family_states()
         
         # Get memory stats
         memory_stats = self.unified_memory.get_unified_stats()
@@ -528,14 +593,21 @@ class AGIKernel:
                 'proposed_goal_count': len(proposed_goals),
                 'total_memories': memory_stats.get('total_memories', 0)
             },
-            'active_goals': active_goals,
-            'proposed_goals': proposed_goals,
+            'active_goals': [g.to_dict() for g in active_goals[:5]],
+            'proposed_goals': [g.to_dict() for g in proposed_goals[:5]],
             'recent_experiences': recent_experiences,
             'learning_insights': learning_report['meta_learning_insights'],
             'effectiveness': {
                 'recent_learning_success': learning_report['recent_success_rate'],
                 'strategy_stats': learning_report['strategy_effectiveness']
-            }
+            },
+            'action_family_trust_state': action_family_trust_state,
+            'action_family_trust_summary': {
+                'degraded': [family for family, state in action_family_trust_state.items() if state.get('trust_bucket') == 'degraded'],
+                'cooling_down': [family for family, state in action_family_trust_state.items() if state.get('trust_bucket') == 'cooling_down'],
+                'recovering': [family for family, state in action_family_trust_state.items() if state.get('trust_bucket') == 'recovering'],
+                'healthy': [family for family, state in action_family_trust_state.items() if state.get('trust_bucket') == 'healthy'],
+            },
         }
     
     # =================================================================

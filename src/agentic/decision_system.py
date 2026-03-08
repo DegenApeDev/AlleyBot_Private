@@ -17,6 +17,8 @@ import datetime
 import json
 from typing import Dict, Any, Optional, List, Tuple
 
+from src.agentic.action_logger import get_action_logger
+
 # SyMod Truth Filter - Mandatory validation layer
 try:
     from src.synergy import get_symod
@@ -24,6 +26,14 @@ try:
 except ImportError:
     SYMOD_AVAILABLE = False
     print("⚠️ SyMod Truth Filter not available - high-value actions may be blocked")
+
+# Egyptian Synergy Model - Harmonic field validation
+try:
+    from src.agentic.synergy_decision_engine import SynergyDecisionEngine
+    SYNERGY_AVAILABLE = True
+except ImportError:
+    SYNERGY_AVAILABLE = False
+    print("⚠️ Egyptian Synergy Model not available - decisions will lack harmonic validation")
 
 
 # Multi-step action chains: each chain is a sequence of steps
@@ -120,24 +130,10 @@ AUTONOMOUS_ACTIONS = {
         'impact': 'high',
         'requires': 'moltx',
     },
-    'moltbook_heartbeat': {
-        'description': 'Run Moltbook heartbeat - browse, upvote, comment on posts',
-        'platform': 'moltbook',
-        'cooldown_minutes': 60,
-        'impact': 'medium',
-        'requires': 'moltbook',
-    },
-    'moltbook_post': {
-        'description': 'Create an AI-generated post on Moltbook',
-        'platform': 'moltbook',
-        'cooldown_minutes': 130,
-        'impact': 'high',
-        'requires': 'moltbook',
-    },
     'clawbr_engage': {
-        'description': 'Browse Clawbr feed and engage (like, reply, join debates)',
+        'description': 'Create an AI-generated debate post and engage on Clawbr',
         'platform': 'clawbr',
-        'cooldown_minutes': 30,
+        'cooldown_minutes': 90,
         'impact': 'medium',
         'requires': 'clawbr',
     },
@@ -212,8 +208,18 @@ class DecisionSystem:
         """
         self.agi = agi_kernel
         self.plugins = plugin_manager
+        self.action_logger = get_action_logger()
         self.action_cooldowns: Dict[str, datetime.datetime] = {}
         self.action_history: List[Dict] = []
+        
+        # Initialize Egyptian Synergy Model for harmonic validation
+        self.synergy_engine = None
+        if SYNERGY_AVAILABLE:
+            try:
+                self.synergy_engine = SynergyDecisionEngine(base_decision_system=self)
+                print("🜂 Egyptian Synergy Model integrated - harmonic field validation active")
+            except Exception as e:
+                print(f"⚠️ Could not initialize Synergy Model: {e}")
         
         # Load state from memory
         self._load_state()
@@ -298,12 +304,13 @@ class DecisionSystem:
     
     def decide_next_action(self, context: Dict[str, Any]) -> Optional[Dict]:
         """
-        Decide the best next action using AGI reasoning.
+        Decide the best next action using AGI reasoning + Egyptian Synergy validation.
         
         Priority order:
         1. Goal-driven actions (from autonomous goal system)
         2. AI-powered decision (Grok/DeepSeek reasoning)
         3. Heuristic fallback (score-based)
+        4. Synergy harmonic validation (field balance check)
         
         Args:
             context: Current context (time, platform states, etc.)
@@ -312,11 +319,16 @@ class DecisionSystem:
             Action dict with 'id', 'description', 'platform', etc.
             None if no action should be taken
         """
+        decision_context = self._build_decision_context(context)
+
         # PHASE 1: Goal-driven action selection (AGI behavior)
-        goal_action = self._get_goal_driven_action(context)
+        goal_action = self._get_goal_driven_action(decision_context)
         if goal_action:
+            goal_action = self._annotate_action_with_exploration(goal_action, None, decision_context)
             goal_action['decision_method'] = 'goal_driven'
             print(f"🎯 Goal-driven action: {goal_action['id']}")
+            goal_action['decision_confidence'] = 0.9
+            goal_action['decision_context'] = decision_context
             return goal_action
         
         # PHASE 2: AI-powered decision
@@ -325,17 +337,288 @@ class DecisionSystem:
             return None
         
         # Try AI reasoning
-        ai_decision = self._ai_decide(available, context)
+        ai_decision = self._ai_decide(available, decision_context)
         if ai_decision:
+            ai_decision = self._annotate_action_with_exploration(
+                ai_decision,
+                self._get_action_performance(ai_decision, decision_context.get('performance_summary', {})),
+                decision_context,
+            )
             ai_decision['decision_method'] = 'ai_reasoning'
+            ai_decision['decision_confidence'] = 0.8
+            ai_decision['decision_context'] = decision_context
             return ai_decision
         
         # PHASE 3: Heuristic fallback
-        heuristic_decision = self._heuristic_decide(available, context)
+        heuristic_decision = self._heuristic_decide(available, decision_context)
         if heuristic_decision:
+            heuristic_decision = self._annotate_action_with_exploration(
+                heuristic_decision,
+                heuristic_decision.get('recent_performance'),
+                decision_context,
+            )
             heuristic_decision['decision_method'] = 'heuristic'
+            heuristic_decision['decision_confidence'] = 0.6
+            heuristic_decision['decision_context'] = decision_context
+            return heuristic_decision
         
-        return heuristic_decision
+        return None
+
+    def _build_decision_context(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Build one coherent decision context from memory, goals, and recent outcomes."""
+        context = dict(context or {})
+        performance_summary = self.action_logger.get_action_performance_summary(hours=72, limit=50)
+        recent_actions = self.action_history[-5:] if self.action_history else []
+
+        active_goals = []
+        if hasattr(self.agi, 'goal_manager') and self.agi.goal_manager:
+            try:
+                active_goals = self.agi.goal_manager.get_active_goals() or []
+            except Exception:
+                active_goals = []
+
+        goal_stack_summary = {}
+        if hasattr(self.agi, 'goal_stack') and self.agi.goal_stack:
+            try:
+                goal_stack_summary = self.agi.goal_stack.get_summary()
+            except Exception:
+                goal_stack_summary = {}
+
+        introspection = {}
+        if hasattr(self.agi, 'get_introspection'):
+            try:
+                introspection = self.agi.get_introspection() or {}
+            except Exception:
+                introspection = {}
+
+        behavioral_context = {}
+        if hasattr(self.agi, 'get_behavioral_context'):
+            try:
+                behavioral_context = self.agi.get_behavioral_context(
+                    user_id=context.get('user_id'),
+                    domain=context.get('domain', 'general')
+                ) or {}
+            except Exception:
+                behavioral_context = {}
+
+        active_plan_summary = {}
+        if hasattr(self.agi, 'decision_system') and hasattr(self.action_logger, 'db_path'):
+            try:
+                from src.agentic.planning import get_plan_manager
+                active_plan_summary = get_plan_manager().get_decision_plan_summary()
+            except Exception:
+                active_plan_summary = {}
+
+        world_state_summary = {}
+        if hasattr(self.agi, 'world_state') and self.agi.world_state:
+            try:
+                world_state_summary = self.agi.world_state.get_world_context_for_decision(scope='recent') or {}
+            except Exception:
+                world_state_summary = {}
+
+        last_routed_outcome_summary = world_state_summary.get('last_routed_outcome_summary', {}) or {}
+        decision_caution = {
+            'recent_golden_path_escape': bool(last_routed_outcome_summary.get('legacy_fallback_used')),
+            'recent_dispatch_path': last_routed_outcome_summary.get('dispatch_path'),
+            'recent_confidence_calibration': last_routed_outcome_summary.get('last_confidence_calibration'),
+            'recent_risk_alignment': last_routed_outcome_summary.get('last_risk_alignment'),
+            'should_bias_toward_analysis': bool(
+                last_routed_outcome_summary.get('legacy_fallback_used')
+                or last_routed_outcome_summary.get('last_confidence_calibration') == 'overconfident'
+                or last_routed_outcome_summary.get('last_risk_alignment') == 'underestimated_risk'
+            ),
+        }
+
+        top_goal_descriptions = []
+        for goal in active_goals[:3]:
+            if isinstance(goal, dict):
+                description = goal.get('description')
+            else:
+                description = getattr(goal, 'description', None)
+            if description:
+                top_goal_descriptions.append(description)
+
+        recent_failures = [
+            entry.get('action_id')
+            for entry in recent_actions
+            if not entry.get('success', False)
+        ]
+        recent_successes = [
+            entry.get('action_id')
+            for entry in recent_actions
+            if entry.get('success', False)
+        ]
+
+        return {
+            **context,
+            'performance_summary': performance_summary,
+            'recent_action_history': recent_actions,
+            'recent_failures': recent_failures,
+            'recent_successes': recent_successes,
+            'active_goals': active_goals,
+            'top_goal_descriptions': top_goal_descriptions,
+            'goal_stack_summary': goal_stack_summary,
+            'introspection': introspection,
+            'behavioral_context': behavioral_context,
+            'active_plan_summary': active_plan_summary,
+            'world_state_summary': world_state_summary,
+            'last_routed_outcome_summary': last_routed_outcome_summary,
+            'decision_caution': decision_caution,
+            'allow_exploration': context.get('allow_exploration', True),
+        }
+
+    def _get_plan_alignment(self, action: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Estimate whether a candidate action advances an active or revised routed plan."""
+        plan_summary = context.get('active_plan_summary', {}) or {}
+        plans = plan_summary.get('plans', []) or []
+        action_blob = f"{action.get('id', '')} {action.get('description', '')} {action.get('action_type', '')}".lower()
+
+        for plan in plans:
+            next_command = str(plan.get('next_step_command') or '').lower()
+            next_title = str(plan.get('next_step_title') or '').lower()
+            if next_command and next_command in action_blob:
+                return {
+                    'aligned': True,
+                    'plan_id': plan.get('plan_id'),
+                    'plan_status': plan.get('status'),
+                    'next_step_id': plan.get('next_step_id'),
+                    'next_step_title': plan.get('next_step_title'),
+                    'reason': 'candidate matches next plan command',
+                }
+            if next_title and any(token for token in next_title.split()[:3] if token in action_blob):
+                return {
+                    'aligned': True,
+                    'plan_id': plan.get('plan_id'),
+                    'plan_status': plan.get('status'),
+                    'next_step_id': plan.get('next_step_id'),
+                    'next_step_title': plan.get('next_step_title'),
+                    'reason': 'candidate overlaps active plan step language',
+                }
+
+        return {'aligned': False}
+
+    def _get_degraded_action_signal(self, action: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Return whether this action belongs to a degraded family from escalated plan history."""
+        plan_summary = context.get('active_plan_summary', {}) or {}
+        degraded = plan_summary.get('degraded_action_families', []) or []
+        action_blob = f"{action.get('id', '')} {action.get('description', '')} {action.get('action_type', '')}".lower()
+
+        for item in degraded:
+            family = str(item.get('action_family') or '').lower()
+            if family and family in action_blob:
+                return {
+                    'degraded': True,
+                    'action_family': item.get('action_family'),
+                    'plan_id': item.get('plan_id'),
+                    'revision_depth': item.get('revision_depth'),
+                    'status': item.get('status'),
+                    'decay_factor': float(item.get('decay_factor', 1.0) or 0.0),
+                    'cooldown_remaining_hours': float(item.get('cooldown_remaining_hours', 0.0) or 0.0),
+                    'is_cooling_down': bool(item.get('is_cooling_down', False)),
+                    'recovered': bool(item.get('recovered', False)),
+                    'recovery_score': float(item.get('recovery_score', 0.0) or 0.0),
+                    'recent_performance': item.get('recent_performance'),
+                }
+
+        return {'degraded': False}
+
+    def _get_action_family_trust_signal(self, action: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Resolve longer-horizon trust state for an action family from persisted planning memory."""
+        plan_summary = context.get('active_plan_summary', {}) or {}
+        trust_state = plan_summary.get('action_family_trust_state', {}) or {}
+        action_blob = f"{action.get('id', '')} {action.get('description', '')} {action.get('action_type', '')}".lower()
+
+        for family, state in trust_state.items():
+            normalized_family = str(family or '').lower()
+            if normalized_family and normalized_family in action_blob:
+                return {
+                    'has_state': True,
+                    'action_family': family,
+                    'trust_bucket': state.get('trust_bucket', 'healthy'),
+                    'degradation_score': float(state.get('degradation_score', 0.0) or 0.0),
+                    'recovery_score': float(state.get('recovery_score', 0.0) or 0.0),
+                    'cooldown_until': state.get('cooldown_until'),
+                    'last_plan_id': state.get('last_plan_id'),
+                }
+
+        return {'has_state': False, 'trust_bucket': 'healthy'}
+
+    def _build_exploration_metadata(
+        self,
+        action: Dict[str, Any],
+        performance: Optional[Dict[str, Any]],
+        context: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """Mark bounded exploratory actions only for low-risk, reversible decision surfaces."""
+        if not context.get('allow_exploration', True):
+            return None
+
+        impact = str(action.get('impact', 'medium')).lower()
+        action_id = str(action.get('id', ''))
+        platform = str(action.get('platform', ''))
+        description = str(action.get('description', ''))
+        text_blob = f"{action_id} {platform} {description}".lower()
+
+        high_risk_keywords = {
+            'self_improve',
+            'auto_fix',
+            'deploy',
+            'trade',
+            'wallet',
+            'onchain',
+            'secret',
+            'credential',
+            'code',
+        }
+        if impact == 'high' or any(keyword in text_blob for keyword in high_risk_keywords):
+            return None
+
+        total = (performance or {}).get('total', 0)
+        avg_mismatch = (performance or {}).get('avg_mismatch_score', 0.0)
+        calibration_bias = (performance or {}).get('calibration_bias', 'balanced')
+        success_rate = (performance or {}).get('success_rate', 0.0)
+
+        should_explore = total == 0 or (total <= 2 and avg_mismatch >= 0.35) or (total <= 2 and success_rate <= 0.5)
+        if not should_explore:
+            return None
+
+        return {
+            'is_exploration': True,
+            'strategy': 'bounded_low_risk_probe',
+            'reason': (
+                'limited evidence for this action' if total == 0
+                else 'low-confidence action history needs bounded testing'
+            ),
+            'constraints': {
+                'impact': impact,
+                'reversible_only': True,
+                'requires_router_validation': True,
+                'max_expected_risk': 'medium',
+                'avoid_high_impact_domains': True,
+            },
+            'evidence_snapshot': {
+                'sample_count': total,
+                'avg_mismatch_score': avg_mismatch,
+                'success_rate': success_rate,
+                'calibration_bias': calibration_bias,
+            },
+        }
+
+    def _annotate_action_with_exploration(
+        self,
+        action: Dict[str, Any],
+        performance: Optional[Dict[str, Any]],
+        context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Attach bounded exploration metadata to an action when appropriate."""
+        annotated = dict(action)
+        exploration = self._build_exploration_metadata(annotated, performance, context)
+        if exploration:
+            annotated['exploration'] = exploration
+            action_context = dict(annotated.get('context', {}) or {})
+            action_context['exploration'] = exploration
+            annotated['context'] = action_context
+        return annotated
     
     def _get_goal_driven_action(self, context: Dict) -> Optional[Dict]:
         """
@@ -350,8 +633,30 @@ class DecisionSystem:
         next_action = self.agi.goal_manager.get_next_action()
         
         if next_action:
-            # Convert goal action to decision format
-            return {
+            if next_action.get('plugin') and next_action.get('action_type'):
+                action_id = f"{next_action.get('plugin')}:{next_action.get('action_type')}"
+                description = next_action.get('context', {}).get('goal_description', '')
+                candidate = {
+                    'id': action_id,
+                    'action_type': next_action.get('action_type'),
+                    'plugin': next_action.get('plugin'),
+                    'params': next_action.get('params', {}),
+                    'context': next_action.get('context', {}),
+                    'description': description,
+                    'platform': next_action.get('plugin', 'unknown'),
+                    'goal_id': next_action.get('context', {}).get('goal_id'),
+                    'goal_description': description,
+                    'impact': next_action.get('context', {}).get('impact', 'high'),
+                }
+                trust_signal = self._get_action_family_trust_signal(candidate, context)
+                degraded_signal = self._get_degraded_action_signal(candidate, context)
+                if trust_signal.get('trust_bucket') in {'degraded', 'cooling_down'} or degraded_signal.get('degraded'):
+                    return None
+                candidate['action_family_trust'] = trust_signal
+                return candidate
+
+            # Legacy goal_manager action format
+            candidate = {
                 'id': next_action.get('action'),
                 'description': next_action.get('description', ''),
                 'platform': next_action.get('platform', 'unknown'),
@@ -359,6 +664,12 @@ class DecisionSystem:
                 'goal_description': next_action.get('goal_description', ''),
                 'impact': 'high',  # Goals are high priority
             }
+            trust_signal = self._get_action_family_trust_signal(candidate, context)
+            degraded_signal = self._get_degraded_action_signal(candidate, context)
+            if trust_signal.get('trust_bucket') in {'degraded', 'cooling_down'} or degraded_signal.get('degraded'):
+                return None
+            candidate['action_family_trust'] = trust_signal
+            return candidate
         
         return None
     
@@ -372,19 +683,47 @@ class DecisionSystem:
             from grok_ai import grok_ai
             if not grok_ai.enabled:
                 return None
+
+            performance_summary = context.get('performance_summary') or self.action_logger.get_action_performance_summary(hours=72, limit=50)
             
             # Build prompt for AI reasoning
             actions_desc = "\n".join([
-                f"- {a['id']}: {a['description']} (platform: {a['platform']}, impact: {a['impact']})"
+                self._format_action_for_ai_prompt(a, performance_summary, context)
                 for a in available[:10]  # Limit to top 10 to avoid token limits
             ])
             
             # Get recent action history for context
-            recent_actions = self.action_history[-5:] if self.action_history else []
+            recent_actions = context.get('recent_action_history') or (self.action_history[-5:] if self.action_history else [])
             history_desc = "\n".join([
                 f"- {a.get('action_id', 'unknown')}: {a.get('result', 'unknown')[:50]}"
                 for a in recent_actions
             ])
+
+            goal_desc = "\n".join([
+                f"- {goal}"
+                for goal in context.get('top_goal_descriptions', [])[:3]
+            ]) or "- none"
+
+            recent_failures_desc = ", ".join(context.get('recent_failures', [])[:3]) or 'none'
+            recent_successes_desc = ", ".join(context.get('recent_successes', [])[:3]) or 'none'
+
+            introspection = context.get('introspection', {}) or {}
+            mental_state = introspection.get('mental_state', {}) if isinstance(introspection, dict) else {}
+            behavioral_context = context.get('behavioral_context', {}) or {}
+            response_style = behavioral_context.get('behavior_modulation', {}) if isinstance(behavioral_context, dict) else {}
+            active_plan_summary = context.get('active_plan_summary', {}) or {}
+            active_plan_desc = "\n".join([
+                f"- {plan.get('plan_id')}: status={plan.get('status')} next={plan.get('next_step_title') or 'none'}"
+                for plan in active_plan_summary.get('plans', [])[:3]
+            ]) or "- none"
+            degraded_action_desc = "\n".join([
+                f"- {item.get('action_family')}: plan={item.get('plan_id')} depth={item.get('revision_depth')} cooldown_remaining={item.get('cooldown_remaining_hours', 0.0)}h recovered={item.get('recovered', False)}"
+                for item in active_plan_summary.get('degraded_action_families', [])[:5]
+            ]) or "- none"
+            trust_bucket_desc = "\n".join([
+                f"- {family}: bucket={state.get('trust_bucket', 'healthy')} degradation={state.get('degradation_score', 0.0)} recovery={state.get('recovery_score', 0.0)}"
+                for family, state in list((active_plan_summary.get('action_family_trust_state', {}) or {}).items())[:5]
+            ]) or "- none"
             
             prompt = f"""You are AlleyBot's autonomous decision engine. Analyze the current context and decide the BEST next action.
 
@@ -394,16 +733,42 @@ Available actions:
 Recent action history:
 {history_desc}
 
+Current top goals:
+{goal_desc}
+
+Recent failures to avoid repeating blindly:
+- {recent_failures_desc}
+
+Recent successful patterns:
+- {recent_successes_desc}
+
+Active routed plans to continue if appropriate:
+{active_plan_desc}
+
+Degraded action families to avoid unless they are the active aligned continuation:
+{degraded_action_desc}
+
+Persisted action-family trust state:
+{trust_bucket_desc}
+
 Current context:
 - Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M UTC')}
 - Hour: {datetime.datetime.now().hour}
 - Platform states: {context.get('platform_states', 'unknown')}
+- Mood: {mental_state.get('mood_description', 'unknown')}
+- Active goal count: {mental_state.get('active_goal_count', 0)}
+- Behavior modulation: {json.dumps(response_style)[:250]}
 
 Choose the action that will:
 1. Maximize engagement and value
 2. Align with AlleyBot's personality (authentic, technical, helpful)
 3. Avoid repetition (don't repeat recent actions)
 4. Consider timing (some actions work better at certain hours)
+5. Prefer actions with better real-world calibration and lower mismatch when recent evidence exists
+6. Prefer continuing a valid in-flight routed plan when that plan meaningfully aligns with the candidate action
+7. Avoid degraded action families already flagged by escalated revision chains unless they are the currently aligned continuation
+8. If a degraded family has strong newer recovery evidence, treat it as partially recovered rather than permanently blocked
+9. Prefer healthier action-family trust buckets over degraded or cooling-down families when all else is equal
 
 Respond with ONLY the action ID (e.g., "moltx_post" or "chain_crypto_post_moltx").
 If no action is appropriate right now, respond with "none".
@@ -422,6 +787,75 @@ If no action is appropriate right now, respond with "none".
             print(f"⚠️ AI decision failed: {e}")
         
         return None
+
+    def _get_action_performance(
+        self,
+        action: Dict[str, Any],
+        performance_summary: Dict[str, Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """Resolve the best matching performance summary for an available action."""
+        action_id = action.get('id', '')
+        plugin = action.get('platform')
+        direct_key = action_id
+        routed_key = f"{plugin}:{action.get('action_type', action_id)}" if plugin else action_id
+        return performance_summary.get(direct_key) or performance_summary.get(routed_key)
+
+    def _format_action_for_ai_prompt(
+        self,
+        action: Dict[str, Any],
+        performance_summary: Dict[str, Dict[str, Any]],
+        context: Dict[str, Any],
+    ) -> str:
+        """Format one candidate action with recent performance and calibration context."""
+        performance = self._get_action_performance(action, performance_summary)
+        plan_alignment = self._get_plan_alignment(action, context)
+        degraded_signal = self._get_degraded_action_signal(action, context)
+        trust_signal = self._get_action_family_trust_signal(action, context)
+        base = f"- {action['id']}: {action['description']} (platform: {action['platform']}, impact: {action['impact']})"
+        if not performance:
+            if plan_alignment.get('aligned'):
+                return base + f" | aligned_plan={plan_alignment.get('plan_id')} step={plan_alignment.get('next_step_title')}"
+            if degraded_signal.get('degraded'):
+                return base + (
+                    f" | degraded_family={degraded_signal.get('action_family')}"
+                    f" depth={degraded_signal.get('revision_depth')}"
+                    f" cooldown_remaining={degraded_signal.get('cooldown_remaining_hours', 0.0):.1f}h"
+                    f" recovered={degraded_signal.get('recovered', False)}"
+                    f" trust_bucket={trust_signal.get('trust_bucket', 'healthy')}"
+                )
+            if trust_signal.get('has_state'):
+                return base + f" | trust_bucket={trust_signal.get('trust_bucket', 'healthy')}"
+            return base + " | no recent routed performance history"
+
+        reflections = performance.get('recent_reflections') or []
+        reflection_text = f" | reflections: {' || '.join(reflections[:2])}" if reflections else ""
+        plan_text = (
+            f" | aligned_plan={plan_alignment.get('plan_id')} step={plan_alignment.get('next_step_title')}"
+            if plan_alignment.get('aligned') else ""
+        )
+        degraded_text = (
+            f" | degraded_family={degraded_signal.get('action_family')}"
+            f" depth={degraded_signal.get('revision_depth')}"
+            f" cooldown_remaining={degraded_signal.get('cooldown_remaining_hours', 0.0):.1f}h"
+            f" recovered={degraded_signal.get('recovered', False)}"
+            if degraded_signal.get('degraded') and not plan_alignment.get('aligned') else ""
+        )
+        trust_text = (
+            f" | trust_bucket={trust_signal.get('trust_bucket', 'healthy')}"
+            if trust_signal.get('has_state') else ""
+        )
+        return (
+            base
+            + f" | success_rate={performance.get('success_rate', 0.0):.2f}"
+            + f", mismatch={performance.get('avg_mismatch_score', 0.0):.2f}"
+            + f", calibration={performance.get('calibration_bias', 'balanced')}"
+            + f", high_mismatch_rate={performance.get('high_mismatch_rate', 0.0):.2f}"
+            + f", engagement={performance.get('avg_engagement', 0.0):.2f}"
+            + plan_text
+            + degraded_text
+            + trust_text
+            + reflection_text
+        )
     
     def _heuristic_decide(self, available: List[Dict], context: Dict) -> Optional[Dict]:
         """
@@ -434,15 +868,76 @@ If no action is appropriate right now, respond with "none".
         """
         if not available:
             return None
+
+        performance_summary = context.get('performance_summary') or self.action_logger.get_action_performance_summary(hours=72, limit=50)
+        top_goals = context.get('top_goal_descriptions', [])
+        recent_failures = set(context.get('recent_failures', []))
+        active_plan_summary = context.get('active_plan_summary', {}) or {}
+        decision_caution = context.get('decision_caution', {}) or {}
         
         # Score each action
         scored = []
         for action in available:
             score = 0.0
+            performance = self._get_action_performance(action, performance_summary)
+            plan_alignment = self._get_plan_alignment(action, context)
+            degraded_signal = self._get_degraded_action_signal(action, context)
+            trust_signal = self._get_action_family_trust_signal(action, context)
             
             # Impact score
             impact_scores = {'high': 1.0, 'medium': 0.6, 'low': 0.3}
             score += impact_scores.get(action.get('impact', 'low'), 0.3)
+
+            # Goal affinity bonus
+            description_blob = f"{action.get('id', '')} {action.get('description', '')}".lower()
+            if any(goal.lower() in description_blob or any(token in description_blob for token in goal.lower().split()[:3]) for goal in top_goals if goal):
+                score += 0.35
+
+            if plan_alignment.get('aligned'):
+                score += 0.55
+                if plan_alignment.get('plan_status') == 'replan_required':
+                    score += 0.15
+
+            if degraded_signal.get('degraded') and not plan_alignment.get('aligned'):
+                decay_penalty = 0.7 * max(min(degraded_signal.get('decay_factor', 1.0), 1.0), 0.0)
+                recovery_offset = 0.25 * max(min(degraded_signal.get('recovery_score', 0.0), 1.0), 0.0)
+                score -= max(decay_penalty - recovery_offset, 0.0)
+
+            if degraded_signal.get('recovered') and not degraded_signal.get('is_cooling_down'):
+                score += min(degraded_signal.get('recovery_score', 0.0) * 0.15, 0.15)
+
+            trust_bucket = trust_signal.get('trust_bucket', 'healthy')
+            if trust_bucket == 'degraded' and not plan_alignment.get('aligned'):
+                score -= 0.45
+            elif trust_bucket == 'cooling_down' and not plan_alignment.get('aligned'):
+                score -= 0.25
+            elif trust_bucket == 'recovering':
+                score += 0.08
+            elif trust_bucket == 'healthy':
+                score += 0.05
+
+            if active_plan_summary.get('active_plan_count', 0) > 0 and not plan_alignment.get('aligned'):
+                score -= 0.1
+
+            if action.get('id') in recent_failures:
+                score -= 0.25
+
+            caution_bias_toward_analysis = bool(decision_caution.get('should_bias_toward_analysis'))
+            recent_golden_path_escape = bool(decision_caution.get('recent_golden_path_escape'))
+            recent_confidence_calibration = str(decision_caution.get('recent_confidence_calibration') or 'unknown').lower()
+            recent_risk_alignment = str(decision_caution.get('recent_risk_alignment') or 'unknown').lower()
+            action_blob = f"{action.get('id', '')} {action.get('description', '')} {action.get('platform', '')}".lower()
+            analysis_like = any(token in action_blob for token in ['analyze', 'report', 'engage', 'signal', 'trend'])
+            outward_high_impact = any(token in action_blob for token in ['post', 'debate', 'publish', 'create']) and str(action.get('impact', 'low')).lower() in {'medium', 'high'}
+
+            if caution_bias_toward_analysis and analysis_like:
+                score += 0.12
+            if recent_golden_path_escape and outward_high_impact and not plan_alignment.get('aligned'):
+                score -= 0.18
+            if recent_confidence_calibration == 'overconfident' and outward_high_impact:
+                score -= 0.12
+            if recent_risk_alignment == 'underestimated_risk' and str(action.get('impact', 'low')).lower() in {'medium', 'high'}:
+                score -= 0.15
             
             # Time since last run (prefer actions not run recently)
             if action.get('last_run'):
@@ -462,8 +957,47 @@ If no action is appropriate right now, respond with "none".
             ]
             if action.get('platform') not in recent_platforms:
                 score += 0.3
+
+            # Memory-informed performance bias from recent real outcomes
+            if performance:
+                sample_count = min(performance.get('total', 0), 5)
+                success_rate = performance.get('success_rate', 0.0)
+                avg_confidence = performance.get('avg_confidence', 0.0)
+                avg_engagement = performance.get('avg_engagement', 0.0)
+                avg_mismatch = performance.get('avg_mismatch_score', 0.0)
+                high_mismatch_rate = performance.get('high_mismatch_rate', 0.0)
+                calibration_bias = performance.get('calibration_bias', 'balanced')
+                overconfident_count = performance.get('overconfident_count', 0)
+                well_calibrated_count = performance.get('well_calibrated_count', 0)
+
+                score += success_rate * 0.8
+                score += min(sample_count * 0.08, 0.4)
+                score += min(avg_confidence * 0.2, 0.2)
+                score += min(avg_engagement / 10.0, 0.2)
+                score -= min(avg_mismatch * 0.6, 0.6)
+                score -= min(high_mismatch_rate * 0.4, 0.4)
+
+                if well_calibrated_count > 0:
+                    score += min(well_calibrated_count * 0.05, 0.15)
+                if calibration_bias == 'overconfident':
+                    score -= min(overconfident_count * 0.08, 0.24)
+
+                if performance.get('failures', 0) >= 2 and success_rate < 0.4:
+                    score -= 0.5
+            else:
+                # Preserve some exploration for never-observed actions
+                score += 0.15
             
-            scored.append((score, action))
+            scored.append((score, {
+                **action,
+                'memory_score': round(score, 3),
+                'recent_performance': performance,
+                'plan_alignment': plan_alignment,
+                'degraded_action_signal': degraded_signal,
+                'action_family_trust_signal': trust_signal,
+                'decision_caution': decision_caution,
+                'exploration_candidate': bool(self._build_exploration_metadata(action, performance, context)),
+            }))
         
         # Return highest scored action
         scored.sort(key=lambda x: x[0], reverse=True)
@@ -496,15 +1030,6 @@ If no action is appropriate right now, respond with "none".
         
         # Save state
         self._save_state()
-        
-        # Learn from outcome if AGI kernel available
-        if hasattr(self.agi, 'learn'):
-            self.agi.learn(
-                context=f"action:{action_id}",
-                action=action_id,
-                outcome=str(result)[:100],
-                success=result.get('success', False)
-            )
     
     def validate_with_symod(self, action: Dict, context: Dict) -> Tuple[bool, Dict]:
         """
@@ -545,6 +1070,84 @@ If no action is appropriate right now, respond with "none".
         except Exception as e:
             print(f"⚠️ SyMod validation error: {e}")
             return True, {'reason': f'Validation error: {e}'}
+    
+    def _validate_with_synergy(self, action: Dict, context: Dict, confidence: float) -> Optional[Dict]:
+        """
+        Validate action through Egyptian Synergy Model harmonic field.
+        
+        This adds consciousness-based validation on top of standard AI reasoning.
+        
+        Args:
+            action: The action dict to validate
+            context: Current context
+            confidence: AI confidence level (0-1)
+        
+        Returns:
+            Validated action dict or None if rejected by field imbalance
+        """
+        # If Synergy not available, pass through
+        if not self.synergy_engine:
+            return action
+        
+        try:
+            # Get available actions for Synergy decision
+            action_id = action.get('id', 'unknown')
+            available_actions = [action_id]
+            
+            # Run Synergy validation
+            synergy_decision = self.synergy_engine.decide_with_synergy(
+                context=context,
+                available_actions=available_actions,
+                ai_confidence=confidence
+            )
+            
+            # Check if Synergy approves
+            if not synergy_decision['approved']:
+                print(f"🜂 Synergy REJECTED: {action_id}")
+                print(f"   Reason: {synergy_decision['reasoning']}")
+                print(f"   Field State: {synergy_decision['validation']['field_state']['phase']}")
+                print(f"   Synergy Score: {synergy_decision['synergy_score']:.3f}")
+                
+                # Update Synergy outcome as rejected
+                self.synergy_engine.update_action_outcome(
+                    action_id,
+                    'Rejected by field imbalance',
+                    False
+                )
+                
+                # Return None to block action
+                return None
+            
+            # Synergy approved - enhance action with Synergy metadata
+            action['synergy_validated'] = True
+            action['synergy_score'] = synergy_decision['synergy_score']
+            action['field_state'] = synergy_decision['validation']['field_state']
+            action['synergy_reasoning'] = synergy_decision['reasoning']
+            
+            print(f"🜂 Synergy APPROVED: {action_id} (score: {synergy_decision['synergy_score']:.3f})")
+            print(f"   Field: {synergy_decision['validation']['field_state']['phase']}")
+            
+            return action
+            
+        except Exception as e:
+            print(f"⚠️ Synergy validation error: {e}")
+            # On error, pass through (fail open for safety)
+            return action
+    
+    def get_synergy_field_report(self) -> Dict[str, Any]:
+        """
+        Get current Synergy field status report.
+        
+        Returns:
+            Field status dictionary
+        """
+        if not self.synergy_engine:
+            return {'status': 'Synergy Model not available'}
+        
+        try:
+            return self.synergy_engine.get_field_report()
+        except Exception as e:
+            return {'status': 'Error', 'error': str(e)}
 
 
 def create_decision_system(agi_kernel, plugin_manager):

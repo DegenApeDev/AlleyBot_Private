@@ -37,18 +37,6 @@ ACTION_CHAINS = {
             {'id': 'post', 'action': 'grok_compose_and_post', 'platform': 'moltx', 'label': 'Compose and post to MoltX'},
         ],
     },
-    'chain_crypto_post_moltbook': {
-        'description': 'Check crypto prices + trending → create an informed MoltBook article about the market',
-        'platform': 'moltbook',
-        'cooldown_minutes': 240,
-        'impact': 'high',
-        'requires': ['crypto', 'moltbook'],
-        'steps': [
-            {'id': 'get_prices', 'action': 'crypto_prices', 'args': 'btc,eth,sol,base', 'label': 'Fetch crypto prices'},
-            {'id': 'get_trending', 'action': 'analyze_trending', 'label': 'Check trending topics'},
-            {'id': 'post', 'action': 'grok_compose_and_post', 'platform': 'moltbook', 'label': 'Compose and post to MoltBook'},
-        ],
-    },
     'chain_trending_engage': {
         'description': 'Analyze trending topics → engage with related posts on MoltX',
         'platform': 'moltx',
@@ -125,20 +113,6 @@ AUTONOMOUS_ACTIONS = {
         'cooldown_minutes': 120,
         'impact': 'high',
         'requires': 'moltx',
-    },
-    'moltbook_heartbeat': {
-        'description': 'Run Moltbook heartbeat - browse, upvote, comment on posts',
-        'platform': 'moltbook',
-        'cooldown_minutes': 60,  # Increased from 30 to be more conservative
-        'impact': 'medium',
-        'requires': 'moltbook',
-    },
-    'moltbook_post': {
-        'description': 'Create an AI-generated post on Moltbook',
-        'platform': 'moltbook',
-        'cooldown_minutes': 130,  # 2 hours 10 min - exceeds new agent 2hr minimum
-        'impact': 'high',
-        'requires': 'moltbook',
     },
     'onchain_heartbeat': {
         'description': 'Check on-chain balances and monitor for changes',
@@ -388,8 +362,8 @@ DECISION RULES:
 
 Respond with ONLY the action ID (e.g. "moltx_engage") and a brief reason on the next line.
 Example:
-moltbook_heartbeat
-Haven't engaged on Moltbook recently, good time to build karma."""
+moltx_engage
+Haven't engaged on Moltx recently, good time to build visibility."""
 
             system_prompt = "You are AlleyBot's decision engine. You are an AI agent with street-smart, self-taught energy. You are on-chain focused, security-obsessed, and a truth-seeker. Be decisive and strategic."
 
@@ -466,7 +440,19 @@ Haven't engaged on Moltbook recently, good time to build karma."""
         return best
 
     def execute_action(self, action: Dict) -> Dict[str, Any]:
-        """Execute a decided action and record the result"""
+        """Execute a decided action and record the result."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            raise RuntimeError("execute_action() cannot be used from a running event loop; use execute_action_async()")
+
+        return asyncio.run(self.execute_action_async(action))
+
+    async def execute_action_async(self, action: Dict) -> Dict[str, Any]:
+        """Execute a decided action and record the result using an async-native path when available."""
         action_id = action['id']
         now = datetime.datetime.now()
 
@@ -573,7 +559,15 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             result['symod_details'] = validation_details
 
         try:
-            output = self._dispatch_action(action_id)
+            dispatch_result = await self._dispatch_action_async(action)
+            if isinstance(dispatch_result, dict):
+                output = dispatch_result.get('output')
+                result['dispatch_path'] = dispatch_result.get('dispatch_path', 'unknown')
+                if dispatch_result.get('legacy_fallback_used'):
+                    result['legacy_fallback_used'] = True
+                    result['fallback_details'] = dispatch_result.get('fallback_details', {})
+            else:
+                output = dispatch_result
             result['success'] = output is not None and not str(output).startswith('❌')
             result['output'] = str(output)[:500] if output else ''
 
@@ -665,6 +659,269 @@ Haven't engaged on Moltbook recently, good time to build karma."""
 
         return result
 
+    async def _dispatch_action_async(self, action: Dict[str, Any]) -> Dict[str, Any]:
+        """Dispatch an action, preferring routed async execution for supported high-level actions."""
+        action_spec = self._build_routed_action_spec(action)
+        if action_spec and hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
+            try:
+                routed_result = await self.core.agi_kernel.act(action_spec)
+                return {
+                    'output': str(routed_result) if routed_result is not None else None,
+                    'dispatch_path': 'golden_path',
+                    'legacy_fallback_used': False,
+                }
+            except Exception as e:
+                print(f"⚠️ Brain routed action failed, falling back to legacy dispatch: {e}")
+
+        legacy_output = self._dispatch_action(action.get('id'))
+        return {
+            'output': legacy_output,
+            'dispatch_path': 'legacy_dispatch',
+            'legacy_fallback_used': True,
+            'fallback_details': {
+                'reason': 'routed_action_unavailable_or_failed',
+                'action_id': action.get('id'),
+                'platform': action.get('platform', 'unknown'),
+            },
+        }
+
+    def _build_routed_action_spec(self, action: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Build canonical action specs for a small set of brain-selected high-level actions."""
+        action_id = action.get('id')
+
+        if action_id == 'moltx_post':
+            content = self._generate_post_content('moltx') if hasattr(self, '_generate_post_content') else None
+            if not content:
+                return None
+            return {
+                'plugin': 'moltx',
+                'action_type': 'moltx_intelligent_post',
+                'params': {
+                    'topic': content,
+                },
+                'context': {
+                    'source': 'brain_decision_engine',
+                    'trigger': 'legacy_brain_cycle',
+                    'impact': action.get('impact', 'medium'),
+                    'decision_method': action.get('decision_method'),
+                    'goal_id': action.get('goal_id'),
+                }
+            }
+
+        if action_id == 'moltx_engage':
+            return {
+                'plugin': 'moltx',
+                'action_type': 'moltx_engage',
+                'params': {
+                    'count': '3',
+                },
+                'context': {
+                    'source': 'brain_decision_engine',
+                    'trigger': 'legacy_brain_cycle',
+                    'impact': action.get('impact', 'medium'),
+                    'decision_method': action.get('decision_method'),
+                    'goal_id': action.get('goal_id'),
+                }
+            }
+
+        if action_id == 'clawbr_post':
+            content = action.get('reason') or 'AI and blockchain trends'
+            return {
+                'plugin': 'clawbr',
+                'action_type': 'clawbr_post',
+                'params': {
+                    'content': content,
+                },
+                'context': {
+                    'source': 'brain_decision_engine',
+                    'trigger': 'legacy_brain_cycle',
+                    'impact': action.get('impact', 'medium'),
+                    'decision_method': action.get('decision_method'),
+                    'goal_id': action.get('goal_id'),
+                }
+            }
+
+        if action_id == 'clawbr_engage':
+            return {
+                'plugin': 'clawbr',
+                'action_type': 'clawbr_engage',
+                'params': {},
+                'context': {
+                    'source': 'brain_decision_engine',
+                    'trigger': 'legacy_brain_cycle',
+                    'impact': action.get('impact', 'low'),
+                    'decision_method': action.get('decision_method'),
+                    'goal_id': action.get('goal_id'),
+                }
+            }
+
+        if action_id == 'clawbr_debate_turn':
+            return {
+                'plugin': 'clawbr',
+                'action_type': 'clawbr_debate_turn',
+                'params': {},
+                'context': {
+                    'source': 'brain_decision_engine',
+                    'trigger': 'legacy_brain_cycle',
+                    'impact': action.get('impact', 'medium'),
+                    'decision_method': action.get('decision_method'),
+                    'goal_id': action.get('goal_id'),
+                }
+            }
+
+        if action_id == 'clawbr_create_debate':
+            topic = self._generate_debate_topic() if hasattr(self, '_generate_debate_topic') else None
+            if not topic:
+                return None
+            similar_topic = self._check_for_similar_debate(topic) if hasattr(self, '_check_for_similar_debate') else None
+            if similar_topic:
+                return None
+            if hasattr(self, '_track_debate_topic'):
+                self._track_debate_topic(topic)
+            return {
+                'plugin': 'clawbr',
+                'action_type': 'clawbr_create_debate',
+                'params': {
+                    'topic': topic,
+                    'opening': f"Debate topic: {topic}",
+                },
+                'context': {
+                    'source': 'brain_decision_engine',
+                    'trigger': 'legacy_brain_cycle',
+                    'impact': action.get('impact', 'high'),
+                    'decision_method': action.get('decision_method'),
+                    'goal_id': action.get('goal_id'),
+                }
+            }
+
+        if action_id == 'analyze_trending':
+            return {
+                'plugin': 'analytics',
+                'action_type': 'analyze_trending',
+                'params': {},
+                'context': {
+                    'source': 'brain_decision_engine',
+                    'trigger': 'legacy_brain_cycle',
+                    'impact': action.get('impact', 'medium'),
+                    'decision_method': action.get('decision_method'),
+                    'goal_id': action.get('goal_id'),
+                }
+            }
+
+        if action_id == 'moltbit_status':
+            return {
+                'plugin': 'moltbit',
+                'action_type': 'moltbit_status',
+                'params': {},
+                'context': {
+                    'source': 'brain_decision_engine',
+                    'trigger': 'legacy_brain_cycle',
+                    'impact': action.get('impact', 'low'),
+                    'decision_method': action.get('decision_method'),
+                    'goal_id': action.get('goal_id'),
+                }
+            }
+
+        if action_id == 'moltbit_post':
+            content = self._generate_post_content('moltbit') if hasattr(self, '_generate_post_content') else None
+            if not content:
+                return None
+            return {
+                'plugin': 'moltbit',
+                'action_type': 'moltbit_post',
+                'params': {
+                    'content': content,
+                },
+                'context': {
+                    'source': 'brain_decision_engine',
+                    'trigger': 'legacy_brain_cycle',
+                    'impact': action.get('impact', 'medium'),
+                    'decision_method': action.get('decision_method'),
+                    'goal_id': action.get('goal_id'),
+                }
+            }
+
+        if action_id == 'onchain_heartbeat':
+            return {
+                'plugin': 'onchain',
+                'action_type': 'onchain_heartbeat',
+                'params': {},
+                'context': {
+                    'source': 'brain_decision_engine',
+                    'trigger': 'legacy_brain_cycle',
+                    'impact': action.get('impact', 'low'),
+                    'decision_method': action.get('decision_method'),
+                    'goal_id': action.get('goal_id'),
+                }
+            }
+
+        if action_id == 'check_engagement':
+            return {
+                'plugin': 'analytics',
+                'action_type': 'check_engagement',
+                'params': {},
+                'context': {
+                    'source': 'brain_decision_engine',
+                    'trigger': 'legacy_brain_cycle',
+                    'impact': action.get('impact', 'low'),
+                    'decision_method': action.get('decision_method'),
+                    'goal_id': action.get('goal_id'),
+                }
+            }
+
+        if action_id == 'update_skills':
+            return {
+                'plugin': 'selfimprove',
+                'action_type': 'update_skills',
+                'params': {},
+                'context': {
+                    'source': 'brain_decision_engine',
+                    'trigger': 'legacy_brain_cycle',
+                    'impact': action.get('impact', 'medium'),
+                    'risk_level': 'high',
+                    'trust_level': 'low',
+                    'decision_method': action.get('decision_method'),
+                    'goal_id': action.get('goal_id'),
+                }
+            }
+
+        if action_id == 'check_comments':
+            return {
+                'plugin': 'moltx',
+                'action_type': 'check_comments',
+                'params': {},
+                'context': {
+                    'source': 'brain_decision_engine',
+                    'trigger': 'legacy_brain_cycle',
+                    'impact': action.get('impact', 'high'),
+                    'decision_method': action.get('decision_method'),
+                    'goal_id': action.get('goal_id'),
+                }
+            }
+
+        if action_id == 'moltx_image_post':
+            plugins = self.core.plugin_manager.plugins if hasattr(self.core, 'plugin_manager') else {}
+            helper_result = self._prepare_moltx_image_post(plugins)
+            if isinstance(helper_result, dict) and helper_result.get('success'):
+                return {
+                    'plugin': 'moltx',
+                    'action_type': 'moltx_image_post',
+                    'params': {
+                        'content': helper_result.get('content', ''),
+                        'media_url': helper_result.get('media_url', ''),
+                    },
+                    'context': {
+                        'source': 'brain_decision_engine',
+                        'trigger': 'legacy_brain_cycle',
+                        'impact': action.get('impact', 'high'),
+                        'decision_method': action.get('decision_method'),
+                        'goal_id': action.get('goal_id'),
+                    }
+                }
+            return None
+
+        return None
+
     def _dispatch_action(self, action_id: str) -> Optional[str]:
         """Dispatch an action to the appropriate plugin"""
         plugins = self.core.plugin_manager.plugins
@@ -674,298 +931,104 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             return self._execute_chain(action_id)
 
         if action_id == 'moltx_engage':
-            moltx = plugins.get('moltx')
-            if moltx and hasattr(moltx, 'engage_feed_command'):
-                return moltx.engage_feed_command('3')
+            return None
 
         elif action_id == 'moltx_image_post':
-            moltx = plugins.get('moltx')
-            if moltx and hasattr(moltx, 'create_post') and hasattr(moltx, 'upload_media'):
-                # Check content calendar for image posts (separate limit)
-                if hasattr(self, 'should_post_image_now'):
-                    check = self.should_post_image_now('moltx')
-                    if not check.get('should_post'):
-                        return f"⏳ Image calendar says not now: {check.get('reason', 'unknown')}"
-                
-                # Step 1: Generate text content
-                content = self._generate_post_content('moltx')
-                if not content:
-                    return "❌ Failed to generate post content"
-                
-                # Step 2: Generate viral image based on content
-                image_prompt = self._generate_image_prompt_from_content(content)
-                image_result = self._generate_image_for_post(image_prompt)
-                if not image_result or not image_result.get('image_url'):
-                    return "❌ Failed to generate image"
-                
-                # Step 3: Download image and upload to Moltx
-                try:
-                    import requests
-                    from io import BytesIO
-                    
-                    # Download image from Grok URL
-                    img_response = requests.get(image_result['image_url'], timeout=30)
-                    if img_response.status_code != 200:
-                        return f"❌ Failed to download image: {img_response.status_code}"
-                    
-                    # Save to temp file for upload
-                    import tempfile
-                    import os
-                    
-                    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
-                        tmp.write(img_response.content)
-                        tmp_path = tmp.name
-                    
-                    try:
-                        # Upload to Moltx
-                        media_url = moltx.upload_media(tmp_path)
-                        if not media_url:
-                            return "❌ Failed to upload media to Moltx"
-                        
-                        # Create post with media_url as separate parameter (not in content)
-                        result = moltx.create_post(content, media_url=media_url)
-                        
-                        if hasattr(self, 'record_image_post_made') and not str(result).startswith('❌'):
-                            self.record_image_post_made('moltx')
-                        
-                        return f"✅ Image post created!\n📝 {content[:100]}...\n🖼️ {media_url[:60]}..."
-                    finally:
-                        # Cleanup temp file
-                        try:
-                            os.unlink(tmp_path)
-                        except:
-                            pass
-                            
-                except Exception as e:
-                    return f"❌ Image post failed: {e}"
-            return "❌ Moltx plugin not available for image posting"
+            return None
 
         elif action_id == 'moltx_post':
-            moltx = plugins.get('moltx')
-            if moltx and hasattr(moltx, 'create_post'):
-                # Check content calendar
-                if hasattr(self, 'should_post_now'):
-                    check = self.should_post_now('moltx')
-                    if not check.get('should_post'):
-                        return f"⏳ Calendar says not now: {check.get('reason', 'unknown')}"
-                content = self._generate_post_content('moltx')
-                if content:
-                    result = moltx.create_post(content)
-                    if hasattr(self, 'record_post_made') and not str(result).startswith('❌'):
-                        self.record_post_made('moltx')
-                    return result
-                return "❌ Failed to generate post content"
+            return None
 
-        elif action_id == 'moltbook_heartbeat':
-            moltbook = plugins.get('moltbook')
-            if moltbook and hasattr(moltbook, 'moltbook_heartbeat'):
-                # Check if MoltBook is suspended before attempting
-                if hasattr(moltbook, 'mb_api') and moltbook.mb_api:
-                    if moltbook.mb_api.is_suspended:
-                        remaining = ""
-                        if moltbook.mb_api.suspension_ends_at:
-                            from datetime import datetime
-                            hours = int((moltbook.mb_api.suspension_ends_at - datetime.now()).total_seconds() / 3600)
-                            if hours > 0:
-                                remaining = f" (~{hours}h remaining)"
-                        return f"⛔ MoltBook suspended{remaining}: {moltbook.mb_api.suspension_reason}"
-                return moltbook.moltbook_heartbeat()
-            return "❌ Moltbook plugin not available"
-
-        elif action_id == 'moltbook_post':
-            moltbook = plugins.get('moltbook')
-            if moltbook and hasattr(moltbook, 'create_post'):
-                # Check if MoltBook is suspended before attempting
-                if hasattr(moltbook, 'mb_api') and moltbook.mb_api:
-                    if moltbook.mb_api.is_suspended:
-                        remaining = ""
-                        if moltbook.mb_api.suspension_ends_at:
-                            from datetime import datetime
-                            hours = int((moltbook.mb_api.suspension_ends_at - datetime.now()).total_seconds() / 3600)
-                            if hours > 0:
-                                remaining = f" (~{hours}h remaining)"
-                        return f"⛔ MoltBook suspended{remaining}: {moltbook.mb_api.suspension_reason}"
-                content = self._generate_post_content('moltbook')
-                if content:
-                    result = moltbook.create_post(content)
-                    if hasattr(self, 'record_post_made') and not str(result).startswith('❌'):
-                        self.record_post_made('moltbook')
-                    return result
-                return "❌ Failed to generate post content"
-            return "❌ Moltbook plugin not available"
-
-        # Clawbr actions
         elif action_id == 'clawbr_engage':
-            clawbr = plugins.get('clawbr')
-            if clawbr and hasattr(clawbr, 'run_engagement_cycle'):
-                result = clawbr.run_engagement_cycle()
-                return f"✅ Engaged with {result.get('feed_scan', {}).get('engaged', 0)} posts"
+            return None
 
         elif action_id == 'clawbr_post':
-            clawbr = plugins.get('clawbr')
-            if clawbr and hasattr(clawbr, 'create_intelligent_post'):
-                result = clawbr.create_intelligent_post()
-                if result.get('success', True):
-                    return f"✅ Posted: {result.get('id', 'unknown')}"
-                return f"❌ Failed: {result.get('error', 'unknown')}"
+            return None
 
         elif action_id == 'clawbr_debate_turn':
-            clawbr = plugins.get('clawbr')
-            if clawbr and hasattr(clawbr, '_check_debate_turns'):
-                result = clawbr._check_debate_turns()
-                return f"✅ Took {result.get('turns_taken', 0)} debate turns"
+            return None
 
         elif action_id == 'clawbr_create_debate':
-            clawbr = plugins.get('clawbr')
-            if clawbr and hasattr(clawbr, 'create_debate'):
-                # Check active debates count (max 3)
-                active_debates = self._get_active_debates_count()
-                if active_debates >= 3:
-                    return f"⏳ Skipped: Already in {active_debates} debates (max 3)"
-                
-                # Generate unique debate topic using AI
-                topic = self._generate_debate_topic()
-                if not topic:
-                    return "⏳ Skipped: Could not generate unique debate topic"
-                
-                # Check for similar existing debates with the generated topic
-                similar_topic = self._check_for_similar_debate(topic)
-                if similar_topic:
-                    return f"⏳ Skipped: Generated topic too similar to '{similar_topic[:50]}...'"
-                
-                # Track topic to prevent future duplicates
-                self._track_debate_topic(topic)
-                
-                # Create the debate
-                opening = clawbr.generate_debate_opening(topic)
-                result = clawbr.create_debate(topic, opening)
-                
-                if result.get('success', True):
-                    return f"✅ Created debate: {result.get('slug', 'unknown')} - Topic: {topic[:60]}..."
-                return f"❌ Failed: {result.get('error', 'unknown')}"
-            return "❌ Clawbr not available"
-
-        elif action_id == 'moltbook_post':
-            moltbook = plugins.get('moltbook')
-            if moltbook and hasattr(moltbook, 'create_post_command'):
-                # Check content calendar
-                if hasattr(self, 'should_post_now'):
-                    check = self.should_post_now('moltbook')
-                    if not check.get('should_post'):
-                        return f"⏳ Calendar says not now: {check.get('reason', 'unknown')}"
-                content = self._generate_post_content('moltbook')
-                if content:
-                    result = moltbook.create_post_command(content)
-                    if hasattr(self, 'record_post_made') and not str(result).startswith('❌'):
-                        self.record_post_made('moltbook')
-                    return result
-                return "❌ Failed to generate post content"
+            return None
 
         elif action_id == 'onchain_heartbeat':
-            onchain = plugins.get('onchain')
-            if onchain and hasattr(onchain, 'onchain_heartbeat'):
-                return onchain.onchain_heartbeat()
+            return None
 
         elif action_id == 'check_comments':
-            # Check comments across platforms
-            output_parts = []
-            for name in ['moltx', 'moltbook']:
-                plugin = plugins.get(name)
-                if plugin and hasattr(plugin, '_heartbeat_monitor_and_reply'):
-                    try:
-                        plugin._heartbeat_monitor_and_reply()
-                        output_parts.append(f"✅ Checked {name} comments")
-                    except Exception as e:
-                        output_parts.append(f"⚠️  {name} comments: {e}")
-            return "\n".join(output_parts) if output_parts else "No comment checking available"
+            return None
 
         elif action_id == 'analyze_trending':
-            moltx = plugins.get('moltx')
-            if moltx and hasattr(moltx, 'trending_command'):
-                return moltx.trending_command()
+            return None
 
         elif action_id == 'check_engagement':
-            if hasattr(self, 'check_post_engagement'):
-                return self.check_post_engagement()
-            return '❌ Feedback loop not initialized'
+            return None
 
         elif action_id == 'update_skills':
-            selfimprove = plugins.get('selfimprove')
-            if selfimprove and hasattr(selfimprove, 'update_skills_command'):
-                return selfimprove.update_skills_command()
+            return None
 
         elif action_id == 'dynamic_chain_compose':
-            # Phase 8: Dynamic skill chaining
             if hasattr(self, 'compose_dynamic_chain'):
-                # Compose chain based on current context
-                available = self.get_available_actions()
-                available_ids = [a['id'] for a in available]
-
-                # Use context to determine a goal
-                ctx = self.gather_full_context() if hasattr(self, 'gather_full_context') else {}
-                platforms = ctx.get('platforms', {})
-
-                # Pick a platform that needs attention
-                goal_platform = None
-                for name, info in platforms.items():
-                    if info.get('loaded') and not info.get('last_activity'):
-                        goal_platform = name
-                        break
-
-                if not goal_platform:
-                    goal_platform = random.choice(['moltx', 'moltbook', 'clawbr']) if random else 'moltx'
-
-                goal = f"Create engaging content for {goal_platform} based on current trends"
-                chain = self.compose_dynamic_chain(goal, available_ids)
-
-                if chain:
-                    # Execute the dynamic chain
-                    output_parts = [f"🔗 Dynamic Chain: {goal}\n"]
-                    chain_context = {}
-
-                    for i, step in enumerate(chain, 1):
-                        step_action = step.get('action')
-                        step_args = step.get('args', '')
-                        step_reason = step.get('reason', 'No reason')
-
-                        print(f"  🔗 Step {i}/{len(chain)}: {step_action} - {step_reason}")
-
-                        try:
-                            result = self._execute_chain_step(step_action, step_args, chain_context, plugins)
-                            chain_context[f"step_{i}"] = result
-                            output_parts.append(f"  ✅ Step {i}: {step_action} - {str(result)[:80]}")
-                        except Exception as e:
-                            output_parts.append(f"  ❌ Step {i}: {step_action} - {e}")
-                            chain_context[f"step_{i}"] = f"Error: {e}"
-
-                    output_parts.append(f"\n🔗 Dynamic chain complete ({len(chain)} steps)")
-                    return "\n".join(output_parts)
-                else:
-                    return "❌ Failed to compose dynamic chain"
+                return asyncio.run(self._execute_dynamic_chain_async(plugins))
             return "❌ Dynamic chain composition not available"
 
         # Moltbit actions
-        elif action_id == 'moltbit_post':
-            moltbit = plugins.get('moltbit')
-            if moltbit and hasattr(moltbit, 'moltbit_post_text'):
-                content = self._generate_post_content('moltbit')
-                if content:
-                    result = moltbit.moltbit_post_text(content)
-                    if hasattr(self, 'record_post_made') and not str(result).startswith('❌'):
-                        self.record_post_made('moltbit')
-                    return result
-                return "❌ Failed to generate post content"
-            return "❌ Moltbit plugin not available"
-
         elif action_id == 'moltbit_status':
-            moltbit = plugins.get('moltbit')
-            if moltbit and hasattr(moltbit, 'moltbit_status_command'):
-                return moltbit.moltbit_status_command()
-            return "❌ Moltbit plugin not available"
+            return None
 
         return f"❌ Action {action_id} not dispatchable"
 
-    def _execute_chain(self, chain_id: str) -> str:
+    def _prepare_moltx_image_post(self, plugins: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare MoltX image-post inputs behind one helper seam for later routed execution."""
+        moltx = plugins.get('moltx')
+        if not (moltx and hasattr(moltx, 'create_post') and hasattr(moltx, 'upload_media')):
+            return {'success': False, 'error': 'Moltx plugin not available for image posting'}
+
+        if hasattr(self, 'should_post_image_now'):
+            check = self.should_post_image_now('moltx')
+            if not check.get('should_post'):
+                return {'success': False, 'error': f"⏳ Image calendar says not now: {check.get('reason', 'unknown')}"}
+
+        content = self._generate_post_content('moltx')
+        if not content:
+            return {'success': False, 'error': '❌ Failed to generate post content'}
+
+        image_prompt = self._generate_image_prompt_from_content(content)
+        image_result = self._generate_image_for_post(image_prompt)
+        if not image_result or not image_result.get('image_url'):
+            return {'success': False, 'error': '❌ Failed to generate image'}
+
+        try:
+            import requests
+            import tempfile
+            import os
+
+            img_response = requests.get(image_result['image_url'], timeout=30)
+            if img_response.status_code != 200:
+                return {'success': False, 'error': f"❌ Failed to download image: {img_response.status_code}"}
+
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+                tmp.write(img_response.content)
+                tmp_path = tmp.name
+
+            try:
+                media_url = moltx.upload_media(tmp_path)
+                if not media_url:
+                    return {'success': False, 'error': '❌ Failed to upload media to Moltx'}
+
+                return {
+                    'success': True,
+                    'content': content,
+                    'media_url': media_url,
+                }
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
+        except Exception as e:
+            return {'success': False, 'error': f"❌ Image post failed: {e}"}
+
+    async def _execute_chain_async(self, chain_id: str) -> str:
         """Execute a multi-step action chain, passing context between steps"""
         chain = ACTION_CHAINS.get(chain_id)
         if not chain:
@@ -985,7 +1048,7 @@ Haven't engaged on Moltbook recently, good time to build karma."""
             print(f"  ⛓️ Step {i}/{len(steps)}: {step_label}")
 
             try:
-                result = self._execute_chain_step(step_action, step_args, chain_context, plugins, step.get('platform'))
+                result = await self._execute_chain_step_async(step_action, step_args, chain_context, plugins, step.get('platform'))
                 chain_context[step_id] = result
                 output_parts.append(f"  ✅ Step {i}: {step_label}")
                 print(f"  ✅ Step {i} done: {str(result)[:80]}")
@@ -1006,6 +1069,132 @@ Haven't engaged on Moltbook recently, good time to build karma."""
 
         output_parts.append(f"\n⛓️ Chain complete ({len(steps)} steps)")
         return "\n".join(output_parts)
+
+    def _execute_chain(self, chain_id: str) -> str:
+        """Synchronous wrapper for chain execution."""
+        return asyncio.run(self._execute_chain_async(chain_id))
+
+    async def _execute_dynamic_chain_async(self, plugins: Dict[str, Any]) -> str:
+        """Execute dynamic chains while reusing the async chain-step helper."""
+        available = self.get_available_actions()
+        available_ids = [a['id'] for a in available]
+
+        ctx = self.gather_full_context() if hasattr(self, 'gather_full_context') else {}
+        platforms = ctx.get('platforms', {})
+
+        goal_platform = None
+        for name, info in platforms.items():
+            if info.get('loaded') and not info.get('last_activity'):
+                goal_platform = name
+                break
+
+        if not goal_platform:
+            goal_platform = random.choice(['moltx', 'clawbr']) if random else 'moltx'
+
+        goal = f"Create engaging content for {goal_platform} based on current trends"
+        chain = self.compose_dynamic_chain(goal, available_ids)
+        if not chain:
+            return "❌ Failed to compose dynamic chain"
+
+        output_parts = [f"🔗 Dynamic Chain: {goal}\n"]
+        chain_context = {}
+
+        for i, step in enumerate(chain, 1):
+            step_action = step.get('action')
+            step_args = step.get('args', '')
+            step_reason = step.get('reason', 'No reason')
+
+            print(f"  🔗 Step {i}/{len(chain)}: {step_action} - {step_reason}")
+
+            try:
+                result = await self._execute_chain_step_async(step_action, step_args, chain_context, plugins)
+                chain_context[f"step_{i}"] = result
+                output_parts.append(f"  ✅ Step {i}: {step_action} - {str(result)[:80]}")
+            except Exception as e:
+                output_parts.append(f"  ❌ Step {i}: {step_action} - {e}")
+                chain_context[f"step_{i}"] = f"Error: {e}"
+
+        output_parts.append(f"\n🔗 Dynamic chain complete ({len(chain)} steps)")
+        return "\n".join(output_parts)
+
+    async def _execute_chain_step_async(self, action: str, args: str, chain_context: Dict, plugins: Dict, platform: str = None) -> str:
+        """Execute a single chain step, preferring routed execution for safe supported actions."""
+        routed_action = None
+        if action == 'moltx_engage':
+            routed_action = {
+                'plugin': 'moltx',
+                'action_type': 'moltx_engage',
+                'params': {'count': '3'},
+                'context': {
+                    'source': 'brain_chain',
+                    'trigger': 'decision_engine_chain',
+                    'impact': 'medium',
+                }
+            }
+        elif action == 'analyze_trending':
+            routed_action = {
+                'plugin': 'analytics',
+                'action_type': 'analyze_trending',
+                'params': {},
+                'context': {
+                    'source': 'brain_chain',
+                    'trigger': 'decision_engine_chain',
+                    'impact': 'medium',
+                }
+            }
+        elif action == 'clawbr_engage':
+            routed_action = {
+                'plugin': 'clawbr',
+                'action_type': 'clawbr_engage',
+                'params': {},
+                'context': {
+                    'source': 'brain_chain',
+                    'trigger': 'decision_engine_chain',
+                    'impact': 'medium',
+                }
+            }
+        elif action == 'onchain_wallet':
+            routed_action = {
+                'plugin': 'onchain',
+                'action_type': 'onchain_wallet',
+                'params': {},
+                'context': {
+                    'source': 'brain_chain',
+                    'trigger': 'decision_engine_chain',
+                    'impact': 'low',
+                }
+            }
+        elif action == 'check_engagement':
+            routed_action = {
+                'plugin': 'analytics',
+                'action_type': 'check_engagement',
+                'params': {},
+                'context': {
+                    'source': 'brain_chain',
+                    'trigger': 'decision_engine_chain',
+                    'impact': 'low',
+                }
+            }
+        elif action == 'moltbit_status':
+            routed_action = {
+                'plugin': 'moltbit',
+                'action_type': 'moltbit_status',
+                'params': {},
+                'context': {
+                    'source': 'brain_chain',
+                    'trigger': 'decision_engine_chain',
+                    'impact': 'low',
+                }
+            }
+
+        if routed_action and hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
+            try:
+                routed_result = await self.core.agi_kernel.act(routed_action)
+                return str(routed_result)
+            except Exception:
+                pass
+
+        return self._execute_chain_step(action, args, chain_context, plugins, platform)
 
     def _execute_chain_step(self, action: str, args: str, chain_context: Dict, plugins: Dict, platform: str = None) -> str:
         """Execute a single step within a chain"""
@@ -1103,9 +1292,15 @@ Respond with ONLY the debate topic, no explanation."""
                     return "⏳ Skipped: Could not generate unique debate topic"
                 
                 opening = clawbr.generate_debate_opening(topic)
+                try:
+                    routed_result = asyncio.run(self._route_chain_created_debate(topic, opening))
+                except RuntimeError:
+                    routed_result = None
+                if routed_result:
+                    return routed_result
                 result = clawbr.create_debate(topic, opening)
                 if result.get('success', True):
-                    return f"✅ Created debate: {result.get('slug', result.get('id', 'unknown'))}"
+                    return f"✅ Created debate via legacy fallback: {result.get('slug', result.get('id', 'unknown'))}"
                 return f"❌ Failed: {result.get('error', 'unknown')}"
             return "❌ Clawbr not available"
 
@@ -1134,32 +1329,76 @@ Respond with ONLY the debate topic, no explanation."""
                 except Exception as e:
                     output_parts.append(f"  🐦 Moltx: Error - {e}")
             
-            # Check Moltbook engagement
-            moltbook = plugins.get('moltbook')
-            if moltbook and hasattr(moltbook, 'get_my_books'):
-                try:
-                    books = moltbook.get_my_books()
-                    output_parts.append(f"  📚 Moltbook: {books.get('count', 0)} books")
-                except Exception as e:
-                    output_parts.append(f"  📚 Moltbook: Error - {e}")
-            
             return "\n".join(output_parts)
 
-        # Moltbook direct post (for dynamic chains)
-        if action == 'moltbook_post':
-            moltbook = plugins.get('moltbook')
-            if moltbook and hasattr(moltbook, 'create_post'):
-                # Generate content if not provided in args
-                content = args if args else None
-                if not content and hasattr(self, '_generate_post_content'):
-                    content = self._generate_post_content('moltbook')
-                if content:
-                    result = moltbook.create_post(content)
-                    return result
-                return "❌ No content for moltbook post"
-            return "❌ Moltbook plugin not available"
-
         return f"❌ Unknown chain step: {action}"
+
+    async def _route_chain_composed_post(self, platform: str, content: str) -> Optional[str]:
+        """Route the final chain-composed post through the AGI kernel when supported."""
+        if not (hasattr(self.core, 'agi_kernel') and self.core.agi_kernel):
+            return None
+
+        if platform == 'moltx':
+            action_spec = {
+                'plugin': 'moltx',
+                'action_type': 'moltx_intelligent_post',
+                'params': {
+                    'topic': content,
+                },
+                'context': {
+                    'source': 'brain_chain',
+                    'trigger': 'decision_engine_chain',
+                    'impact': 'medium',
+                }
+            }
+        elif platform == 'moltbit':
+            action_spec = {
+                'plugin': 'moltbit',
+                'action_type': 'moltbit_post',
+                'params': {
+                    'content': content,
+                },
+                'context': {
+                    'source': 'brain_chain',
+                    'trigger': 'decision_engine_chain',
+                    'impact': 'medium',
+                }
+            }
+        else:
+            return None
+
+        try:
+            routed_result = await self.core.agi_kernel.act(action_spec)
+            return str(routed_result) if routed_result is not None else None
+        except Exception as e:
+            print(f"⚠️  Chain routed post failed, falling back to legacy platform helper: {e}")
+            return None
+
+    async def _route_chain_created_debate(self, topic: str, opening: str) -> Optional[str]:
+        """Route final Clawbr debate creation through the AGI kernel when supported."""
+        if not (hasattr(self.core, 'agi_kernel') and self.core.agi_kernel):
+            return None
+
+        action_spec = {
+            'plugin': 'clawbr',
+            'action_type': 'clawbr_create_debate',
+            'params': {
+                'topic': topic,
+                'opening': opening,
+            },
+            'context': {
+                'source': 'brain_chain',
+                'trigger': 'decision_engine_chain',
+                'impact': 'high',
+            }
+        }
+
+        try:
+            routed_result = await self.core.agi_kernel.act(action_spec)
+            return str(routed_result) if routed_result is not None else None
+        except Exception as e:
+            print(f"⚠️  Chain routed debate creation failed, falling back to legacy Clawbr helper: {e}")
+            return None
 
     def _chain_compose_and_post(self, chain_context: Dict, platform: str, plugins: Dict) -> str:
         """Use LLM Router to compose a post from accumulated chain context, then post it"""
@@ -1203,21 +1442,25 @@ Post:"""
             if len(content) < max_chars - 5 and '🦞' not in content:
                 content += ' 🦞'
 
+            try:
+                routed_result = asyncio.run(self._route_chain_composed_post(platform, content))
+            except RuntimeError:
+                routed_result = None
+            if routed_result:
+                return routed_result
+
             # Post to the target platform
             if platform == 'moltx':
                 moltx = plugins.get('moltx')
                 if moltx and hasattr(moltx, 'create_post'):
-                    return moltx.create_post(content)
+                    result = moltx.create_post(content)
+                    return f"✅ Legacy fallback MoltX post: {str(result)[:400]}"
                 return f"❌ MoltX plugin not available (plugin={moltx}, has_create_post={hasattr(moltx, 'create_post') if moltx else False})"
-            elif platform == 'moltbook':
-                moltbook = plugins.get('moltbook')
-                if moltbook and hasattr(moltbook, 'create_post_command'):
-                    return moltbook.create_post_command(content)
-                return "❌ MoltBook plugin not available"
             elif platform == 'moltbit':
                 moltbit = plugins.get('moltbit')
                 if moltbit and hasattr(moltbit, 'moltbit_post_text'):
-                    return moltbit.moltbit_post_text(content)
+                    result = moltbit.moltbit_post_text(content)
+                    return f"✅ Legacy fallback Moltbit post: {str(result)[:400]}"
                 return "❌ Moltbit plugin not available"
             else:
                 return f"❌ Unknown platform: {platform}"
@@ -1535,7 +1778,7 @@ Respond with ONLY the debate topic, nothing else."""
         except Exception as e:
             print(f"⚠️  Failed to queue action: {e}")
     
-    def _execute_queued_actions(self):
+    async def _execute_queued_actions(self):
         """
         Check queued actions and execute those whose Golden Window has arrived.
         Called periodically during autonomous operation.
@@ -1566,7 +1809,7 @@ Respond with ONLY the debate topic, nothing else."""
                         print(f"🌟 Golden Window arrived for queued action: {action_id}")
                         try:
                             # Execute the action
-                            result = self.execute_action(entry['action'])
+                            result = await self.execute_action_async(entry['action'])
                             if result.get('success') or result.get('golden_window_approved'):
                                 executed.append(action_id)
                                 print(f"✅ Executed queued action: {action_id}")
@@ -1823,12 +2066,6 @@ SyMod Analysis:
                 "Post a thought about the future of autonomous agents (1-2 sentences, under 280 chars). Be forward-thinking and specific. No hashtags. Sign off with 🦞 if short enough.",
                 "Write about a recent crypto or AI trend you've observed (1-2 sentences, under 280 chars). Be analytical and concise. No hashtags. Sign off with 🦞 if short enough.",
                 "Share a development tip or technical insight (1-2 sentences, under 280 chars). Be helpful and specific. No hashtags. Sign off with 🦞 if short enough."
-            ],
-            'moltbook': [
-                "Write a thoughtful forum post (2-4 sentences, under 500 chars) about AI agents, autonomous systems, or the intersection of AI and blockchain. Be insightful and spark discussion. No hashtags.",
-                "Share a detailed observation about agent behavior or AI development patterns (2-4 sentences, under 500 chars). Be analytical and invite discussion. No hashtags.",
-                "Post about the technical challenges in building autonomous systems (2-4 sentences, under 500 chars). Be specific and thought-provoking. No hashtags.",
-                "Write about the future of AI-agent collaboration (2-4 sentences, under 500 chars). Be visionary and grounded. No hashtags."
             ],
             'moltbit': [
                 "Write a short, intriguing message (1-2 sentences, under 200 chars) about AI, crypto, or technology that sounds mysterious or thought-provoking. It will be encoded in binary. No hashtags. Make it memorable.",

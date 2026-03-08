@@ -126,6 +126,7 @@ class WorldStateBridge:
             'recent_events': [],
             'trending_topics': [],
             'active_entities': [],
+            'action_family_trust_state': getattr(self.agi, 'plan_manager', None).get_action_family_states() if getattr(self.agi, 'plan_manager', None) else {},
         }
         
         # Get recent events
@@ -147,6 +148,26 @@ class WorldStateBridge:
         
         # Get most active entities
         context['active_entities'] = self._get_active_entities(hours=hours or 24)
+
+        alley_context = self.get_entity_context('alleybot')
+        alley_facts = alley_context.get('facts', {}) if isinstance(alley_context, dict) else {}
+        context['last_routed_outcome_summary'] = {
+            'dispatch_path': ((alley_facts.get('last_dispatch_path') or {}).get('value')),
+            'legacy_fallback_used': ((alley_facts.get('last_legacy_fallback_used') or {}).get('value')),
+            'has_validation_trace': bool(((alley_facts.get('last_validation_trace') or {}).get('value'))),
+            'has_ranking_evidence': bool(((alley_facts.get('last_ranking_evidence') or {}).get('value'))),
+            'last_confidence_calibration': ((alley_facts.get('last_confidence_calibration') or {}).get('value')),
+            'last_value_alignment': ((alley_facts.get('last_value_alignment') or {}).get('value')),
+            'last_risk_alignment': ((alley_facts.get('last_risk_alignment') or {}).get('value')),
+        }
+
+        trust_state = context.get('action_family_trust_state', {}) or {}
+        context['action_family_trust_summary'] = {
+            'degraded': [family for family, state in trust_state.items() if state.get('trust_bucket') == 'degraded'],
+            'cooling_down': [family for family, state in trust_state.items() if state.get('trust_bucket') == 'cooling_down'],
+            'recovering': [family for family, state in trust_state.items() if state.get('trust_bucket') == 'recovering'],
+            'healthy': [family for family, state in trust_state.items() if state.get('trust_bucket') == 'healthy'],
+        }
         
         return context
     
@@ -370,6 +391,62 @@ class WorldStateBridge:
         )
         
         self.world_state.add_fact(fact)
+
+    def record_routed_outcome(self, outcome_record: Dict[str, Any], trust_state: Optional[Dict[str, Any]] = None):
+        """Persist canonical routed outcome details into durable world-state facts and events."""
+        if not isinstance(outcome_record, dict) or not outcome_record:
+            return
+
+        entity_id = str(
+            outcome_record.get('goal_id')
+            or outcome_record.get('action_id')
+            or 'alleybot'
+        )
+        prediction_evaluation = outcome_record.get('prediction_evaluation') or {}
+        validation_trace = outcome_record.get('validation_trace') or []
+        ranking_evidence = outcome_record.get('ranking_evidence') or {}
+        dispatch_path = str(outcome_record.get('dispatch_path', 'unknown') or 'unknown').lower()
+        legacy_fallback_used = bool(outcome_record.get('legacy_fallback_used', False))
+        fallback_details = outcome_record.get('fallback_details') or {}
+        plugin = outcome_record.get('plugin') or 'unknown'
+        action_type = outcome_record.get('action_type') or outcome_record.get('action_id') or 'unknown'
+
+        event_payload = {
+            'action_id': outcome_record.get('action_id'),
+            'action_type': action_type,
+            'plugin': plugin,
+            'success': bool(outcome_record.get('success', False)),
+            'trigger': outcome_record.get('trigger'),
+            'goal_id': outcome_record.get('goal_id'),
+            'mismatch_score': outcome_record.get('mismatch_score'),
+            'prediction_evaluation': prediction_evaluation,
+            'validation_trace': validation_trace,
+            'ranking_evidence': ranking_evidence,
+            'dispatch_path': dispatch_path,
+            'legacy_fallback_used': legacy_fallback_used,
+            'fallback_details': fallback_details,
+            'trust_state': trust_state or {},
+        }
+        self.record_interaction(
+            platform=plugin,
+            interaction_type='routed_outcome',
+            actor_id='alleybot',
+            target_id=entity_id,
+            data=event_payload,
+        )
+
+        self.record_fact(entity_id, 'last_routed_outcome', outcome_record, source='action_router', confidence=0.95)
+        self.record_fact(entity_id, 'last_mismatch_score', float(outcome_record.get('mismatch_score', 0.0) or 0.0), source='action_router', confidence=0.95)
+        self.record_fact(entity_id, 'last_confidence_calibration', prediction_evaluation.get('confidence_calibration', 'unknown'), source='action_router', confidence=0.9)
+        self.record_fact(entity_id, 'last_value_alignment', prediction_evaluation.get('value_alignment', 'unknown'), source='action_router', confidence=0.9)
+        self.record_fact(entity_id, 'last_risk_alignment', prediction_evaluation.get('risk_alignment', 'unknown'), source='action_router', confidence=0.9)
+        self.record_fact(entity_id, 'last_validation_trace', validation_trace, source='action_router', confidence=0.9)
+        self.record_fact(entity_id, 'last_ranking_evidence', ranking_evidence, source='action_router', confidence=0.9)
+        self.record_fact(entity_id, 'last_dispatch_path', dispatch_path, source='action_router', confidence=0.9)
+        self.record_fact(entity_id, 'last_legacy_fallback_used', legacy_fallback_used, source='action_router', confidence=0.9)
+        if fallback_details:
+            self.record_fact(entity_id, 'last_fallback_details', fallback_details, source='action_router', confidence=0.85)
+        self.record_fact(entity_id, 'action_family_trust_state', trust_state or {}, source='planning_memory', confidence=0.85)
     
     # =========================================================================
     # Integration with Goal Generator

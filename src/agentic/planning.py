@@ -22,6 +22,8 @@ from pathlib import Path
 import logging
 from collections import defaultdict, deque
 
+from src.agentic.action_logger import get_action_logger
+
 logger = logging.getLogger(__name__)
 
 
@@ -369,6 +371,8 @@ class PlanManager:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
+
+    MAX_REVISION_CHAIN_DEPTH = 3
     
     def _init_db(self) -> None:
         """Initialize SQLite database"""
@@ -414,8 +418,570 @@ class PlanManager:
                     artifacts TEXT
                 )
             ''')
+
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS action_family_state (
+                    action_family TEXT PRIMARY KEY,
+                    trust_bucket TEXT,
+                    degradation_score REAL,
+                    recovery_score REAL,
+                    cooldown_until TEXT,
+                    last_plan_id TEXT,
+                    last_updated_at TEXT,
+                    metadata TEXT
+                )
+            ''')
             
             conn.commit()
+
+    def update_action_family_state(
+        self,
+        action_family: str,
+        trust_bucket: str,
+        degradation_score: float,
+        recovery_score: float,
+        cooldown_until: Optional[datetime],
+        last_plan_id: Optional[str],
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Persist trust state for an action family so learning survives beyond active plans."""
+        normalized_family = str(action_family or '').strip().lower()
+        if not normalized_family:
+            return
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''
+                INSERT OR REPLACE INTO action_family_state VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                normalized_family,
+                trust_bucket,
+                float(degradation_score or 0.0),
+                float(recovery_score or 0.0),
+                cooldown_until.isoformat() if cooldown_until else None,
+                last_plan_id,
+                datetime.now().isoformat(),
+                json.dumps(metadata or {}),
+            ))
+            conn.commit()
+
+    def get_action_family_states(self) -> Dict[str, Dict[str, Any]]:
+        """Load persisted trust state for action families."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute('SELECT * FROM action_family_state').fetchall()
+
+        states: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            states[row['action_family']] = {
+                'action_family': row['action_family'],
+                'trust_bucket': row['trust_bucket'] or 'healthy',
+                'degradation_score': float(row['degradation_score'] or 0.0),
+                'recovery_score': float(row['recovery_score'] or 0.0),
+                'cooldown_until': row['cooldown_until'],
+                'last_plan_id': row['last_plan_id'],
+                'last_updated_at': row['last_updated_at'],
+                'metadata': json.loads(row['metadata']) if row['metadata'] else {},
+            }
+        return states
+
+    def _derive_trust_bucket(
+        self,
+        degradation_score: float,
+        recovery_score: float,
+        cooldown_until: Optional[datetime],
+    ) -> str:
+        """Map degradation and recovery signals into a bounded trust bucket."""
+        now = datetime.now()
+        cooling_down = bool(cooldown_until and cooldown_until > now)
+        if degradation_score >= 0.75 and cooling_down:
+            return 'degraded'
+        if cooling_down:
+            return 'cooling_down'
+        if recovery_score >= 0.5:
+            return 'recovering'
+        return 'healthy'
+
+    def create_routed_plan(
+        self,
+        goal_id: str,
+        title: str,
+        description: str,
+        plan_steps: List[Dict[str, Any]],
+    ) -> Plan:
+        """Create and persist a lightweight routed plan from AGI-orchestrator plan steps."""
+        import uuid
+
+        plan_id = f"routed-plan-{str(uuid.uuid4())[:8]}"
+        normalized_goal_id = goal_id or plan_id
+        plan = Plan(
+            id=plan_id,
+            goal_id=normalized_goal_id,
+            title=title,
+            description=description,
+            status='active',
+            started_at=datetime.now(),
+        )
+
+        previous_step_id = None
+        total_steps = len(plan_steps or [])
+        for index, raw_step in enumerate(plan_steps or [], start=1):
+            step_id = f"{plan_id}-step{index}"
+            details = raw_step.get('details') if isinstance(raw_step, dict) else {}
+            if not isinstance(details, dict):
+                details = {'raw_details': str(details)}
+
+            action_name = raw_step.get('action', f'step_{index}') if isinstance(raw_step, dict) else f'step_{index}'
+            title_text = raw_step.get('title') if isinstance(raw_step, dict) else None
+            description_text = raw_step.get('description') if isinstance(raw_step, dict) else None
+
+            step = PlanStep(
+                id=step_id,
+                goal_id=normalized_goal_id,
+                title=title_text or f"Step {index}: {action_name}",
+                description=description_text or f"Execute routed plan step '{action_name}' ({index}/{total_steps})",
+                step_type=StepType.CUSTOM,
+                command=action_name,
+                parameters=details,
+                dependencies=[previous_step_id] if previous_step_id else [],
+                status=StepStatus.READY if previous_step_id is None else StepStatus.BLOCKED,
+            )
+
+            if previous_step_id and previous_step_id in plan.steps:
+                plan.steps[previous_step_id].dependents.append(step_id)
+
+            plan.steps[step_id] = step
+            previous_step_id = step_id
+
+        self.save_plan(plan)
+        return plan
+
+    def create_revised_plan(
+        self,
+        plan_id: str,
+        failed_step_id: str,
+        outcome: Dict[str, Any],
+    ) -> Optional[Plan]:
+        """Create a lightweight revised plan when a routed step requires replanning."""
+        plan = self.get_plan(plan_id)
+        if not plan or failed_step_id not in plan.steps:
+            return None
+
+        failed_step = plan.steps[failed_step_id]
+        lineage = self._build_revision_lineage(plan, failed_step)
+        revision_depth = len(lineage)
+        mismatch_score = (
+            outcome.get('mismatch_score')
+            or ((outcome.get('outcome_record') or {}).get('mismatch_score'))
+            or ((outcome.get('prediction_evaluation') or {}).get('mismatch_score'))
+            or 0.0
+        )
+        failure_reason = outcome.get('error') or outcome.get('reason') or failed_step.last_error or 'execution mismatch'
+        prediction_evaluation = (outcome.get('prediction_evaluation') or {})
+        if not prediction_evaluation:
+            prediction_evaluation = (outcome.get('outcome_record') or {}).get('prediction_evaluation', {}) or {}
+        ranking_evidence = (outcome.get('ranking_evidence') or {})
+        if not ranking_evidence:
+            ranking_evidence = (outcome.get('outcome_record') or {}).get('ranking_evidence', {}) or {}
+        dispatch_path = str(
+            outcome.get('dispatch_path')
+            or (outcome.get('outcome_record') or {}).get('dispatch_path')
+            or 'unknown'
+        ).lower()
+        legacy_fallback_used = bool(
+            outcome.get('legacy_fallback_used')
+            or (outcome.get('outcome_record') or {}).get('legacy_fallback_used')
+        )
+        fallback_details = (outcome.get('fallback_details') or {})
+        if not fallback_details:
+            fallback_details = (outcome.get('outcome_record') or {}).get('fallback_details', {}) or {}
+
+        observed_risk = str(prediction_evaluation.get('observed_risk', 'medium')).lower()
+        risk_alignment = str(prediction_evaluation.get('risk_alignment', 'matched')).lower()
+        calibration = str(prediction_evaluation.get('confidence_calibration', 'well_calibrated')).lower()
+        value_alignment = str(prediction_evaluation.get('value_alignment', 'matched')).lower()
+        ranked_predicted_value = str(ranking_evidence.get('predicted_value', 'medium') or 'medium').lower()
+        ranked_adjustment = float(ranking_evidence.get('memory_shaped_adjustment', 0.0) or 0.0)
+        ranked_used_memory_recall = bool(
+            (ranking_evidence.get('memory_relevance_count', 0) or 0) > 0
+            or ranking_evidence.get('entity_context_found')
+        )
+        ranked_negative_memory_count = int(ranking_evidence.get('negative_memory_count', 0) or 0)
+        action_type = str(
+            outcome.get('action_type')
+            or (outcome.get('outcome_record') or {}).get('action_type')
+            or failed_step.command
+            or ''
+        ).lower()
+        plugin_name = str(
+            outcome.get('plugin')
+            or (outcome.get('outcome_record') or {}).get('plugin')
+            or ''
+        ).lower()
+        performance_summary = {}
+        action_performance = None
+        try:
+            performance_summary = get_action_logger().get_action_performance_summary(hours=72, limit=50)
+        except Exception:
+            performance_summary = {}
+
+        if action_type:
+            direct_key = action_type
+            routed_key = f"{plugin_name}:{action_type}" if plugin_name else action_type
+            action_performance = performance_summary.get(direct_key) or performance_summary.get(routed_key)
+
+        recent_success_rate = float((action_performance or {}).get('success_rate', 0.0) or 0.0)
+        recent_avg_mismatch = float((action_performance or {}).get('avg_mismatch_score', 0.0) or 0.0)
+        recent_high_mismatch_rate = float((action_performance or {}).get('high_mismatch_rate', 0.0) or 0.0)
+        recent_calibration_bias = str((action_performance or {}).get('calibration_bias', 'balanced')).lower()
+        recent_total = int((action_performance or {}).get('total', 0) or 0)
+
+        outcome_text = f"{failure_reason} {failed_step.title} {failed_step.description} {failed_step.command}".lower()
+        next_action = failed_step.command or 'retry_with_adjustment'
+        next_details = {
+            **(failed_step.parameters or {}),
+            'revised_from_plan_id': plan.id,
+            'revised_from_step_id': failed_step.id,
+            'retry_mode': 'bounded_adjustment',
+            'prior_failure_reason': str(failure_reason),
+        }
+        if action_performance:
+            next_details['recent_action_performance'] = {
+                'success_rate': recent_success_rate,
+                'avg_mismatch_score': recent_avg_mismatch,
+                'high_mismatch_rate': recent_high_mismatch_rate,
+                'calibration_bias': recent_calibration_bias,
+                'total': recent_total,
+            }
+        if ranking_evidence:
+            next_details['ranking_evidence'] = ranking_evidence
+        if legacy_fallback_used or dispatch_path != 'golden_path':
+            next_details['dispatch_metadata'] = {
+                'dispatch_path': dispatch_path,
+                'legacy_fallback_used': legacy_fallback_used,
+                'fallback_details': fallback_details,
+            }
+        next_details['revision_depth'] = revision_depth
+        next_details['revision_lineage'] = lineage
+        next_title = f"Adjusted retry for {failed_step.title}"
+        next_description = 'Retry with narrower scope or safer constraints after reassessment'
+
+        should_abandon = (
+            revision_depth >= self.MAX_REVISION_CHAIN_DEPTH
+            and recent_total >= 3
+            and recent_success_rate < 0.35
+            and max(mismatch_score, recent_avg_mismatch) >= 0.65
+        )
+        should_escalate = (
+            not should_abandon
+            and revision_depth >= 2
+            and (
+                max(mismatch_score, recent_avg_mismatch) >= 0.6
+                or recent_high_mismatch_rate >= 0.5
+            )
+        )
+
+        if should_abandon:
+            revised_steps = [
+                {
+                    'action': 'reassess_strategy',
+                    'title': 'Reassess exhausted strategy',
+                    'description': f"Review repeated failures for '{failed_step.title}' and terminate unsafe retry loops",
+                    'details': {
+                        'original_plan_id': plan.id,
+                        'failed_step_id': failed_step.id,
+                        'failure_reason': str(failure_reason),
+                        'mismatch_score': float(mismatch_score or 0.0),
+                        'revision_depth': revision_depth,
+                        'revision_lineage': lineage,
+                        'escalation_mode': 'abandon',
+                    },
+                },
+                {
+                    'action': 'analyze_performance',
+                    'title': 'Document degraded action family',
+                    'description': 'Capture failure evidence and mark this strategy as degraded instead of retrying it again',
+                    'details': {
+                        'time_window': '7d',
+                        'revised_from_plan_id': plan.id,
+                        'revised_from_step_id': failed_step.id,
+                        'replan_basis': 'strategy_abandoned',
+                        'escalation_mode': 'abandon',
+                        'prior_failure_reason': str(failure_reason),
+                        'revision_depth': revision_depth,
+                        'revision_lineage': lineage,
+                        'recent_action_performance': next_details.get('recent_action_performance'),
+                    },
+                },
+            ]
+
+            revised_plan = self.create_routed_plan(
+                goal_id=plan.goal_id,
+                title=f"Abandoned: {plan.title}",
+                description=f"Escalated abandonment of {plan.id} after repeated failed revisions for step '{failed_step.title}'",
+                plan_steps=revised_steps,
+            )
+            revised_plan.status = 'escalated'
+            self.save_plan(revised_plan)
+            return revised_plan
+
+        if should_escalate:
+            revised_steps = [
+                {
+                    'action': 'reassess_strategy',
+                    'title': 'Escalate to safer strategy',
+                    'description': f"Repeated mismatch for '{failed_step.title}' requires a safer alternate path",
+                    'details': {
+                        'original_plan_id': plan.id,
+                        'failed_step_id': failed_step.id,
+                        'failure_reason': str(failure_reason),
+                        'mismatch_score': float(mismatch_score or 0.0),
+                        'revision_depth': revision_depth,
+                        'revision_lineage': lineage,
+                        'escalation_mode': 'safer_alternate',
+                    },
+                },
+                {
+                    'action': 'analyze_performance',
+                    'title': 'Analyze before alternate path',
+                    'description': 'Pause direct retries and ground the next move in safer evidence before continuing',
+                    'details': {
+                        'time_window': '7d',
+                        'revised_from_plan_id': plan.id,
+                        'revised_from_step_id': failed_step.id,
+                        'replan_basis': 'safer_alternate_path',
+                        'escalation_mode': 'safer_alternate',
+                        'prior_failure_reason': str(failure_reason),
+                        'revision_depth': revision_depth,
+                        'revision_lineage': lineage,
+                        'recent_action_performance': next_details.get('recent_action_performance'),
+                    },
+                },
+                {
+                    'action': 'moltx_engage' if plugin_name != 'clawbr' else 'clawbr_engage',
+                    'title': 'Gather fresh external signal',
+                    'description': 'Use a bounded lower-risk engagement pass before selecting another outward action',
+                    'details': {
+                        'count': failed_step.parameters.get('count', 3),
+                        'revised_from_plan_id': plan.id,
+                        'revised_from_step_id': failed_step.id,
+                        'replan_basis': 'safer_signal_reentry',
+                        'escalation_mode': 'safer_alternate',
+                        'prior_failure_reason': str(failure_reason),
+                        'revision_depth': revision_depth,
+                        'revision_lineage': lineage,
+                        'recent_action_performance': next_details.get('recent_action_performance'),
+                    },
+                },
+            ]
+
+            revised_plan = self.create_routed_plan(
+                goal_id=plan.goal_id,
+                title=f"Escalated: {plan.title}",
+                description=f"Safer alternate revision of {plan.id} after repeated mismatch on step '{failed_step.title}'",
+                plan_steps=revised_steps,
+            )
+            revised_plan.status = 'active'
+            self.save_plan(revised_plan)
+            return revised_plan
+
+        if (
+            recent_total >= 3 and recent_success_rate < 0.35 and recent_high_mismatch_rate >= 0.4
+        ):
+            next_action = 'analyze_performance'
+            next_title = 'Pause and analyze weak action family'
+            next_description = 'Recent history shows this action family is underperforming, so gather evidence before retrying'
+            next_details = {
+                'time_window': '7d',
+                'revised_from_plan_id': plan.id,
+                'revised_from_step_id': failed_step.id,
+                'replan_basis': 'historically_weak_action_family',
+                'prior_failure_reason': str(failure_reason),
+                'recent_action_performance': {
+                    'success_rate': recent_success_rate,
+                    'avg_mismatch_score': recent_avg_mismatch,
+                    'high_mismatch_rate': recent_high_mismatch_rate,
+                    'calibration_bias': recent_calibration_bias,
+                    'total': recent_total,
+                },
+            }
+        elif observed_risk in {'high', 'critical'} or risk_alignment == 'underestimated_risk':
+            next_action = 'analyze_performance'
+            next_title = 'Analyze risk before retry'
+            next_description = 'Inspect recent performance and risk signals before taking another action'
+            next_details = {
+                'time_window': '7d',
+                'revised_from_plan_id': plan.id,
+                'revised_from_step_id': failed_step.id,
+                'replan_basis': 'risk_mitigation',
+                'prior_failure_reason': str(failure_reason),
+                'recent_action_performance': next_details.get('recent_action_performance'),
+            }
+        elif (
+            calibration == 'overconfident'
+            or (recent_calibration_bias == 'overconfident' and recent_total >= 3)
+        ) and max(mismatch_score, recent_avg_mismatch) >= 0.6:
+            next_action = 'analyze_performance'
+            next_title = 'Recalibrate before retry'
+            next_description = 'Reduce overconfidence by gathering fresh performance evidence before the next move'
+            next_details = {
+                'time_window': '7d',
+                'revised_from_plan_id': plan.id,
+                'revised_from_step_id': failed_step.id,
+                'replan_basis': 'confidence_recalibration',
+                'prior_failure_reason': str(failure_reason),
+                'recent_action_performance': next_details.get('recent_action_performance'),
+            }
+        elif legacy_fallback_used and dispatch_path != 'golden_path':
+            next_action = 'analyze_performance'
+            next_title = 'Reassess action that left Golden Path'
+            next_description = 'This action required legacy fallback execution, so pause and gather evidence before retrying it directly'
+            next_details = {
+                'time_window': '7d',
+                'revised_from_plan_id': plan.id,
+                'revised_from_step_id': failed_step.id,
+                'replan_basis': 'golden_path_fallback',
+                'prior_failure_reason': str(failure_reason),
+                'recent_action_performance': next_details.get('recent_action_performance'),
+                'dispatch_metadata': {
+                    'dispatch_path': dispatch_path,
+                    'legacy_fallback_used': legacy_fallback_used,
+                    'fallback_details': fallback_details,
+                },
+            }
+        elif ranked_negative_memory_count >= 1 and ranked_used_memory_recall:
+            next_action = 'analyze_performance'
+            next_title = 'Reassess recalled negative pattern'
+            next_description = 'Recent recall surfaced negative prior evidence, so pause and ground the next move before retrying'
+            next_details = {
+                'time_window': '7d',
+                'revised_from_plan_id': plan.id,
+                'revised_from_step_id': failed_step.id,
+                'replan_basis': 'negative_memory_recall',
+                'prior_failure_reason': str(failure_reason),
+                'recent_action_performance': next_details.get('recent_action_performance'),
+                'ranking_evidence': ranking_evidence,
+            }
+        elif (
+            action_type in {'reply', 'moltx_reply'}
+            or any(keyword in outcome_text for keyword in ['reply', 'comment', 'response', 'mention'])
+        ) and failed_step.parameters.get('target_id'):
+            next_action = 'moltx_reply'
+            next_title = 'Retry as direct reply'
+            next_description = 'Respond directly with narrower scope and contextual targeting'
+            next_details = {
+                'target_id': failed_step.parameters.get('target_id'),
+                'content': failed_step.parameters.get('content') or failed_step.parameters.get('message') or 'Following up with a more focused response.',
+                'revised_from_plan_id': plan.id,
+                'revised_from_step_id': failed_step.id,
+                'replan_basis': 'reply_retry',
+                'prior_failure_reason': str(failure_reason),
+                'recent_action_performance': next_details.get('recent_action_performance'),
+            }
+        elif (
+            plugin_name == 'analytics'
+            or action_type in {'analyze_performance', 'report'}
+            or value_alignment == 'underestimated_value'
+            or ranked_predicted_value == 'high'
+            or (recent_total >= 3 and recent_success_rate < 0.45 and action_type in {'moltx_intelligent_post', 'post'})
+        ):
+            next_action = 'moltx_engage'
+            next_title = 'Gather stronger live signal'
+            next_description = 'Run a bounded engagement cycle to improve context before selecting the next outward action'
+            next_details = {
+                'count': failed_step.parameters.get('count', 3),
+                'revised_from_plan_id': plan.id,
+                'revised_from_step_id': failed_step.id,
+                'replan_basis': 'signal_gathering',
+                'prior_failure_reason': str(failure_reason),
+                'recent_action_performance': next_details.get('recent_action_performance'),
+                'ranking_evidence': ranking_evidence,
+                'ranking_bias': 'high_predicted_value_recovery' if ranked_predicted_value == 'high' else 'standard',
+            }
+        elif ranked_adjustment <= -0.04 and max(mismatch_score, recent_avg_mismatch) >= 0.5:
+            next_action = 'analyze_performance'
+            next_title = 'Recalibrate weak ranked action'
+            next_description = 'Ranking evidence already cooled this action, so gather safer evidence before trying again'
+            next_details = {
+                'time_window': '7d',
+                'revised_from_plan_id': plan.id,
+                'revised_from_step_id': failed_step.id,
+                'replan_basis': 'ranking_recalibration',
+                'prior_failure_reason': str(failure_reason),
+                'recent_action_performance': next_details.get('recent_action_performance'),
+                'ranking_evidence': ranking_evidence,
+            }
+        elif action_type in {'moltx_intelligent_post', 'post', 'execute_post'} or any(keyword in outcome_text for keyword in ['timeout', 'no content', 'content', 'post', 'publish', 'creative']):
+            next_action = 'moltx_intelligent_post'
+            next_title = 'Retry content post with tighter topic'
+            next_description = 'Generate a narrower, more grounded post topic before retrying publication'
+            next_details = {
+                'content': failed_step.parameters.get('topic') or failed_step.parameters.get('content') or failed_step.description,
+                'revised_from_plan_id': plan.id,
+                'revised_from_step_id': failed_step.id,
+                'replan_basis': 'content_retry',
+                'prior_failure_reason': str(failure_reason),
+                'recent_action_performance': next_details.get('recent_action_performance'),
+            }
+        elif action_type in {'moltx_engage', 'engage', 'clawbr_engage'} or any(keyword in outcome_text for keyword in ['engage', 'feed', 'signal', 'discovery', 'browse']):
+            next_action = 'clawbr_engage' if plugin_name == 'clawbr' or action_type == 'clawbr_engage' else 'moltx_engage'
+            next_title = 'Gather fresh signal before retry'
+            next_description = 'Run a bounded engagement cycle to gather better context before the next move'
+            next_details = {
+                'count': failed_step.parameters.get('count', 3),
+                'revised_from_plan_id': plan.id,
+                'revised_from_step_id': failed_step.id,
+                'replan_basis': 'engagement_retry',
+                'prior_failure_reason': str(failure_reason),
+                'recent_action_performance': next_details.get('recent_action_performance'),
+            }
+
+        revised_steps = [
+            {
+                'action': 'reassess_strategy',
+                'title': 'Reassess strategy',
+                'description': f"Review failed/high-mismatch step '{failed_step.title}' and choose a safer next move",
+                'details': {
+                    'original_plan_id': plan.id,
+                    'failed_step_id': failed_step.id,
+                    'failure_reason': str(failure_reason),
+                    'mismatch_score': float(mismatch_score or 0.0),
+                },
+            },
+            {
+                'action': next_action,
+                'title': next_title,
+                'description': next_description,
+                'details': next_details,
+            },
+        ]
+
+        revised_plan = self.create_routed_plan(
+            goal_id=plan.goal_id,
+            title=f"Revised: {plan.title}",
+            description=f"Revision of {plan.id} after step '{failed_step.title}' required replanning",
+            plan_steps=revised_steps,
+        )
+        revised_plan.status = 'active'
+        self.save_plan(revised_plan)
+        return revised_plan
+
+    def _build_revision_lineage(self, plan: Plan, failed_step: PlanStep) -> List[str]:
+        """Build revision lineage by following revised_from_plan_id metadata across plan chains."""
+        lineage = [plan.id]
+        current_plan_id = (failed_step.parameters or {}).get('revised_from_plan_id')
+        visited = {plan.id}
+
+        while current_plan_id and current_plan_id not in visited:
+            visited.add(current_plan_id)
+            lineage.append(current_plan_id)
+            current_plan = self.get_plan(current_plan_id)
+            if not current_plan:
+                break
+            current_step_id = current_plan.current_step_id
+            current_step = current_plan.steps.get(current_step_id) if current_step_id else None
+            current_plan_id = (current_step.parameters or {}).get('revised_from_plan_id') if current_step else None
+
+        return lineage
     
     def save_plan(self, plan: Plan) -> None:
         """Save plan and steps to database"""
@@ -504,6 +1070,189 @@ class PlanManager:
                 completed_steps=json.loads(row['completed_steps']) if row['completed_steps'] else [],
                 failed_steps=json.loads(row['failed_steps']) if row['failed_steps'] else []
             )
+
+    def get_recent_plan_summaries(self, limit: int = 5, statuses: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """Return recent plan summaries for decision-layer continuity and prioritization."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+
+            query = 'SELECT id FROM plans'
+            params: List[Any] = []
+            if statuses:
+                placeholders = ', '.join(['?'] * len(statuses))
+                query += f' WHERE status IN ({placeholders})'
+                params.extend(statuses)
+            query += ' ORDER BY COALESCE(started_at, created_at) DESC LIMIT ?'
+            params.append(limit)
+
+            rows = conn.execute(query, params).fetchall()
+
+        summaries: List[Dict[str, Any]] = []
+        for row in rows:
+            plan = self.get_plan(row['id'])
+            if not plan:
+                continue
+
+            current_step = plan.steps.get(plan.current_step_id) if plan.current_step_id else None
+            next_step = plan.get_next_step()
+            summaries.append({
+                'plan_id': plan.id,
+                'goal_id': plan.goal_id,
+                'title': plan.title,
+                'description': plan.description,
+                'status': plan.status,
+                'progress_percent': round(plan.progress_percent, 2),
+                'current_step_id': current_step.id if current_step else None,
+                'current_step_title': current_step.title if current_step else None,
+                'current_step_command': current_step.command if current_step else None,
+                'next_step_id': next_step.id if next_step else None,
+                'next_step_title': next_step.title if next_step else None,
+                'next_step_command': next_step.command if next_step else None,
+                'failed_steps': list(plan.failed_steps),
+                'completed_steps': list(plan.completed_steps),
+                'step_count': len(plan.steps),
+                'revision_depth': len(self._build_revision_lineage(plan, current_step or next_step)) if (current_step or next_step) else 1,
+            })
+
+        return summaries
+
+    def get_decision_plan_summary(self) -> Dict[str, Any]:
+        """Return a compact active/revised plan summary for autonomous decision selection."""
+        active_plans = self.get_recent_plan_summaries(limit=3, statuses=['active', 'replan_required', 'escalated'])
+        degraded_actions: List[Dict[str, Any]] = []
+        now = datetime.now()
+        performance_summary = {}
+        try:
+            performance_summary = get_action_logger().get_action_performance_summary(hours=72, limit=50)
+        except Exception:
+            performance_summary = {}
+        for plan in active_plans:
+            if plan.get('status') != 'escalated':
+                continue
+            degraded_command = plan.get('current_step_command') or plan.get('next_step_command')
+            if not degraded_command:
+                continue
+            created_at_raw = plan.get('created_at')
+            age_hours = 0.0
+            if created_at_raw:
+                try:
+                    created_at = datetime.fromisoformat(created_at_raw)
+                    age_hours = max((now - created_at).total_seconds() / 3600.0, 0.0)
+                except Exception:
+                    age_hours = 0.0
+            cooldown_hours = 24.0
+            remaining_hours = max(cooldown_hours - age_hours, 0.0)
+            decay_factor = round(min(remaining_hours / cooldown_hours, 1.0), 3)
+            performance = performance_summary.get(degraded_command) or performance_summary.get(f"moltx:{degraded_command}") or performance_summary.get(f"clawbr:{degraded_command}")
+            recovered = False
+            recovery_score = 0.0
+            degradation_score = decay_factor
+            if performance:
+                success_rate = float(performance.get('success_rate', 0.0) or 0.0)
+                avg_mismatch = float(performance.get('avg_mismatch_score', 0.0) or 0.0)
+                high_mismatch_rate = float(performance.get('high_mismatch_rate', 0.0) or 0.0)
+                total = int(performance.get('total', 0) or 0)
+                if total >= 3 and success_rate >= 0.6 and avg_mismatch <= 0.35 and high_mismatch_rate <= 0.34:
+                    recovered = True
+                    recovery_score = round(min((success_rate - avg_mismatch), 1.0), 3)
+                    decay_factor = round(max(decay_factor * 0.25, 0.0), 3)
+                    degradation_score = decay_factor
+            cooldown_until = now + timedelta(hours=remaining_hours) if remaining_hours > 0 else None
+            trust_bucket = self._derive_trust_bucket(degradation_score, recovery_score, cooldown_until)
+            self.update_action_family_state(
+                action_family=degraded_command,
+                trust_bucket=trust_bucket,
+                degradation_score=degradation_score,
+                recovery_score=recovery_score,
+                cooldown_until=cooldown_until,
+                last_plan_id=plan.get('plan_id'),
+                metadata={
+                    'revision_depth': plan.get('revision_depth', 1),
+                    'status': plan.get('status'),
+                    'age_hours': round(age_hours, 2),
+                },
+            )
+            degraded_actions.append({
+                'action_family': degraded_command,
+                'plan_id': plan.get('plan_id'),
+                'revision_depth': plan.get('revision_depth', 1),
+                'status': plan.get('status'),
+                'age_hours': round(age_hours, 2),
+                'cooldown_hours': cooldown_hours,
+                'cooldown_remaining_hours': round(remaining_hours, 2),
+                'decay_factor': decay_factor,
+                'is_cooling_down': remaining_hours > 0,
+                'trust_bucket': trust_bucket,
+                'degradation_score': degradation_score,
+                'recovered': recovered,
+                'recovery_score': recovery_score,
+                'recent_performance': {
+                    'success_rate': float((performance or {}).get('success_rate', 0.0) or 0.0),
+                    'avg_mismatch_score': float((performance or {}).get('avg_mismatch_score', 0.0) or 0.0),
+                    'high_mismatch_rate': float((performance or {}).get('high_mismatch_rate', 0.0) or 0.0),
+                    'total': int((performance or {}).get('total', 0) or 0),
+                } if performance else None,
+            })
+        persisted_states = self.get_action_family_states()
+        for family, state in persisted_states.items():
+            if any(item.get('action_family') == family for item in degraded_actions):
+                continue
+            cooldown_until_raw = state.get('cooldown_until')
+            cooldown_remaining_hours = 0.0
+            is_cooling_down = False
+            if cooldown_until_raw:
+                try:
+                    cooldown_until = datetime.fromisoformat(cooldown_until_raw)
+                    cooldown_remaining_hours = max((cooldown_until - now).total_seconds() / 3600.0, 0.0)
+                    is_cooling_down = cooldown_remaining_hours > 0
+                except Exception:
+                    cooldown_remaining_hours = 0.0
+                    is_cooling_down = False
+            degraded_actions.append({
+                'action_family': family,
+                'plan_id': state.get('last_plan_id'),
+                'revision_depth': (state.get('metadata') or {}).get('revision_depth', 1),
+                'status': (state.get('metadata') or {}).get('status', 'persisted'),
+                'age_hours': None,
+                'cooldown_hours': None,
+                'cooldown_remaining_hours': round(cooldown_remaining_hours, 2),
+                'decay_factor': float(state.get('degradation_score', 0.0) or 0.0),
+                'is_cooling_down': is_cooling_down,
+                'trust_bucket': state.get('trust_bucket', 'healthy'),
+                'degradation_score': float(state.get('degradation_score', 0.0) or 0.0),
+                'recovered': state.get('trust_bucket') == 'recovering',
+                'recovery_score': float(state.get('recovery_score', 0.0) or 0.0),
+                'recent_performance': (state.get('metadata') or {}).get('recent_performance'),
+                'persisted_state': True,
+            })
+
+        return {
+            'active_plan_count': len(active_plans),
+            'has_replan_required': any(plan.get('status') == 'replan_required' for plan in active_plans),
+            'has_escalated_plan': any(plan.get('status') == 'escalated' for plan in active_plans),
+            'degraded_action_families': degraded_actions,
+            'action_family_trust_state': persisted_states,
+            'plans': active_plans,
+            'top_plan': active_plans[0] if active_plans else None,
+        }
+
+    def get_top_resumable_plan(self) -> Optional[Dict[str, Any]]:
+        """Return the highest-priority resumable plan for AGI cycle continuation."""
+        plans = self.get_recent_plan_summaries(limit=5, statuses=['replan_required', 'active', 'escalated'])
+        if not plans:
+            return None
+
+        plans.sort(
+            key=lambda plan: (
+                0 if plan.get('status') == 'replan_required' else 1,
+                1 if plan.get('status') == 'escalated' else 0,
+                -(plan.get('progress_percent') or 0.0),
+            )
+        )
+        top_plan = plans[0]
+        if not top_plan.get('next_step_id'):
+            return None
+        return top_plan
     
     def update_step(self, plan_id: str, step_id: str, status: StepStatus, 
                     output: Optional[str] = None, error: Optional[str] = None) -> None:
@@ -522,6 +1271,63 @@ class PlanManager:
                 plan_id
             ))
             conn.commit()
+
+    def mark_step_active(self, plan_id: str, step_id: str) -> Optional[Plan]:
+        """Mark a routed plan step active and persist current step tracking."""
+        plan = self.get_plan(plan_id)
+        if not plan or step_id not in plan.steps:
+            return None
+
+        step = plan.steps[step_id]
+        step.status = StepStatus.ACTIVE
+        step.started_at = datetime.now()
+        step.attempts += 1
+        plan.current_step_id = step_id
+        plan.started_at = plan.started_at or datetime.now()
+        self.save_plan(plan)
+        return plan
+
+    def complete_step_from_outcome(
+        self,
+        plan_id: str,
+        step_id: str,
+        outcome: Dict[str, Any],
+    ) -> Optional[Plan]:
+        """Update plan/step state from a routed execution outcome."""
+        plan = self.get_plan(plan_id)
+        if not plan or step_id not in plan.steps:
+            return None
+
+        step = plan.steps[step_id]
+        success = bool(outcome.get('success', False) or outcome.get('result') == 'success')
+        mismatch_score = (
+            outcome.get('mismatch_score')
+            or ((outcome.get('outcome_record') or {}).get('mismatch_score'))
+            or ((outcome.get('prediction_evaluation') or {}).get('mismatch_score'))
+            or 0.0
+        )
+
+        step.output = str(outcome)[:500]
+        step.completed_at = datetime.now()
+
+        if success:
+            plan.update_step_status(step_id, StepStatus.COMPLETED)
+        else:
+            error_text = outcome.get('error') or outcome.get('reason') or outcome.get('result_summary') or 'step failed'
+            plan.update_step_status(step_id, StepStatus.FAILED, error=str(error_text))
+
+        if plan.is_complete:
+            plan.status = 'completed'
+            plan.completed_at = datetime.now()
+        elif not success:
+            plan.status = 'replan_required' if float(mismatch_score or 0.0) >= 0.5 else 'failed'
+        elif float(mismatch_score or 0.0) >= 0.65:
+            plan.status = 'replan_required'
+        else:
+            plan.status = 'active'
+
+        self.save_plan(plan)
+        return plan
     
     def _row_to_step(self, row: sqlite3.Row) -> PlanStep:
         """Convert database row to PlanStep"""

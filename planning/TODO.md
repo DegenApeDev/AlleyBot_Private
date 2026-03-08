@@ -1,355 +1,605 @@
-# AlleyBot TODO — Roadmap
-
-> **📋 HANDOFF NOTES (Feb 15, 2026):** This project is being handed off. See [Handoff Section](#-handoff-for-next-agent) below for critical context.
+# AlleyBot TODO — True Autonomy Roadmap
 
 ---
 
-## 🎯 HANDOFF FOR NEXT AGENT
+## Mission
 
-### Current State (As of Feb 15, 2026)
+AlleyBot already has a large portion of the AGI stack implemented:
 
-**Branch:** `kimi25_polished` (pushed and ready)
+- memory systems
+- world state
+- goal generation
+- planning
+- causal reasoning
+- research
+- creative generation
+- social intelligence
+- metacognition
+- SyMod validation
+- Synergy field validation
+- autonomous brain loops
+- self-improvement pipeline
 
-**Recent Major Changes:**
-1. **Dashboard Overhaul COMPLETE** (`templates/dashboard_v2.html`, `plugins/analytics/analytics.py`)
-   - New AGI Social Intelligence panel with live stats
-   - Animated UI with gradient backgrounds, shimmer effects
-   - Real-time updates (5s refresh for stats, 10s for activity)
-   - Platform stats now count from memory (not broken attributes)
-   
-2. **Platform Aggregator FIXED** (`plugins/analytics/platform_aggregator.py`)
-   - Was showing 0 for all platform stats
-   - Now correctly counts posts from `*_recent_posts` memory keys
-   - Each platform: moltx, moltbook, moltchan, moltroad, clawbr
+The next phase is not adding random new features.
+The next phase is **turning all existing systems into one coherent autonomous runtime**.
 
-3. **Missing Methods FIXED**
-   - `analytics.py`: Added `_get_brain_stats()` that was corrupted
-   - `clawbr.py`: Added missing command methods (`clawbr_analytics_command`, etc.)
-   - `agi_social_mixin.py`: Fixed `get_notifications()` signature handling
-   - `moltroad.py`: Removed broken `/bounties` call causing 404
+The near-term mission is to push AlleyBot from partially unified autonomy toward a more human-like autonomy loop:
 
-### Known Issues (Monitor These)
+- perceive
+- interpret
+- predict
+- plan
+- validate
+- act
+- reflect
+- learn
+- adapt
 
-| Issue | Status | Notes |
-|-------|--------|-------|
-| Dashboard stats showing 0 | ✅ FIXED | Now counts from memory, hot-reload `analytics` plugin |
-| Missing `_get_brain_stats` | ✅ FIXED | Method restored in analytics.py |
-| Clawbr missing commands | ✅ FIXED | Added in clawbr.py:620-656 |
-| Moltx `unread_only` error | ✅ FIXED | Fixed in agi_social_mixin.py:62-80 |
-| MoltRoad 404 on bounties | ✅ FIXED | Removed from heartbeat |
-| AGI social cycle running | ✅ ACTIVE | Follows users, replies to notifications |
+The core objective is:
 
-### Hot-Reload Commands
-```bash
-/reload_plugins analytics      # After dashboard changes
-/reload_plugins brain          # After brain changes
-/reload_plugins moltx          # After moltx changes
-/reload_plugins clawbr         # After clawbr changes
-/reload_plugins moltroad       # After moltroad changes
-```
-
-### Key File Locations
-```
-Dashboard:          templates/dashboard_v2.html
-                    plugins/analytics/analytics.py
-                    plugins/analytics/platform_aggregator.py
-
-Brain/AGI Social:     src/agentic/autonomous_brain.py
-                      src/agentic/agi_social_mixin.py
-                      src/agentic/skilldoc_manager.py
-
-Platforms:            plugins/moltx/moltx.py
-                      plugins/clawbr/clawbr.py
-                      plugins/moltbook/moltbook.py
-                      plugins/moltroad/moltroad.py
-```
-
-### Environment Variables Required
-```bash
-MOLTBOOK_API_KEY=      # For Moltbook platform
-MOLTX_API_KEY=         # For Moltx platform  
-MOLTCHAN_API_KEY=      # For Moltchan platform
-MOLTROAD_API_KEY=      # For Moltroad platform
-CLAWBR_API_KEY=        # For Clawbr platform
-GROK_API_KEY=          # For Grok AI
-DEEPSEEK_API_KEY=      # For DeepSeek AI
-TELEGRAM_BOT_TOKEN=    # For Telegram bot
-TELEGRAM_ADMIN_CHAT_ID=# Owner-only commands
-BASE_WALLET_PUBLIC_ADDRESS=  # For on-chain
-```
-
-### Testing Dashboard
-```bash
-# Access dashboard at:
-http://localhost:7001
-http://38.247.148.22:7001
-
-# API endpoints:
-/api/stats              # All stats JSON
-/api/recent_activity    # Activity feed
-/api/agent_card         # ERC-8004 agent card
-```
-
-### Next Steps for Next Agent
-1. **Monitor dashboard** - Ensure stats populate correctly after hot-reload
-2. **Verify AGI social** - Check that `follow_after_engagement` and notification replies work
-3. **Platform health** - Watch logs for any API errors from platforms
-4. **Dashboard polish** - If needed, further enhance visualizations
-5. **World State** - Continue expanding platform adapters (see PLATFORM_INTEGRATION_GUIDE.md)
+**One brain, one execution pipeline, one validation ladder, one learning loop.**
 
 ---
 
-## Completed ✅
+## Current Reality
 
-### Phase 1: Self-Reflection System (AGI Core)
-**Goal: Alley learns from every action he takes**
-- [x] **Action-Outcome Logger** - Every decision logged with result (`src/agentic/action_logger.py`)
-- [x] **Performance Scorer** - Auto-score each action's effectiveness (built into logger)
-- [x] **Strategy Evolution** - Mutate approaches, keep winners (`src/agentic/strategy_evolver.py`)
-- [x] **Failure Analysis** - Learn from mistakes via outcome tracking
-- [x] **Telegram Commands** - `/reflection_status`, `/reflection_log`, `/reflection_tune`, `/evolve`, `/strategies`
+### What is already implemented
 
-### Phase 1: Stabilize (48 tests - Legacy)
-- [x] Fix Moltx API endpoint URL encoding issues
-- [x] Fix Grok nested JSON response parsing
-- [x] Prevent raw JSON display in posts and outputs
-- [x] Fix Moltbook API method errors
-- [x] Add parameter validation across all plugins
+- [x] AGI Kernel integration layer
+- [x] AGI Orchestrator with multi-phase cycle
+- [x] Autonomous Brain loop
+- [x] Goal systems and goal stack
+- [x] Unified memory + episodic memory + SQLite persistence
+- [x] World state ingestion and inference engine
+- [x] Social, creative, causal, research, and metacognitive systems
+- [x] SyMod-based validation systems
+- [x] Egyptian Synergy model / harmonic validation
+- [x] Telegram command layer for monitoring and control
+- [x] Self-improvement / autonomous coding pipeline
+- [x] Multi-platform adapters and posting/engagement systems
+- [x] Routed execution for the main autonomous proposal, goal, and orchestrator paths
+- [x] Routed validation traces for the main autonomous path
+- [x] Lightweight prediction artifact scaffolding on routed actions
+- [x] Recent action performance now partially informs decision ranking
+- [x] Explicit prediction evaluation and mismatch scoring now exist on routed outcomes
+- [x] Bounded exploration metadata now exists for low-evidence, low-risk actions
+- [x] Short multi-step routed plan tracking and revised-plan execution now exist on the main routed path
+- [x] Replanning now uses structured reflection signals plus recent action-family performance
+- [x] Repeated failed replans now escalate into safer alternate paths or bounded abandonment
+- [x] Degraded action-family cooldown, decay, and recovery-aware avoidance now shape decision ranking
 
-### Phase 2: Autonomous Goal Management (AGI Core) ✅
-**Goal: Alley detects gaps and proposes his own tasks**
-- [x] **Opportunity Detector** - Scan for unfulfilled requests (`src/agentic/goal_detector.py`)
-- [x] **Goal Generator** - Create proposals with priority scores (`src/agentic/goal_manager.py`)
-- [x] **Goal Queue** - Manage active/pending/completed goals with status tracking
-- [x] **Auto-Propose Skills** - Generate skill proposals when gaps found
-- [x] **Telegram Commands** - `/goals`, `/goals_approve`, `/goals_scan`, `/goals_create`
+### What is still missing for true full autonomy
 
-### Phase 2: Modularize (49 tests - Legacy)
-- [x] Split moltx.py into 5 mixin files
-- [x] Split moltbook.py into 4 mixin files
-- [x] Unified EnhancedMemorySystem across core
-- [x] Archive 20 stale scripts
-
-### Phase 3: Multi-Step Planning (AGI Core) ✅
-**Goal: Complex tasks broken into sub-tasks**
-- [x] **Goal Decomposer** - Break big goals into steps (`src/agentic/planning.py`)
-- [x] **Dependency Tracker** - DAG-based dependency management with topological sort
-- [x] **Plan Monitor** - Track progress, recover from failures, retry logic
-- [x] **Step Types** - RESEARCH, DESIGN, IMPLEMENT, TEST, DEPLOY, REVIEW, DOCUMENT
-- [x] **Telegram Commands** - `/plan_create`, `/plan_status`, `/plan_execute`, `/plan_steps`
-
-### Phase 3: On-Chain (31 tests - Legacy)
-- [x] Web3Provider connecting to Base (chain 8453)
-- [x] Token tracker (ALLEY, USDC, WETH)
-- [x] Tx monitor with semantic memory logging
-- [x] Wire on-chain commands into Telegram (/wallet, /balance, /block, /track, /tx, /activity)
-
-### Phase 4: Self-Extension Pipeline (COMPLETED) ✅
-**Goal: Alley detects gaps and builds new skills automatically**
-- [x] **Skill Proposal Generator** - Converts goals into skill specifications (`src/agentic/skill_generator.py`)
-- [x] **Autonomous Coder** - Generates Python code from specs (`src/agentic/autonomous_coder.py`)
-- [x] **Auto-Tester** - Validates skills work correctly (`src/agentic/skill_tester.py`)
-- [x] **Auto-Deployer** - Hot-loads skills into production
-- [x] **Telegram Control** - `/extend`, `/skills_propose`, `/skills_generate`, `/skills_test`, `/skills_deploy` (`plugins/telegram/extend_commands.py`)
-- [x] **Security Validation** - CodeSecurityValidator with dangerous pattern detection
-
-**Pipeline:** `Detect Gap → Propose Skill → Generate Code → Test → Deploy`
-
-### Phase 5: Causal Understanding (AGI Core) ✅
-**Goal: Understand *why* things happen, not just *what* happens**
-- [x] **Event Causality Tracker** - Link cause → effect chains (`src/agentic/causal_engine.py`)
-- [x] **Counterfactual Analysis** - "What if I had done X instead?"
-- [x] **Intervention Simulation** - Predict outcomes of hypothetical actions
-- [x] **Root Cause Analysis** - Find true sources of trends/engagement
-- [x] **Impact Attribution** - Know which actions drove which results
-- [x] **Telegram Commands** - `/causal`, `/why`, `/whatif`, `/root_cause`, `/attribution`
-
-### Phase 5: Autonomous Brain (30 tests - Legacy)
-- [x] Context Gatherer — pulls from memory, on-chain, platforms, engagement, goals
-- [x] Decision Engine — 14+ autonomous actions (incl. chains), AI-powered (Grok) with heuristic fallback
-- [x] Smart Reply — memory-enriched replies with user profiles
-- [x] Telegram integration (/think, /brain_start, /brain_stop, /brain)
-- [x] Background autonomous loop (configurable cycle interval)
-
-### Phase 6: World State Foundation (NEW)
-- [x] World State Manager with SQLite backend (entities, facts, relationships, events)
-- [x] Platform Adapter Pattern — extensible ingestion framework
-- [x] MoltxAdapter & ClawbrAdapter implementations
-- [x] WorldStateIngestionEngine with auto-sync (15min intervals)
-- [x] Telegram commands for World State queries (/world_status, /world_search, etc.)
-- [x] PLATFORM_INTEGRATION_GUIDE.md for future platforms
-
-### Security Hardening
-- [x] SecurityFilter covers ALL 15+ .env keys (was only 4)
-- [x] Auto-scans os.environ for PRIVATE/SECRET/TOKEN/API_KEY/PASSWORD
-- [x] Outbound Telegram filter on all command outputs
-- [x] Owner-lock ALL 23 Telegram commands via TELEGRAM_ADMIN_CHAT_ID
-- [x] No hardcoded IDs — everything from .env
-
-### Dashboard
-- [x] Rewrite dashboard with modern dark UI
-- [x] Brain Status panel (live cycles, success rate, actions, known users)
-- [x] Real AI stats from ModelRouter token tracker
-- [x] Auto-refresh (stats 20s, feed 45s)
-
-**Total: 190+ tests, all passing**
+- [ ] A single authoritative execution pipeline
+- [ ] A single authoritative validation pipeline
+- [ ] A canonical action schema across all autonomous systems
+- [ ] Consistent goal-to-action compilation
+- [ ] Consistent outcome recording and feedback into memory
+- [ ] Clear trust tiers for safe vs dangerous autonomy
+- [ ] Full alignment between documentation, architecture, and runtime behavior
+- [ ] Explicit expected-vs-actual reflection mismatch scoring across all autonomous surfaces
+- [ ] Strong memory-informed autonomous action selection across all autonomous surfaces
+- [ ] Bounded experimentation for uncertainty reduction across all autonomous surfaces
+- [ ] Short multi-step plan persistence and replanning across all autonomous surfaces
 
 ---
 
-## 🎯 AGI-Like Capabilities Roadmap
+## Current Priority Order
 
-### Phase 7: World State Intelligence (COMPLETED) ✅
-**Goal: Turn raw data into actionable intelligence**
-- [x] **Trend Detection Engine** — Identify rising topics before they peak (`src/autonomy/inference_engine.py`)
-- [x] **Relationship Graph Analysis** — Find influencers, clusters, echo chambers
-- [x] **Predictive Engagement** — Predict which posts will perform well
-- [x] **Sentiment Evolution Tracking** — Track how sentiment changes over time
-- [x] **Cross-Platform Pattern Matching** — Detect trends across platforms
-- [x] **Anomaly Detection** — Alert on unusual activity (viral posts, drama, opportunities)
-- [x] **Inference Mixin** — Brain plugin integration (`plugins/brain/inference_mixin.py`)
-- [x] **Telegram Commands** — `/trends`, `/influencers`, `/predict`, `/anomalies`, `/sentiment`, `/patterns`, `/intel`
+Choose work in this order unless a critical bug or security issue overrides it:
 
-### Phase 8: Self-Reflective Learning Loop ✅
-**Goal: Agent improves its own behavior based on outcomes**
-- [x] **Action-Outcome Logging** — Every decision tracked with result (`src/agentic/action_logger.py`)
-- [x] **Performance Scoring** — Auto-score each action's effectiveness
-- [x] **Strategy Evolution** — Mutate posting strategies, keep winners (`src/agentic/strategy_evolver.py`)
-- [x] **Failure Analysis** — Analyze failed actions, extract lessons
-- [x] **Self-Reflection Mixin** — Brain plugin meta-learning (`plugins/brain/self_reflection.py`)
-- [x] **Success Pattern Mining** — Find what consistently works
-- [x] **Auto-Personality Tuning** — Adjust tone/style based on engagement data
-
-### Phase 9: Multi-Step Reasoning & Planning ✅
-**Goal: Complex problem-solving with intermediate steps**
-- [x] **Goal Decomposer** — Break big goals into sub-tasks (`src/agentic/planning.py`)
-- [x] **Dependency Tracker** — DAG-based dependency management
-- [x] **Plan Execution Monitor** — Track multi-step plans, recover from failures
-- [x] **Resource Allocation** — Budget attention/API calls across priorities
-- [x] **Long-Horizon Planning** — Plan days/weeks ahead, not just immediate
-- [x] **Contingency Planning** — Have backup plans when primary fails
-
-### Phase 10: Causal Understanding ✅
-**Goal: Understand *why* things happen, not just *what* happens**
-- [x] **Event Causality Tracker** — Link cause → effect chains (`src/agentic/causal_engine.py`)
-- [x] **Counterfactual Analysis** — "What if I had done X instead?"
-- [x] **Intervention Simulation** — Predict outcomes of hypothetical actions
-- [x] **Root Cause Analysis** — Find true sources of trends/engagement
-- [x] **Impact Attribution** — Know which actions drove which results
-- [x] **Telegram Commands** — `/causal`, `/why`, `/whatif`, `/root_cause`, `/attribution`
-
-### Phase 11: Autonomous Research & Discovery ✅
-**Goal: Agent finds new knowledge on its own**
-- [x] **Curiosity Engine** — Identify knowledge gaps, seek answers (`src/agentic/research_engine.py`)
-- [x] **Web Search Integration** — Auto-research topics of interest
-- [x] **Documentation Reading** — Parse docs/APIs to learn capabilities
-- [x] **Experimentation Loop** — Try new things, record results
-- [x] **Knowledge Synthesis** — Connect facts from multiple sources
-- [x] **Question Generation** — Formulate good questions to investigate
-
-### Phase 12: Theory of Mind & Social Intelligence ✅
-**Goal: Understand and predict other agents'/users' behavior**
-- [x] **Agent Modeling** — Build profiles of other AI agents (style, goals, patterns) (`src/agentic/social_intelligence.py`)
-- [x] **User Intent Prediction** — Predict what users want before they ask
-- [x] **Deception Detection** — Spot fake engagement, bots, manipulation
-- [x] **Collaboration Negotiation** — Propose and negotiate joint actions
-- [x] **Reputation Modeling** — Track trustworthiness of other entities
-- [x] **Social Dynamics Simulation** — Predict how communities will react
-
-### Phase 13: Creative Generation & Innovation ✅
-**Goal: Create novel content, not just remix existing**
-- [x] **Original Content Generation** — Create new memes, concepts, narratives (`src/agentic/creative_engine.py`)
-- [x] **Cross-Domain Inspiration** — Apply ideas from one domain to another
-- [x] **A/B Test Design** — Auto-design experiments to test hypotheses
-- [x] **Format Innovation** — Invent new content formats
-- [x] **Story Arc Construction** — Build multi-post narratives
-- [x] **Style Transfer** — Adapt content style to match context
-
-### Phase 14: Metacognition & Self-Awareness ✅
-**Goal: Agent knows its own capabilities and limitations**
-- [x] **Capability Self-Assessment** — Know what it can/can't do (`src/agentic/metacognition.py`)
-- [x] **Confidence Calibration** — Know when it's uncertain
-- [x] **Resource Self-Monitoring** — Track API usage, costs, rate limits
-- [x] **Error Pattern Recognition** — Learn from its own mistakes
-- [x] **Strategy Selection** — Choose approach based on problem type
-- [x] **Learning Rate Adaptation** — Learn faster when environment changes
+1. [ ] Eliminate remaining execution-path fragmentation
+2. [ ] Normalize validation contracts and trust/risk tiers
+3. [ ] Complete canonical action coverage for remaining helper/plugin surfaces
+4. [ ] Close outcome-to-learning consistency across all routed actions
+5. [~] Make autonomous action selection more memory-informed and prediction-informed
+6. [~] Add expected-vs-actual reflection mismatch scoring
+7. [~] Introduce bounded exploratory actions for uncertainty reduction
+8. [~] Upgrade from next-action choice to short plan execution and replanning
+9. [ ] Simplify runtime ownership and publish architecture truth
 
 ---
 
-## 🔧 Infrastructure & Scaling
+## Priority 1 — Unify Autonomous Execution
 
-### Phase 15: Vault-Based Security Migration
-- [ ] Move from .env files to secure vault-based secret management
-- [ ] Implement HashiCorp Vault integration (or local vault alternative)
-- [ ] Create secret rotation mechanism for API keys
-- [ ] Add audit logging for secret access
+**Goal:** Every autonomous action must execute through one path.
 
-### Phase 16: Hot-Swappable Plugin System
-- [ ] Plugin state persistence layer — checkpoint/restore during swaps
-- [ ] Event bus architecture — pub/sub instead of direct calls
-- [ ] Hot reload mechanism — reload without restart
-- [ ] `/reload_plugin <name>` Telegram command
+### Problems to solve
 
-### Phase 17: Distributed Architecture
-- [ ] Multi-instance coordination — Multiple AlleyBots working together
-- [ ] Load balancing — Distribute work across instances
-- [ ] State synchronization — Shared memory across nodes
-- [ ] Failover handling — Continue if one instance dies
+- [x] `AutonomousBrain` direct proposal execution path removed from the main runtime flow
+- [x] `AGIOrchestrator._execute_plan()` now emits canonical action specs and routes through `AGIKernel.act()`
+- [ ] Some plugin actions and synchronous command/helper surfaces are still invoked ad hoc instead of through a shared executor
+- [~] Some older helper/plugin surfaces still retain legacy direct execution assumptions, but the decision-engine direct-dispatch surface has been reduced for already-supported routed actions
+- [x] Main execution path now feeds a shared outcome/telemetry artifact through `ActionRouter`
 
----
+### Required work
 
-## 🎮 AGI-Like Behaviors (Cross-Cutting)
+- [x] Make `AGIKernel.act()` + `ActionRouter.route_action()` the primary autonomous execution path
+- [x] Refactor `AutonomousBrain` so it schedules and proposes, but does not directly execute plugin logic
+- [x] Convert AGI orchestrator outputs into canonical action specs before execution
+- [x] Route multi-platform campaign execution through async-native `AGIKernel.act()` calls for supported platforms (`moltx`, `clawbr`)
+- [x] Route the Telegram `/multi_platform` and `/post` command surfaces into the unified orchestrator/kernel execution path
+- [x] Add an async-native execution path to `plugins/brain/decision_engine.py` and route targeted high-level brain actions (`moltx_post`, `moltx_engage`, `clawbr_post`, `clawbr_engage`, `clawbr_debate_turn`, `clawbr_create_debate`, `analyze_trending`) through `AGIKernel.act()` when supported
+- [x] Move legacy brain fallback execution and Golden Window queued execution onto the async-native decision-engine path
+- [x] Reuse the async routed step pathway for supported chain and dynamic-chain actions such as `moltx_engage`, `clawbr_engage`, and `onchain_wallet`
+- [x] Route selected low-risk helper/status actions on the decision-engine path such as `moltbit_status`, `onchain_heartbeat`, `check_engagement`, and `check_comments`
+- [x] Route `update_skills` through `ActionRouter` with explicit strict risk/trust metadata so the self-improvement update flow uses fail-closed validation
+- [x] Route `moltx_image_post` through `ActionRouter` by preparing content/media behind a helper seam and executing the final post through a public MoltX command wrapper
+- [ ] Finish normalizing the remaining command/helper dispatch layers and direct plugin helper surfaces under the shared executor
+- [x] Remove duplicated execution helpers once routing is stable
+- [x] Ensure routed high-impact actions pass through the same validation/logging flow
 
-These should be exhibited across all phases:
+### Done when
 
-| Behavior | Description |
-|----------|-------------|
-| **Proactivity** | Takes action without being prompted |
-| **Adaptability** | Changes strategy when conditions change |
-| **Curiosity** | Seeks new information voluntarily |
-| **Memory** | Learns from past experiences |
-| **Reasoning** | Can explain why it did something |
-| **Planning** | Thinks ahead, not just reactive |
-| **Social** | Understands and interacts with others |
-| **Self-Improvement** | Gets better over time |
-| **Resilience** | Handles failures gracefully |
-| **Creativity** | Generates novel solutions |
+- [ ] No autonomous or command-driven high-level action bypasses `ActionRouter`
+- [x] Execution logs now have one canonical routed outcome record for the main autonomous path
+- [x] Goal progress, memory writes, and outcome reflection now happen after execution for the routed path
+- [ ] Remaining helper-driven and plugin-driven execution surfaces are either routed or explicitly deprecated
 
 ---
 
-## 📝 Recent Completed Items
-- [x] **AGI Core Phases 1-14 COMPLETE** — Full AGI capability implementation
-- [x] **Multi-Platform Engine** (`src/agentic/multi_platform_engine.py`) — Unified 6-platform interface
-- [x] **Console Monitor & Auto-Skills** (`src/agentic/console_monitor.py`) — Detects messages + auto-acquires skills
-- [x] **API Response Skill Detection** — Parses `moltx_notice` for skill updates (https://moltx.io/skill.md)
-- [x] Telegram commands: `/agi_cycle`, `/multi_platform`, `/console_monitor`, `/console_stats`, `/pending_messages`
-- [x] Phase 7: World State Intelligence (`src/autonomy/inference_engine.py`) — trends, anomalies, predictions
-- [x] Phase 8: Self-Reflective Learning (`plugins/brain/self_reflection.py`) — action-outcome logging, strategy evolution
-- [x] Phase 9: Multi-Step Planning (`src/agentic/planning.py`) — goal decomposition, dependency tracking
-- [x] Phase 10: Causal Understanding (`src/agentic/causal_engine.py`) — cause-effect, counterfactuals, root cause
-- [x] Phase 11: Autonomous Research (`src/agentic/research_engine.py`) — curiosity engine, knowledge synthesis
-- [x] Phase 12: Social Intelligence (`src/agentic/social_intelligence.py`) — agent modeling, deception detection
-- [x] Phase 13: Creative Generation (`src/agentic/creative_engine.py`) — novel content, A/B tests, story arcs
-- [x] Phase 14: Metacognition (`src/agentic/metacognition.py`) — self-assessment, confidence calibration
-- [x] **Hot-Loading Plugin Architecture** — Full implementation with SOP.md, WORLD_MODEL.md, AGENTIC_BEHAVIOR.md documentation
-- [x] BasePlugin interface at `plugins/base_plugin.py` — all plugins max 200 lines
-- [x] PluginManager at `src/agentic/plugin_manager.py` — hot-loading with dependencies
-- [x] Central event loop at `src/agentic/event_loop.py` with Planner integration
-- [x] plugins.json configuration for hotload settings
-- [x] Moltx v2 migrated to `plugins/moltx/moltx_v2.py` as adapter pattern example
-- [x] Comprehensive tests at `tests/plugins/test_plugin_architecture.py`
-- [x] ARCHITECTURE_REPORT.md with full implementation details
-- [x] 4 architecture invariants enforced: SyMod global brain, thin adapters, single event loop, sacred self-extension pipeline
-- [x] World State Platform Adapter System — extensible data ingestion
-- [x] Moltx/Clawbr adapters with auto-sync
-- [x] `/brain_world_sync` command working (100 interactions, 113 entities)
-- [x] Entity dataclass with platform field
-- [x] PLATFORM_INTEGRATION_GUIDE.md documentation
+## Priority 2 — Unify Validation
+
+**Goal:** Every autonomous action should pass through the same layered validation policy.
+
+### Problems to solve
+
+- [x] Synergy and SyMod are now both present in the routed validation ladder
+- [x] SyMod return shapes are normalized in `ActionRouter`
+- [ ] Some code treats validators like booleans, others like tuples, others like dicts
+- [ ] Security/policy validation is not clearly sequenced with reasoning validation
+- [ ] Validator contracts are not yet fully normalized project-wide
+
+### Required validation ladder
+
+- [ ] Stage 1: Strategic relevance validation
+- [x] Stage 2: Synergy field / harmonic timing validation
+- [x] Stage 3: SyMod truth / mathematical integrity validation
+- [ ] Stage 4: Security and policy validation
+- [ ] Stage 5: Execution readiness validation
+
+### Required work
+
+- [ ] Standardize all validators to return a single dict structure
+- [x] Create one routed validation orchestrator path in `ActionRouter`
+- [ ] Define which action classes require soft validation vs hard blocking
+- [~] Ensure self-improvement, trading, external posting, and on-chain actions use stricter thresholds
+- [ ] Add human-readable validation traces for debugging and Telegram inspection
+- [ ] Update docs so “fully integrated” only describes what is actually enforced at runtime
+
+### Done when
+
+- [x] Main routed autonomous actions now produce a validation trace including AGI + Synergy metadata
+- [ ] Validation behavior is deterministic and easy to inspect from logs/Telegram
+- [ ] No code path skips required validation stages
 
 ---
 
-## 🚀 Quick Reference
-- **Branch:** `kimi25_polished`
-- **Run:** `python alleybot_core.py autonomous`
-- **Tests:** `python -m unittest tests.test_fixes tests.test_phase2 tests.test_phase3 tests.test_phase4 tests.test_phase5`
-- **Cost:** ~$0.015/day (~$0.45/month) at current Grok pricing
-- **.gitignore:** blocks `test_*.py` — use `git add -f` to stage test files
+## Priority 3 — Canonical Action Model
+
+**Goal:** Goals, plans, AGI outputs, and plugin calls all speak the same language.
+
+### Problems to solve
+
+- [ ] Some goal-driven and command-driven actions still need wider canonical adapter coverage across plugins
+- [x] Main planner/orchestrator outputs now compile into routed execution specs for the primary orchestrator path
+- [ ] Plugins still expose mixed interfaces (`execute_action`, direct methods, command methods) beyond the current routed adapters
+- [~] Some higher-risk stateful helper surfaces still need careful routed treatment, but `update_skills` now routes with strict risk/trust metadata
+- [~] Runtime/platform quirks still need hardening on some surfaces, but MoltX trending parsing and 5:1 engage gating have been tightened to fail closed more safely
+- [ ] An action registry for AGI intent to executable action mapping is not yet complete
+
+### Required work
+
+- [x] Define and start using a canonical action schema for the main autonomous work path
+- [ ] Finalize standard fields: `plugin`, `action_type`, `params`, `context`, `impact`, `goal_id`, `trigger`, `validation_class`, `risk_level`, `trust_level`
+- [ ] Build an action registry that maps AGI intent → executable action specs
+- [x] Add first-pass plugin adapters where native plugin APIs do not match the canonical schema
+- [ ] Normalize the remaining command-style and method-style plugin interfaces under a shared adapter layer
+
+### Done when
+
+- [x] Main goal systems now emit executable specs for the routed path
+- [x] Main orchestrator plan execution now compiles directly into routed actions
+- [x] Legacy brain fallback and queued Golden Window execution now route targeted supported actions through canonical specs, including `moltx_engage`
+- [x] Supported decision-engine chain and dynamic-chain steps now partially reuse canonical routed execution
+- [x] Selected low-risk helper/status actions now compile directly into canonical routed actions, including `check_comments` via a public MoltX wrapper
+- [x] `update_skills` now compiles into a routed canonical action with stricter validation metadata
+- [x] `moltx_image_post` now compiles into a routed canonical action after helper-based media preparation and public-wrapper execution
+- [ ] Broader planner and remaining command/helper surfaces compile directly into actions
+- [ ] Every platform plugin can be invoked through a standard executor contract
+
+---
+
+## Priority 4 — Strengthen Goal-Driven Autonomy
+
+**Goal:** AlleyBot should pursue goals reliably, not just generate them.
+
+### Problems to solve
+
+- [x] Goal mapping is now partially canonicalized for `goal_driven_cycle` and `goal_manager`
+- [x] Goal progress for routed actions is now tied to the canonical outcome record
+- [~] Opportunity detection and goal generation now influence autonomous pickup and pursuit on the conservative safe-goal path, but they are not yet the dominant driver of all action selection
+- [~] Goal completion logic is stronger on the safe-goal path via repeated success/failure feedback, but blocked and partially completed goals still need richer handling beyond the conservative loop
+
+### Required work
+
+- [x] Ensure approved low-risk goals can be picked up and acted on without requiring manual Telegram commands
+- [x] Make the active safe-goal state materially influence what actions are chosen next via conservative proposal bias
+- [~] Add reliable handling for blocked goals, retries, partial completion, and abandonment
+- [~] Add reliable handling for blocked goals, retries, partial completion, and abandonment; conservative safe goals now have soft blocked markers, basic recovery, and temporary backoff, but broader/explicit state handling is still incomplete
+- [x] Reduce goal generation theater by connecting the safe-goal path to real execution and reflection loops
+- [x] Reframe Telegram as a reporting/status surface rather than a constant execution driver for the conservative autonomy loop
+- [x] Add owner-facing accomplishment reporting and cooldown-based autonomous digests for meaningful recent progress
+- [x] Report safe-goal progress/cooling/failure states to Telegram informationally
+- [~] Extend the same autonomous pickup/pursuit/feedback behavior beyond the original conservative safe-goal categories; low-impact operational `fix` goals from `error_pattern` now partially join the loop, but broader risky/stateful categories still remain manual
+
+### Done when
+
+- [~] Goals are not just generated; they now shape conservative safe-goal action selection and completion for analysis/optimization plus a narrow operational fix slice, but broader goal categories still need the same treatment
+- [~] Goals are not just generated; they now shape conservative safe-goal action selection and completion for analysis/optimization plus a narrow operational fix slice, including blocked/backoff behavior, but broader goal categories still need the same treatment
+- [~] Telegram is now used mainly for reporting, status, and high-risk intervention on the conservative autonomy path, but not all legacy surfaces are there yet
+- [x] The conservative safe-goal loop can continue pursuing work across cycles without needing explicit restarts from the owner
+- [x] Safe-goal outcomes now feed reflection-like future behavior through success/failure feedback and pursuit bias
+
+---
+
+## Priority 5 — Close the Learning Loop
+
+**Goal:** Every action should improve future behavior.
+
+### Problems to solve
+
+- [x] Main routed outcome recording now has one canonical record shape
+- [~] World state, episodic memory, unified memory, and action history now partially share richer canonical routed outcome metadata, but broader normalization is still incomplete
+- [~] Reflection and strategy evolution now partially consume canonical routed outcome data, including ranking evidence, but broader migration is still incomplete
+- [~] Reflection and strategy evolution now partially consume canonical routed outcome data, including ranking evidence and dispatch/fallback learning metadata, but broader migration is still incomplete
+- [ ] Expected-vs-actual mismatch is not yet a first-class learning signal
+- [~] Expected-vs-actual mismatch is now first-class on the main routed path, but not yet fully propagated across all autonomy surfaces
+
+### Required work
+
+- [x] Define one canonical outcome record format
+- [ ] Ensure every autonomous action stores:
+  - [x] action id
+  - [x] goal id
+  - [x] trigger
+  - [x] validation trace
+  - [x] execution result
+  - [x] success/failure
+  - [x] performance metrics
+  - [x] reflection summary
+  - [x] prediction artifact
+  - [x] mismatch score / prediction evaluation
+- [x] Feed outcomes into episodic memory and unified memory for the routed path
+- [x] Feed outcomes into shared `ActionLogger` for the routed path
+- [~] Feed outcomes into world state and strategy evolution consistently; strategy-evolution context now partially includes canonical ranking evidence plus dispatch/fallback learning metadata, and the world-state bridge now persists richer routed outcome metadata, but broader consistency is still incomplete
+- [x] Make performance-based adaptation visible in subsequent decisions on the main routed path, including ranking-aware replanning
+- [~] Some custom chain-only helpers now route their final state-changing writes through the Golden Path, but broader chain/helper execution is still not fully unified
+- [x] Fallback-aware dispatch metadata now influences replanning and is summarized in kernel/strategy learning on the main routed path
+- [x] World-state bridge and decision context now partially consume richer canonical routed outcome metadata, including validation/ranking/fallback summaries
+
+### Done when
+
+- [x] Reflection now has complete structured data for the main routed autonomous path
+- [ ] Strategy evolution uses real cross-platform outcomes
+- [~] AlleyBot measurably changes behavior based on past results, including caution-aware heuristic shaping from recent routed outcome summaries
+- [x] Repeated overconfidence, underperformance, and reliable wins are visible in future action ranking on the main routed path
+
+---
+
+## Priority 5A — Memory-Informed Decisions, Prediction, and Reflection
+
+**Goal:** Make future action selection depend on recalled experience, predicted value, and expected-vs-actual mismatch.
+
+### Current status
+
+- [x] `ActionLogger` now exposes recent action performance summaries
+- [x] `DecisionSystem` heuristic ranking now partially considers recent outcome performance
+- [x] `ActionRouter` now attaches a lightweight pre-action `prediction` artifact to routed actions
+- [x] AI decision prompts are now enriched with candidate performance, plan-state, and degraded-family context on the main routed path
+- [x] Reflection mismatch scoring now shapes future choices on the main routed path
+- [x] Persistent action-family trust state now survives beyond immediate active plan summaries
+- [x] Action-family trust buckets now shape goal selection, longer-horizon goal prioritization, secure goal generation, strategy recommendations, orchestrator context, and world-state bridge context
+- [x] `AutonomousBrain` now ranks proposals using recent routed outcomes, predicted value, and lightweight episodic/unified-memory recall signals
+- [x] Routed action context and canonical outcome records now persist `ranking_evidence`
+- [x] Kernel learning, strategy-evolution persistence, and replanning now partially consume routed `ranking_evidence`
+- [x] Decision-engine execution now emits machine-readable fallback metadata for Golden Path escapes
+- [x] Replanning, kernel learning, and strategy persistence now partially consume dispatch/fallback learning metadata
+- [x] World-state decision context now exposes a compact `last_routed_outcome_summary` with validation, ranking, and fallback alignment signals
+- [x] Heuristic action scoring now reacts conservatively to recent Golden Path escape and poor calibration/risk signals
+
+### Required work
+
+- [x] Expose memory-informed candidate summaries to `_ai_decide()` in `DecisionSystem`
+- [x] Compute expected-vs-actual reflection mismatch in `ActionRouter`
+- [x] Include prediction evaluation in the canonical `outcome_record`
+- [x] Pass mismatch metadata through kernel learning surfaces for the main routed path
+- [x] Use mismatch and performance history to bias future ranking more directly
+- [x] Use recalled memory, recent routed outcomes, and predicted value to shape `AutonomousBrain` proposal ranking
+- [x] Persist ranking evidence through the Golden Path and into downstream learning metadata
+- [x] Use ranking evidence in replanning decisions on the routed path
+- [x] Persist machine-readable fallback metadata and use it in downstream replanning/learning surfaces
+- [x] Feed enriched routed outcome metadata into world-state summaries and decision-context caution shaping
+
+### Immediate next task
+
+- [~] Push the canonical routed outcome record more directly into downstream world-state facts and broader strategy-adaptation flows; richer routed metadata now reaches the world-state bridge, decision context, and caution-aware heuristic shaping, but broader adaptation flows are still incomplete
+
+### Done when
+
+- [x] Routed actions carry explicit prediction evaluation data
+- [x] Overconfidence and underconfidence patterns can be detected from action history
+- [x] Decision ranking uses memory, prediction quality, and outcome quality together on the main routed path
+- [x] Replanning now reacts to ranking evidence as well as mismatch/performance on the main routed path
+- [x] Replanning and learning now react when execution escapes the Golden Path on the main routed path
+- [x] Decision context and heuristic shaping now react to recent routed outcome summaries from world-state on the main routed path
+
+---
+
+## Priority 5B — Bounded Exploration and Human-Like Cognitive Loop
+
+**Goal:** Safely expand from capable routed automation toward a reflective, adaptive autonomy loop.
+
+### Human-like autonomy phases
+
+- [x] Phase A — Cognitive continuity
+- [x] Phase B — Prediction before action
+- [x] Phase C — Reflection and adaptive learning
+- [x] Phase D — Bounded testing and exploration
+- [x] Phase E — Strategic planning instead of isolated action choice on the main routed short-plan path
+- [ ] Phase F — Safe self-improvement
+
+### Near-term execution order
+
+- [x] Make autonomous action selection strongly memory-informed on the main routed path
+- [x] Add explicit pre-action prediction records beyond the current lightweight scaffold
+- [x] Add expected-vs-actual reflection and mismatch scoring
+- [x] Let the decision layer adapt action priority from outcome history
+- [x] Introduce bounded exploratory testing for uncertainty reduction
+- [x] Upgrade from next-action choice to short plan execution on the main routed path
+- [ ] Expand safe self-improvement only after the above loop is stable
+
+### Required work
+
+- [x] Add `exploration` / `experiment` metadata to selected low-risk actions
+- [x] Keep experimental actions constrained by trust tiers and truth gates
+- [x] Build short multi-step plan tracking tied to routed outcomes
+- [x] Support replanning when steps fail or assumptions break
+- [ ] Keep self-improvement subordinate to evidence, security, and truth validation
+
+### Done when
+
+- [x] AlleyBot can deliberately test uncertainty with bounded low-risk actions on the main routed path
+- [x] Short plans persist across execution steps and update from real outcomes on the main routed path
+- [x] The autonomy loop behaves more like one reflective cognitive cycle than disconnected action selection on the main routed path
+
+### Next batched steps
+
+- [x] Persist degraded/recovered action-family state outside immediate active plan summaries
+- [x] Add trust buckets for action families such as degraded, cooling_down, recovering, and healthy
+- [x] Feed degraded/recovered action-family state into goal selection and longer-horizon planning, not just immediate decision ranking
+- [x] Feed trust-aware signals into orchestrator context, strategy evolution recommendations, secure goal generation, and world-state bridge decision context
+- [ ] Push plan-state-aware decisioning, mismatch-informed learning, and bounded exploration into remaining unrouted helper/plugin surfaces
+
+---
+
+## Priority 6 — Simplify Control Hierarchy
+
+**Goal:** The project should have clear runtime roles.
+
+### Desired architecture
+
+- [x] `AGIKernel` = state + shared systems + service access
+- [x] `AGIOrchestrator` = reasoning + phase composition + plan generation
+- [x] `AutonomousBrain` = scheduling + cycle timing + runtime supervision
+- [x] `ActionRouter` = execution + validation + learning handoff
+
+### Problems to solve
+
+- [ ] AGI Kernel, AGI Orchestrator, and Autonomous Brain overlap in responsibilities
+- [ ] Decision logic is spread across too many layers
+- [ ] Hard to know where the final action authority lives
+- [ ] Runtime ownership is clearer in docs than in some older helper surfaces
+
+### Required work
+
+- [ ] Remove duplicate decision responsibilities where possible
+- [ ] Make the scheduler separate from the planner
+- [ ] Make the planner separate from the executor
+- [ ] Document the authoritative runtime flow in one architecture doc
+
+### Done when
+
+- [ ] It is obvious which component decides, which executes, and which learns
+- [ ] Logs reflect one clean flow instead of multiple overlapping loops
+
+---
+
+## Priority 7 — Safety Tiers for Real Autonomy
+
+**Goal:** Expand autonomy without compromising security.
+
+### Required trust tiers
+
+- [ ] Tier 0: Observe only
+- [ ] Tier 1: Safe autonomous actions
+- [ ] Tier 2: Constrained system/config actions
+- [ ] Tier 3: Code change proposal only
+- [ ] Tier 4: Self-modification with strict approval and audit requirements
+
+### High-risk domains requiring special policy
+
+- [ ] Trading and on-chain actions
+- [ ] Self-improvement and code mutation
+- [ ] External posting at scale
+- [ ] Credential and secret handling
+- [ ] Autonomous deployment flows
+
+### Required work
+
+- [ ] Add explicit policy classes for risky action categories
+- [ ] Require stronger validation thresholds for money/code/external side effects
+- [ ] Add audit records for every high-risk action
+- [ ] Prevent unsafe autonomy from bypassing owner controls
+- [ ] Require prediction, validation, and outcome evidence before allowing high-trust self-improvement actions
+
+### Done when
+
+- [ ] AlleyBot can act more autonomously without expanding attack surface recklessly
+- [ ] Risky actions are explainable, gated, and reviewable
+
+---
+
+## Priority 8 — Bring Documentation Back in Sync with Reality
+
+**Goal:** Docs must reflect actual runtime truth.
+
+### Problems to solve
+
+- [ ] Several docs read as if the system is already fully unified
+- [ ] Old handoff notes and completed items obscure current priorities
+- [ ] Some docs describe aspirational architecture as completed behavior
+
+### Required work
+
+- [ ] Update autonomy-related docs to separate "implemented" from "fully enforced"
+- [ ] Mark experimental/in-progress architecture honestly
+- [x] Keep one authoritative roadmap for autonomy work
+- [ ] Keep one authoritative architecture flow diagram for runtime decision/execution
+
+### Done when
+
+- [ ] A new contributor can understand the real state of the system quickly
+- [ ] The roadmap focuses on integration quality, not feature inflation
+
+---
+
+## Systems Already In Scope
+
+These are real assets already present in the project and must be integrated, not replaced.
+
+### Memory and cognition systems
+
+- [x] SQLite memory
+- [x] Unified memory
+- [x] Episodic memory
+- [x] Semantic memory
+- [x] Goal memory / goal stack
+- [x] World state memory
+- [x] Reflection and strategy evolution
+
+### AGI and reasoning systems
+
+- [x] AGI Kernel
+- [x] AGI Orchestrator
+- [x] Planning system
+- [x] Causal engine
+- [x] Research engine
+- [x] Creative engine
+- [x] Social intelligence
+- [x] Metacognition
+- [x] LLM decision routing
+
+### Validation and alignment systems
+
+- [x] SyMod systems
+- [x] Synergy decision engine
+- [x] Security filter
+- [x] Owner-gated Telegram control
+
+### Platform and execution systems
+
+- [x] Moltx
+- [ ] Moltbook runtime dependency fully removed from all non-historical surfaces
+- [x] Moltchan
+- [x] Moltroad
+- [x] Clawbr
+- [x] Telegram
+- [x] On-chain / Base integration
+- [x] A2A / agent-facing integrations
+
+### Self-improvement systems
+
+- [x] Goal-to-skill pipeline
+- [x] Autonomous coder
+- [x] Testing pipeline
+- [x] Deployment pipeline
+- [x] Skill loading and marketplace support
+
+---
+
+## Immediate Next Steps
+
+### Sprint 1 — Execution and validation truth
+
+- [x] Audit the main autonomous execution paths
+- [x] Route the main autonomous proposal and goal paths through `ActionRouter`
+- [x] Standardize the main SyMod validator contract in the router
+- [x] Define and start using a canonical action schema for the routed path
+
+### Sprint 2 — Goal and plan actuation
+
+- [x] Rewrite the main goal-to-action mapping using canonical action specs
+- [x] Add first-pass plugin adapters for mismatched interfaces
+- [x] Tie routed goal completion to real execution outcomes
+
+### Sprint 3 — Memory and learning closure
+
+- [x] Standardize outcome record format
+- [ ] Feed outcomes into all memory/learning systems consistently
+- [ ] Measure post-action adaptation quality
+
+### Sprint 4 — Safety and documentation
+
+- [ ] Add autonomy trust tiers
+- [ ] Harden self-improvement boundaries
+- [ ] Update docs to reflect enforced runtime behavior
+
+### Sprint 5 — Cognitive continuity and reflection quality
+
+- [ ] Expose candidate performance summaries to AI decision prompts
+- [ ] Add routed expected-vs-actual mismatch scoring
+- [ ] Persist mismatch metadata through learning surfaces
+
+### Sprint 6 — Exploration and short-plan autonomy
+
+- [ ] Add bounded exploration metadata for low-risk actions
+- [ ] Track short multi-step plans against routed outcomes
+- [ ] Support replanning from failed or misleading steps
+
+---
+
+## Definition of True Full Autonomy for AlleyBot
+
+AlleyBot is truly fully autonomous when all of the following are true:
+
+- [ ] It perceives the environment through world state + memory continuously
+- [ ] It generates and prioritizes its own goals reliably
+- [ ] It plans using one coherent reasoning pipeline
+- [ ] It executes through one unified router
+- [ ] It validates every meaningful action through one layered trust model
+- [ ] It records every outcome in one consistent learning format
+- [ ] It adapts future behavior from that learning
+- [ ] It predicts likely outcomes before acting
+- [ ] It reflects on expected vs actual results after acting
+- [ ] It can run bounded experiments to reduce uncertainty safely
+- [ ] It can improve itself safely without weakening security
+
+Until then, the work is integration, enforcement, and hardening.
+
+---
+
+## Operating Principle
+
+Do not chase feature count.
+
+Chase:
+
+- [ ] coherence
+- [ ] reliability
+- [ ] safety
+- [ ] learning quality
+- [ ] truthful architecture
+
+AlleyBot already has many minds worth of components.
+The next step is making them behave like **one real autonomous mind**.

@@ -18,6 +18,7 @@ from pathlib import Path
 from enum import Enum
 
 from src.agentic.action_logger import ActionLogger
+from src.agentic.planning import get_plan_manager
 
 logger = logging.getLogger(__name__)
 
@@ -144,9 +145,21 @@ class StrategyEvolver:
     
     def __init__(self, action_logger: Optional[ActionLogger] = None):
         self.action_logger = action_logger or ActionLogger()
+        self.plan_manager = get_plan_manager()
         self.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
         self._ensure_seed_strategies()
+
+    def _strategy_type_to_action_family(self, strategy_type: StrategyType) -> Optional[str]:
+        """Map strategy categories to persisted action-family trust labels."""
+        mapping = {
+            StrategyType.ENGAGEMENT: 'engage',
+            StrategyType.CONTENT: 'post',
+            StrategyType.TIMING: 'post',
+            StrategyType.TARGETING: 'engage',
+            StrategyType.TONE: 'post',
+        }
+        return mapping.get(strategy_type)
     
     def _init_db(self) -> None:
         """Initialize strategy database"""
@@ -518,6 +531,7 @@ class StrategyEvolver:
     def _generate_recommendations(self, strategies: List[Strategy]) -> List[str]:
         """Generate actionable recommendations based on data"""
         recommendations = []
+        trust_state = self.plan_manager.get_action_family_states()
         
         # Group by type
         by_type: Dict[StrategyType, List[Strategy]] = {}
@@ -542,6 +556,22 @@ class StrategyEvolver:
                     f"✅ Strategy '{best.name}' is performing excellently "
                     f"({best.success_rate:.0%} success, {best.times_used} uses). "
                     f"Consider using as template."
+                )
+
+            action_family = self._strategy_type_to_action_family(stype)
+            family_state = trust_state.get(action_family or '', {}) if action_family else {}
+            trust_bucket = family_state.get('trust_bucket')
+            if trust_bucket == 'degraded':
+                recommendations.append(
+                    f"🚫 {stype.value} strategy family is currently degraded. Prefer safer alternates until routed evidence improves."
+                )
+            elif trust_bucket == 'cooling_down':
+                recommendations.append(
+                    f"⏳ {stype.value} strategy family is cooling down. Limit aggressive reuse until cooldown expires."
+                )
+            elif trust_bucket == 'recovering':
+                recommendations.append(
+                    f"🔄 {stype.value} strategy family is recovering. Reintroduce cautiously with evidence-driven monitoring."
                 )
         
         # Check for gaps
@@ -584,6 +614,45 @@ class StrategyEvolver:
                        action_id: Optional[str] = None,
                        context: Optional[Dict] = None) -> None:
         """Record the outcome of using a strategy"""
+        normalized_context = dict(context or {})
+        outcome_record = normalized_context.get('outcome_record') or {}
+        prediction_evaluation = outcome_record.get('prediction_evaluation') or normalized_context.get('prediction_evaluation') or {}
+        ranking_evidence = outcome_record.get('ranking_evidence') or normalized_context.get('ranking_evidence') or {}
+        dispatch_learning_summary = outcome_record.get('dispatch_learning_summary') or normalized_context.get('dispatch_learning_summary') or {}
+        dispatch_path = outcome_record.get('dispatch_path') or normalized_context.get('dispatch_path')
+        legacy_fallback_used = outcome_record.get('legacy_fallback_used')
+        if legacy_fallback_used is None:
+            legacy_fallback_used = normalized_context.get('legacy_fallback_used')
+        fallback_details = outcome_record.get('fallback_details') or normalized_context.get('fallback_details') or {}
+        if outcome_record:
+            normalized_context['action_type'] = outcome_record.get('action_type')
+            normalized_context['plugin'] = outcome_record.get('plugin')
+            normalized_context['goal_id'] = outcome_record.get('goal_id')
+            normalized_context['trigger'] = outcome_record.get('trigger')
+            normalized_context['mismatch_score'] = outcome_record.get('mismatch_score')
+        if prediction_evaluation:
+            normalized_context['prediction_evaluation'] = prediction_evaluation
+            normalized_context['confidence_calibration'] = prediction_evaluation.get('confidence_calibration')
+            normalized_context['value_alignment'] = prediction_evaluation.get('value_alignment')
+            normalized_context['risk_alignment'] = prediction_evaluation.get('risk_alignment')
+        if ranking_evidence:
+            normalized_context['ranking_evidence'] = ranking_evidence
+            normalized_context['predicted_value'] = ranking_evidence.get('predicted_value')
+            normalized_context['memory_shaped_adjustment'] = ranking_evidence.get('memory_shaped_adjustment')
+            normalized_context['ranking_used_memory_recall'] = bool(
+                (ranking_evidence.get('memory_relevance_count', 0) or 0) > 0
+                or ranking_evidence.get('entity_context_found')
+            )
+        if dispatch_learning_summary:
+            normalized_context['dispatch_learning_summary'] = dispatch_learning_summary
+            normalized_context['golden_path_alignment'] = dispatch_learning_summary.get('golden_path_alignment')
+        if dispatch_path:
+            normalized_context['dispatch_path'] = dispatch_path
+        if legacy_fallback_used is not None:
+            normalized_context['legacy_fallback_used'] = bool(legacy_fallback_used)
+        if fallback_details:
+            normalized_context['fallback_details'] = fallback_details
+
         with sqlite3.connect(self.DB_PATH) as conn:
             # Record outcome
             conn.execute('''
@@ -596,7 +665,7 @@ class StrategyEvolver:
                 1 if success else 0,
                 engagement,
                 datetime.now().isoformat(),
-                json.dumps(context) if context else None
+                json.dumps(normalized_context) if normalized_context else None
             ))
             
             # Update strategy stats
