@@ -5,9 +5,10 @@ Admin-only access for security
 """
 import os
 import re
+import asyncio
 from telegram import Update
 from telegram.ext import ContextTypes
-from typing import Optional
+from typing import Any, Optional
 
 from plugins.telegram.natural_intent_classifier import get_natural_intent_classifier
 
@@ -23,7 +24,7 @@ class ConversationalAI:
         self.agentic_system = agentic_system
         self.admin_chat_id = os.getenv('TELEGRAM_ADMIN_CHAT_ID')
         self.conversation_history = {}
-        self.intent_classifier: Optional[SemanticIntentClassifier] = None
+        self.intent_classifier: Optional[Any] = None
         self._load_conversation_memory()
         
     def set_agentic_system(self, agentic_system):
@@ -97,15 +98,25 @@ class ConversationalAI:
             if user_message.startswith('/'):
                 return
             
-            # Initialize intent classifier if not already done
-            self._init_intent_classifier()
+            # Initialize intent classifier if not already done, but don't let it block Telegram responsiveness
+            try:
+                await asyncio.wait_for(asyncio.to_thread(self._init_intent_classifier), timeout=2.5)
+            except Exception as classifier_init_exc:
+                print(f"⚠️ Intent classifier init skipped for responsiveness: {classifier_init_exc}")
             
             # Use semantic intent classification first (fast, no AI latency)
             if self.intent_classifier and self.intent_classifier.command_embeddings:
                 await update.message.chat.send_action(action="typing")
                 
                 # Classify intent
-                match_result = self.intent_classifier.classify_intent(user_message)
+                try:
+                    match_result = await asyncio.wait_for(
+                        asyncio.to_thread(self.intent_classifier.classify_intent, user_message),
+                        timeout=3.0,
+                    )
+                except Exception as classify_exc:
+                    print(f"⚠️ Intent classifier timed out or failed: {classify_exc}")
+                    match_result = None
                 
                 if match_result:
                     command_name, confidence = match_result
@@ -167,7 +178,11 @@ class ConversationalAI:
                 response = await self._agentic_response(user_id, user_message)
             else:
                 # Fallback to DeepSeek direct chat
-                response = await self._fallback_response(user_message)
+                try:
+                    response = await asyncio.wait_for(self._fallback_response(user_message), timeout=8.0)
+                except Exception as fallback_exc:
+                    print(f"⚠️ Fallback response path timed out or failed: {fallback_exc}")
+                    response = "🦞 I got your message, but my heavier reasoning path is still warming up. Try /help or /status, or send the message again in a moment."
             
             # Send response (handle long messages)
             if len(response) > 4000:

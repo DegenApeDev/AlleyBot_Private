@@ -38,6 +38,7 @@ class Telegram(AlleyBotPlugin):
         self.last_activity = None
         self._polling_thread = None
         self._polling_loop = None
+        self._polling_started_event = None
         
         # Pre-warm shared SentenceTransformer model in background so it's ready before first message
         try:
@@ -95,6 +96,16 @@ class Telegram(AlleyBotPlugin):
         """Setup Telegram bot handlers"""
         if not self.application:
             return
+
+        async def _telegram_error_handler(update, context):
+            try:
+                print(f"❌ Telegram handler error: {context.error}")
+                if update and getattr(update, 'effective_message', None):
+                    await update.effective_message.reply_text(f"❌ Telegram handler error: {context.error}")
+            except Exception as error_handler_exc:
+                print(f"⚠️ Telegram error handler failed: {error_handler_exc}")
+
+        self.application.add_error_handler(_telegram_error_handler)
         
         # Import intelligent commands
         from plugins.telegram.intelligent_commands import IntelligentTelegramCommands
@@ -1377,6 +1388,16 @@ All harmonic constants active and operational."""
         except Exception as e:
             print(f"❌ Failed to start Telegram bot: {e}")
             self.is_running = False
+
+    async def wait_until_polling_started(self, timeout: float = 10.0) -> bool:
+        """Wait until Telegram polling has actually started."""
+        event = self._polling_started_event
+        if not event:
+            return False
+        try:
+            await asyncio.wait_for(event.wait(), timeout=timeout)
+            return True
+        except Exception:
             return False
     
     def start_telegram_bot_daemon(self):
@@ -1486,6 +1507,7 @@ I'm ready to assist! Use /help to see available commands or just chat with me di
             return
 
         app = self.application
+        self._polling_started_event = asyncio.Event()
 
         if self.is_running:
             print("⚠️  Telegram polling already marked running, skipping duplicate start")
@@ -1502,21 +1524,44 @@ I'm ready to assist! Use /help to see available commands or just chat with me di
             return
 
         try:
+            from telegram.error import TelegramError
+
+            def polling_error_callback(error: TelegramError) -> None:
+                print(f"❌ Telegram polling error: {error}")
+
             await app.initialize()
             print("✅ Telegram application initialized")
 
             await app.start()
             print("✅ Telegram application started")
 
+            original_process_update = app.process_update
+
+            async def debug_process_update(update):
+                try:
+                    message = getattr(update, 'message', None)
+                    text = getattr(message, 'text', '') if message else ''
+                    user_id = getattr(getattr(message, 'from_user', None), 'id', '?') if message else '?'
+                    print(f"📨 Telegram update received: '{str(text)[:80]}' from user {user_id}")
+                except Exception:
+                    print("📨 Telegram update received")
+                return await original_process_update(update)
+
+            app.process_update = debug_process_update
+
             await app.updater.start_polling(
-                drop_pending_updates=True,
+                drop_pending_updates=False,
                 allowed_updates=Update.ALL_TYPES,
+                error_callback=polling_error_callback,
             )
             self.is_running = True
-            print(f"✅ Telegram updater polling started (running={app.updater.running})")
+            self._polling_started_event.set()
+            print(f"✅ Telegram updater polling started (running={app.updater.running}, app_running={app.running})")
 
             while self.is_running:
                 await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            print("ℹ️ Telegram polling task cancelled during shutdown")
         finally:
             try:
                 if getattr(app, 'updater', None) and app.updater.running:

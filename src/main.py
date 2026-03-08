@@ -95,7 +95,17 @@ async def _run_production(core):
     )
     print("✅ Telegram polling task scheduled")
 
-    print("\n🎉 All systems GO — Telegram commands are live!\n")
+    telegram_ready = False
+    try:
+        if hasattr(telegram_plugin, 'wait_until_polling_started'):
+            telegram_ready = await telegram_plugin.wait_until_polling_started(timeout=15.0)
+    except Exception as e:
+        print(f"⚠️  Telegram polling readiness check failed: {e}")
+
+    if telegram_ready:
+        print("\n🎉 All systems GO — Telegram commands are live!\n")
+    else:
+        print("\n⚠️  Telegram polling was scheduled but did not confirm readiness yet.\n")
 
     # --- Keep running until interrupted ---
     try:

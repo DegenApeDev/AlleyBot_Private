@@ -17,9 +17,9 @@ class GrokAI:
     
     # Model routing per engineer's recommendation
     MODELS = {
-        'reasoning': 'grok-4.1-fast-reasoning',      # Design, specs, APIs, edge cases
+        'reasoning': 'grok-4-1-fast-reasoning',      # Design, specs, APIs, edge cases
         'code': 'grok-code-fast-1',                   # Large code, scaffolding, files
-        'quick': 'grok-4.1-fast-non-reasoning',      # Small edits, glue, cheap tasks
+        'quick': 'grok-4-1-fast-non-reasoning',      # Small edits, glue, cheap tasks
         'default': 'grok-4-1-fast-reasoning',
     }
     

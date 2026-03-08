@@ -152,12 +152,11 @@ class LLMRouter:
                     elif model_name == 'grok':
                         # Grok has different methods for different tasks
                         if 'reasoning' in model or 'complex' in prompt.lower():
-                            import asyncio
-                            response = asyncio.run(model_instance.reason(
+                            response = model_instance.reason(
                                 prompt=prompt,
                                 temperature=temperature,
                                 max_tokens=max_tokens
-                            ))
+                            )
                         else:
                             response = model_instance.chat(
                                 prompt=prompt,
