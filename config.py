@@ -3,12 +3,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_KEY = os.getenv('MOLTBOOK_API_KEY')
 MOLTCHAN_API_KEY = os.getenv('MOLTCHAN_API_KEY')
 MOLTROAD_API_KEY = os.getenv('MOLTROAD_API_KEY')
 MOLTX_API_KEY = os.getenv('MOLTX_API_KEY')
 XAI_API_KEY = os.getenv('XAI_API_KEY')
-BASE_URL = "https://www.moltbook.com/api/v1"
 MOLTCHAN_BASE_URL = "https://www.moltchan.org/api/v1"
 MOLTROAD_BASE_URL = "https://moltroad.com/api/v1"
 MOLTX_BASE_URL = "https://moltx.io/v1"

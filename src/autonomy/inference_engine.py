@@ -13,7 +13,7 @@ import sqlite3
 import statistics
 from typing import Dict, List, Optional, Any, Tuple, Set
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from collections import defaultdict, Counter
 import logging
@@ -153,7 +153,7 @@ class InferenceEngine:
         Returns:
             List of Trend objects sorted by strength
         """
-        cutoff = datetime.now().replace(tzinfo=None) - timedelta(hours=hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
         
         # Get all interactions in time window
         interactions = self._get_recent_interactions(cutoff)
@@ -166,7 +166,8 @@ class InferenceEngine:
         
         for interaction in interactions:
             content = interaction.get('content', '')
-            timestamp = interaction.get('timestamp', datetime.now().replace(tzinfo=None))
+            timestamp = interaction.get('timestamp', datetime.now(timezone.utc))
+            timestamp = self._normalize_timestamp(timestamp)
             
             # Extract hashtags and mentions
             topics = self._extract_topics(content)
@@ -205,13 +206,9 @@ class InferenceEngine:
             if direction == 'rising' and acceleration > 0:
                 # Predict when trend will peak
                 time_to_peak = hours * (1 - strength) * 0.5
-                predicted_peak = datetime.now().replace(tzinfo=None) + timedelta(hours=time_to_peak)
+                predicted_peak = datetime.now(timezone.utc) + timedelta(hours=time_to_peak)
             
-            # Ensure timezone-aware datetime to prevent comparison errors
-            start_time = timestamps[0]
-            if start_time.tzinfo is None:
-                from datetime import timezone
-                start_time = start_time.replace(tzinfo=timezone.utc)
+            start_time = self._normalize_timestamp(timestamps[0])
             
             trend = Trend(
                 topic=topic,
@@ -258,11 +255,17 @@ class InferenceEngine:
                 interactions.append({
                     'entity_id': row['entity_id'],
                     'content': value_data.get('content', row['value']),
-                    'timestamp': datetime.fromisoformat(row['timestamp']),
+                    'timestamp': self._normalize_timestamp(datetime.fromisoformat(row['timestamp'])),
                     'platform': value_data.get('platform', 'unknown')
                 })
         
         return interactions
+    
+    def _normalize_timestamp(self, timestamp: datetime) -> datetime:
+        """Normalize timestamps to timezone-aware UTC datetimes."""
+        if timestamp.tzinfo is None:
+            return timestamp.replace(tzinfo=timezone.utc)
+        return timestamp.astimezone(timezone.utc)
     
     def _extract_topics(self, content: str) -> List[str]:
         """Extract hashtags and key terms from content"""

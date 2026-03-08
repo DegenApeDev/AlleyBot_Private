@@ -17,6 +17,8 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 from dataclasses import dataclass, field
 
+from src.agentic.planning import get_plan_manager
+
 
 @dataclass
 class Goal:
@@ -85,6 +87,7 @@ class SecureGoalGenerator:
     
     def __init__(self, agi_kernel):
         self.agi = agi_kernel
+        self.plan_manager = get_plan_manager()
         
         # Core values (cannot be violated)
         self.core_values = {
@@ -110,6 +113,39 @@ class SecureGoalGenerator:
         self.max_goal_cost = 100.0  # USD equivalent
         
         print("🎯 SecureGoalGenerator initialized")
+
+    def _infer_action_family_for_goal(self, goal: Goal) -> Optional[str]:
+        """Infer the dominant action family implied by a generated goal."""
+        goal_blob = f"{goal.description} {' '.join(action.get('action', '') for action in goal.actions)}".lower()
+        if 'create_content' in goal_blob or 'market_skill' in goal_blob or 'post' in goal_blob:
+            return 'post'
+        if 'engage_platform' in goal_blob or 'reply' in goal_blob or 'engage' in goal_blob:
+            return 'engage'
+        if 'analyze' in goal_blob or 'research' in goal_blob:
+            return 'analyze'
+        if 'develop_skill' in goal_blob or 'fix' in goal_blob:
+            return 'fix'
+        return None
+
+    def _score_goal_against_trust_state(self, goal: Goal) -> float:
+        """Score generated goals using persisted action-family trust buckets."""
+        score = float(goal.priority)
+        action_family = self._infer_action_family_for_goal(goal)
+        if not action_family:
+            return score
+
+        state = self.plan_manager.get_action_family_states().get(action_family, {})
+        trust_bucket = state.get('trust_bucket', 'healthy')
+        degradation_score = float(state.get('degradation_score', 0.0) or 0.0)
+        recovery_score = float(state.get('recovery_score', 0.0) or 0.0)
+
+        if trust_bucket == 'degraded':
+            return score - (0.35 + (degradation_score * 0.25))
+        if trust_bucket == 'cooling_down':
+            return score - (0.2 + (degradation_score * 0.1))
+        if trust_bucket == 'recovering':
+            return score + min(0.15 + (recovery_score * 0.1), 0.3)
+        return score + 0.05
     
     def generate_goals(self, world_state: Dict) -> List[Goal]:
         """
@@ -152,9 +188,14 @@ class SecureGoalGenerator:
         # Platform engagement goals
         if self._should_engage_platforms(world_state):
             candidates.append(self._create_engagement_goal(world_state))
+
+        candidates.sort(key=self._score_goal_against_trust_state, reverse=True)
         
         # 3. Validate and filter goals
         for candidate in candidates[:self.max_goals_per_cycle]:
+            trust_score = self._score_goal_against_trust_state(candidate)
+            if trust_score < 0.35:
+                continue
             if self._validate_goal(candidate):
                 goals.append(candidate)
         

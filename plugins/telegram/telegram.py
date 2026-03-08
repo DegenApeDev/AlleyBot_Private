@@ -7,6 +7,7 @@ import os
 import requests
 import json
 import asyncio
+import threading
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from telegram import Bot, Update
@@ -35,10 +36,11 @@ class Telegram(AlleyBotPlugin):
         self.is_running = False
         self.message_queue = []
         self.last_activity = None
+        self._polling_thread = None
+        self._polling_loop = None
         
         # Pre-warm shared SentenceTransformer model in background so it's ready before first message
         try:
-            import threading
             def _prewarm():
                 try:
                     from plugins.telegram.intent_classifier import get_sentence_model
@@ -93,24 +95,6 @@ class Telegram(AlleyBotPlugin):
         """Setup Telegram bot handlers"""
         if not self.application:
             return
-        
-        # DEBUG: Add catch-all handler FIRST to trace all updates
-        from telegram.ext import MessageHandler, filters
-        async def debug_all_updates(update, context):
-            print(f"🔔 DEBUG HANDLER FIRING: {update.message.text if update.message else 'N/A'}")
-            # Don't block other handlers - this handler just logs
-        self.application.add_handler(MessageHandler(filters.ALL, debug_all_updates), group=-1)
-        
-        # Also add a pre-handler callback to trace every update
-        async def trace_handler_callback(update, context):
-            print(f"🔔 TRACE: Handler processing update: {update.message.text if update.message else 'callback'}")
-        
-        # Monkey-patch the application to trace handler calls
-        original_process_update = self.application.process_update
-        async def patched_process_update(update):
-            print(f"🔔 PATCH: process_update called with: {update.message.text if update.message else 'N/A'}")
-            return await original_process_update(update)
-        self.application.process_update = patched_process_update
         
         # Import intelligent commands
         from plugins.telegram.intelligent_commands import IntelligentTelegramCommands
@@ -188,17 +172,6 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("symod_status", self.intelligent_commands.symod_status))
         self.application.add_handler(CommandHandler("symod_cycle", self.intelligent_commands.symod_cycle))
         self.application.add_handler(CommandHandler("symod_config", self.intelligent_commands.symod_config))
-        
-        # MoltBook AI commands
-        self.application.add_handler(CommandHandler("moltbookai_post", self.intelligent_commands.moltbookai_post))
-        self.application.add_handler(CommandHandler("moltbookai_comment", self.intelligent_commands.moltbookai_comment))
-        self.application.add_handler(CommandHandler("moltbookai_profile", self.intelligent_commands.moltbookai_profile))
-        self.application.add_handler(CommandHandler("moltbookai_feed", self.intelligent_commands.moltbookai_feed))
-        self.application.add_handler(CommandHandler("moltbookai_submolts", self.intelligent_commands.moltbookai_submolts))
-        self.application.add_handler(CommandHandler("moltbookai_init", self.intelligent_commands.moltbookai_init))
-        
-        # MoltBook commands (legacy - keep for compatibility)
-        self.application.add_handler(CommandHandler("moltbook_post", self.intelligent_commands.moltbook_post))
         self.application.add_handler(CommandHandler("moltchan_post", self.intelligent_commands.moltchan_post))
         
         # System commands
@@ -472,6 +445,11 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("agi_cycle", self._handle_agi_cycle))
         self.application.add_handler(CommandHandler("multi_platform", self._handle_multi_platform))
         
+        # Egyptian Synergy Model commands
+        self.application.add_handler(CommandHandler("synergy_status", self._handle_synergy_status))
+        self.application.add_handler(CommandHandler("weigh_heart", self._handle_weigh_heart))
+        self.application.add_handler(CommandHandler("field_report", self._handle_field_report))
+        
         # Console Monitor commands
         self.application.add_handler(CommandHandler("console_monitor", self._handle_console_monitor))
         self.application.add_handler(CommandHandler("console_stats", self._handle_console_stats))
@@ -615,7 +593,7 @@ class Telegram(AlleyBotPlugin):
             )
             
             orchestrator = get_agi_orchestrator(core=self.core)
-            result = orchestrator.run_multi_platform_cycle(topic=topic)
+            result = await orchestrator.run_multi_platform_cycle(topic=topic)
             
             # Format response
             if result.get('success'):
@@ -753,7 +731,7 @@ class Telegram(AlleyBotPlugin):
         welcome_message = """🦞 **AlleyBot** — Autonomous AI Agent
 
 🧠 **Brain:** /brain_start /brain_stop /think /brain
-📢 **Social:** /moltx_post /moltx_feed /moltbookai_post
+📢 **Social:** /moltx_post /moltx_feed /moltx_engage
 🔗 **On-Chain:** /wallet /balance /track /tx /activity
 🤝 **A2A:** /a2a_start /a2a_status /a2a_tasks
 🆔 **ERC-8004:** /erc8004_rebuild /erc8004_update
@@ -898,8 +876,23 @@ Just send any message and I'll respond!
                 return
             
             if self.core and 'moltx' in self.core.plugins:
-                moltx_plugin = self.core.plugins['moltx']
-                result = moltx_plugin.create_post(post_content)
+                if hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
+                    action_spec = {
+                        'plugin': 'moltx',
+                        'action_type': 'moltx_intelligent_post',
+                        'params': {
+                            'topic': post_content,
+                        },
+                        'context': {
+                            'source': 'telegram_command',
+                            'trigger': 'owner_command',
+                            'impact': 'high',
+                        }
+                    }
+                    result = await self.core.agi_kernel.act(action_spec)
+                else:
+                    moltx_plugin = self.core.plugins['moltx']
+                    result = moltx_plugin.create_post(post_content)
                 await update.message.reply_text(f"📢 Post Result:\n{result}")
                 self._log_activity("command", {"command": "post", "user": "DegenApeDev", "content": post_content})
             else:
@@ -1137,7 +1130,97 @@ The community is growing! 🚀"""
 AlleyBot is working autonomously! 🦞"""
         
         self.send_alert("Autonomous Mode", alert_message, "low")
-    
+
+    def notify_autonomous_accomplishment(self, title: str, summary: str, reward_signal: str = "Progress made"):
+        """Send a human-facing accomplishment update for meaningful autonomous wins."""
+        if not self.enabled:
+            return
+
+        alert_message = f"""🏆 **Autonomous Accomplishment**
+
+🎯 **Completed**: {title}
+📝 **Summary**: {summary}
+💛 **Why it matters**: {reward_signal}
+
+AlleyBot is reporting back with a meaningful win for his human. 🦞"""
+
+        self.send_alert("Autonomous Accomplishment", alert_message, "normal")
+
+    def send_autonomous_digest(self, hours: int = 24):
+        """Send a concise digest of recent autonomous wins to the owner."""
+        if not self.enabled:
+            return
+
+        try:
+            from src.agentic.goal_manager import get_goal_manager, GoalStatus
+            from src.agentic.action_logger import ActionLogger
+
+            goal_manager = get_goal_manager()
+            action_logger = ActionLogger()
+
+            completed_goals = []
+            for goal in goal_manager.get_goals(status=GoalStatus.COMPLETED, limit=10):
+                if goal.completed_at:
+                    age_hours = (datetime.now() - goal.completed_at).total_seconds() / 3600
+                    if age_hours <= hours:
+                        completed_goals.append(goal)
+
+            recent_actions = action_logger.get_recent_actions(outcome='success', limit=10)
+            recent_actions = [
+                action for action in recent_actions
+                if (datetime.now() - action.timestamp).total_seconds() / 3600 <= hours
+            ]
+
+            if not completed_goals and not recent_actions:
+                return
+
+            lines = [f"📬 **Autonomous Digest (Last {hours}h)**", ""]
+
+            if completed_goals:
+                lines.append(f"🏆 **Completed Goals**: {len(completed_goals)}")
+                for goal in completed_goals[:3]:
+                    outcome = (goal.outcome or 'Completed successfully')[:90]
+                    lines.append(f"- `{goal.id}` {goal.title[:60]}")
+                    lines.append(f"  {outcome}")
+                lines.append("")
+
+            if recent_actions:
+                lines.append(f"⚡ **Successful Actions**: {len(recent_actions)}")
+                for action in recent_actions[:5]:
+                    target = action.target_name or action.target_id or action.plugin
+                    lines.append(
+                        f"- `{action.action_type}` via `{action.plugin}` @ {action.timestamp.strftime('%H:%M')}"
+                        f" → {str(target)[:60]}"
+                    )
+
+            lines.append("")
+            lines.append("AlleyBot is sharing what he accomplished for his human. 🦞")
+
+            self.send_alert("Autonomous Digest", "\n".join(lines), "normal")
+        except Exception as e:
+            print(f"⚠️  Could not send autonomous digest: {e}")
+
+    def maybe_send_autonomous_digest(self, hours: int = 24, cooldown_hours: int = 6):
+        """Send an autonomous digest only if the cooldown window has elapsed."""
+        if not self.enabled:
+            return False
+
+        try:
+            last_digest = self.core.get_memory('telegram_last_autonomous_digest_at') if self.core else None
+            if last_digest:
+                last_digest_at = datetime.fromisoformat(last_digest)
+                elapsed_hours = (datetime.now() - last_digest_at).total_seconds() / 3600
+                if elapsed_hours < cooldown_hours:
+                    return False
+
+            self.send_autonomous_digest(hours=hours)
+            if self.core:
+                self.core.save_memory('telegram_last_autonomous_digest_at', datetime.now().isoformat())
+            return True
+        except Exception as e:
+            print(f"⚠️  Could not evaluate autonomous digest cooldown: {e}")
+            return False
+
     def notify_error(self, error_type: str, error_message: str):
         """Send notification for important errors"""
         if not self.enabled:
@@ -1152,6 +1235,134 @@ AlleyBot encountered an issue and needs attention!"""
         
         self.send_alert("System Alert", alert_message, "high")
     
+    async def _handle_synergy_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show current Egyptian Synergy field status"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            # Get decision system from AGI kernel
+            if not hasattr(self.core, 'agi_kernel') or not hasattr(self.core.agi_kernel, 'decision_system'):
+                await update.message.reply_text("⚠️ Decision system not available")
+                return
+            
+            decision_system = self.core.agi_kernel.decision_system
+            report = decision_system.get_synergy_field_report()
+            
+            if 'status' in report and report['status'] != 'Synergy Model not available':
+                field_state = report.get('field_state', {})
+                
+                message = f"""🜂 **Egyptian Synergy Field Status**
+
+**Field State**: {field_state.get('phase', 'unknown').title()}
+**Balance**: {field_state.get('balance', 0):.3f}
+**Resonant**: {'✅ Yes' if field_state.get('resonant') else '❌ No'}
+
+**Decision History**:
+• Total: {report.get('total_decisions', 0)}
+• Completed: {report.get('completed_actions', 0)}
+• Success Rate: {report.get('success_rate', 0):.1%}
+• Weighted Balance: {report.get('weighted_balance', 0):.3f}
+
+**Recommendation**: {report.get('recommendation', 'N/A')}"""
+            else:
+                message = f"🜂 **Synergy Status**: {report.get('status', 'Unknown')}"
+            
+            await update.message.reply_text(message)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def _handle_weigh_heart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Perform Weighing of the Heart validation"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            # Get decision system
+            if not hasattr(self.core, 'agi_kernel') or not hasattr(self.core.agi_kernel, 'decision_system'):
+                await update.message.reply_text("⚠️ Decision system not available")
+                return
+            
+            decision_system = self.core.agi_kernel.decision_system
+            
+            if not decision_system.synergy_engine:
+                await update.message.reply_text("⚠️ Synergy Model not available")
+                return
+            
+            # Perform heart weighing
+            from src.agentic.synergy_constants import DuatConsciousnessBridge
+            duat = DuatConsciousnessBridge()
+            
+            judgment = duat.weigh_heart(
+                decision_system.synergy_engine.action_history,
+                "Current state check"
+            )
+            
+            message = f"""⚖️ **Weighing of the Heart**
+
+**Historical Balance**: {judgment['historical_balance']:.3f}
+**Weighted Balance**: {judgment['weighted_balance']:.3f}
+
+**Feather Weight** (Ma'at): {judgment['feather_weight']:.3f}
+**Heart Weight**: {judgment['heart_weight']:.3f}
+
+**Verdict**: {judgment['verdict']}"""
+            
+            await update.message.reply_text(message)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
+    async def _handle_field_report(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Get detailed Synergy field report"""
+        if not await self._verify_owner(update):
+            return
+        
+        try:
+            # Get decision system
+            if not hasattr(self.core, 'agi_kernel') or not hasattr(self.core.agi_kernel, 'decision_system'):
+                await update.message.reply_text("⚠️ Decision system not available")
+                return
+            
+            decision_system = self.core.agi_kernel.decision_system
+            
+            if not decision_system.synergy_engine:
+                await update.message.reply_text("⚠️ Synergy Model not available")
+                return
+            
+            # Get constants info
+            from src.agentic.synergy_constants import SynergyConstants
+            constants = SynergyConstants()
+            
+            message = f"""🜂 **Egyptian Synergy Field Report**
+
+**Core Constants**:
+• Golden Phase: {constants.GOLDEN_PHASE}
+• Compression: {constants.COMPRESSION_ANGLE}°
+• Release: {constants.RELEASE_ANGLE}°
+
+**Pyramid Constants**:
+• Latitude: {constants.PYRAMID_LATITUDE}° N
+• Speed of Light: {constants.C_LIGHT:,} m/s
+
+**Quadrian Arena**:
+• Theta X: {constants.THETA_X}°
+• Theta Y: {constants.THETA_Y}°
+• Turn Limit: {constants.TURN_LIMIT}°
+
+**Duat Code**:
+• Primitives: {constants.DUAT_PRIMITIVES}
+• Actions: {constants.DUAT_ACTIONS}
+• Mirror Ratio: {constants.MIRROR_FIELD_RATIO}
+
+All harmonic constants active and operational."""
+            
+            await update.message.reply_text(message)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+    
     def start_telegram_bot(self):
         """Start the Telegram bot properly"""
         if not self.enabled or not self.application:
@@ -1159,10 +1370,7 @@ AlleyBot encountered an issue and needs attention!"""
         
         try:
             print("🤖 Starting Telegram bot polling...")
-            
-            # Run the bot in the current thread (blocking)
-            self.application.run_polling(drop_pending_updates=True)
-            self.is_running = True
+            asyncio.run(self._start_polling_async())
             print("✅ Telegram bot started successfully")
             return True
             
@@ -1177,19 +1385,12 @@ AlleyBot encountered an issue and needs attention!"""
             return False
         
         try:
-            import threading
-            import asyncio
-            
             def run_bot():
                 try:
-                    # Create new event loop for this thread
                     loop = asyncio.new_event_loop()
+                    self._polling_loop = loop
                     asyncio.set_event_loop(loop)
-                    
-                    # Run the bot
-                    self.application.run_polling(drop_pending_updates=True)
-                    self.is_running = True
-                    
+                    loop.run_until_complete(self._start_polling_async())
                 except Exception as e:
                     print(f"❌ Telegram bot error: {e}")
                     self.is_running = False
@@ -1198,16 +1399,19 @@ AlleyBot encountered an issue and needs attention!"""
                         loop.close()
                     except Exception as e:
                         print(f"⚠️  Error closing event loop: {e}")
+                    self._polling_loop = None
             
-            # Start bot in a separate daemon thread
-            bot_thread = threading.Thread(target=run_bot, daemon=True)
+            if self._polling_thread and self._polling_thread.is_alive():
+                print("⚠️  Telegram bot daemon already running")
+                return True
+
+            bot_thread = threading.Thread(target=run_bot, daemon=True, name="telegram-polling")
             bot_thread.start()
+            self._polling_thread = bot_thread
             
-            # Give it a moment to start
             import time
             time.sleep(1)
             
-            self.is_running = True
             print("✅ Telegram bot started in background")
             return True
             
@@ -1219,7 +1423,6 @@ AlleyBot encountered an issue and needs attention!"""
         """Stop the Telegram bot"""
         if self.application and self.is_running:
             try:
-                self.application.stop()
                 self.is_running = False
                 print("✅ Telegram bot stopped")
             except Exception as e:
@@ -1236,10 +1439,10 @@ AlleyBot encountered an issue and needs attention!"""
         if self.enabled:
             print("✅ Telegram plugin ready (polling will start via production mode)")
             
-            # Pre-warm intent classifier AFTER plugin is fully initialized
-            # so it can access all registered commands
-            if hasattr(self, 'conversational_ai'):
-                self.conversational_ai.prewarm_intent_classifier()
+            # DISABLED: Pre-warming takes 10 minutes and blocks startup
+            # Intent classifier will load lazily on first message instead (1-2 sec delay on first msg only)
+            # if hasattr(self, 'conversational_ai'):
+            #     self.conversational_ai.prewarm_intent_classifier()
     
     def _send_startup_notification(self):
         """Send startup notification to the owner"""
@@ -1268,64 +1471,71 @@ I'm ready to assist! Use /help to see available commands or just chat with me di
             return
         
         try:
-            import asyncio
-            
-            # Create new event loop for background polling
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
             print("🤖 Starting Telegram bot polling in background...")
-            
-            async def start_polling():
-                """Start polling without signal handlers (for background threads)"""
-                try:
-                    # Check if already running
-                    if self.application.updater.running:
-                        print("⚠️  Telegram updater already running, skipping initialization")
-                        self.is_running = True
-                        return
-                    
-                    # Initialize the application
-                    await self.application.initialize()
-                    
-                    # Start the updater (polling)
-                    await self.application.updater.start_polling(
-                        drop_pending_updates=True,
-                        allowed_updates=Update.ALL_TYPES
-                    )
-                    
-                    # Start the application
-                    await self.application.start()
-                    
-                    self.is_running = True
-                    print("✅ Telegram bot polling started successfully")
-
-                    # Start all AsyncPluginMixin background tasks now that
-                    # we have a running event loop they can share
-                    if self.core and hasattr(self.core, 'plugin_manager'):
-                        try:
-                            await self.core.plugin_manager.start_all_background()
-                            print("▶️  All plugin background tasks started")
-                        except Exception as bg_err:
-                            print(f"⚠️  start_all_background error: {bg_err}")
-                    
-                    # Keep the bot running
-                    while self.is_running:
-                        await asyncio.sleep(1)
-                        
-                except Exception as e:
-                    print(f"❌ Polling error: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    self.is_running = False
-            
-            # Run the async polling function
-            loop.run_until_complete(start_polling())
+            self.start_telegram_bot_daemon()
             
         except Exception as e:
             print(f"❌ Failed to start Telegram bot polling: {e}")
             import traceback
             traceback.print_exc()
+            self.is_running = False
+
+    async def _start_polling_async(self):
+        """Authoritative Telegram polling lifecycle for all startup paths."""
+        if not self.enabled or not self.application:
+            return
+
+        app = self.application
+
+        if self.is_running:
+            print("⚠️  Telegram polling already marked running, skipping duplicate start")
+            return
+
+        if getattr(app, 'running', False):
+            self.is_running = True
+            print("⚠️  Telegram application already running, skipping duplicate start")
+            return
+
+        if getattr(app, 'updater', None) and app.updater.running:
+            self.is_running = True
+            print("⚠️  Telegram updater already running, skipping duplicate start")
+            return
+
+        try:
+            await app.initialize()
+            print("✅ Telegram application initialized")
+
+            await app.start()
+            print("✅ Telegram application started")
+
+            await app.updater.start_polling(
+                drop_pending_updates=True,
+                allowed_updates=Update.ALL_TYPES,
+            )
+            self.is_running = True
+            print(f"✅ Telegram updater polling started (running={app.updater.running})")
+
+            while self.is_running:
+                await asyncio.sleep(1)
+        finally:
+            try:
+                if getattr(app, 'updater', None) and app.updater.running:
+                    await app.updater.stop()
+            except Exception as e:
+                print(f"⚠️  Error stopping Telegram updater: {e}")
+
+            try:
+                if app.running:
+                    await app.stop()
+            except Exception as e:
+                print(f"⚠️  Error stopping Telegram application: {e}")
+
+            try:
+                if getattr(app, '_initialized', False):
+                    await app.shutdown()
+            except Exception as e:
+                print(f"⚠️  Error shutting down Telegram application: {e}")
+
             self.is_running = False
     
     def cleanup(self):

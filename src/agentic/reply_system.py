@@ -64,16 +64,18 @@ class ReplySystem:
             profiles = self.agi.unified_memory.get('brain_user_profiles')
             if profiles and isinstance(profiles, dict):
                 self.user_profiles = profiles
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.debug(f"Could not load user profiles: {e}")
     
     def _save_user_profiles(self):
         """Save user profiles to unified memory"""
         try:
             if self.agi and hasattr(self.agi, 'unified_memory'):
                 self.agi.unified_memory.set('brain_user_profiles', self.user_profiles)
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.debug(f"Could not save user profiles: {e}")
     
     def _get_user_profile(self, username: str) -> Dict:
         """Get or create a profile for a user we've interacted with"""
@@ -141,8 +143,9 @@ class ReplySystem:
                         memory_context = "\nRelevant memories:\n" + "\n".join(
                             f"- {r.get('content', '')[:100]}" for r in results
                         )
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.debug(f"Could not fetch memory context: {e}")
         
         # On-chain context for crypto-related comments
         onchain_context = ""
@@ -162,8 +165,9 @@ class ReplySystem:
                                     tok = provider.get_token_balance(info['address'])
                                     if tok.get('success') and tok['balance'] > 0:
                                         onchain_context += f" {tok['balance']:,.0f} {sym}."
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.debug(f"Could not fetch onchain context: {e}")
         
         # Try Grok first (better reasoning), then DeepSeek
         reply = self._generate_with_grok(
@@ -194,8 +198,9 @@ class ReplySystem:
                         context={'user': commenter_name, 'platform': platform},
                         outcome={'success': True, 'reply': reply[:100]}
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.debug(f"Could not log episodic memory: {e}")
         
         return reply
     
@@ -215,8 +220,9 @@ class ReplySystem:
                     onchain = self.plugin_manager.plugins.get('onchain')
                     if onchain and hasattr(onchain, 'get_latest_block'):
                         block_height = onchain.get_latest_block()
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.debug(f"Could not get block height: {e}")
             
             validation = c2v.validate_debate_argument(
                 argument_text=reply,

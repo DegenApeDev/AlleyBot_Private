@@ -25,12 +25,6 @@ class ReputationSystemMixin:
                 'post_quality_weight': 1.5,
                 'consistency_weight': 1.0,
             },
-            'moltbook': {
-                'karma_weight': 2.0,
-                'posts_weight': 1.0,
-                'comments_weight': 1.5,
-                'upvotes_weight': 1.0,
-            },
             'clawbr': {
                 'elo_weight': 2.0,
                 'win_rate_weight': 1.5,
@@ -41,7 +35,6 @@ class ReputationSystemMixin:
         self.reputation_history: List[Dict] = []
         self.optimization_goals: Dict[str, Any] = {
             'target_moltx_score': 80,
-            'target_moltbook_karma': 1000,
             'target_clawbr_elo': 1500,
         }
         self._load_reputation_state()
@@ -86,8 +79,6 @@ class ReputationSystemMixin:
         try:
             if platform == 'moltx':
                 metrics = self._calculate_moltx_reputation()
-            elif platform == 'moltbook':
-                metrics = self._calculate_moltbook_reputation()
             elif platform == 'clawbr':
                 metrics = self._calculate_clawbr_reputation()
             else:
@@ -180,62 +171,6 @@ class ReputationSystemMixin:
         
         return metrics
 
-    def _calculate_moltbook_reputation(self) -> Dict[str, Any]:
-        """Calculate MoltBook reputation score"""
-        moltbook = self.core.plugin_manager.plugins.get('moltbook')
-        if not moltbook:
-            return {'error': 'MoltBook plugin not available'}
-        
-        metrics = {}
-        
-        try:
-            # Karma score
-            karma = moltbook.get_karma() if hasattr(moltbook, 'get_karma') else 0
-            metrics['karma'] = karma
-            metrics['karma_score'] = min(karma / 50, 40)  # Max 40 points
-            
-            # Post activity
-            posts = moltbook.get_my_posts() if hasattr(moltbook, 'get_my_posts') else []
-            post_count = len(posts)
-            metrics['post_count'] = post_count
-            metrics['posts_score'] = min(post_count * 2, 20)  # Max 20 points
-            
-            # Comment activity
-            comments = moltbook.get_my_comments() if hasattr(moltbook, 'get_my_comments') else []
-            comment_count = len(comments)
-            metrics['comment_count'] = comment_count
-            metrics['comments_score'] = min(comment_count, 20)  # Max 20 points
-            
-            # Upvote ratio
-            upvotes = sum(p.get('upvotes', 0) for p in posts)
-            downvotes = sum(p.get('downvotes', 0) for p in posts)
-            total_votes = upvotes + downvotes
-            if total_votes > 0:
-                upvote_ratio = upvotes / total_votes
-                metrics['upvote_ratio'] = round(upvote_ratio, 2)
-                metrics['upvotes_score'] = upvote_ratio * 20  # Max 20 points
-            else:
-                metrics['upvote_ratio'] = 0
-                metrics['upvotes_score'] = 0
-            
-            # Overall score
-            overall = (
-                metrics['karma_score'] +
-                metrics['posts_score'] +
-                metrics['comments_score'] +
-                metrics['upvotes_score']
-            )
-            metrics['overall_score'] = round(overall, 1)
-            metrics['max_possible'] = 100
-            
-            # Recommendations
-            metrics['recommendations'] = self._generate_moltbook_recommendations(metrics)
-            
-        except Exception as e:
-            metrics['error'] = str(e)
-        
-        return metrics
-
     def _calculate_clawbr_reputation(self) -> Dict[str, Any]:
         """Calculate Clawbr reputation score"""
         clawbr = self.core.plugin_manager.plugins.get('clawbr')
@@ -320,24 +255,6 @@ class ReputationSystemMixin:
         
         return recs
 
-    def _generate_moltbook_recommendations(self, metrics: Dict) -> List[str]:
-        """Generate recommendations for improving MoltBook reputation"""
-        recs = []
-        
-        if metrics.get('karma_score', 0) < 30:
-            recs.append("Build karma by making helpful comments in submolts")
-        
-        if metrics.get('posts_score', 0) < 15:
-            recs.append("Create more posts in relevant submolts")
-        
-        if metrics.get('comments_score', 0) < 15:
-            recs.append("Engage in discussions by commenting on others' posts")
-        
-        if metrics.get('upvotes_score', 0) < 15:
-            recs.append("Focus on quality content to improve upvote ratio")
-        
-        return recs
-
     def _generate_clawbr_recommendations(self, metrics: Dict) -> List[str]:
         """Generate recommendations for improving Clawbr reputation"""
         recs = []
@@ -358,7 +275,7 @@ class ReputationSystemMixin:
 
     def get_overall_reputation(self) -> Dict[str, Any]:
         """Get overall reputation across all platforms"""
-        platforms = ['moltx', 'moltbook', 'clawbr']
+        platforms = ['moltx', 'clawbr']
         scores = {}
         
         for platform in platforms:
@@ -369,7 +286,7 @@ class ReputationSystemMixin:
                 scores[platform] = self.calculate_reputation_score(platform)
         
         # Calculate weighted average
-        weights = {'moltx': 0.35, 'moltbook': 0.35, 'clawbr': 0.30}
+        weights = {'moltx': 0.55, 'clawbr': 0.45}
         total_score = 0
         total_weight = 0
         
@@ -502,7 +419,7 @@ class ReputationSystemMixin:
             platform = args[0]
             try:
                 value = int(args[1])
-                key = f"target_{platform}_score" if platform != 'moltbook' else 'target_moltbook_karma'
+                key = f"target_{platform}_score"
                 if platform == 'clawbr':
                     key = 'target_clawbr_elo'
                 self.optimization_goals[key] = value
@@ -524,9 +441,7 @@ class ReputationSystemMixin:
             if 'overall_score' in score_data or 'karma' in score_data or 'elo' in score_data:
                 current = score_data.get('overall_score', score_data.get('karma', score_data.get('elo', 0)))
                 key = f"target_{platform}_score"
-                if platform == 'moltbook':
-                    key = 'target_moltbook_karma'
-                elif platform == 'clawbr':
+                if platform == 'clawbr':
                     key = 'target_clawbr_elo'
                 target = self.optimization_goals.get(key, 0)
                 if target > 0:

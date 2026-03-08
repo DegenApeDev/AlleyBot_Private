@@ -30,6 +30,7 @@ from .content_strategy import ContentStrategySystem, create_content_strategy
 from .world_state_bridge import WorldStateBridge, create_world_state_bridge
 from .goal_stack import GoalStackBridge, create_goal_stack
 from .planning import get_plan_manager
+from .work_item_manager import WorkItemManager, create_work_item_manager
 
 
 class AGIKernel:
@@ -46,6 +47,13 @@ class AGIKernel:
     def __init__(self, core=None):
         self.core = core
         print("🧠 Initializing AGI Kernel...")
+        self.domain_autonomy_profiles = {
+            'social': {'enabled': True, 'trust_tier': 'medium', 'risk_level': 'medium'},
+            'content': {'enabled': True, 'trust_tier': 'medium', 'risk_level': 'medium'},
+            'analysis': {'enabled': True, 'trust_tier': 'high', 'risk_level': 'low'},
+            'market': {'enabled': False, 'trust_tier': 'low', 'risk_level': 'high'},
+            'self_improvement': {'enabled': False, 'trust_tier': 'low', 'risk_level': 'high'},
+        }
         
         # Initialize all AGI subsystems
         self.unified_memory = create_unified_memory(core)
@@ -102,6 +110,7 @@ class AGIKernel:
         # Goal stack (persistent goal tracking and execution)
         self.goal_stack = None  # Initialized after plugin_manager available
         self.plan_manager = get_plan_manager()
+        self.work_item_manager = create_work_item_manager(core)
         
         # Behavior modulator (episodic learning feedback loop)
         self.behavior_modulator = None  # Initialized with episodic memory
@@ -380,14 +389,430 @@ class AGIKernel:
         if not self.decision_system:
             print("⚠️ Decision system not initialized")
             return None
+
+        enriched_context = dict(context or {})
+        enriched_context['active_work_items'] = self.get_active_work_items(limit=5)
         
         # Use decision system for autonomous thinking
-        action = self.decision_system.decide_next_action(context)
+        action = self.decision_system.decide_next_action(enriched_context)
         
         if action:
             print(f"🧠 AGI decided: {action.get('id')} ({action.get('decision_method', 'unknown')})")
         
         return action
+
+    def get_active_work_items(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """Return active meaningful work items, persisted across cycles when available."""
+        derived_items = self._derive_work_items(limit=limit)
+
+        if self.work_item_manager:
+            try:
+                self.work_item_manager.upsert_many(derived_items)
+                persisted = self.work_item_manager.get_active_work_items(limit=limit)
+                judged_items: List[Dict[str, Any]] = []
+                for item in persisted:
+                    judgment = self._evaluate_work_item_capability(item)
+                    item['capability_judgment'] = judgment
+                    metadata = dict(item.get('metadata') or {})
+                    metadata['capability_judgment'] = judgment
+                    item['metadata'] = metadata
+                    self.work_item_manager.persist_capability_judgment(item.get('id'), judgment)
+                    judged_items.append(item)
+                if judged_items:
+                    return judged_items[:limit]
+                if persisted:
+                    return persisted
+            except Exception as exc:
+                print(f"⚠️ Work item persistence failed: {exc}")
+
+        return derived_items[:limit]
+
+    def _derive_work_items(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """Derive lightweight meaningful work items from goals and recent world-state signals."""
+        work_items: List[Dict[str, Any]] = []
+
+        try:
+            active_goals = self.goal_manager.get_active_goals() if self.goal_manager else []
+        except Exception:
+            active_goals = []
+
+        for goal in active_goals[:limit]:
+            goal_id = getattr(goal, 'id', None) or goal.get('id') if isinstance(goal, dict) else None
+            goal_description = getattr(goal, 'description', None) or goal.get('description') if isinstance(goal, dict) else None
+            goal_blob = str(goal_description or '').lower()
+            work_items.append({
+                'id': f"goal:{goal_id or 'unknown'}",
+                'type': 'goal',
+                'source': 'goal_manager',
+                'goal_id': goal_id,
+                'summary': goal_description or 'active goal',
+                'urgency': 'high',
+                'status': 'active',
+                'recommended_action_family': 'analyze' if goal_description and any(token in goal_description.lower() for token in ['analy', 'research', 'report']) else None,
+            })
+
+            if any(token in goal_blob for token in ['debate', 'argue', 'discussion']):
+                work_items.append({
+                    'id': f"debate:{goal_id or 'unknown'}",
+                    'type': 'debate_continuation',
+                    'source': 'goal_manager',
+                    'goal_id': goal_id,
+                    'summary': goal_description or 'Continue active debate thread',
+                    'urgency': 'medium',
+                    'status': 'active',
+                    'recommended_action_family': 'engage',
+                })
+
+        if self.world_state and hasattr(self.world_state, 'get_world_context_for_decision'):
+            try:
+                world_context = self.world_state.get_world_context_for_decision(scope='recent') or {}
+            except Exception:
+                world_context = {}
+
+            recent_events = world_context.get('recent_events', []) or []
+            trending_topics = world_context.get('trending_topics', []) or []
+            service_messages = world_context.get('service_messages', []) or []
+            market_signals = world_context.get('market_opportunities', []) or world_context.get('onchain_opportunities', []) or []
+
+            mention_like_events = [
+                event for event in recent_events
+                if str(event.get('type', '')).lower() in {'mention', 'reply', 'comment'}
+            ]
+            if mention_like_events:
+                work_items.append({
+                    'id': 'interaction:pending_social_followup',
+                    'type': 'interaction_followup',
+                    'source': 'world_state',
+                    'summary': f"{len(mention_like_events)} recent interaction(s) may need follow-up",
+                    'urgency': 'high',
+                    'status': 'active',
+                    'recommended_action_family': 'engage',
+                    'metadata': {
+                        'interaction_count': len(mention_like_events),
+                    },
+                })
+
+            actionable_service_messages = [
+                message for message in service_messages
+                if isinstance(message, dict) and str(message.get('priority', 'medium')).lower() in {'high', 'critical'}
+            ]
+            if actionable_service_messages:
+                top_message = actionable_service_messages[0]
+                work_items.append({
+                    'id': f"service:{top_message.get('id', 'pending_operational_prompt')}",
+                    'type': 'service_prompt',
+                    'source': 'world_state',
+                    'summary': top_message.get('summary') or top_message.get('content') or 'High-priority operational service message needs review',
+                    'urgency': 'high',
+                    'status': 'active',
+                    'recommended_action_family': 'analyze',
+                    'metadata': {
+                        'service_message': top_message,
+                    },
+                })
+
+            if trending_topics:
+                top_topic = trending_topics[0]
+                work_items.append({
+                    'id': f"trend:{top_topic.get('topic', 'unknown')}",
+                    'type': 'trend_opportunity',
+                    'source': 'world_state',
+                    'summary': f"Investigate or act on trending topic {top_topic.get('topic', 'unknown')}",
+                    'urgency': 'medium',
+                    'status': 'active',
+                    'recommended_action_family': 'analyze',
+                    'topic': top_topic.get('topic'),
+                    'metadata': {
+                        'trend_signal': top_topic,
+                    },
+                })
+
+            if market_signals:
+                top_market_signal = market_signals[0]
+                work_items.append({
+                    'id': f"market:{top_market_signal.get('id', top_market_signal.get('symbol', 'opportunity'))}",
+                    'type': 'market_opportunity',
+                    'source': 'world_state',
+                    'summary': top_market_signal.get('summary') or f"Review market/on-chain opportunity for {top_market_signal.get('symbol', 'unknown')}",
+                    'urgency': 'medium',
+                    'status': 'active',
+                    'recommended_action_family': 'analyze',
+                    'metadata': {
+                        'market_signal': top_market_signal,
+                    },
+                })
+
+        repeated_failure_item = self._derive_repeated_failure_work_item()
+        if repeated_failure_item:
+            work_items.append(repeated_failure_item)
+
+        operational_fix_item = self._derive_operational_fix_work_item()
+        if operational_fix_item:
+            work_items.append(operational_fix_item)
+
+        failed_goal_item = self._derive_failed_goal_execution_work_item()
+        if failed_goal_item:
+            work_items.append(failed_goal_item)
+
+        return work_items[:limit]
+
+    def _derive_repeated_failure_work_item(self) -> Optional[Dict[str, Any]]:
+        """Derive a work item when routed action history shows repeated blocked/failure patterns."""
+        router = getattr(self, 'action_router', None)
+        execution_history = getattr(router, 'execution_history', None) if router else None
+        if not isinstance(execution_history, list) or len(execution_history) < 3:
+            return None
+
+        recent_failures = [
+            outcome for outcome in execution_history[-8:]
+            if not outcome.get('success', False)
+        ]
+        if len(recent_failures) < 2:
+            return None
+
+        dominant_action = str(recent_failures[-1].get('action_type', '') or 'unknown')
+        blocked_reasons = [
+            str(outcome.get('error') or outcome.get('reason') or 'execution_failed')
+            for outcome in recent_failures[-3:]
+        ]
+
+        return {
+            'id': f"failure:{dominant_action}",
+            'type': 'blocked_action_pattern',
+            'source': 'action_router',
+            'summary': f"Repeated blocked/failing action pattern detected for {dominant_action}",
+            'urgency': 'medium',
+            'status': 'active',
+            'recommended_action_family': 'analyze',
+            'metadata': {
+                'recent_failures': blocked_reasons,
+                'failure_count': len(recent_failures),
+            },
+            'last_outcome': blocked_reasons[-1],
+            'blocked_reason': blocked_reasons[-1],
+        }
+
+    def _derive_operational_fix_work_item(self) -> Optional[Dict[str, Any]]:
+        """Create an operational-fix work item when recent routed failures imply a system/runtime issue."""
+        router = getattr(self, 'action_router', None)
+        execution_history = getattr(router, 'execution_history', None) if router else None
+        if not isinstance(execution_history, list):
+            return None
+
+        recent_failures = [
+            outcome for outcome in execution_history[-6:]
+            if not outcome.get('success', False)
+            and any(token in str(outcome.get('error') or outcome.get('reason') or '').lower() for token in ['timeout', 'network', 'unavailable', 'not loaded'])
+        ]
+        if not recent_failures:
+            return None
+
+        latest = recent_failures[-1]
+        failure_reason = str(latest.get('error') or latest.get('reason') or 'runtime_issue')
+        return {
+            'id': f"opsfix:{latest.get('action_type', 'runtime')}",
+            'type': 'operational_fix',
+            'source': 'action_router',
+            'summary': f"Investigate operational/runtime issue affecting {latest.get('action_type', 'runtime action')}",
+            'urgency': 'medium',
+            'status': 'active',
+            'recommended_action_family': 'analyze',
+            'metadata': {
+                'failure_reason': failure_reason,
+            },
+            'blocked_reason': failure_reason,
+            'last_outcome': failure_reason,
+        }
+
+    def _derive_failed_goal_execution_work_item(self) -> Optional[Dict[str, Any]]:
+        """Create a work item when the same goal repeatedly fails to execute successfully."""
+        router = getattr(self, 'action_router', None)
+        execution_history = getattr(router, 'execution_history', None) if router else None
+        if not isinstance(execution_history, list):
+            return None
+
+        goal_failures = [
+            outcome for outcome in execution_history[-10:]
+            if not outcome.get('success', False) and outcome.get('goal_id')
+        ]
+        if len(goal_failures) < 2:
+            return None
+
+        goal_id = goal_failures[-1].get('goal_id')
+        same_goal_failures = [outcome for outcome in goal_failures if outcome.get('goal_id') == goal_id]
+        if len(same_goal_failures) < 2:
+            return None
+
+        last_failure = same_goal_failures[-1]
+        failure_reason = str(last_failure.get('error') or last_failure.get('reason') or 'goal_execution_failed')
+        return {
+            'id': f"goalfail:{goal_id}",
+            'type': 'failed_goal_execution',
+            'source': 'action_router',
+            'goal_id': goal_id,
+            'summary': f"Repeated failed execution detected for goal {goal_id}",
+            'urgency': 'medium',
+            'status': 'active',
+            'recommended_action_family': 'analyze',
+            'metadata': {
+                'failure_count': len(same_goal_failures),
+                'failure_reason': failure_reason,
+            },
+            'blocked_reason': failure_reason,
+            'last_outcome': failure_reason,
+        }
+
+    def _evaluate_work_item_capability(self, work_item: Dict[str, Any]) -> Dict[str, Any]:
+        """Evaluate whether a work item is executable now or reflects a real capability gap."""
+        work_item = dict(work_item or {})
+        action_family = str(work_item.get('recommended_action_family') or '').lower()
+        summary_blob = " ".join([
+            str(work_item.get('summary', '') or ''),
+            str(work_item.get('type', '') or ''),
+            str(work_item.get('topic', '') or ''),
+            action_family,
+        ]).lower()
+
+        judgment = {
+            'can_execute_now': False,
+            'needs_more_context': False,
+            'needs_different_strategy': False,
+            'needs_new_skill': False,
+            'blocked_by_policy': False,
+            'blocked_by_runtime_readiness': False,
+            'primary_reason': 'insufficient_evidence',
+            'summary': '',
+            'matching_actions': [],
+            'plugin_ready': False,
+            'trust_bucket': 'unknown',
+            'world_state_evidence': False,
+            'upgrade_allowed': False,
+            'upgrade_evidence_count': 0,
+            'upgrade_within_policy': False,
+            'predicted_value_outweighs_risk': False,
+            'gap_type': 'none',
+        }
+
+        available_actions = []
+        if self.decision_system and hasattr(self.decision_system, 'get_available_actions'):
+            try:
+                available_actions = self.decision_system.get_available_actions() or []
+            except Exception:
+                available_actions = []
+
+        matching_actions = []
+        required_plugins = set()
+        for action in available_actions:
+            action_blob = " ".join([
+                str(action.get('id', '') or ''),
+                str(action.get('description', '') or ''),
+                str(action.get('platform', '') or ''),
+                str(action.get('requires', '') or ''),
+            ]).lower()
+            if action_family and action_family in action_blob:
+                matching_actions.append(action.get('id'))
+                requires = action.get('requires')
+                if isinstance(requires, list):
+                    required_plugins.update(str(req) for req in requires if req)
+                elif requires:
+                    required_plugins.add(str(requires))
+
+        loaded_plugins = set()
+        plugin_manager = getattr(self.core, 'plugin_manager', None) if self.core else None
+        if plugin_manager and hasattr(plugin_manager, 'list_loaded'):
+            try:
+                loaded_plugins = {str(name) for name in (plugin_manager.list_loaded() or [])}
+            except Exception:
+                loaded_plugins = set()
+
+        plugin_ready = not required_plugins or any(plugin in loaded_plugins for plugin in required_plugins)
+        judgment['plugin_ready'] = plugin_ready
+        judgment['matching_actions'] = matching_actions[:5]
+
+        trust_state = self.plan_manager.get_action_family_states() if self.plan_manager else {}
+        family_state = trust_state.get(action_family, {}) if action_family else {}
+        trust_bucket = family_state.get('trust_bucket', 'healthy' if action_family else 'unknown')
+        judgment['trust_bucket'] = trust_bucket
+
+        world_evidence = False
+        metadata = work_item.get('metadata') or {}
+        if metadata.get('interaction_count') or metadata.get('trend_signal') or work_item.get('goal_id'):
+            world_evidence = True
+        judgment['world_state_evidence'] = world_evidence
+
+        if trust_bucket == 'degraded':
+            judgment['blocked_by_policy'] = True
+            judgment['primary_reason'] = 'trust_policy_block'
+            judgment['summary'] = 'Action family is currently degraded and should fail closed'
+            return judgment
+
+        if trust_bucket == 'cooling_down':
+            judgment['blocked_by_runtime_readiness'] = True
+            judgment['primary_reason'] = 'action_family_cooling_down'
+            judgment['blocked_reason'] = 'cooldown_active'
+            judgment['summary'] = 'Action family is cooling down before safe retry'
+            return judgment
+
+        if not matching_actions:
+            judgment['needs_new_skill'] = True
+            judgment['primary_reason'] = 'no_matching_routed_action'
+            judgment['summary'] = 'No routed action currently matches this work item'
+            judgment['gap_type'] = 'new_skill_need'
+            self._annotate_upgrade_eligibility(work_item, judgment)
+            return judgment
+
+        if not plugin_ready:
+            judgment['blocked_by_runtime_readiness'] = True
+            judgment['primary_reason'] = 'required_plugin_unavailable'
+            judgment['blocked_reason'] = 'plugin_unavailable'
+            judgment['summary'] = 'Required plugin capability is not currently loaded'
+            judgment['gap_type'] = 'missing_plugin_capability'
+            return judgment
+
+        if not world_evidence and work_item.get('type') != 'goal':
+            judgment['needs_more_context'] = True
+            judgment['primary_reason'] = 'weak_world_evidence'
+            judgment['summary'] = 'Work item needs stronger world evidence before execution'
+            judgment['gap_type'] = 'prompt_or_context_deficiency'
+            return judgment
+
+        if action_family == 'engage' and 'trend' in summary_blob:
+            judgment['needs_different_strategy'] = True
+            judgment['primary_reason'] = 'strategy_alignment_issue'
+            judgment['summary'] = 'Trend opportunity may need analysis before engagement'
+            judgment['gap_type'] = 'prompt_or_context_deficiency'
+            return judgment
+
+        judgment['can_execute_now'] = True
+        judgment['primary_reason'] = 'routed_action_available'
+        judgment['summary'] = 'Routed action, plugin readiness, and trust state support execution now'
+        return judgment
+
+    def _annotate_upgrade_eligibility(self, work_item: Dict[str, Any], judgment: Dict[str, Any]) -> None:
+        """Annotate whether bounded upgrade intent is justified by repeated evidence and policy."""
+        metadata = work_item.get('metadata') or {}
+        evidence = metadata.get('upgrade_evidence') or {}
+        repeated_need_count = int(evidence.get('repeated_need_count', 0) or 0)
+        bounded_objective = metadata.get('bounded_upgrade_objective') or {}
+        trust_bucket = str(judgment.get('trust_bucket', 'unknown') or 'unknown').lower()
+        within_policy = trust_bucket not in {'degraded'} and not judgment.get('blocked_by_policy')
+
+        predicted_value_outweighs_risk = bool(
+            repeated_need_count >= 2
+            and judgment.get('world_state_evidence')
+            and within_policy
+            and bounded_objective.get('scope') == 'bounded'
+        )
+
+        judgment['upgrade_evidence_count'] = repeated_need_count
+        judgment['upgrade_within_policy'] = within_policy
+        judgment['predicted_value_outweighs_risk'] = predicted_value_outweighs_risk
+        judgment['upgrade_allowed'] = bool(
+            judgment.get('needs_new_skill')
+            and repeated_need_count >= 2
+            and within_policy
+            and predicted_value_outweighs_risk
+        )
     
     async def act(self, action_spec: Dict) -> Dict:
         """
@@ -408,11 +833,54 @@ class AGIKernel:
         if not self.action_router:
             print("⚠️ Action router not initialized")
             return {'success': False, 'error': 'Action router not available'}
+
+        autonomy_gate = self._evaluate_domain_autonomy_gate(action_spec)
+        if not autonomy_gate.get('allowed', False):
+            return {
+                'success': False,
+                'error': autonomy_gate.get('reason', 'Domain autonomy gate denied action'),
+                'blocked_by_domain_autonomy': True,
+                'domain_autonomy_gate': autonomy_gate,
+            }
+
+        action_context = dict(action_spec.get('context', {}) or {})
+        action_context['domain_autonomy_gate'] = autonomy_gate
+        action_spec['context'] = action_context
         
         # Route through unified pipeline
         result = await self.action_router.route_action(action_spec)
         
         return result
+
+    def _evaluate_domain_autonomy_gate(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
+        """Gate real-world autonomy by trusted domain before execution reaches the router."""
+        plugin = str(action_spec.get('plugin', '') or '').lower()
+        action_type = str(action_spec.get('action_type', '') or '').lower()
+        domain = 'analysis'
+        if plugin in {'moltx', 'clawbr', 'telegram'} or any(token in action_type for token in ['reply', 'comment', 'debate', 'engage', 'follow']):
+            domain = 'social'
+        elif any(token in action_type for token in ['post', 'content']) or plugin in {'moltbook'}:
+            domain = 'content'
+        elif any(token in action_type for token in ['analy', 'report', 'check_']):
+            domain = 'analysis'
+        elif any(token in action_type for token in ['trade', 'wallet', 'market']) or plugin in {'onchain', 'polymarket'}:
+            domain = 'market'
+        elif any(token in action_type for token in ['self_improve', 'auto_fix']) or plugin in {'selfimprove'}:
+            domain = 'self_improvement'
+
+        profile = dict(self.domain_autonomy_profiles.get(domain, {'enabled': False, 'trust_tier': 'low', 'risk_level': 'high'}))
+        allowed = bool(profile.get('enabled'))
+        reason = 'allowed'
+        if not allowed:
+            reason = f'{domain}_autonomy_not_enabled'
+
+        return {
+            'allowed': allowed,
+            'domain': domain,
+            'trust_tier': profile.get('trust_tier', 'low'),
+            'risk_level': profile.get('risk_level', 'high'),
+            'reason': reason,
+        }
     
     def learn(self, context: str, action: str, outcome: str, 
               success: bool, user_id: str = None, outcome_record: Dict[str, Any] = None):
@@ -451,6 +919,7 @@ class AGIKernel:
             'fallback_details': fallback_details,
             'golden_path_alignment': 'aligned' if dispatch_path == 'golden_path' and not legacy_fallback_used else 'escaped',
         }
+        risk_reflection = self._build_real_world_reflection(outcome_record)
 
         # 1. Record in episodic memory
         self.behavior_modulator.record_outcome(
@@ -474,6 +943,7 @@ class AGIKernel:
                 'outcome_record': outcome_record,
                 'ranking_learning_summary': ranking_learning_summary,
                 'dispatch_learning_summary': dispatch_learning_summary,
+                'risk_reflection': risk_reflection,
                 'action_family_trust_state': action_family_trust_state,
                 'learning': self.adaptive_learner.get_learning_report(),
                 'action_family_trust_summary': {
@@ -494,6 +964,8 @@ class AGIKernel:
                 )
             except Exception:
                 pass
+
+        self._update_work_item_from_outcome(success=success, outcome_record=outcome_record, outcome=outcome)
         
         # 3. Update goal progress if applicable
         goal_id = outcome_record.get('goal_id')
@@ -514,6 +986,47 @@ class AGIKernel:
             success=success,
             outcome_description=outcome
         )
+
+    def _build_real_world_reflection(self, outcome_record: Dict[str, Any]) -> Dict[str, Any]:
+        """Capture higher-stakes reflection metadata for money, reputation, and persistent external state."""
+        action_type = str(outcome_record.get('action_type', '') or '').lower()
+        plugin = str(outcome_record.get('plugin', '') or '').lower()
+        result_summary = str(outcome_record.get('result_summary', '') or '').lower()
+
+        money_sensitive = bool(any(token in action_type for token in ['trade', 'wallet', 'market']) or plugin in {'onchain', 'polymarket'})
+        reputation_sensitive = bool(any(token in action_type for token in ['post', 'reply', 'comment', 'debate', 'engage']))
+        persistent_external_state = bool(money_sensitive or reputation_sensitive or any(token in result_summary for token in ['created', 'posted', 'executed', 'published']))
+
+        return {
+            'money_sensitive': money_sensitive,
+            'reputation_sensitive': reputation_sensitive,
+            'persistent_external_state': persistent_external_state,
+            'reflection_priority': 'high' if money_sensitive or persistent_external_state else 'medium' if reputation_sensitive else 'low',
+        }
+
+    def _update_work_item_from_outcome(self, success: bool, outcome_record: Dict[str, Any], outcome: str) -> None:
+        """Update durable work-item state from routed action outcomes."""
+        if not self.work_item_manager:
+            return
+
+        ranking_evidence = outcome_record.get('ranking_evidence') or {}
+        work_item_id = ranking_evidence.get('active_work_item_id') or outcome_record.get('active_work_item_id')
+        if not work_item_id:
+            return
+
+        self.work_item_manager.record_attempt(work_item_id, outcome)
+
+        if success:
+            self.work_item_manager.complete_work_item(work_item_id, outcome)
+            return
+
+        prediction_evaluation = outcome_record.get('prediction_evaluation') or {}
+        mismatch_score = float(prediction_evaluation.get('mismatch_score', 0.0) or 0.0)
+        failure_reason = str(outcome_record.get('error') or outcome_record.get('reason') or outcome or 'execution_failed')
+        if mismatch_score >= 0.75 or any(token in failure_reason.lower() for token in ['policy', 'forbidden', 'degraded', 'denied']):
+            self.work_item_manager.abandon_work_item(work_item_id, outcome, failure_reason)
+        else:
+            self.work_item_manager.update_status(work_item_id, 'blocked', blocked_reason=failure_reason, last_outcome=outcome)
     
     # =================================================================
     # Autonomous Operations

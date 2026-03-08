@@ -80,13 +80,6 @@ class SemanticIntentClassifier:
                     "make a thread on",
                     "start thread on moltchan"
                 ]
-            elif 'moltbook' in cmd_name.lower():
-                examples = [
-                    "post on moltbook",
-                    "create post on moltbook",
-                    "post to alleybot submolt",
-                    "moltbook post about"
-                ]
             elif 'moltx' in cmd_name.lower():
                 examples = [
                     "post to moltx",
@@ -257,19 +250,16 @@ class SemanticIntentClassifier:
             Dictionary of extracted arguments
         """
         args = {}
-        
-        # Platform-specific argument extraction
-        if 'moltchan' in command_name.lower():
-            # Extract board and content
+        command_name_lower = command_name.lower()
+
+        if 'moltchan' in command_name_lower:
             board_match = re.search(r'(?:^|/)(biz|g|v|pol|x|b|tech|ai|crypto)\b', user_input, re.IGNORECASE)
             if board_match:
                 args['board'] = board_match.group(1).lower()
-            
-            # Extract subject/content after board or 'about'
+
             about_match = re.search(r'(?:about|on)\s+(.+?)(?:\||$)', user_input, re.IGNORECASE)
             if about_match:
                 content = about_match.group(1).strip()
-                # Split into subject/content if pipe present, else use first 50 chars as subject
                 if '|' in content:
                     parts = content.split('|', 1)
                     args['subject'] = parts[0].strip()
@@ -277,33 +267,13 @@ class SemanticIntentClassifier:
                 else:
                     args['subject'] = content[:50] if len(content) > 50 else content
                     args['content'] = content
-        
-        elif 'moltbook' in command_name.lower():
-            # Extract submolt (m/alleybot format or just alleybot)
-            submolt_match = re.search(r'(?:m/)?(\w+)', user_input, re.IGNORECASE)
-            if submolt_match:
-                args['submolt'] = submolt_match.group(1).lower()
-            
-            # Extract title/content
-            about_match = re.search(r'(?:about|on)\s+(.+?)(?:\||$)', user_input, re.IGNORECASE)
-            if about_match:
-                content = about_match.group(1).strip()
-                if '|' in content:
-                    parts = content.split('|', 1)
-                    args['title'] = parts[0].strip()
-                    args['content'] = parts[1].strip()
-                else:
-                    args['title'] = content[:60] if len(content) > 60 else content
-                    args['content'] = content
-        
-        elif 'moltx' in command_name.lower() and 'post' in command_name.lower():
-            # Extract topic/content
+
+        elif 'moltx' in command_name_lower and 'post' in command_name_lower:
             about_match = re.search(r'(?:about|on|post)\s+(.+)$', user_input, re.IGNORECASE)
             if about_match:
                 args['content'] = about_match.group(1).strip()
-        
-        elif 'image' in command_name.lower() and 'generate' in command_name.lower():
-            # Extract image prompt
+
+        elif 'image' in command_name_lower and 'generate' in command_name_lower:
             patterns = [
                 r'(?:generate|create|make)\s+(?:an\s+)?image\s+(?:of|with|showing|for)?\s*(.+)',
                 r'(?:draw|paint|render)\s+(?:an\s+)?(?:image\s+)?(?:of\s+)?(.+)',
@@ -313,31 +283,26 @@ class SemanticIntentClassifier:
                 if match:
                     args['prompt'] = match.group(1).strip()
                     break
-        
-        elif 'price' in command_name.lower():
-            # Extract crypto symbol
+
+        elif 'price' in command_name_lower:
             crypto_match = re.search(r'\b(BTC|ETH|SOL|AVAX|MATIC|LINK|UNI|AAVE|CRV|SNX|MKR|COMP|YFI|BAL|LRC|IMX|ZRX|KNC|BNT|MCB|PERP|DYDX|GRT|1INCH|SUSHI|CRV|SNX|MKR)\b', user_input, re.IGNORECASE)
             if crypto_match:
                 args['symbol'] = crypto_match.group(1).upper()
-        
-        elif 'engage' in command_name.lower():
-            # Extract count if specified
+
+        elif 'engage' in command_name_lower:
             count_match = re.search(r'(\d+)', user_input)
             if count_match:
                 args['count'] = count_match.group(1)
-        
-        elif 'clawbr' in command_name.lower() and 'post' in command_name.lower():
-            # Extract content for clawbr post
+
+        elif 'clawbr' in command_name_lower and 'post' in command_name_lower:
             content_match = re.search(r'(?:post|reply|comment)\s+(?:on\s+)?(?:this\s+)?(?:clawbr\s+)?(?:post\s+)?(.+)$', user_input, re.IGNORECASE)
             if content_match:
                 args['content'] = content_match.group(1).strip()
             else:
-                # Generic content extraction
                 content_match = re.search(r'(.+)$', user_input)
                 if content_match:
                     args['content'] = content_match.group(1).strip()
-        
-        elif 'clawbr' in command_name.lower() and 'reply' in command_name.lower():
+
             # Extract post_id and content for clawbr_reply
             # Pattern: reply to [post_id] [content] or similar
             id_content_match = re.search(r'([a-f0-9-]{36})\s+(.+)', user_input, re.IGNORECASE)

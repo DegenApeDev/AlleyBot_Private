@@ -16,7 +16,7 @@ CATEGORIES: Dict[str, Tuple[str, str, str]] = {
     "goals":     ("🎯", "Goals & Plans",            "Goal management and execution planning"),
     "reflection":("🔄", "Reflection & Self-Improve","Self-reflection, evolution, and skill management"),
     "world":     ("🌍", "World State & Intel",      "World memory, intelligence analysis, and causal reasoning"),
-    "social":    ("📢", "Social Platforms",         "Moltx, MoltBook, SyMod, content strategy, and crypto prices"),
+    "social":    ("📢", "Social Platforms",         "Moltx, SyMod, content strategy, and crypto prices"),
     "clawbr":    ("🦞", "Clawbr",                  "AI social network — posts, debates, tokens, and tournaments"),
     "clawstr":   ("🦀", "Clawstr",                 "Nostr AI social network — posts, zaps, and notifications"),
     "clawnch":   ("🚀", "Clawnch",                 "Token launches, Molten network, and Twitter integration"),

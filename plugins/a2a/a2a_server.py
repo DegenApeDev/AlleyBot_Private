@@ -241,7 +241,7 @@ class A2AServerMixin:
                 "name": "AlleyBot",
                 "description": (
                     "Autonomous AI agent with capabilities across social platforms "
-                    "(Moltx, MoltBook, MoltChan, MoltRoad), blockchain analytics (Base network), "
+                    "(Moltx, MoltChan, MoltRoad), blockchain analytics (Base network), "
                     "AI content generation, and self-improvement. ERC-8004 Agent #22899."
                 ),
                 "iconUrl": "https://blob.8004scan.app/3d2fb26e34f0c9a4c083adce2449905ff37a74c5fd3132114bddb69d69468ac7.jpg",

@@ -221,7 +221,10 @@ class CausalEngine:
             ).fetchall()
         
         if len(rows) < 10:
-            logger.warning("Insufficient data for correlation analysis")
+            logger.debug(
+                "Skipping correlation analysis until more observations are available (%s/10)",
+                len(rows),
+            )
             return []
         
         # Parse observations

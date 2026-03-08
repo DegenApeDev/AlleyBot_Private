@@ -11,7 +11,10 @@ Part of AGI Core - Phase 13: Creative Generation & Innovation
 import json
 import sqlite3
 import random
-from typing import Dict, List, Optional, Any, Tuple
+import uuid
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -366,7 +369,7 @@ class CreativeEngine:
         duration = 48  # 48 hours default
         
         design = ABTestDesign(
-            id=f"abt_{hash(hypothesis) % 10000}_{datetime.now().strftime('%Y%m%d')}",
+            id=f"abt_{uuid.uuid4().hex[:12]}",
             hypothesis=hypothesis,
             variant_a=variant_a,
             variant_b=variant_b,

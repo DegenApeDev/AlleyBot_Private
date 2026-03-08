@@ -21,6 +21,8 @@ from dataclasses import dataclass, asdict, field
 from pathlib import Path
 import logging
 
+from src.agentic.planning import get_plan_manager
+
 logger = logging.getLogger(__name__)
 
 
@@ -160,7 +162,95 @@ class GoalManager:
     def __init__(self, db_path: str = 'data/goals.db'):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.plan_manager = get_plan_manager()
         self._init_db()
+
+    def _infer_action_family_for_goal(self, goal: Goal) -> Optional[str]:
+        """Infer likely action family for a goal from its category and text."""
+        goal_blob = f"{goal.title} {goal.description} {goal.category}".lower()
+        trigger_blob = json.dumps(goal.trigger_data or {}).lower()
+        combined = f"{goal_blob} {trigger_blob}"
+
+        if 'moltx' in combined or 'post' in combined or 'content' in combined:
+            return 'post'
+        if 'engage' in combined or 'reply' in combined or 'social' in combined:
+            return 'engage'
+        if 'analy' in combined or 'research' in combined or 'report' in combined:
+            return 'analyze'
+        if 'fix' in combined or 'repair' in combined or 'retry' in combined:
+            return 'fix'
+        return None
+
+    def _score_goal_with_trust_state(self, goal: Goal) -> float:
+        """Blend goal priority with persisted action-family trust state."""
+        score = float(goal.effective_priority)
+        action_family = self._infer_action_family_for_goal(goal)
+        if not action_family:
+            action_family = None
+
+        trust_state = self.plan_manager.get_action_family_states().get(action_family, {}) if action_family else {}
+        trust_bucket = trust_state.get('trust_bucket', 'healthy')
+        degradation_score = float(trust_state.get('degradation_score', 0.0) or 0.0)
+        recovery_score = float(trust_state.get('recovery_score', 0.0) or 0.0)
+
+        if trust_bucket == 'degraded':
+            score -= 2.5 + degradation_score
+        elif trust_bucket == 'cooling_down':
+            score -= 1.5 + (degradation_score * 0.5)
+        elif trust_bucket == 'recovering':
+            score += 0.75 + recovery_score
+        elif trust_bucket == 'healthy':
+            score += 0.25
+
+        owner_notes = goal.owner_notes or ''
+        if 'BLOCKED:' in owner_notes:
+            last_blocked_marker = owner_notes.rsplit('BLOCKED:', 1)[-1].strip().lower()
+            if last_blocked_marker:
+                score -= 1.0
+            if goal.started_at:
+                hours_since_start = (datetime.now() - goal.started_at).total_seconds() / 3600
+                if hours_since_start < 2:
+                    score -= 1.5
+
+        return score
+
+    def should_auto_approve_goal(self, goal: Goal) -> bool:
+        """Fail-closed policy for safe low-risk autonomous goal auto-approval."""
+        if not goal:
+            return False
+
+        if goal.category not in {'analysis', 'optimization', 'fix'}:
+            return False
+
+        if goal.trigger_type not in {'gap', 'opportunity', 'error_pattern'}:
+            return False
+
+        if float(goal.impact_score or 0.0) > 6.5:
+            return False
+
+        if float(goal.confidence or 0.0) < 0.55:
+            return False
+
+        combined = f"{goal.title} {goal.description} {goal.category}".lower()
+        blocked_markers = {
+            'post', 'reply', 'wallet', 'transfer', 'trade', 'swap', 'claim',
+            'deploy', 'delete', 'private key', 'self-update', 'update skill',
+            'skill', 'code', 'patch', 'execute', 'message owner', 'telegram',
+            'plugin lacks', 'create new skill', 'create new platform plugin',
+            'register', 'write file', 'save file', 'commit', 'restart',
+        }
+        if any(marker in combined for marker in blocked_markers):
+            return False
+
+        action_family = self._infer_action_family_for_goal(goal)
+        if goal.category == 'fix' and action_family not in {None, 'fix', 'analyze'}:
+            return False
+        if goal.category in {'analysis', 'optimization'} and action_family and action_family != 'analyze':
+            return False
+
+        trust_state = self.plan_manager.get_action_family_states().get(action_family or 'analyze', {})
+        trust_bucket = trust_state.get('trust_bucket', 'healthy')
+        return trust_bucket in {'healthy', 'recovering'}
     
     def _init_db(self) -> None:
         """Initialize SQLite database"""
@@ -285,7 +375,20 @@ class GoalManager:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(query, params).fetchall()
-            return [self._row_to_goal(row) for row in rows]
+            goals = [self._row_to_goal(row) for row in rows]
+
+        if status in {GoalStatus.APPROVED, GoalStatus.ACTIVE, None}:
+            goals.sort(key=lambda goal: (self._score_goal_with_trust_state(goal), goal.created_at.timestamp()), reverse=True)
+        return goals
+
+    def has_active_goals(self) -> bool:
+        """Return True when at least one goal is already actively in progress."""
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM goals WHERE status = ?",
+                [GoalStatus.ACTIVE.name],
+            ).fetchone()
+        return bool(row and row[0] > 0)
     
     def approve_goal(self, goal_id: str, owner_notes: Optional[str] = None) -> bool:
         """Owner approves a proposed goal"""
@@ -353,8 +456,149 @@ class GoalManager:
                 goal_id
             ))
             conn.commit()
-        
+
+        try:
+            from plugin_manager import get_plugin_manager
+            plugin_manager = get_plugin_manager()
+            telegram = plugin_manager.get_plugin('telegram') if plugin_manager else None
+            if telegram and hasattr(telegram, 'notify_autonomous_accomplishment'):
+                reward_signal = f"Completed a {goal.category} goal with priority {goal.priority.name.lower()}"
+                summary = outcome[:240] if outcome else f"Goal {goal_id} completed successfully"
+                telegram.notify_autonomous_accomplishment(goal.title, summary, reward_signal)
+                if hasattr(telegram, 'maybe_send_autonomous_digest'):
+                    telegram.maybe_send_autonomous_digest(hours=24, cooldown_hours=6)
+        except Exception as e:
+            logger.debug(f"Could not send goal completion notification: {e}")
+
         logger.info(f"✅ Goal completed: {goal_id}")
+        return True
+    
+    def record_goal_action_success(self, goal_id: str, note: Optional[str] = None) -> bool:
+        """Record progress for a safe active goal after a successful goal-tagged action."""
+        goal = self.get_goal(goal_id)
+        if not goal or goal.status != GoalStatus.ACTIVE:
+            return False
+
+        if not self.should_auto_approve_goal(goal):
+            return False
+
+        existing_notes = goal.owner_notes or ''
+        progress_note = (note or 'Goal-aligned action succeeded').strip()[:180]
+        blocked_count = existing_notes.count('BLOCKED:')
+        if blocked_count > 0:
+            trimmed_notes = existing_notes.rsplit('BLOCKED:', 1)[0].rstrip()
+        else:
+            trimmed_notes = existing_notes
+        updated_notes = f"{trimmed_notes}\nSUCCESS: {progress_note}".strip()[:1000]
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''
+                UPDATE goals
+                SET owner_notes = ?
+                WHERE id = ?
+            ''', (
+                updated_notes,
+                goal_id,
+            ))
+            conn.commit()
+
+        success_count = updated_notes.count('SUCCESS:')
+        if success_count in {1, 2}:
+            try:
+                from plugin_manager import get_plugin_manager
+                plugin_manager = get_plugin_manager()
+                telegram = plugin_manager.get_plugin('telegram') if plugin_manager else None
+                if telegram and hasattr(telegram, 'notify_autonomous_activity'):
+                    telegram.notify_autonomous_activity(
+                        'goal_progress',
+                        f"Safe goal `{goal_id}` progressing ({success_count}/3): {goal.title[:120]}"
+                    )
+            except Exception as e:
+                logger.debug(f"Could not send goal progress notification: {e}")
+
+        if success_count >= 3:
+            outcome = note or f"Completed after {success_count} successful goal-aligned actions"
+            return self.complete_goal(goal_id, outcome=outcome)
+
+        return True
+
+    def record_goal_action_failure(self, goal_id: str, note: Optional[str] = None) -> bool:
+        """Record failure for a safe active goal and fail it after repeated goal-tagged failures."""
+        goal = self.get_goal(goal_id)
+        if not goal or goal.status != GoalStatus.ACTIVE:
+            return False
+
+        if not self.should_auto_approve_goal(goal):
+            return False
+
+        existing_notes = goal.owner_notes or ''
+        failure_note = (note or 'Goal-aligned action failed').strip()[:180]
+        updated_notes = f"{existing_notes}\nFAILURE: {failure_note}".strip()[:1000]
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''
+                UPDATE goals
+                SET owner_notes = ?
+                WHERE id = ?
+            ''', (
+                updated_notes,
+                goal_id,
+            ))
+            conn.commit()
+
+        failure_count = updated_notes.count('FAILURE:')
+        if failure_count == 1:
+            blocked_notes = f"{updated_notes}\nBLOCKED: {failure_note}".strip()[:1000]
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute('''
+                    UPDATE goals
+                    SET owner_notes = ?
+                    WHERE id = ?
+                ''', (
+                    blocked_notes,
+                    goal_id,
+                ))
+                conn.commit()
+            updated_notes = blocked_notes
+
+        if failure_count in {1, 2}:
+            try:
+                from plugin_manager import get_plugin_manager
+                plugin_manager = get_plugin_manager()
+                telegram = plugin_manager.get_plugin('telegram') if plugin_manager else None
+                if telegram and hasattr(telegram, 'notify_autonomous_activity'):
+                    telegram.notify_autonomous_activity(
+                        'goal_cooling',
+                        f"Safe goal `{goal_id}` hit resistance ({failure_count}/3): {goal.title[:120]}"
+                    )
+            except Exception as e:
+                logger.debug(f"Could not send goal cooling notification: {e}")
+
+        if failure_count >= 3:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute('''
+                    UPDATE goals
+                    SET status = ?, outcome = ?, owner_notes = ?
+                    WHERE id = ?
+                ''', (
+                    GoalStatus.FAILED.name,
+                    note or f"Goal failed after {failure_count} goal-aligned action failures",
+                    updated_notes,
+                    goal_id,
+                ))
+                conn.commit()
+            logger.info(f"❌ Goal failed after repeated goal-aligned failures: {goal_id}")
+            try:
+                from plugin_manager import get_plugin_manager
+                plugin_manager = get_plugin_manager()
+                telegram = plugin_manager.get_plugin('telegram') if plugin_manager else None
+                if telegram and hasattr(telegram, 'notify_autonomous_activity'):
+                    telegram.notify_autonomous_activity(
+                        'goal_failed',
+                        f"Safe goal `{goal_id}` failed after repeated resistance: {goal.title[:120]}"
+                    )
+            except Exception as e:
+                logger.debug(f"Could not send goal failed notification: {e}")
         return True
     
     def reject_goal(self, goal_id: str, reason: Optional[str] = None) -> bool:
@@ -425,6 +669,23 @@ class GoalManager:
         """Get the highest priority approved goal ready to start"""
         goals = self.get_goals(status=GoalStatus.APPROVED, limit=1)
         return goals[0] if goals else None
+
+    def start_next_safe_goal(self) -> Optional[Goal]:
+        """Start the next safe approved goal if no goal is currently active."""
+        if self.has_active_goals():
+            return None
+
+        next_goal = self.get_next_priority_goal()
+        if not next_goal:
+            return None
+
+        if not self.should_auto_approve_goal(next_goal):
+            return None
+
+        if not self.start_goal(next_goal.id):
+            return None
+
+        return self.get_goal(next_goal.id)
     
     def _row_to_goal(self, row: sqlite3.Row) -> Goal:
         """Convert database row to Goal"""

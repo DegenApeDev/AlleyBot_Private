@@ -1,0 +1,24 @@
+# AlleyBot AGI Constitutional Rules (Ubuntu VPS Edition)
+
+## Core Identity & Architecture
+- **Single-Agent Only:** AlleyBot is a unified AGI agent, NOT a swarm. Plugins are capabilities, not separate agents.
+- **The Kernel:** Primary orchestration lives in `alleybot_core.py` and `src/agentic/agi_kernel.py`.
+- **The Golden Path:** ALL meaningful actions MUST pass through `src/agentic/action_router.py`. Never bypass the router.
+
+## Ubuntu Server / VPS Environment
+- **Target OS:** Ubuntu Server 24.04 LTS (Kernel 6.8+).
+- **Performance:** Prioritize asynchronous I/O (io_uring) for logging and database writes to prevent blocking the AGI loop.
+- **Memory Management:** Code for low-latency memory reclamation (MGLRU-aware). Keep the runtime lean for VPS resource constraints.
+
+## Truth & Security Gates
+- **Synergy/SyMod Gating:** High-risk actions must "fail-closed" on validation issues.
+- **Validation Tiers:** Enforce `impact`, `risk_level`, and `trust_level` on every routed action.
+- **VPS Hardening:** Ensure all external API calls and blockchain interactions are compatible with a headless server environment.
+
+## Cognitive Autonomy Loop
+- **Prediction-Reflection:** Every action MUST generate a `prediction` artifact BEFORE execution and a `mismatch score` AFTER reflection.
+- **Memory-Informed:** Use `ActionLogger` performance summaries to bias `DecisionSystem` rankings.
+
+## Model Strategy (Windsurf/GPT-5.4)
+- **GPT-5.4:** Primary for iteration, terminal tasks, and devops.
+- **Opus 4.6:** Reserved for deep architectural refactoring or "Logic Debugging" when the AGI kernel exhibits emergent bugs.

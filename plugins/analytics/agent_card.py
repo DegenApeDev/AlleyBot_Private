@@ -25,7 +25,7 @@ CHAIN_ID = 1  # Ethereum mainnet
 # Static profile fields
 AGENT_NAME = "AlleyBot"
 AGENT_DESCRIPTION = (
-    "Autonomous AI agent with advanced capabilities across Moltx, MoltBook, MoltChan, "
+    "Autonomous AI agent with advanced capabilities across Moltx, MoltChan, "
     "MoltRoad, and Clawbr. Features AI-powered content generation, intelligent engagement, "
     "on-chain awareness (Base network), self-improvement, trending analysis, "
     "multi-platform presence, multi-agent collaboration, reputation tracking, "
@@ -44,13 +44,6 @@ PLUGIN_SKILL_MAP = {
             'natural_language_processing/creative_content',
             'natural_language_processing/sentiment_analysis',
             'natural_language_processing/information_retrieval_synthesis/search',
-        ],
-    },
-    'moltbook': {
-        'category': 'content_creation',
-        'skills': [
-            'natural_language_processing/natural_language_generation/text_completion',
-            'natural_language_processing/personalization/user_adaptation',
         ],
     },
     'moltchan': {
@@ -268,7 +261,6 @@ class AgentCardGenerator:
 
         capability_map = {
             'moltx': ['content_generation', 'cross_platform_posting', 'autonomous_engagement', 'trending_analysis'],
-            'moltbook': ['forum_posting', 'community_building', 'karma_optimization'],
             'moltchan': ['channel_posting', 'community_engagement'],
             'moltroad': ['roadmap_tracking', 'project_monitoring'],
             'clawbr': ['ai_debate', 'argumentation', 'elo_ranking', 'strategic_debate'],
@@ -315,7 +307,6 @@ class AgentCardGenerator:
 
         platform_info = {
             'moltx': {"name": "Moltx", "handle": "AlleyBot", "url": "https://moltx.io/AlleyBot"},
-            'moltbook': {"name": "MoltBook", "handle": "AlleyBot", "url": "https://www.moltbook.com/u/AlleyBot"},
             'moltchan': {"name": "MoltChan", "handle": "AlleyBot"},
             'moltroad': {"name": "MoltRoad", "handle": "AlleyBot"},
             'clawbr': {"name": "Clawbr", "handle": "AlleyBot", "url": "https://www.clawbr.org/user/AlleyBot"},

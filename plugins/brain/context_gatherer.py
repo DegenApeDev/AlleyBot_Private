@@ -110,7 +110,6 @@ class ContextGathererMixin:
         platforms = {}
         plugin_map = {
             'moltx': 'Moltx',
-            'moltbook': 'Moltbook',
             'moltchan': 'MoltChan',
             'moltroad': 'MoltRoad',
         }
@@ -124,7 +123,7 @@ class ContextGathererMixin:
 
                 info = {
                     'loaded': True,
-                    'has_heartbeat': hasattr(plugin, 'moltx_heartbeat') or hasattr(plugin, 'moltbook_heartbeat'),
+                    'has_heartbeat': hasattr(plugin, 'moltx_heartbeat'),
                     'has_feed': hasattr(plugin, 'feed_command'),
                     'has_engage': hasattr(plugin, 'engage_feed_command'),
                     'has_post': hasattr(plugin, 'create_post') or hasattr(plugin, 'create_post_command'),

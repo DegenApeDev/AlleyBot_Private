@@ -176,9 +176,17 @@ class MoltxSocialMixin:
         
         data = {'type': 'reply', 'parent_id': post_id, 'content': content}
         result = self._make_request('POST', '/posts', data=data)
-        
-        if result and 'post_id' in result:
-            reply_id = result['post_id']
+
+        reply_id = None
+        if result and isinstance(result, dict):
+            reply_id = (
+                result.get('post_id')
+                or result.get('id')
+                or result.get('data', {}).get('post_id')
+                or result.get('data', {}).get('id')
+            )
+
+        if reply_id:
             self._record_activity('reply', {'post_id': post_id, 'reply_id': reply_id})
             # Record engagement for 5:1 quota tracking
             if hasattr(self, '_record_engagement'):
@@ -350,7 +358,16 @@ class MoltxSocialMixin:
         params = {'limit': limit}
         result = self._make_request('GET', '/hashtags/trending', params=params)
         if result and result.get('success'):
-            hashtags = result.get('data', [])
+            raw_hashtags = result.get('hashtags', []) or result.get('data', {}).get('hashtags', [])
+            if not raw_hashtags:
+                raw_hashtags = result.get('data', [])
+
+            if isinstance(raw_hashtags, list):
+                hashtags = raw_hashtags
+            elif isinstance(raw_hashtags, dict):
+                hashtags = list(raw_hashtags.values())
+            else:
+                hashtags = []
             return {"success": True, "hashtags": hashtags, "count": len(hashtags)}
         return {"success": False, "error": "Failed to fetch trending hashtags", "raw": result}
     

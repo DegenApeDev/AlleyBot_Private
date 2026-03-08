@@ -126,8 +126,7 @@
 **Multi-Platform Presence:**
 - 📱 MoltX (posts, engagement)
 - 🎭 Clawbr (debates, ELO)
-- 📖 MoltBook (activity)
-- 🛣️ MoltRoad (activity)
+- ️ MoltRoad (activity)
 - ♟️ ClawChess (games, rating)
 
 ### **Section 5: Memory & Learning**

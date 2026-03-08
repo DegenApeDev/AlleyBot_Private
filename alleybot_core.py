@@ -6,9 +6,18 @@ The heart of AlleyBot - coordinates plugins and manages the agent
 import json
 import schedule
 import time
+import signal
+import atexit
 from datetime import datetime
 from pathlib import Path
 from plugin_manager import PluginManager
+
+# Load environment variables from .env file FIRST
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("⚠️  python-dotenv not installed, environment variables must be set manually")
 
 # Import console logging system
 from console_logger import init_console_logging, stop_console_logging
@@ -51,6 +60,10 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
     def __init__(self, config_dir='config'):
         # Initialize console logging FIRST (before any prints)
         self.console_logger = init_console_logging(max_days=7)
+        
+        # Register cleanup handlers for graceful shutdown
+        self._cleanup_registered = False
+        self._register_cleanup_handlers()
         
         # Main tagline - show immediately at startup
         print("🦞 AlleyBot - Extensible AI Agent & Automation Platform")
@@ -120,6 +133,32 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
         print(f"💬 Available commands: {len(self.plugin_manager.commands)}")
         print(f"📝 Console logging: ACTIVE (7-day retention)")
         print(f"{'='*60}\n")
+    
+    def _register_cleanup_handlers(self):
+        """Register signal handlers and atexit for proper cleanup"""
+        if self._cleanup_registered:
+            return
+        
+        def signal_handler(signum, frame):
+            print(f"\n⚠️  Received signal {signum}, initiating cleanup...")
+            self.cleanup()
+            import sys
+            sys.exit(0)
+        
+        # Register signal handlers
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+        
+        # Register atexit handler as fallback
+        atexit.register(self._atexit_cleanup)
+        
+        self._cleanup_registered = True
+    
+    def _atexit_cleanup(self):
+        """Cleanup called by atexit - avoid duplicate cleanup"""
+        if hasattr(self, '_cleaned_up'):
+            return
+        self.cleanup()
     
     def _add_core_commands(self):
         """Add core system commands"""
@@ -341,9 +380,8 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
             # Auto-start dashboard in background
             self._start_dashboard_background()
             
-            # Run the production async event loop
-            import asyncio
-            asyncio.run(run_production_mode(self))
+            # run_production_mode calls asyncio.run() internally
+            run_production_mode(self)
             
         except ImportError as e:
             print(f"⚠️  Production mode not available: {e}")
@@ -524,18 +562,38 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
     
     def cleanup(self):
         """Cleanup resources"""
+        # Prevent duplicate cleanup
+        if hasattr(self, '_cleaned_up'):
+            return
+        self._cleaned_up = True
+        
         print("🧹 Cleaning up...")
         
-        # Stop console logging
-        stop_console_logging()
+        # Cleanup plugins first
+        try:
+            for plugin_name, plugin in list(self.plugin_manager.plugins.items()):
+                try:
+                    if hasattr(plugin, 'cleanup'):
+                        plugin.cleanup()
+                except Exception as e:
+                    print(f"⚠️  Error cleaning up {plugin_name}: {e}")
+        except Exception as e:
+            print(f"⚠️  Error during plugin cleanup: {e}")
         
         # Close SQLite memory connection
-        if hasattr(self, 'memory_db') and self.memory_db:
-            self.memory_db.close()
-        # Cleanup plugins
-        for plugin in self.plugin_manager.plugins.values():
-            if hasattr(plugin, 'cleanup'):
-                plugin.cleanup()
+        try:
+            if hasattr(self, 'memory_db') and self.memory_db:
+                self.memory_db.close()
+        except Exception as e:
+            print(f"⚠️  Error closing memory DB: {e}")
+        
+        # Stop console logging last
+        try:
+            stop_console_logging()
+        except Exception as e:
+            print(f"⚠️  Error stopping console logging: {e}")
+        
+        print("✅ Cleanup complete")
 
 
 if __name__ == "__main__":

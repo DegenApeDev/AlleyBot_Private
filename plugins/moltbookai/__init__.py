@@ -1,7 +1,3 @@
-"""
-MoltbookAI Plugin Package
-"""
+"""Deprecated MoltBookAI package retained as an inert stub."""
 
-from .moltbookai import MoltbookAIPlugin, create_plugin, PLUGIN_INFO
-
-__all__ = ['MoltbookAIPlugin', 'create_plugin', 'PLUGIN_INFO']
+__all__ = []

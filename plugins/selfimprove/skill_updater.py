@@ -23,7 +23,6 @@ from pathlib import Path
 # Platform skill file URLs
 SKILL_URLS = {
     'moltx': 'https://moltx.io/skill.md',
-    'moltbook': 'https://moltbook.com/skill.md',
     'moltchan': 'https://moltchan.com/skill.md',
     'moltroad': 'https://moltroad.com/skill.md',
 }
@@ -214,7 +213,7 @@ class SkillUpdaterMixin:
     def update_single_skill_command(self, platform=None):
         """Update a single platform's skill file"""
         if not platform:
-            return "❌ Usage: update_skill <platform> (moltx, moltbook, moltchan, moltroad)"
+            return "❌ Usage: update_skill <platform> (moltx, moltchan, moltroad)"
 
         platform = str(platform).lower().strip()
         if platform not in SKILL_URLS:
@@ -239,7 +238,7 @@ class SkillUpdaterMixin:
     def handle_platform_skill_event(self, platform: str, notice: Dict[str, Any]):
         """Handle a skill update event pushed by a platform API response.
 
-        Called automatically when any platform (MoltX, MoltBook, MoltChan, MoltRoad)
+        Called automatically when any platform (MoltX, MoltChan, MoltRoad)
         includes a skill_update notice in an API response.
 
         Expected notice format:

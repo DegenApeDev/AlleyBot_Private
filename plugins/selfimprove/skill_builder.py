@@ -5,7 +5,6 @@ Skills are SKILL.md files with YAML frontmatter + markdown instructions.
 
 Platform skill docs are used as references:
 - Moltx: https://moltx.io/skill.md
-- Moltbook: https://moltbook.io/skill.md (if available)
 """
 import os
 import re
@@ -22,11 +21,6 @@ ACTIVE_PLATFORMS = {
         'skill_url': 'https://moltx.io/skill.md',
         'description': 'Twitter-like social platform for AI agents',
         'capabilities': ['post', 'reply', 'like', 'follow', 'feed', 'trending', 'articles', 'DMs'],
-    },
-    'moltbook': {
-        'skill_url': 'https://moltbook.io/skill.md',
-        'description': 'Reddit-like forum platform for AI agents',
-        'capabilities': ['post', 'comment', 'upvote', 'submolts', 'feed'],
     },
     'clawbr': {
         'skill_url': 'https://clawbr.org/skill.md',

@@ -44,12 +44,14 @@ class EventRunner:
     
     def __init__(self, core):
         self.core = core
-        self.event_queue = asyncio.Queue()
+        # Bounded queue to prevent memory leak - max 1000 pending events
+        self.event_queue = asyncio.Queue(maxsize=1000)
         self.running = False
         self.session_manager = None  # Will be injected
         self.model_router = None  # Will be injected
         self.trending_analyzer = TrendingAnalyzer()
         self.activity_logger = ActivityLogger()
+        self._dropped_events = 0  # Track dropped events for monitoring
         
     async def start(self):
         """Start the event-driven agent loop"""
@@ -145,9 +147,8 @@ class EventRunner:
             task = event.payload.get('task', '')
             print(f"🤖 Executing autonomous task: {task}")
             
-            # Get Moltx plugin (for Moltx) or Moltbook plugin
+            # Get Moltx plugin
             moltx_available = hasattr(self.core, 'plugin_manager') and 'moltx' in self.core.plugin_manager.plugins
-            moltbook_available = hasattr(self.core, 'plugin_manager') and 'moltbook' in self.core.plugin_manager.plugins
             
             if task == 'create_post':
                 # Create intelligent post on available platforms
@@ -158,28 +159,6 @@ class EventRunner:
                 # Moltx posting is disabled to prevent spam
                 if moltx_available:
                     print(f"⚠️  Moltx posting disabled - preventing spam")
-                
-                # Also try Moltbook with intelligent content generation
-                if moltbook_available:
-                    moltbook_plugin = self.core.plugin_manager.plugins['moltbook']
-                    if hasattr(moltbook_plugin, 'create_intelligent_post'):
-                        try:
-                            # Use the intelligent post method instead of hardcoded content
-                            result = moltbook_plugin.create_intelligent_post()
-                            if result and not result.startswith("❌"):
-                                print(f"✅ Moltbook intelligent post created: {result}")
-                                
-                                # Log activity
-                                self.activity_logger.log_activity('post', 'moltbook', {
-                                    'type': 'intelligent_post',
-                                    'submolt': 'general'
-                                })
-                            else:
-                                print(f"⚠️  Moltbook post failed: {result}")
-                        except Exception as e:
-                            print(f"❌ Moltbook post error: {e}")
-                    else:
-                        print(f"⚠️  Moltbook intelligent posting not available")
                 
             elif task == 'browse_and_engage':
                 # Browse feed and engage
@@ -202,85 +181,6 @@ class EventRunner:
                         'count': count,
                         'result': str(engage_result)[:100]
                     })
-                
-                # Moltbook engagement - check suspension first
-                if moltbook_available:
-                    moltbook_plugin = self.core.plugin_manager.plugins['moltbook']
-                    if hasattr(moltbook_plugin, 'mb_api') and moltbook_plugin.mb_api:
-                        # Check if suspended/banned - set 7-day cooldown if 401 detected
-                        if hasattr(moltbook_plugin.mb_api, 'is_suspended') and moltbook_plugin.mb_api.is_suspended:
-                            # Check if suspension expired
-                            if hasattr(moltbook_plugin.mb_api, 'check_suspension_status'):
-                                still_suspended = moltbook_plugin.mb_api.check_suspension_status()
-                                if still_suspended:
-                                    ends_at = moltbook_plugin.mb_api.suspension_ends_at
-                                    remaining = ""
-                                    if ends_at:
-                                        from datetime import datetime
-                                        remaining_secs = (ends_at - datetime.now()).total_seconds()
-                                        remaining_days = int(remaining_secs / 86400)
-                                        remaining_hours = int((remaining_secs % 86400) / 3600)
-                                        remaining = f" ({remaining_days}d {remaining_hours}h remaining)"
-                                    print(f"🚫 Moltbook engagement skipped: Account suspended{remaining}")
-                                    moltbook_available = False  # Skip all Moltbook activity
-                            else:
-                                print(f"🚫 Moltbook engagement skipped: Account suspended")
-                                moltbook_available = False
-                        try:
-                            # Get feed
-                            feed_data = moltbook_plugin.api.get_feed(sort='hot', limit=count)
-                            if feed_data and 'posts' in feed_data:
-                                posts = feed_data['posts'][:count]
-                                print(f"📚 Moltbook feed retrieved: {len(posts)} posts")
-                                
-                                # Upvote and comment on posts
-                                for post in posts:
-                                    post_id = post.get('id')
-                                    if post_id:
-                                        # Upvote
-                                        moltbook_plugin.api.upvote_post(post_id)
-                                        print(f"  ✅ Upvoted Moltbook post {post_id}")
-                                        
-                                        # Log upvote activity
-                                        self.activity_logger.log_activity('upvote', 'moltbook', {
-                                            'post_id': post_id
-                                        })
-                                        
-                                        # Generate AI comment using moltbook plugin
-                                        try:
-                                            comment = None
-                                            if hasattr(moltbook_plugin, '_create_intelligent_comment'):
-                                                comment = moltbook_plugin._create_intelligent_comment(post)
-                                            if not comment:
-                                                # Fallback: use grok/deepseek directly
-                                                try:
-                                                    from grok_ai import grok_ai
-                                                    post_title = post.get('title', '')
-                                                    post_content = post.get('content', '')[:300]
-                                                    prompt = f"Write a short, thoughtful reply (1-2 sentences, under 200 chars) to this post. Be specific to the content, not generic.\n\nPost: {post_title}\n{post_content}\n\nReply:"
-                                                    comment = grok_ai.chat(prompt)
-                                                    if comment:
-                                                        comment = comment.strip().strip('"')
-                                                except Exception:
-                                                    pass
-                                            if comment:
-                                                moltbook_plugin.api.add_comment(post_id, comment)
-                                                print(f"  💬 Commented on Moltbook post {post_id}: {comment[:60]}...")
-                                                
-                                                self.activity_logger.log_activity('comment', 'moltbook', {
-                                                    'post_id': post_id,
-                                                    'comment': comment[:100]
-                                                })
-                                        except Exception as e:
-                                            print(f"  ⚠️ Comment generation failed: {e}")
-                                
-                                print(f"✅ Moltbook engagement completed")
-                            else:
-                                print(f"⚠️  No Moltbook posts found in feed")
-                        except Exception as e:
-                            print(f"❌ Moltbook engagement error: {e}")
-                    else:
-                        print(f"⚠️  Moltbook API not initialized")
                 
             elif task == 'analyze_trending':
                 # Analyze trending topics and create post based on trends
@@ -608,9 +508,20 @@ Generate only the post content (no explanations or meta-commentary):"""
                 await asyncio.sleep(60)
     
     async def queue_event(self, event: AgentEvent):
-        """Add event to the queue"""
-        await self.event_queue.put(event)
-        print(f"📋 Event queued: {event.event_type.value} (priority: {event.priority})")
+        """Add event to the queue with backpressure handling"""
+        try:
+            # Try to add to queue without blocking (0.1s timeout)
+            await asyncio.wait_for(self.event_queue.put(event), timeout=0.1)
+            print(f"📋 Event queued: {event.event_type.value} (priority: {event.priority})")
+        except asyncio.TimeoutError:
+            # Queue is full - drop low priority events
+            if event.priority <= 1:
+                self._dropped_events += 1
+                print(f"⚠️  Queue full, dropped low-priority event (total dropped: {self._dropped_events})")
+            else:
+                # For high priority events, wait longer
+                await self.event_queue.put(event)
+                print(f"📋 Event queued (waited): {event.event_type.value} (priority: {event.priority})")
     
     def stop(self):
         """Stop the event runner"""

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Quick script to regenerate agent card with TEE support"""
 import sys
-sys.path.insert(0, '/home/degendev/Dev/Agents/MoltbookBot')
+sys.path.insert(0, '/home/alley/AlleyBot')
 
 from plugins.analytics.agent_card import AgentCardGenerator
 
@@ -15,6 +15,6 @@ print('✅ Agent card generated')
 print('supportedTrust:', card.get('supportedTrust', []))
 
 # Save to static
-static_path = '/home/degendev/Dev/Agents/MoltbookBot/static/.well-known/agent-card.json'
+static_path = '/home/alley/AlleyBot/static/.well-known/agent-card.json'
 gen.save_static(static_path)
 print('📁 Saved to', static_path)

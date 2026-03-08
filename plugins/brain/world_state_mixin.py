@@ -89,7 +89,6 @@ class WorldStateMixin:
             Entity(id="platform_moltx", type="platform", name="Moltx", display_name="Moltx"),
             Entity(id="platform_clawbr", type="platform", name="Clawbr", display_name="Clawbr"),
             Entity(id="platform_telegram", type="platform", name="Telegram", display_name="Telegram"),
-            Entity(id="platform_moltbook", type="platform", name="Moltbook", display_name="Moltbook"),
         ]
         
         for platform in platforms:

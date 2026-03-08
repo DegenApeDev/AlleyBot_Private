@@ -28,7 +28,7 @@ class AutonomousSkillWorkflow:
             'platform_trends': {
                 'enabled': True,
                 'weight': 0.3,
-                'sources': ['moltx', 'moltbook', 'moltchan']
+                'sources': ['moltx', 'moltchan']
             },
             'performance_gaps': {
                 'enabled': True,
@@ -88,7 +88,7 @@ class AutonomousSkillWorkflow:
         
         try:
             # Get trending topics from platforms
-            for platform in ['moltx', 'moltbook']:
+            for platform in ['moltx']:
                 trending_cmd = f"{platform}_trending"
                 result = self.core.run_command(trending_cmd)
                 
@@ -173,12 +173,6 @@ class AutonomousSkillWorkflow:
                 'platform': 'moltx',
                 'frequency': 5,
                 'impact': 'medium'
-            },
-            {
-                'error_type': 'rate_limit',
-                'platform': 'moltbook',
-                'frequency': 3,
-                'impact': 'high'
             }
         ]
     

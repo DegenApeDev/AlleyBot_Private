@@ -112,7 +112,7 @@ class GoalStackMixin:
         # Map goal patterns to actions
         goal_patterns = {
             'engagement': ['moltx_engage', 'clawbr_engage', 'check_engagement'],
-            'post': ['moltx_post', 'clawbr_post', 'moltbook_post'],
+            'post': ['moltx_post', 'clawbr_post'],
             'growth': ['analyze_trending', 'moltx_engage', 'clawbr_engage'],
             'quality': ['check_engagement', 'analyze_trending'],
             'reply': ['check_comments', 'dm_check'],

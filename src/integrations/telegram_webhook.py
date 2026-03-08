@@ -64,44 +64,53 @@ class TelegramWebhook:
             app = self.telegram_plugin.application
             print("📱 Starting Telegram bot polling...")
             
-            # DEBUG: Check handlers before initialization
-            handler_count = len(app.handlers.get(0, [])) if hasattr(app, 'handlers') else 0
-            print(f"  🔍 Handlers registered before init: {handler_count}")
-
             # Initialize the application (registers handlers)
             await app.initialize()
             print("  ✅ Application initialized")
+            
+            # Debug: Check handler count
+            total_handlers = sum(len(handlers) for handlers in app.handlers.values())
+            print(f"  🔍 Debug: {total_handlers} handlers registered across {len(app.handlers)} groups")
 
             # Start the application (enables handlers to process updates)
             await app.start()
             print("  ✅ Application started")
-            
-            # DEBUG: Check if handlers are still registered after start
-            handler_count_after = len(app.handlers.get(0, [])) if hasattr(app, 'handlers') else 0
-            print(f"  🔍 Handlers after start: {handler_count_after}")
 
             # Start polling in background task
-            # NOTE: drop_pending_updates=False so we process commands sent during startup
+            # drop_pending_updates=True: discard stale updates from before startup
+            # so commands sent while bot was offline don't replay and confuse state
             from telegram import Update
+            from telegram.error import TelegramError
+            
+            def polling_error_callback(error: TelegramError) -> None:
+                print(f"  ❌ POLLING ERROR: {error}")
+            
             print("  🔄 Starting updater polling...")
             await app.updater.start_polling(
-                drop_pending_updates=False,
-                allowed_updates=Update.ALL_TYPES
+                drop_pending_updates=True,
+                allowed_updates=Update.ALL_TYPES,
+                error_callback=polling_error_callback
             )
             print("  ✅ Updater polling started")
 
             self.telegram_plugin.is_running = True
             print("✅ Telegram bot polling started — commands are live!")
+            print(f"  🔍 Debug: updater.running={app.updater.running}")
+            print(f"  🔍 Debug: app.running={app.running}")
+            print(f"  🔍 Debug: update_queue type={type(app.update_queue)}")
             
-            # DEBUG: Test if we can get updates
-            try:
-                updates = await app.bot.get_updates(limit=1, timeout=1)
-                if updates:
-                    print(f"  🔍 Test: Found {len(updates)} pending update(s)")
-                else:
-                    print(f"  🔍 Test: No pending updates")
-            except Exception as test_err:
-                print(f"  ⚠️ Test get_updates failed: {test_err}")
+            # Diagnostic: monkey-patch process_update to log incoming updates
+            _orig_process_update = app.process_update
+            async def _debug_process_update(update):
+                try:
+                    msg = getattr(update, 'message', None)
+                    text = getattr(msg, 'text', '') if msg else ''
+                    uid = getattr(getattr(msg, 'from_user', None), 'id', '?') if msg else '?'
+                    print(f"  📨 UPDATE RECEIVED: '{text[:50]}' from user {uid}")
+                except Exception:
+                    print(f"  📨 UPDATE RECEIVED (could not parse)")
+                return await _orig_process_update(update)
+            app.process_update = _debug_process_update
             
             # Start all AsyncPluginMixin background tasks now that event loop is running
             if hasattr(self.telegram_plugin, 'core') and hasattr(self.telegram_plugin.core, 'plugin_manager'):
@@ -111,10 +120,12 @@ class TelegramWebhook:
                 except Exception as bg_err:
                     print(f"⚠️  start_all_background error: {bg_err}")
 
-            # Send startup notification
+            # Send startup notification in a thread so it doesn't block the event loop
             try:
                 if hasattr(self.telegram_plugin, '_send_startup_notification'):
-                    self.telegram_plugin._send_startup_notification()
+                    import asyncio
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(None, self.telegram_plugin._send_startup_notification)
             except Exception:
                 pass
             

@@ -341,7 +341,6 @@ class AnalyticsPlugin(AlleyBotPlugin):
 
         # Source 1: Platform-specific post memories (most accurate)
         post_memories = [
-            'moltbook_recent_posts',
             'moltx_recent_posts', 
             'moltchan_recent_posts',
             'moltroad_recent_posts',
@@ -393,7 +392,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
         today = datetime.now().date().isoformat()
         count = 0
         try:
-            for key in ['moltbook_recent_posts', 'moltx_recent_posts']:
+            for key in ['moltx_recent_posts']:
                 posts = self.core.get_memory(key) or []
                 for p in posts:
                     ts = p.get('timestamp', '')
@@ -452,7 +451,6 @@ class AnalyticsPlugin(AlleyBotPlugin):
         try:
             platform_stats = self.aggregator.get_all_stats()
             platforms = platform_stats.get('platforms', {})
-            moltbook = platforms.get('moltbook', {})
             brain_data = self._get_brain_stats()
             ai_data = self._get_ai_stats()
             onchain_data = self._get_onchain_stats()
@@ -464,7 +462,6 @@ class AnalyticsPlugin(AlleyBotPlugin):
                 'total_followers': platform_stats.get('total_followers', 0),
                 'ai_generations': platform_stats.get('total_posts', 0),
                 'posts_today': self._get_posts_today(),
-                'karma': moltbook.get('karma', 0),
                 'platforms': platforms,
                 'api_status': 'ok',
                 'timestamp': platform_stats.get('timestamp'),
@@ -598,8 +595,6 @@ class AnalyticsPlugin(AlleyBotPlugin):
         action_labels = {
             'moltx_engage': 'Engaged with Moltx feed',
             'moltx_post': 'Created a post on Moltx',
-            'moltbook_heartbeat': 'Engaged with MoltBook feed',
-            'moltbook_post': 'Created a post on MoltBook',
             'moltchan_engage': 'Engaged on MoltChan',
             'moltroad_engage': 'Engaged on MoltRoad',
             'check_comments': 'Checked and replied to comments',

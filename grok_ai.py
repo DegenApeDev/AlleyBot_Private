@@ -35,7 +35,7 @@ class GrokAI:
             self.enabled = True
             print("✅ Grok AI initialized")
     
-    async def reason(self, prompt: str, temperature: float = 0.7, max_tokens: int = 1500) -> Optional[str]:
+    def reason(self, prompt: str, temperature: float = 0.7, max_tokens: int = 1500) -> Optional[str]:
         """
         Use Grok's reasoning model for complex decision-making.
         
@@ -180,7 +180,16 @@ class GrokAI:
         
         return text
     
-    def chat(self, prompt: str, system_prompt: str = None, max_tokens: int = 500, model: str = None) -> Optional[str]:
+    def chat(
+        self,
+        prompt: str,
+        system_prompt: str = None,
+        max_tokens: int = 500,
+        model: str = None,
+        temperature: float = 0.7,
+        top_p: float = None,
+        **kwargs,
+    ) -> Optional[str]:
         """General-purpose chat method for simple prompts
         
         Args:
@@ -188,6 +197,8 @@ class GrokAI:
             system_prompt: Optional system instructions
             max_tokens: Max response length
             model: Override default model (e.g., 'grok-4-1-fast-non-reasoning' for cheaper skill generation)
+            temperature: Creativity level (0.0-1.0)
+            top_p: Optional nucleus sampling parameter
         """
         if not self.enabled:
             return None
@@ -197,11 +208,13 @@ class GrokAI:
                 messages.append({"role": "system", "content": system_prompt})
             messages.append({"role": "user", "content": prompt})
             data = {
-                "model": self.model,
+                "model": model or self.model,
                 "messages": messages,
                 "max_tokens": max_tokens,
-                "temperature": 0.7
+                "temperature": temperature,
             }
+            if top_p is not None:
+                data["top_p"] = top_p
             response = self._make_api_request(data)
             return self._extract_text(response)
         except Exception as e:

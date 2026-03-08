@@ -101,57 +101,40 @@ class GoalDrivenCycle:
         - 'quality' goals → analyze and improve
         """
         goal_type = goal.context.get('type', 'general')
+
+        def build_action(plugin: str, action_type: str, params: Dict[str, Any]) -> Dict[str, Any]:
+            return {
+                'plugin': plugin,
+                'action_type': action_type,
+                'params': params,
+                'context': {
+                    'goal_driven': True,
+                    'goal_id': goal.id,
+                    'goal_description': goal.description,
+                    'impact': 'high',
+                    'source': 'goal_driven_cycle',
+                }
+            }
         
         # Engagement goals
         if goal_type == 'recurring' or 'engagement' in goal.description.lower():
             platforms = goal.context.get('platforms', ['moltx'])
-            
-            return {
-                'plugin': platforms[0],
-                'action_type': 'engage_with_feed',
-                'params': {
-                    'count': 3,
-                    'goal_id': goal.id
-                },
-                'context': {
-                    'goal_driven': True,
-                    'goal_id': goal.id,
-                    'goal_description': goal.description
-                }
-            }
+
+            primary_platform = platforms[0]
+            if primary_platform == 'moltx':
+                return build_action('moltx', 'moltx_engage', {'count': 3})
+            if primary_platform == 'clawbr':
+                return build_action('clawbr', 'clawbr_engage', {})
+            return build_action(primary_platform, 'engage', {'count': 3})
         
         # Growth goals
         elif goal_type == 'growth' or 'grow' in goal.description.lower():
-            return {
-                'plugin': 'moltx',
-                'action_type': 'create_post',
-                'params': {
-                    'content_type': 'engaging',
-                    'goal_id': goal.id
-                },
-                'context': {
-                    'goal_driven': True,
-                    'goal_id': goal.id,
-                    'goal_description': goal.description
-                }
-            }
+            return build_action('moltx', 'moltx_intelligent_post', {'topic': goal.description})
         
         # Quality goals
         elif goal_type == 'quality' or 'engagement rate' in goal.description.lower():
             # Analyze performance and adjust strategy
-            return {
-                'plugin': 'analytics',
-                'action_type': 'analyze_performance',
-                'params': {
-                    'time_window': '7d',
-                    'goal_id': goal.id
-                },
-                'context': {
-                    'goal_driven': True,
-                    'goal_id': goal.id,
-                    'goal_description': goal.description
-                }
-            }
+            return build_action('analytics', 'analyze_performance', {'time_window': '7d'})
         
         # Default: increment attempt counter
         if self.goal_stack:

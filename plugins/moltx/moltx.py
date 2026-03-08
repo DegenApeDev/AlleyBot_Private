@@ -176,6 +176,15 @@ class MoltxPlugin(
         output += f"❤️ Posts Liked: {len(self._get_activity('like_post'))}\n"
         return output
 
+    def check_comments_command(self):
+        """Public wrapper to monitor comments and reply when appropriate."""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        if not hasattr(self, '_heartbeat_monitor_and_reply'):
+            return "❌ Comment monitor unavailable"
+        result = self._heartbeat_monitor_and_reply()
+        return result or "✅ Checked MoltX comments"
+
     def _get_activity(self, activity_type):
         """Get activity log from memory"""
         if not hasattr(self, 'core') or not self.core:
@@ -265,6 +274,16 @@ class MoltxPlugin(
         topic = ' '.join(args) if args else None
         return self.intelligent_post(topic=topic)
 
+    def moltx_image_post_command(self, content, media_url):
+        """Public wrapper to create a MoltX post with uploaded media."""
+        if not self.initialized:
+            return "❌ Moltx not initialized. Register an agent first."
+        if not content:
+            return "❌ Missing content for image post"
+        if not media_url:
+            return "❌ Missing media URL for image post"
+        return self.create_post(content, media_url=media_url)
+
     def feed_command(self, *args):
         """Command to fetch and format feed output for Telegram/NL callers."""
         feed_type = 'global'
@@ -337,6 +356,15 @@ class MoltxPlugin(
         except (TypeError, ValueError):
             target_count = 3
         target_count = max(2, min(target_count, 15))  # Allow more engagements
+        can_attempt_replies = True
+        if hasattr(self, '_check_engagement_quota'):
+            try:
+                can_attempt_replies = bool(self._check_engagement_quota())
+            except Exception:
+                can_attempt_replies = False
+
+        if not can_attempt_replies:
+            print("🔒 Dynamic Engage: Reply/comment actions gated until MoltX engagement buffer is met; using like-first mode")
 
         print(f"🤖 Dynamic Engage: Starting intelligent engagement cycle...")
         
@@ -350,7 +378,11 @@ class MoltxPlugin(
             trending = self.get_trending_hashtags(limit=5)
             hashtags = []
             if isinstance(trending, dict):
-                hashtags = trending.get('hashtags', []) or trending.get('data', {}).get('hashtags', [])
+                raw_hashtags = trending.get('hashtags', []) or trending.get('data', {}).get('hashtags', [])
+                if isinstance(raw_hashtags, list):
+                    hashtags = raw_hashtags
+                elif isinstance(raw_hashtags, dict):
+                    hashtags = list(raw_hashtags.values())
             
             # Mix trending with diverse topics
             if hashtags and isinstance(hashtags, list):
@@ -505,7 +537,7 @@ class MoltxPlugin(
                 
                 # Comment on high-score posts using enhanced generation
                 should_comment = score >= 3 or likes >= 2 or 'category:' in source
-                if should_comment and commented < target_count and hasattr(self, '_generate_enhanced_comment'):
+                if can_attempt_replies and should_comment and commented < target_count and hasattr(self, '_generate_enhanced_comment'):
                     print(f"  💬 Generating enhanced AI comment...")
                     try:
                         comment_text = self._generate_enhanced_comment(content, agent_name=author)
@@ -570,24 +602,21 @@ class MoltxPlugin(
         """Command to fetch and format trending hashtags."""
         limit = int(args[0]) if args and str(args[0]).isdigit() else 10
         limit = max(1, min(limit, 30))
-
+ 
         result = self.get_trending_hashtags(limit)
         if isinstance(result, str):
             return result
-
+ 
         hashtags = []
         if isinstance(result, dict):
-            if result.get('success') and isinstance(result.get('hashtags'), list):
-                hashtags = result.get('hashtags', [])
-            elif isinstance(result.get('data'), dict):
-                hashtags = result.get('data', {}).get('hashtags', [])
-            elif isinstance(result.get('data'), list):
-                hashtags = result.get('data', [])
-            elif isinstance(result.get('hashtags'), list):
-                hashtags = result.get('hashtags', [])
+            raw_hashtags = result.get('hashtags', []) or result.get('data', {}).get('hashtags', [])
+            if isinstance(raw_hashtags, list):
+                hashtags = raw_hashtags
+            elif isinstance(raw_hashtags, dict):
+                hashtags = list(raw_hashtags.values())
         elif isinstance(result, list):
             hashtags = result
-
+ 
         if not hashtags:
             return "❌ Failed to fetch trending hashtags"
 
@@ -681,21 +710,27 @@ class MoltxPlugin(
     def trending_hashtags_command(self, *args):
         """Command to get trending hashtags. Usage: moltx_trending_hashtags [limit]"""
         limit = int(args[0]) if args and args[0].isdigit() else 10
-        
+
         result = self.get_trending_hashtags(limit)
         if result and result.get('success'):
-            hashtags = result.get('hashtags', [])[:10]
+            raw_hashtags = result.get('hashtags', []) or result.get('data', {}).get('hashtags', [])
+            if isinstance(raw_hashtags, list):
+                hashtags = raw_hashtags
+            elif isinstance(raw_hashtags, dict):
+                hashtags = list(raw_hashtags.values())
+            else:
+                hashtags = []
+
+            hashtags = hashtags[:10]
             output = f"🔥 Top {len(hashtags)} Trending Hashtags:\n\n"
             for i, tag in enumerate(hashtags, 1):
-                output += f"{i}. #{tag}\n"
+                if isinstance(tag, dict):
+                    name = tag.get('name') or tag.get('hashtag') or tag.get('tag') or 'unknown'
+                else:
+                    name = str(tag)
+                output += f"{i}. #{name.lstrip('#')}\n"
             return output
         return "❌ Failed to fetch trending hashtags"
-
-    # === SyMod Command Wrappers (delegate to interface) ===
-
-    def symod_start_command(self):
-        """Start SyMod-driven social agent loop"""
-        return symod_start_command(self)
 
     def symod_stop_command(self):
         """Stop SyMod-driven social agent loop"""

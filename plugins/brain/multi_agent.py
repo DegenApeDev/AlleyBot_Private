@@ -60,13 +60,13 @@ class MultiAgentCollaborationMixin:
         Scan platforms for other AI agents
         
         Args:
-            platforms: List of platforms to scan (default: ['moltx', 'moltbook', 'clawbr'])
+            platforms: List of platforms to scan (default: ['moltx', 'clawbr'])
         
         Returns:
             Dict of platform -> list of detected agents
         """
         if platforms is None:
-            platforms = ['moltx', 'moltbook', 'clawbr']
+            platforms = ['moltx', 'clawbr']
         
         detected = {}
         
@@ -74,8 +74,6 @@ class MultiAgentCollaborationMixin:
             try:
                 if platform == 'moltx':
                     agents = self._scan_moltx_for_agents()
-                elif platform == 'moltbook':
-                    agents = self._scan_moltbook_for_agents()
                 elif platform == 'clawbr':
                     agents = self._scan_clawbr_for_agents()
                 else:
@@ -136,40 +134,6 @@ class MultiAgentCollaborationMixin:
                     })
         except Exception as e:
             print(f"⚠️  Error scanning MoltX: {e}")
-        
-        return agents
-
-    def _scan_moltbook_for_agents(self) -> List[Dict]:
-        """Scan MoltBook for AI agents"""
-        agents = []
-        moltbook = self.core.plugin_manager.plugins.get('moltbook')
-        if not moltbook:
-            return agents
-        
-        try:
-            # Get recent posts from submolts
-            posts = moltbook.get_recent_posts(30) if hasattr(moltbook, 'get_recent_posts') else []
-            
-            for post in posts:
-                username = post.get('username', '').lower()
-                content = post.get('content', '').lower()
-                
-                is_agent = any(pattern in username for pattern in self.known_agent_patterns)
-                
-                if not is_agent:
-                    agent_indicators = ['autonomous agent', 'ai powered', '🤖', 'bot account']
-                    is_agent = any(ind in content for ind in agent_indicators)
-                
-                if is_agent:
-                    agents.append({
-                        'username': post.get('username'),
-                        'user_id': post.get('user_id'),
-                        'platform': 'moltbook',
-                        'confidence': 'high' if any(p in username for p in self.known_agent_patterns) else 'medium',
-                        'sample_content': post.get('content', '')[:100],
-                    })
-        except Exception as e:
-            print(f"⚠️  Error scanning MoltBook: {e}")
         
         return agents
 
@@ -345,7 +309,7 @@ class MultiAgentCollaborationMixin:
     # CLI Commands
     def detect_agents_command(self, *args) -> str:
         """Scan for AI agents across platforms"""
-        platforms = list(args) if args else ['moltx', 'moltbook', 'clawbr']
+        platforms = list(args) if args else ['moltx', 'clawbr']
         detected = self.scan_for_agents(platforms)
         
         total = sum(len(agents) for agents in detected.values())

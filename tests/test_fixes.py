@@ -361,12 +361,6 @@ class TestSilentExceptBlocksFixed(unittest.TestCase):
         bare = self._check_no_bare_except(path)
         self.assertEqual(bare, [], f"Bare except: found at lines {bare} in alleybot_core.py")
 
-    def test_moltbook_plugin_no_bare_except(self):
-        path = PROJECT_ROOT / 'plugins' / 'moltbookai' / 'moltbookai.py'
-        if path.exists():
-            bare = self._check_no_bare_except(path)
-            self.assertEqual(bare, [], f"Bare except: found at lines {bare} in moltbookai.py")
-
     def test_telegram_plugin_no_bare_except(self):
         path = PROJECT_ROOT / 'plugins' / 'telegram' / 'telegram.py'
         bare = self._check_no_bare_except(path)

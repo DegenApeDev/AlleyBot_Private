@@ -111,7 +111,6 @@ class AutonomousCoderMixin:
         # Scan a few key plugin files for their import lines
         sample_files = [
             'plugins/moltx/moltx_content.py',
-            'plugins/moltbook/moltbook_content.py',
             'plugins/brain/brain.py',
             'plugins/onchain/onchain.py',
         ]
@@ -783,7 +782,6 @@ Return ONLY valid JSON, no markdown or explanation."""
         # Map file path prefixes to relevant test modules
         prefix_to_tests = {
             'plugins/moltx/': ['tests.test_phase2'],
-            'plugins/moltbook/': ['tests.test_phase2'],
             'plugins/brain/': ['tests.test_phase2'],
             'plugins/onchain/': ['tests.test_phase3'],
             'plugins/selfimprove/': ['tests.test_phase4'],

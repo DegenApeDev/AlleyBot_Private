@@ -27,10 +27,9 @@ class CrossPlatformEngagementMixin:
         # Just initialize our own attributes
         self.engagement_stats = {
             'moltx': {'replies': 0, 'likes': 0, 'follows': 0, 'last_engagement': None},
-            'moltbook': {'replies': 0, 'likes': 0, 'follows': 0, 'last_engagement': None},
             'moltchan': {'replies': 0, 'likes': 0, 'follows': 0, 'last_engagement': None},
         }
-        self.platform_priorities = ['moltx', 'moltbook', 'moltchan']
+        self.platform_priorities = ['moltx', 'moltchan']
     
     def _init_cross_platform_engagement(self):
         """Initialize cross-platform engagement from core memory"""
@@ -65,7 +64,7 @@ class CrossPlatformEngagementMixin:
         Run 5:1 engagement protocol before posting
         
         Args:
-            platform: Platform name (moltx, moltbook, moltchan)
+            platform: Platform name (moltx, moltchan)
             plugin: The platform plugin instance
             update: Optional Telegram update for status messages
             
@@ -135,15 +134,6 @@ class CrossPlatformEngagementMixin:
                         elif isinstance(result, list):
                             feed = result
                             
-            elif platform == 'moltbook':
-                # Moltbook feed
-                if hasattr(plugin, 'get_feed'):
-                    result = plugin.get_feed(limit=30)
-                    if isinstance(result, list):
-                        feed = result
-                    elif isinstance(result, dict):
-                        feed = result.get('posts', result.get('data', []))
-                        
             elif platform == 'moltchan':
                 # Moltchan threads
                 if hasattr(plugin, 'get_threads'):
@@ -171,8 +161,6 @@ class CrossPlatformEngagementMixin:
                 # Platform-specific like method
                 result = None
                 if platform == 'moltx' and hasattr(plugin, 'like_post'):
-                    result = plugin.like_post(post_id)
-                elif platform == 'moltbook' and hasattr(plugin, 'like_post'):
                     result = plugin.like_post(post_id)
                 elif platform == 'moltchan' and hasattr(plugin, 'upvote_thread'):
                     result = plugin.upvote_thread(post_id)
@@ -232,8 +220,6 @@ Generate ONLY the reply (no @ mentions, no explanations):"""
                 result = None
                 if platform == 'moltx' and hasattr(plugin, 'reply_to_post'):
                     result = plugin.reply_to_post(post_id, f"@{author} {reply_text}")
-                elif platform == 'moltbook' and hasattr(plugin, 'add_comment'):
-                    result = plugin.add_comment(post_id, f"@{author} {reply_text}")
                 elif platform == 'moltchan' and hasattr(plugin, 'reply_to_thread'):
                     result = plugin.reply_to_thread(post_id, reply_text)
                 
@@ -266,8 +252,6 @@ Generate ONLY the reply (no @ mentions, no explanations):"""
                 result = None
                 if platform == 'moltx' and hasattr(plugin, 'follow_agent'):
                     result = plugin.follow_agent(author)
-                elif platform == 'moltbook' and hasattr(plugin, 'follow_user'):
-                    result = plugin.follow_user(author)
                 elif platform == 'moltchan' and hasattr(plugin, 'follow_thread'):
                     result = plugin.follow_thread(author)
                 

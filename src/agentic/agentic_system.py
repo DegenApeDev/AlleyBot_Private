@@ -131,7 +131,7 @@ class AgenticAlleyBot:
         if self.selfimprove_plugin:
             print("✅ Self-improvement plugin linked")
         self.opportunity_detector = OnChainOpportunityDetector(
-            moltbook_api=getattr(core.plugin_manager.plugins.get('moltbook'), 'api', None),
+            moltbook_api=None,
             web3_provider=w3_instance
         )
         if w3_instance:
@@ -266,7 +266,7 @@ class AgenticAlleyBot:
             takes_args = len(sig.parameters) > 0
             
             # Extract actual content from JSON if it's a post command
-            if 'moltbook_post' in action_name or 'moltx_post' in action_name:
+            if 'moltx_post' in action_name:
                 if isinstance(params, dict) and 'content' in params:
                     # For post commands, extract the content
                     content = params['content']

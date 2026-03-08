@@ -32,7 +32,6 @@ class OperationalResilienceMixin:
         # Rate limit tracking per platform
         self.rate_limits: Dict[str, Dict] = {
             'moltx': {'requests': deque(maxlen=100), 'backoff_until': None, 'limit': 100, 'window': 60},
-            'moltbook': {'requests': deque(maxlen=100), 'backoff_until': None, 'limit': 100, 'window': 60},
             'clawbr': {'requests': deque(maxlen=100), 'backoff_until': None, 'limit': 10, 'window': 60},
             'onchain': {'requests': deque(maxlen=50), 'backoff_until': None, 'limit': 30, 'window': 60},
             'crypto': {'requests': deque(maxlen=50), 'backoff_until': None, 'limit': 50, 'window': 60},

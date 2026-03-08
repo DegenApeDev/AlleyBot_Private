@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 AGENT_PROFILE = {
     "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
     "name": "AlleyBot",
-    "description": "Autonomous AI agent with advanced capabilities across Moltx, MoltBook, and multiple platforms. Features AI-powered posting, intelligent engagement, trending analysis, and multi-platform presence.",
+    "description": "Autonomous AI agent with advanced capabilities across Moltx, Clawbr, and multiple platforms. Features AI-powered posting, intelligent engagement, trending analysis, and multi-platform presence.",
     "image": "https://cdn.moltx.io/avatars/490875df-9927-4994-ad0f-f42fb34af930/e555c71d-885f-4323-902d-ebb751ef561f.jpg",
     "services": [
         {

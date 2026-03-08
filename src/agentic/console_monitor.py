@@ -32,6 +32,7 @@ import json
 import logging
 import threading
 import subprocess
+import asyncio
 from typing import Dict, List, Optional, Any, Callable, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -228,7 +229,7 @@ class ConsoleMonitor:
         if not self.core or not hasattr(self.core, 'plugins'):
             return
         
-        platform_names = ['moltx', 'clawbr', 'moltbook', 'moltbit', 'moltchan', 'moltroad']
+        platform_names = ['moltx', 'clawbr', 'moltbook', 'moltbit', 'moltchan', 'moltroad', 'telegram']
         
         for name in platform_names:
             if name in self.core.plugins:
@@ -665,8 +666,11 @@ AlleyBot has automatically acquired this new skill from platform announcement an
                     return False
                     
             elif message.message_type in ['mention', 'reply']:
+                routed_result = self._route_public_response(message, response)
+                if routed_result is not None:
+                    result = routed_result
                 # Reply to post/mention
-                if hasattr(platform, 'create_reply'):
+                elif hasattr(platform, 'create_reply'):
                     result = platform.create_reply(
                         target_id=message.context.get('post_id'),
                         content=response
@@ -678,8 +682,11 @@ AlleyBot has automatically acquired this new skill from platform announcement an
                 else:
                     return False
             else:
+                routed_result = self._route_public_response(message, response)
+                if routed_result is not None:
+                    result = routed_result
                 # Default: try to create post
-                if hasattr(platform, 'create_post'):
+                elif hasattr(platform, 'create_post'):
                     result = platform.create_post(response)
                 else:
                     return False
@@ -694,6 +701,84 @@ AlleyBot has automatically acquired this new skill from platform announcement an
         except Exception as e:
             logger.error(f"❌ Exception sending response: {e}")
             return False
+
+    def _route_public_response(self, message: PlatformMessage, response: str) -> Optional[Dict[str, Any]]:
+        """Route public responses through AGIKernel when a safe synchronous bridge is available."""
+        if message.message_type == 'dm':
+            return None
+
+        kernel = getattr(self.core, 'agi_kernel', None) if self.core else None
+        if not kernel:
+            return None
+
+        action_spec = self._build_response_action_spec(message, response)
+        if not action_spec:
+            return None
+
+        try:
+            asyncio.get_running_loop()
+            return None
+        except RuntimeError:
+            pass
+
+        try:
+            return asyncio.run(kernel.act(action_spec))
+        except Exception as e:
+            logger.warning(f"⚠️ Kernel-routed response failed for {message.platform}: {e}")
+            return None
+
+    def _build_response_action_spec(self, message: PlatformMessage, response: str) -> Optional[Dict[str, Any]]:
+        """Build canonical action specs for console-originated public responses."""
+        context = {
+            'source': 'console_monitor',
+            'trigger': message.message_type,
+            'impact': 'medium',
+            'platform': message.platform,
+            'sender': message.sender,
+            'message_id': message.id,
+        }
+
+        if message.platform == 'moltx':
+            if message.message_type in ['mention', 'reply'] and message.context.get('post_id'):
+                return {
+                    'plugin': 'moltx',
+                    'action_type': 'reply',
+                    'params': {
+                        'target_id': message.context.get('post_id'),
+                        'content': response,
+                    },
+                    'context': context,
+                }
+            return {
+                'plugin': 'moltx',
+                'action_type': 'post',
+                'params': {
+                    'content': response,
+                },
+                'context': context,
+            }
+
+        if message.platform == 'clawbr':
+            if message.message_type in ['mention', 'reply'] and message.context.get('post_id'):
+                return {
+                    'plugin': 'clawbr',
+                    'action_type': 'clawbr_comment',
+                    'params': {
+                        'target_id': message.context.get('post_id'),
+                        'content': response,
+                    },
+                    'context': context,
+                }
+            return {
+                'plugin': 'clawbr',
+                'action_type': 'clawbr_post',
+                'params': {
+                    'content': response,
+                },
+                'context': context,
+            }
+
+        return None
     
     # =================================================================
     # AGI Integration

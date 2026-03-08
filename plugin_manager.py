@@ -110,10 +110,6 @@ class PluginManager:
                 "enabled": True,
                 "config": {}
             },
-            "moltbook": {
-                "enabled": True,
-                "config": {}
-            },
             "moltchan": {
                 "enabled": True,
                 "config": {}
@@ -301,7 +297,8 @@ class PluginManager:
         coroutines share the same event loop as the bot.
         """
         import asyncio
-        for name, plugin in self.plugins.items():
+        # Snapshot plugins dict to avoid race condition during iteration
+        for name, plugin in list(self.plugins.items()):
             if hasattr(plugin, 'start_background') and hasattr(plugin, 'create_task'):
                 try:
                     await plugin.start_background()

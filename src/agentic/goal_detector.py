@@ -275,18 +275,51 @@ class GoalDetector:
     
     def propose_goal(self, goal: Goal) -> bool:
         """Submit a goal to the goal manager"""
-        # Set status to PROPOSED (needs owner approval)
-        goal.status = get_goal_manager().GoalStatus.PROPOSED if hasattr(get_goal_manager(), 'GoalStatus') else None
         from src.agentic.goal_manager import GoalStatus
-        goal.status = GoalStatus.PROPOSED
+        auto_approved = False
+        if hasattr(self.goal_manager, 'should_auto_approve_goal') and self.goal_manager.should_auto_approve_goal(goal):
+            goal.status = GoalStatus.APPROVED
+            goal.approved_at = datetime.now()
+            auto_approved = True
+        else:
+            goal.status = GoalStatus.PROPOSED
         
         success = self.goal_manager.add_goal(goal)
         
         if success:
-            logger.info(f"🎯 Proposed goal: {goal.title} (priority: {goal.priority.name})")
-            
-            # TODO: Notify owner via Telegram
-            # This would integrate with notification system
+            logger.info(f"🎯 Goal registered: {goal.title} (status: {goal.status.name}, priority: {goal.priority.name})")
+
+            if auto_approved:
+                try:
+                    from plugin_manager import get_plugin_manager
+                    plugin_manager = get_plugin_manager()
+                    telegram = plugin_manager.get_plugin('telegram') if plugin_manager else None
+                    if telegram and hasattr(telegram, 'notify_autonomous_activity'):
+                        details = (
+                            f"Auto-approved low-risk {goal.category} goal `{goal.id}`: "
+                            f"{goal.title[:120]}"
+                        )
+                        telegram.notify_autonomous_activity('goal_auto_approved', details)
+                except Exception as e:
+                    logger.debug(f"Could not send auto-approved goal notification: {e}")
+
+                try:
+                    started_goal = self.goal_manager.start_next_safe_goal() if hasattr(self.goal_manager, 'start_next_safe_goal') else None
+                    if started_goal and started_goal.id == goal.id:
+                        logger.info(f"🚀 Auto-started safe goal: {goal.id}")
+                        try:
+                            from plugin_manager import get_plugin_manager
+                            plugin_manager = get_plugin_manager()
+                            telegram = plugin_manager.get_plugin('telegram') if plugin_manager else None
+                            if telegram and hasattr(telegram, 'notify_autonomous_activity'):
+                                telegram.notify_autonomous_activity(
+                                    'goal_auto_started',
+                                    f"Started safe low-risk goal `{goal.id}`: {goal.title[:120]}"
+                                )
+                        except Exception as e:
+                            logger.debug(f"Could not send auto-start goal notification: {e}")
+                except Exception as e:
+                    logger.debug(f"Could not auto-start safe goal: {e}")
         
         return success
     

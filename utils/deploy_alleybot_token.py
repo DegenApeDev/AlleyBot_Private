@@ -19,7 +19,7 @@ BASE_WALLET_PRIVATE_KEY = os.getenv('BASE_WALLET_PRIVATE_KEY')
 # Deplous post ID
 DEPLOUS_POST_ID = "d0bdad96-6693-4149-b0d4-3f283a2a7b64"
 
-# Moltbook API
+# Deprecated MoltBook API path retained only for legacy reference
 MOLTBOOK_API_KEY = os.getenv('MOLTBOOK_API_KEY')
 MOLTBOOK_API_URL = "https://www.moltbook.com/api/v1"
 
@@ -54,7 +54,7 @@ def create_deplous_wallet_config():
     return True
 
 def deploy_token():
-    """Post deploy command to Moltbook"""
+    """Legacy helper retained for reference after MoltBook decommissioning."""
     if not MOLTBOOK_API_KEY:
         print("❌ MOLTBOOK_API_KEY not found in .env")
         return False

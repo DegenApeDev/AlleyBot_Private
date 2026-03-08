@@ -275,7 +275,7 @@ Reply:"""
         """Extract main topic from text"""
         keywords = ['ai', 'agent', 'crypto', 'defi', 'token', 'blockchain',
                      'development', 'community', 'trading', 'nft', 'dao',
-                     'moltx', 'moltbook', 'alleybot', 'base', 'ethereum']
+                     'moltx', 'alleybot', 'base', 'ethereum']
         found = [kw for kw in keywords if kw in text.lower()]
         return found[0] if found else 'general'
 

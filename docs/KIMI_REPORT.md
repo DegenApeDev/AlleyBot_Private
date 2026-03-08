@@ -30,7 +30,7 @@ Owner (Telegram) → Telegram Interface → Brain Module
     ┌─────────────┬─────────────┬─────────┴────────┬─────────────┐
     ↓             ↓             ↓                ↓             ↓
  Social Media   Clawbr        A2A System      Crypto/On-Chain  Analytics
-(MoltX/Moltbook) (Debates)   (Agent Tasks)    (Base Network)   (Dashboard)
+(MoltX/MoltChan) (Debates)   (Agent Tasks)    (Base Network)   (Dashboard)
 ```
 
 ---
@@ -40,7 +40,6 @@ Owner (Telegram) → Telegram Interface → Brain Module
 | Plugin | Platform | Key Features |
 |--------|----------|--------------|
 | **moltx** | Twitter-like social | Posts, replies, likes, follows, trending, reposts |
-| **moltbook** | Reddit-like forums | Submolts, posts, comments, upvotes, karma tracking |
 | **clawbr** | AI debate network | Debates, voting, leaderboard, auto-follow opponents |
 | **onchain** | Base (EVM) | Wallet, token tracking (ALLEY/USDC/WETH), tx monitor |
 | **a2a** | Agent2Agent Protocol | RC v1.0 compliant server, task dispatch, streaming |
@@ -58,7 +57,6 @@ Owner (Telegram) → Telegram Interface → Brain Module
 
 ### 1. Multi-Platform Social Media Automation
 - **MoltX** (Twitter-like): Intelligent posting, engagement, trending analysis
-- **MoltBook** (Reddit-like): Submolt exploration, commenting, karma building
 - **Clawbr** (AI Debate): Autonomous debate participation, ELO tracking
 
 ### 2. On-Chain Integration (Base Network)
@@ -127,7 +125,7 @@ Owner (Telegram) → Telegram Interface → Brain Module
    • Encryption: Fernet for sensitive data
 
 ⚡ Performance:
-   • API Rate Limits: 10 req/sec (Clawbr), 100/min (Moltbook)
+   • API Rate Limits: 10 req/sec (Clawbr)
    • Heartbeat: Every 4+ hours
    • Brain Cycle: Every 5 minutes (configurable)
    • Auto-refresh: Stats 20s, Feed 45s (dashboard)
@@ -143,7 +141,6 @@ Owner (Telegram) → Telegram Interface → Brain Module
 
 ### ✅ Phase 2: Modularize (49 tests)
 - Split moltx.py (2808 lines → 5 files)
-- Split moltbook.py (1183 lines → 4 files)
 - Unified EnhancedMemorySystem
 
 ### ✅ Phase 3: On-Chain (31 tests)
@@ -173,7 +170,7 @@ Owner (Telegram) → Telegram Interface → Brain Module
 **Environment Variables** (15+ keys):
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID`
 - `DEEPSEEK_API_KEY`, `XAI_API_KEY` (Grok)
-- `CLAWBR_API_KEY`, `MOLTBOOK_API_KEY`
+- `CLAWBR_API_KEY`
 - `BASE_WALLET_PUBLIC_ADDRESS`, `BASE_RPC_URL`
 - `GITHUB_TOKEN` (for self-improvement)
 
@@ -204,7 +201,7 @@ Owner (Telegram) → Telegram Interface → Brain Module
 ## File Structure
 
 ```
-/home/degendev/Dev/Agents/MoltbookBot/
+/home/degendev/Dev/Agents/AlleyBot/
 ├── alleybot_core.py          # Central orchestrator
 ├── plugin_manager.py         # Plugin system
 ├── plugin_config.json        # 14 plugin configs
@@ -216,7 +213,6 @@ Owner (Telegram) → Telegram Interface → Brain Module
 │
 ├── plugins/                # 14 plugin directories
 │   ├── moltx/             # Twitter-like (7 files)
-│   ├── moltbook/          # Reddit-like (5 files)
 │   ├── clawbr/            # Debates (6 files)
 │   ├── onchain/           # Web3 (5 files)
 │   ├── a2a/               # Agent2Agent (5 files)

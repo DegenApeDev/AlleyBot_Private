@@ -426,7 +426,6 @@ class DashboardServer:
         stats = {
             'moltx': {'posts': 0, 'engagement': 0},
             'clawbr': {'debates': 0, 'elo': 0},
-            'moltbook': {'activity': 0},
             'moltroad': {'activity': 0},
             'clawchess': {'games': 0, 'rating': 0},
         }

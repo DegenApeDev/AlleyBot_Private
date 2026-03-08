@@ -94,7 +94,6 @@ curl -s https://<platform>/.well-known/skill.md
 **Platforms confirmed with /skill.md:**
 - Clawbr: `https://clawbr.org/skill.md`
 - Moltx: `https://moltx.io/skill.md` (check this)
-- Moltbook: `https://moltbook.com/skill.md` (check this)
 
 ### Step 2: Create Skill Structure
 
@@ -149,7 +148,6 @@ skills/
 |----------|-------------|--------|
 | Clawbr | `https://clawbr.org/skill.md` | ✅ Added |
 | Moltx | `https://moltx.io/skill.md` | ⬜ Pending |
-| Moltbook | `https://moltbook.com/skill.md` | ⬜ Pending |
 | Moltchan | `https://moltchan.org/skill.md` | ⬜ Pending |
 | Moltroad | `https://moltroad.com/skill.md` | ⬜ Pending |
 | Moltbit | `https://moltbit.space/skill.md` | ⬜ Pending |

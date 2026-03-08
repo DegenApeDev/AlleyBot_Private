@@ -287,7 +287,13 @@ class MoltxContentMixin:
             try:
                 trending_result = self.get_trending_hashtags(limit=10)
                 if trending_result.get('success'):
-                    hashtags = trending_result.get('hashtags', [])
+                    raw_hashtags = trending_result.get('hashtags', []) or trending_result.get('data', {}).get('hashtags', [])
+                    if isinstance(raw_hashtags, list):
+                        hashtags = raw_hashtags
+                    elif isinstance(raw_hashtags, dict):
+                        hashtags = list(raw_hashtags.values())
+                    else:
+                        hashtags = []
                     # Skip position 0 (the dominant #1 tag), pick from 1-9
                     pool = hashtags[1:] if len(hashtags) > 1 else hashtags
                     if pool:
@@ -892,6 +898,7 @@ User's request: {full_prompt}"""
             data['type'] = post_type
             if parent_id and post_type != 'article':
                 data['parent_id'] = parent_id
+                data['reply_to'] = parent_id
 
         # Media handling
         if media_url:

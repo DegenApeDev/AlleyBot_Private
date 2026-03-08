@@ -1,6 +1,12 @@
 """
 Production-Ready AlleyBot Entry Point
 Event-driven architecture with DeepSeek + Grok-4.1-reasoning
+
+Uses asyncio.run() with a clean async main that:
+1. Initializes + starts the Telegram Application
+2. Starts the updater polling
+3. Starts the event runner + autonomous brain as background tasks
+4. Keeps everything running via asyncio.gather()
 """
 
 import asyncio
@@ -25,90 +31,96 @@ from src.agents.event_runner import EventRunner
 from src.agents.session_manager import SessionManager
 from src.config.models import ModelRouter
 from src.skills.skill_loader import SkillLoader
-from src.integrations.telegram_webhook import TelegramWebhook
 
 
-class ProductionAlleyBot:
-    """Production-ready AlleyBot with event-driven architecture"""
-    
-    def __init__(self, core):
-        self.core = core
-        
-        # Initialize components
-        print("🚀 Initializing Production AlleyBot...")
-        
-        # Session management
-        self.session_manager = SessionManager()
-        print("✅ Session Manager initialized")
-        
-        # Model routing
-        self.model_router = ModelRouter()
-        print("✅ Model Router initialized")
-        
-        # Skills system
-        self.skill_loader = SkillLoader()
-        print("✅ Skill Loader initialized")
-        
-        # Event runner
-        self.event_runner = EventRunner(core)
-        self.event_runner.session_manager = self.session_manager
-        self.event_runner.model_router = self.model_router
-        print("✅ Event Runner initialized")
-        
-        # Telegram integration
-        owner_id = os.getenv('TELEGRAM_OWNER_ID', '6172568442')
-        self.telegram_webhook = TelegramWebhook(self.event_runner, owner_id)
-        
-        # Inject telegram plugin if available
-        if hasattr(core, 'plugin_manager') and 'telegram' in core.plugin_manager.plugins:
-            self.telegram_webhook.telegram_plugin = core.plugin_manager.plugins['telegram']
-            print("✅ Telegram integration ready")
-        
-        print("🎉 Production AlleyBot initialized successfully!")
-    
-    async def start(self):
-        """Start the production event-driven system"""
+async def _run_production(core):
+    """Async main — all startup happens inside a running event loop."""
+
+    print("\n" + "="*60)
+    print("🚀 PRODUCTION ALLEYBOT - EVENT-DRIVEN MODE")
+    print("="*60 + "\n")
+
+    # --- Build components ---
+    session_manager = SessionManager()
+    print("✅ Session Manager initialized")
+    model_router = ModelRouter()
+    print("✅ Model Router initialized")
+    skill_loader = SkillLoader()
+    print("✅ Skill Loader initialized")
+    event_runner = EventRunner(core)
+    event_runner.session_manager = session_manager
+    event_runner.model_router = model_router
+    print("✅ Event Runner initialized")
+
+    # --- Get Telegram Application ---
+    telegram_plugin = None
+    if hasattr(core, 'plugin_manager') and 'telegram' in core.plugin_manager.plugins:
+        telegram_plugin = core.plugin_manager.plugins['telegram']
+
+    if not telegram_plugin or not telegram_plugin.application:
+        print("❌ Telegram plugin not available — cannot start")
+        return
+
+    app = telegram_plugin.application
+    total_handlers = sum(len(h) for h in app.handlers.values())
+    print(f"📱 Telegram: {total_handlers} handlers registered")
+
+    # --- Start background tasks ---
+    # Event runner
+    event_runner_task = asyncio.create_task(event_runner.start(), name="event_runner")
+    print("✅ Event Runner started")
+
+    # Autonomous brain
+    try:
+        from src.agentic.autonomous_startup import get_autonomous_startup
+        autonomous_startup = get_autonomous_startup(core, core.plugin_manager)
+        brain_task = asyncio.create_task(autonomous_startup.initialize(), name="autonomous_brain")
+        print("✅ Autonomous startup scheduled")
+    except Exception as e:
+        print(f"⚠️  Autonomous startup error: {e}")
+        brain_task = None
+
+    # Startup notification (sync HTTP in thread)
+    try:
+        if hasattr(telegram_plugin, '_send_startup_notification'):
+            asyncio.get_event_loop().run_in_executor(
+                None, telegram_plugin._send_startup_notification
+            )
+    except Exception:
+        pass
+
+    telegram_task = asyncio.create_task(
+        telegram_plugin._start_polling_async(),
+        name="telegram_polling",
+    )
+    print("✅ Telegram polling task scheduled")
+
+    print("\n🎉 All systems GO — Telegram commands are live!\n")
+
+    # --- Keep running until interrupted ---
+    try:
+        # Simple keepalive — the event loop is running, polling is active,
+        # background tasks are scheduled. Just sleep forever.
+        while True:
+            await asyncio.sleep(60)
+    except asyncio.CancelledError:
+        pass
+    finally:
+        # --- Shutdown ---
+        print("🧹 Shutting down...")
+        telegram_plugin.is_running = False
+        telegram_task.cancel()
+        event_runner.stop()
         try:
-            print("\n" + "="*60)
-            print("🚀 PRODUCTION ALLEYBOT - EVENT-DRIVEN MODE")
-            print("="*60)
-            print("📊 Architecture:")
-            print("  • Central Event Queue (asyncio.Queue)")
-            print("  • Session State Management (JSON storage)")
-            print("  • Dynamic Model Routing (DeepSeek/Grok-4.1)")
-            print("  • Modular Skills System (YAML definitions)")
-            print("  • Webhook-Ready Integrations")
-            print("="*60 + "\n")
-            
-            # Start Telegram polling as background task (non-blocking)
-            import asyncio
-            polling_task = asyncio.create_task(self.telegram_webhook.start_polling_async())
-            print("📱 Telegram polling started in background")
-            
-            # Give polling a moment to initialize
-            await asyncio.sleep(2)
-            
-            # Initialize autonomous startup system (auto-start brain)
-            from src.agentic.autonomous_startup import get_autonomous_startup
-            autonomous_startup = get_autonomous_startup(self.core, self.core.plugin_manager)
-            await autonomous_startup.initialize()
-            print("✅ Autonomous startup system initialized")
-            
-            # Start event runner (this also blocks, so we need to run both concurrently)
-            await self.event_runner.start()
-            
-        except KeyboardInterrupt:
-            print("\n🛑 Shutting down Production AlleyBot...")
-            self.event_runner.stop()
-        except Exception as e:
-            print(f"❌ Production AlleyBot error: {e}")
-            raise
+            await telegram_task
+        except asyncio.CancelledError:
+            pass
+        print("✅ Shutdown complete")
 
 
-async def run_production_mode(core):
-    """Run AlleyBot in production event-driven mode"""
-    bot = ProductionAlleyBot(core)
-    await bot.start()
+def run_production_mode(core):
+    """Entry point called from alleybot_core.py (synchronous)."""
+    asyncio.run(_run_production(core))
 
 
 if __name__ == "__main__":

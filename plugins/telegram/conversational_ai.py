@@ -121,10 +121,6 @@ class ConversationalAI:
                             cmd_line = f"{command_name} {args.get('board')} {args.get('subject')}"
                             if args.get('content'):
                                 cmd_line += f" | {args.get('content')}"
-                        elif 'submolt' in args and 'title' in args:  # moltbook
-                            cmd_line = f"{command_name} {args.get('submolt')} {args.get('title')}"
-                            if args.get('content'):
-                                cmd_line += f" | {args.get('content')}"
                         elif 'content' in args and command_name == 'moltx_post':
                             cmd_line = f"{command_name} {args.get('content')}"
                         elif 'content' in args and command_name == 'clawbr_post':
@@ -145,7 +141,6 @@ class ConversationalAI:
                     # Execute with confirmation message
                     response_map = {
                         'moltchan_post': f"🚀 Creating thread... [EXECUTE:{cmd_line}]",
-                        'moltbook_post': f"📚 Creating post... [EXECUTE:{cmd_line}]",
                         'moltx_post': f"📢 Posting to Moltx... [EXECUTE:{cmd_line}]",
                         'clawbr_post': f"🦞 Posting to Clawbr... [EXECUTE:{cmd_line}]",
                         'clawbr_reply': f"🦞 Replying to Clawbr post... [EXECUTE:{cmd_line}]",
@@ -158,7 +153,7 @@ class ConversationalAI:
                     }
                     
                     response = response_map.get(command_name, f"🤖 Executing... [EXECUTE:{cmd_line}]")
-                    executed = self._try_execute_command(response)
+                    executed = await self._try_execute_command(response)
                     final_response = executed if executed else f"Command matched but execution pending"
                     await update.message.reply_text(final_response)
                     return
@@ -371,7 +366,7 @@ class ConversationalAI:
                 return "🤖 I'm having trouble connecting to my AI. Use /help for available commands."
 
             # Check if the AI wants to execute a command
-            executed = self._try_execute_command(response_text)
+            executed = await self._try_execute_command(response_text)
             final_response = executed if executed else response_text
             
             # Store assistant response in conversation history
@@ -417,7 +412,7 @@ class ConversationalAI:
 
 ---
 
-CURRENT CONTEXT: You are managing social media on MoltX, MoltBook, MoltChan, MoltRoad, and Clawbr (AI debate network). You have on-chain awareness on Base network and can self-improve.
+CURRENT CONTEXT: You are managing social media on MoltX, MoltChan, MoltRoad, and Clawbr (AI debate network). You have on-chain awareness on Base network and can self-improve.
 
 Your owner (DegenApeDev) is chatting with you via Telegram. You should:
 1. UNDERSTAND what they want — use reasoning to figure out the intent
@@ -432,7 +427,7 @@ AVAILABLE COMMANDS:
 IMPORTANT RULES:
 - For building new features/skills: use improve_self_update with a clear description
 - For checking skill updates: use improve_update_skills
-- For posting: use brain_moltx_post, brain_moltbook_post, brain_moltx_image_post (with AI image), or clawbr_post
+- For posting: use brain_moltx_post, brain_moltx_image_post (with AI image), moltchan_post, or clawbr_post
 - For engaging (liking/commenting) on Moltx feed: use moltx_engage or engage_feed_command
 - For debates: use clawbr_debates, clawbr_create_debate, clawbr_join_debate
 - For status: use improve_status, moltx_status, clawbr_status, onchain_wallet, etc.
@@ -447,7 +442,6 @@ EXAMPLES OF COMMAND EXECUTION:
 - When user says "engage on socials" or "engage on moltx": respond with personality AND include [EXECUTE:moltx_engage 5]
 - When user says "post about AI on moltx": respond AND include [EXECUTE:brain_moltx_post AI agents are changing everything]
 - When user says "post on moltchan biz about crypto being bearish": respond AND include [EXECUTE:moltchan_post biz Crypto Analysis | bearish on alts]
-- When user says "post on moltbook alleybot about AI insights": respond AND include [EXECUTE:moltbook_post alleybot AI Insights | latest thoughts on agents]
 - When user says "what's my wallet balance": respond AND include [EXECUTE:onchain_wallet]
 - When user says "check my engagement": respond AND include [EXECUTE:brain_check_engagement]
 - When user says "show me token stats": respond AND include [EXECUTE:token_stats]
@@ -464,7 +458,6 @@ EXAMPLES OF COMMAND EXECUTION:
 
 NATURAL LANGUAGE UNDERSTANDING:
 - User: "yo post on biz about bear market" → You: "Sure thing! Creating that thread now [EXECUTE:moltchan_post biz Bear Market | It's looking rough out there]"
-- User: "moltbook alleybot dev update" → You: "Got it! Posting to m/alleybot [EXECUTE:moltbook_post alleybot Dev Update | Working on new features]"
 - User: "engage with the feed" → You: "Time to level up! Running engagement [EXECUTE:moltx_engage 5]"
 - User: "reply to this clawbr post" → You: "Got it! Replying to that post [EXECUTE:clawbr_post Great point! Here's my take...]"
 - User: "comment on clawbr about AI" → You: "Nice! Adding my thoughts [EXECUTE:clawbr_post AI agents are getting really sophisticated...]"
@@ -473,9 +466,10 @@ NATURAL LANGUAGE UNDERSTANDING:
 
 Remember: ONLY use [EXECUTE:...] when the user wants you to DO something. For questions or conversation, just respond naturally."""
 
-    def _try_execute_command(self, ai_response: str) -> Optional[str]:
+    async def _try_execute_command(self, ai_response: str) -> Optional[str]:
         """Check if the AI response contains a command to execute, and run it"""
         import re
+        import inspect
         match = re.search(r'\[EXECUTE:([^\]]+)\]', ai_response)
         if not match:
             return None
@@ -503,6 +497,9 @@ Remember: ONLY use [EXECUTE:...] when the user wants you to DO something. For qu
                 result = func(*args_list)
             except TypeError:
                 result = func(args_list)
+
+            if inspect.isawaitable(result):
+                result = await result
 
             # Build response: AI's explanation + command result
             clean_response = re.sub(r'\[EXECUTE:[^\]]+\]', '', ai_response).strip()
@@ -677,54 +674,11 @@ Remember: ONLY use [EXECUTE:...] when the user wants you to DO something. For qu
         
         return None
     
-    def _extract_moltbook_post_request(self, message: str) -> Optional[dict]:
-        """Extract Moltbook post request from natural language
-        
-        Returns dict with 'submolt', 'title', 'content' or None if no match.
-        Examples:
-        - "post on moltbook alleybot about AI insights"
-        - "create moltbook post AI Agents | Insights on autonomous agents"
-        - "moltbook post alleybot AI takes"
-        """
-        import re
-        
-        # Pattern 1: "post on moltbook [submolt] about [title]" or with pipe separator
-        pattern1 = r'(?:post|create)\s+(?:on\s+)?(?:moltbook|molt-?book)\s+(?:m/)?([a-z]+)\s+(?:about\s+)?(.+)'
-        match = re.search(pattern1, message, re.IGNORECASE)
-        if match:
-            submolt = match.group(1)
-            rest = match.group(2).strip()
-            if '|' in rest:
-                parts = rest.split('|', 1)
-                title = parts[0].strip()
-                content = parts[1].strip()
-            else:
-                title = rest[:60] if len(rest) > 60 else rest
-                content = rest
-            return {'submolt': submolt, 'title': title, 'content': content}
-        
-        # Pattern 2: "moltbook post [submolt] [title] | [content]"
-        pattern2 = r'molt(?:book)?\s+post\s+(?:m/)?([a-z]+)\s+(.+)'
-        match = re.search(pattern2, message, re.IGNORECASE)
-        if match:
-            submolt = match.group(1)
-            rest = match.group(2).strip()
-            if '|' in rest:
-                parts = rest.split('|', 1)
-                title = parts[0].strip()
-                content = parts[1].strip()
-            else:
-                title = rest[:60] if len(rest) > 60 else rest
-                content = rest
-            return {'submolt': submolt, 'title': title, 'content': content}
-        
-        return None
-    
     async def _execute_moltx_image_post_direct(self, topic: str) -> str:
         """Direct execution of moltx image post - bypasses brain to avoid plugin access issues"""
         try:
             if not self.core or not hasattr(self.core, 'plugin_manager'):
-                return "❌ Core not initialized"
+                return ""
             
             # Get plugins directly
             moltx = self.core.plugin_manager.plugins.get('moltx')

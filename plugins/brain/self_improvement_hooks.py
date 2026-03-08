@@ -309,7 +309,7 @@ class SelfImprovementHooks:
             return 'high', f"Sensitive error type: {root_cause}"
         
         # MEDIUM RISK: Platform integrations
-        platform_skills = ['moltx', 'moltbook', 'moltchan', 'moltroad', 'clawbr']
+        platform_skills = ['moltx', 'moltchan', 'moltroad', 'clawbr']
         if skill in platform_skills:
             return 'medium', f"Platform integration '{skill}' - review recommended"
         

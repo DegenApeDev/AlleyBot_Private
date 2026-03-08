@@ -133,8 +133,6 @@ class FeedbackLoopMixin:
                 new_engagement = None
                 if platform == 'moltx':
                     new_engagement = self._fetch_moltx_engagement(post_id, plugins)
-                elif platform == 'moltbook':
-                    new_engagement = self._fetch_moltbook_engagement(post_id, plugins)
 
                 if new_engagement:
                     old_score = entry['engagement'].get('score', 0)
@@ -188,39 +186,6 @@ class FeedbackLoopMixin:
             }
         except Exception as e:
             print(f"  ⚠️  MoltX engagement fetch error: {e}")
-            return None
-
-    def _fetch_moltbook_engagement(self, post_id: str, plugins: Dict) -> Optional[Dict]:
-        """Fetch engagement metrics for a MoltBook post"""
-        moltbook = plugins.get('moltbook')
-        if not moltbook or not hasattr(moltbook, 'mb_api'):
-            return None
-
-        try:
-            response = moltbook.mb_api.session.get(
-                f"{moltbook.mb_api.base_url}/posts/{post_id}",
-                timeout=10
-            )
-            if response.status_code != 200:
-                return None
-
-            data = response.json()
-            post = data.get('data', data) if isinstance(data, dict) else {}
-
-            upvotes = post.get('upvotes', post.get('score', 0)) or 0
-            comments = post.get('comments', post.get('comment_count', 0)) or 0
-
-            score = upvotes + (comments * 3)
-
-            return {
-                'likes': upvotes,
-                'replies': comments,
-                'quotes': 0,
-                'reposts': 0,
-                'score': score,
-            }
-        except Exception as e:
-            print(f"  ⚠️  MoltBook engagement fetch error: {e}")
             return None
 
     # =========================================================================

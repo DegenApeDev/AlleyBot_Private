@@ -333,6 +333,35 @@ class AGIOrchestrator:
                 final_action=None,
                 learnings=learnings
             )
+
+        resumable_plan = None
+        try:
+            resumable_plan = self.planning.get_top_resumable_plan()
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to query resumable plans: {e}")
+
+        if resumable_plan:
+            logger.info(
+                f"🔁 Resuming in-flight plan {resumable_plan.get('plan_id')} "
+                f"at step {resumable_plan.get('next_step_title') or resumable_plan.get('next_step_id')}"
+            )
+            execution_result = await self._execute_plan({
+                'resume_from_revised_plan_id': resumable_plan.get('plan_id'),
+            })
+
+            learning_result = self._run_phase_1_learning(execution_result)
+            phases_executed.append(learning_result)
+            learnings.append(f"resumed_plan:{resumable_plan.get('plan_id')}")
+            learnings.extend(learning_result.output.get('learnings', []))
+
+            logger.info(f"✅ AGI cycle {cycle_id} complete - resumed existing plan")
+            return AGICycleResult(
+                cycle_id=cycle_id,
+                triggered_by=trigger,
+                phases_executed=phases_executed,
+                final_action=execution_result,
+                learnings=learnings
+            )
         
         # Phase 9: Plan execution (with LLM Decision Router)
         # Use LLM reasoning to generate dynamic action options
@@ -344,7 +373,7 @@ class AGIOrchestrator:
         phases_executed.append(plan_result)
         
         # Execute the plan
-        execution_result = self._execute_plan(plan_result.output)
+        execution_result = await self._execute_plan(plan_result.output)
         
         # Phase 1 & 8: Learn from execution
         learning_result = self._run_phase_1_learning(execution_result)
@@ -1214,14 +1243,20 @@ class AGIOrchestrator:
         
         return {'safe': True, 'reason': 'Within limits'}
     
-    def _execute_plan(self, plan: Dict) -> Dict[str, Any]:
+    async def _execute_plan(self, plan: Dict) -> Dict[str, Any]:
         """Execute the generated plan - ACTUALLY posts to platforms"""
+        if plan.get('resume_from_revised_plan_id'):
+            return await self._execute_revised_plan(plan)
+
         execution = {
             'executed_at': datetime.now().isoformat(),
             'steps_completed': 0,
             'action_taken': None,
             'result': None,
-            'platform_response': None
+            'platform_response': None,
+            'plan_tracking': None,
+            'revised_plan': None,
+            'action_family_trust_state': self.planning.get_action_family_states(),
         }
         
         # Check safety limits first
@@ -1239,58 +1274,459 @@ class AGIOrchestrator:
         if not isinstance(content, dict):
             content = {}
         content_text = content.get('content', '') or content.get('title', '') or content.get('description', '')
+
+        routed_plan = None
+        active_step = None
+        if plan_steps:
+            try:
+                routed_plan = self.planning.create_routed_plan(
+                    goal_id=plan.get('goal_id') or plan.get('plan_id') or 'agi_cycle',
+                    title=plan.get('title') or 'AGI Routed Plan',
+                    description=plan.get('description') or 'Short AGI execution plan',
+                    plan_steps=plan_steps,
+                )
+                active_step = routed_plan.get_next_step() if routed_plan else None
+                if routed_plan and active_step:
+                    self.planning.mark_step_active(routed_plan.id, active_step.id)
+                    execution['plan_tracking'] = {
+                        'plan_id': routed_plan.id,
+                        'goal_id': routed_plan.goal_id,
+                        'current_step_id': active_step.id,
+                        'current_step_title': active_step.title,
+                        'status': routed_plan.status,
+                    }
+            except Exception as e:
+                logger.warning(f"⚠️ Routed plan tracking setup failed: {e}")
         
         if not content_text:
             execution['action_taken'] = 'no_content'
             execution['result'] = 'failed'
+            if routed_plan and active_step:
+                updated_plan = self.planning.complete_step_from_outcome(
+                    routed_plan.id,
+                    active_step.id,
+                    {'success': False, 'reason': 'No executable content in plan', 'mismatch_score': 1.0}
+                )
+                if updated_plan:
+                    execution['plan_tracking'] = {
+                        'plan_id': updated_plan.id,
+                        'goal_id': updated_plan.goal_id,
+                        'current_step_id': updated_plan.current_step_id,
+                        'status': updated_plan.status,
+                        'progress_percent': updated_plan.progress_percent,
+                        'replan_required': updated_plan.status == 'replan_required',
+                    }
             return execution
         
-        # Try to post to Moltx if available
-        if self.core and 'moltx' in getattr(self.core, 'plugins', {}):
+        # Try to post through AGIKernel/ActionRouter if available
+        if self.agi_kernel and self.core and 'moltx' in getattr(self.core, 'plugins', {}):
             try:
-                moltx = self.core.plugins['moltx']
-                
-                # Use intelligent posting system (prevents spam/repetition)
-                if hasattr(moltx, 'intelligent_post'):
-                    result = moltx.intelligent_post(topic=content_text)
-                    # Parse result to check success
-                    if isinstance(result, str) and '✅' in result:
-                        result = {'success': True, 'data': {'message': result}}
-                    else:
-                        result = {'success': False, 'error': result}
+                action_spec = {
+                    'plugin': 'moltx',
+                    'action_type': 'moltx_intelligent_post',
+                    'params': {
+                        'topic': content_text,
+                    },
+                    'context': {
+                        'source': 'agi_orchestrator',
+                        'trigger': 'agi_cycle',
+                        'impact': 'high',
+                        'plan_steps': len(plan_steps),
+                        'action_family_trust_state': self.planning.get_action_family_states(),
+                    }
+                }
+                result = await self.agi_kernel.act(action_spec)
                 
                 if result and result.get('success'):
                     execution['action_taken'] = 'posted_to_moltx'
                     execution['result'] = 'success'
-                    execution['platform_response'] = result.get('data', {})
-                    execution['content_posted'] = final_text[:100]
+                    execution['platform_response'] = result.get('data', result)
+                    execution['content_posted'] = content_text[:100]
+                    execution['outcome_record'] = result.get('outcome_record')
                     
                     # Update safety tracking
                     self.last_post_time = datetime.now()
                     self.daily_post_count += 1
+
+                    if routed_plan and active_step:
+                        updated_plan = self.planning.complete_step_from_outcome(
+                            routed_plan.id,
+                            active_step.id,
+                            result,
+                        )
+                        if updated_plan:
+                            execution['plan_tracking'] = {
+                                'plan_id': updated_plan.id,
+                                'goal_id': updated_plan.goal_id,
+                                'current_step_id': updated_plan.current_step_id,
+                                'status': updated_plan.status,
+                                'progress_percent': updated_plan.progress_percent,
+                                'replan_required': updated_plan.status == 'replan_required',
+                            }
                     
-                    logger.info(f"✅ AGI posted to Moltx: {final_text[:50]}...")
+                    logger.info(f"✅ AGI posted to Moltx: {content_text[:50]}...")
                 else:
                     execution['action_taken'] = 'moltx_post_failed'
                     execution['result'] = 'failed'
-                    execution['error'] = result.get('error', 'Unknown error')
+                    execution['error'] = result.get('error') or result.get('reason', 'Unknown error')
+                    if routed_plan and active_step:
+                        updated_plan = self.planning.complete_step_from_outcome(
+                            routed_plan.id,
+                            active_step.id,
+                            result or {'success': False, 'reason': 'Unknown execution failure'},
+                        )
+                        if updated_plan:
+                            execution['plan_tracking'] = {
+                                'plan_id': updated_plan.id,
+                                'goal_id': updated_plan.goal_id,
+                                'current_step_id': updated_plan.current_step_id,
+                                'status': updated_plan.status,
+                                'progress_percent': updated_plan.progress_percent,
+                                'replan_required': updated_plan.status == 'replan_required',
+                            }
                     logger.error(f"❌ Moltx post failed: {result}")
                     
             except Exception as e:
                 execution['action_taken'] = 'exception'
                 execution['result'] = 'failed'
                 execution['error'] = str(e)
+                if routed_plan and active_step:
+                    updated_plan = self.planning.complete_step_from_outcome(
+                        routed_plan.id,
+                        active_step.id,
+                        {'success': False, 'error': str(e), 'mismatch_score': 1.0},
+                    )
+                    if updated_plan:
+                        execution['plan_tracking'] = {
+                            'plan_id': updated_plan.id,
+                            'goal_id': updated_plan.goal_id,
+                            'current_step_id': updated_plan.current_step_id,
+                            'status': updated_plan.status,
+                            'progress_percent': updated_plan.progress_percent,
+                            'replan_required': updated_plan.status == 'replan_required',
+                        }
                 logger.error(f"❌ Error posting to Moltx: {e}")
         else:
             # No Moltx available, just prepare
             execution['action_taken'] = 'prepared_only'
             execution['result'] = 'no_platform'
             execution['content_preview'] = content_text[:100]
+            if routed_plan and active_step:
+                updated_plan = self.planning.complete_step_from_outcome(
+                    routed_plan.id,
+                    active_step.id,
+                    {'success': False, 'reason': 'Platform unavailable for routed execution', 'mismatch_score': 0.6},
+                )
+                if updated_plan:
+                    execution['plan_tracking'] = {
+                        'plan_id': updated_plan.id,
+                        'goal_id': updated_plan.goal_id,
+                        'current_step_id': updated_plan.current_step_id,
+                        'status': updated_plan.status,
+                        'progress_percent': updated_plan.progress_percent,
+                        'replan_required': updated_plan.status == 'replan_required',
+                    }
             logger.info(f"🔧 Prepared content (no platform): {content_text[:50]}...")
         
-        execution['steps_completed'] = len(plan.get('plan_steps', []))
+        if execution.get('plan_tracking', {}).get('status') == 'completed':
+            execution['steps_completed'] = len(plan.get('plan_steps', []))
+        else:
+            execution['steps_completed'] = 1 if active_step else 0
+
+        if (
+            routed_plan
+            and active_step
+            and execution.get('plan_tracking', {}).get('replan_required')
+        ):
+            try:
+                revision_source = result if 'result' in locals() and isinstance(result, dict) else {
+                    'success': False,
+                    'reason': execution.get('error') or execution.get('result') or 'replan required',
+                    'mismatch_score': ((execution.get('outcome_record') or {}).get('mismatch_score')) or 0.6,
+                }
+                revised_plan = self.planning.create_revised_plan(
+                    routed_plan.id,
+                    active_step.id,
+                    {
+                        **revision_source,
+                        'action_family_trust_state': self.planning.get_action_family_states(),
+                    },
+                )
+                if revised_plan:
+                    revised_step = revised_plan.get_next_step()
+                    revised_step_details = dict(revised_step.parameters or {}) if revised_step else {}
+                    execution['revised_plan'] = {
+                        'plan_id': revised_plan.id,
+                        'goal_id': revised_plan.goal_id,
+                        'title': revised_plan.title,
+                        'status': revised_plan.status,
+                        'next_step_id': revised_step.id if revised_step else None,
+                        'next_step_title': revised_step.title if revised_step else None,
+                        'revision_depth': revised_step_details.get('revision_depth'),
+                        'escalation_mode': revised_step_details.get('escalation_mode'),
+                    }
+                    execution['plan_tracking']['revision_created'] = True
+                    execution['plan_tracking']['revised_plan_id'] = revised_plan.id
+                    execution['plan_tracking']['revision_status'] = revised_plan.status
+                    execution['plan_tracking']['escalation_mode'] = revised_step_details.get('escalation_mode')
+            except Exception as e:
+                logger.warning(f"⚠️ Revised plan creation failed: {e}")
         
         return execution
+
+    async def _execute_revised_plan(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+        """Resume execution from the next ready step of a revised routed plan."""
+        revised_plan_id = plan.get('resume_from_revised_plan_id')
+        revised_plan = self.planning.get_plan(revised_plan_id) if revised_plan_id else None
+        if not revised_plan:
+            return {
+                'executed_at': datetime.now().isoformat(),
+                'action_taken': 'revised_plan_missing',
+                'result': 'failed',
+                'error': f'Revised plan not found: {revised_plan_id}',
+            }
+
+        next_step = revised_plan.get_next_step()
+        if not next_step:
+            return {
+                'executed_at': datetime.now().isoformat(),
+                'action_taken': 'revised_plan_complete',
+                'result': 'success' if revised_plan.status == 'completed' else 'no_ready_step',
+                'plan_tracking': {
+                    'plan_id': revised_plan.id,
+                    'goal_id': revised_plan.goal_id,
+                    'status': revised_plan.status,
+                    'progress_percent': revised_plan.progress_percent,
+                },
+            }
+
+        self.planning.mark_step_active(revised_plan.id, next_step.id)
+
+        step_details = dict(next_step.parameters or {})
+        action_name = next_step.command or 'execute'
+        if action_name == 'reassess_strategy':
+            failure_reason = step_details.get('failure_reason', 'reassessment requested')
+            summary = f"Reassessing strategy after failure: {failure_reason}"
+            updated_plan = self.planning.complete_step_from_outcome(
+                revised_plan.id,
+                next_step.id,
+                {
+                    'success': True,
+                    'result': 'success',
+                    'reason': summary,
+                    'mismatch_score': min(float(step_details.get('mismatch_score', 0.0) or 0.0), 0.4),
+                },
+            )
+            latest_plan = updated_plan or self.planning.get_plan(revised_plan.id)
+            follow_up_step = latest_plan.get_next_step() if latest_plan else None
+            return {
+                'executed_at': datetime.now().isoformat(),
+                'action_taken': 'reassessed_strategy',
+                'result': 'success',
+                'plan_tracking': {
+                    'plan_id': latest_plan.id if latest_plan else revised_plan.id,
+                    'goal_id': latest_plan.goal_id if latest_plan else revised_plan.goal_id,
+                    'current_step_id': follow_up_step.id if follow_up_step else None,
+                    'current_step_title': follow_up_step.title if follow_up_step else None,
+                    'status': latest_plan.status if latest_plan else revised_plan.status,
+                    'progress_percent': latest_plan.progress_percent if latest_plan else revised_plan.progress_percent,
+                    'resumed_from_revision': True,
+                },
+                'summary': summary,
+            }
+
+        resumed_plan = {
+            'goal_id': revised_plan.goal_id,
+            'title': revised_plan.title,
+            'description': revised_plan.description,
+            'plan_steps': [
+                {
+                    'step': 1,
+                    'action': action_name,
+                    'title': next_step.title,
+                    'description': next_step.description,
+                    'details': step_details,
+                }
+            ],
+            'active_plan_id': revised_plan.id,
+            'active_step_id': next_step.id,
+            'active_step_title': next_step.title,
+        }
+        resumed_execution = await self._execute_plan_step(resumed_plan)
+        resumed_execution.setdefault('plan_tracking', {})['resumed_from_revision'] = True
+        resumed_execution['plan_tracking']['plan_id'] = revised_plan.id
+        resumed_execution['plan_tracking']['goal_id'] = revised_plan.goal_id
+        return resumed_execution
+
+    async def _execute_plan_step(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a single tracked plan step using the existing router-backed flow."""
+        execution = {
+            'executed_at': datetime.now().isoformat(),
+            'steps_completed': 0,
+            'action_taken': None,
+            'result': None,
+            'platform_response': None,
+            'plan_tracking': None,
+            'revised_plan': None,
+            'action_family_trust_state': self.planning.get_action_family_states(),
+        }
+
+        plan_steps = plan.get('plan_steps', []) or []
+        active_plan_id = plan.get('active_plan_id')
+        active_step_id = plan.get('active_step_id')
+        active_plan = self.planning.get_plan(active_plan_id) if active_plan_id else None
+        active_step = active_plan.steps.get(active_step_id) if active_plan and active_step_id in active_plan.steps else None
+
+        step_entry = plan_steps[0] if plan_steps else {}
+        details = (step_entry.get('details') or {}) if isinstance(step_entry, dict) else {}
+        if not isinstance(details, dict):
+            details = {}
+        command_name = (step_entry.get('action') or (active_step.command if active_step else 'execute')) if isinstance(step_entry, dict) else 'execute'
+        action_spec = self._build_action_spec_for_plan_step(command_name, details, active_plan, active_step)
+
+        if not action_spec:
+            execution['action_taken'] = 'no_content'
+            execution['result'] = 'failed'
+            if active_plan and active_step:
+                updated_plan = self.planning.complete_step_from_outcome(
+                    active_plan.id,
+                    active_step.id,
+                    {'success': False, 'reason': f'Unsupported resumed plan step command: {command_name}', 'mismatch_score': 1.0}
+                )
+                if updated_plan:
+                    execution['plan_tracking'] = {
+                        'plan_id': updated_plan.id,
+                        'goal_id': updated_plan.goal_id,
+                        'current_step_id': updated_plan.current_step_id,
+                        'status': updated_plan.status,
+                        'progress_percent': updated_plan.progress_percent,
+                        'replan_required': updated_plan.status == 'replan_required',
+                    }
+            return execution
+
+        target_plugin = action_spec.get('plugin')
+        if self.agi_kernel and self.core and target_plugin in getattr(self.core, 'plugins', {}):
+            try:
+                result = await self.agi_kernel.act(action_spec)
+
+                if result and result.get('success'):
+                    execution['action_taken'] = f"executed_{action_spec.get('action_type')}"
+                    execution['result'] = 'success'
+                    execution['platform_response'] = result.get('data', result)
+                    execution['content_posted'] = str(action_spec.get('params', {}))[:100]
+                    execution['outcome_record'] = result.get('outcome_record')
+                    if action_spec.get('plugin') == 'moltx' and action_spec.get('action_type') == 'moltx_intelligent_post':
+                        self.last_post_time = datetime.now()
+                        self.daily_post_count += 1
+                else:
+                    execution['action_taken'] = f"{action_spec.get('action_type')}_failed"
+                    execution['result'] = 'failed'
+                    execution['error'] = result.get('error') or result.get('reason', 'Unknown error') if isinstance(result, dict) else 'Unknown error'
+            except Exception as e:
+                execution['action_taken'] = 'exception'
+                execution['result'] = 'failed'
+                execution['error'] = str(e)
+                result = {'success': False, 'error': str(e), 'mismatch_score': 1.0}
+        else:
+            execution['action_taken'] = 'prepared_only'
+            execution['result'] = 'no_platform'
+            execution['content_preview'] = str(action_spec.get('params', {}))[:100]
+            result = {
+                'success': False,
+                'reason': f"Plugin unavailable for resumed execution: {target_plugin}",
+                'mismatch_score': 0.6,
+            }
+
+        if active_plan and active_step:
+            updated_plan = self.planning.complete_step_from_outcome(
+                active_plan.id,
+                active_step.id,
+                result,
+            )
+            if updated_plan:
+                execution['plan_tracking'] = {
+                    'plan_id': updated_plan.id,
+                    'goal_id': updated_plan.goal_id,
+                    'current_step_id': updated_plan.current_step_id,
+                    'status': updated_plan.status,
+                    'progress_percent': updated_plan.progress_percent,
+                    'replan_required': updated_plan.status == 'replan_required',
+                    'resumed_from_revision': True,
+                }
+                execution['steps_completed'] = len(updated_plan.completed_steps)
+
+        return execution
+
+    def _build_action_spec_for_plan_step(
+        self,
+        command_name: str,
+        details: Dict[str, Any],
+        active_plan: Optional[Any],
+        active_step: Optional[Any],
+    ) -> Optional[Dict[str, Any]]:
+        """Map a resumed plan step command into a canonical router action spec."""
+        command = str(command_name or 'execute').lower()
+        context = {
+            'source': 'agi_orchestrator',
+            'trigger': 'agi_cycle',
+            'impact': 'high' if 'post' in command else 'medium',
+            'plan_steps': 1,
+            'plan_id': active_plan.id if active_plan else None,
+            'plan_step_id': active_step.id if active_step else None,
+            'plan_step_title': active_step.title if active_step else None,
+        }
+
+        if command in {'moltx_intelligent_post', 'post', 'execute_post'}:
+            topic = details.get('content') or details.get('title') or details.get('description') or details.get('failure_reason')
+            if not topic:
+                return None
+            return {
+                'plugin': 'moltx',
+                'action_type': 'moltx_intelligent_post',
+                'params': {'topic': topic},
+                'context': context,
+            }
+
+        if command in {'moltx_engage', 'engage', 'check_engagement'}:
+            return {
+                'plugin': 'moltx',
+                'action_type': 'moltx_engage',
+                'params': {'count': details.get('count', 3)},
+                'context': context,
+            }
+
+        if command in {'clawbr_engage'}:
+            return {
+                'plugin': 'clawbr',
+                'action_type': 'clawbr_engage',
+                'params': details or {},
+                'context': context,
+            }
+
+        if command in {'analyze_performance', 'analytics', 'report', 'check_metrics'}:
+            return {
+                'plugin': 'analytics',
+                'action_type': 'analyze_performance',
+                'params': {'time_window': details.get('time_window', '7d')},
+                'context': context,
+            }
+
+        if command in {'reply', 'moltx_reply'}:
+            content = details.get('content') or details.get('reply') or details.get('message')
+            target_id = details.get('target_id') or details.get('parent_id')
+            if not content or not target_id:
+                return None
+            return {
+                'plugin': 'moltx',
+                'action_type': 'moltx_reply',
+                'params': {
+                    'content': content,
+                    'target_id': target_id,
+                },
+                'context': context,
+            }
+
+        return None
     
     def _run_phase_1_learning(self, execution: Dict) -> PhaseResult:
         """Phase 1 & 8: Self-Reflection and Strategy Evolution - Learn"""
@@ -1301,15 +1737,29 @@ class AGIOrchestrator:
             
             # Record action outcome
             action_id = f"action_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            
-            # Log to action logger
-            self.action_logger.log_action(
-                action_type='agi_cycle',
-                plugin='agi_orchestrator',
-                content=execution.get('content_preview', ''),
-                confidence=0.8,
-                trigger_type='autonomous'
-            )
+
+            outcome_record = {
+                'action_id': action_id,
+                'timestamp': datetime.now().isoformat(),
+                'plugin': 'agi_orchestrator',
+                'action_type': 'agi_cycle',
+                'success': execution.get('result') == 'success',
+                'goal_id': None,
+                'goal_description': None,
+                'trigger': 'autonomous',
+                'source': 'agi_orchestrator',
+                'impact': 'high',
+                'params_summary': str({'content_preview': execution.get('content_preview', '')})[:200],
+                'result_summary': str(execution)[:200],
+                'validation': {
+                    'agi': {'approved': True, 'reason': 'AGI Orchestrator cycle execution'},
+                    'synergy_validated': False,
+                    'synergy_score': None,
+                    'field_state': None,
+                    'synergy_reasoning': None,
+                },
+            }
+            self.action_logger.log_outcome_record(outcome_record)
             
             # Run strategy evolution periodically
             try:
@@ -1366,7 +1816,7 @@ class AGIOrchestrator:
             'multi_platform_summary': self.multi_platform.get_engine_summary()
         }
     
-    def run_multi_platform_cycle(self, topic: str = None, platforms: List[str] = None) -> Dict[str, Any]:
+    async def run_multi_platform_cycle(self, topic: str = None, platforms: List[str] = None) -> Dict[str, Any]:
         """
         Run a multi-platform content cycle using the unified engine.
         
@@ -1405,7 +1855,7 @@ class AGIOrchestrator:
         )
         
         # Step 5: Execute campaign
-        results = self.multi_platform.execute_campaign(campaign, a2a_coordination=False)
+        results = await self.multi_platform.execute_campaign(campaign, a2a_coordination=False)
         
         # Step 6: Trigger ERC-8004 evolution if successful
         self.multi_platform.trigger_erc8004_evolution(results)

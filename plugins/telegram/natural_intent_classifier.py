@@ -78,42 +78,25 @@ class NaturalIntentClassifier:
         parts = command_name.lower().replace('_', ' ').split()
         
         # Build natural language descriptions from parts
+        # OPTIMIZED: Reduced from 6-10 phrases to 2-3 for faster encoding
         if len(parts) >= 2:
             # Two-part commands: "platform action"
             platform = parts[0]
             action = ' '.join(parts[1:])
             
-            # Generate natural variations
+            # Generate only the most common variations
             phrases.extend([
                 f"{action} on {platform}",
-                f"{action} to {platform}",
-                f"create {action} on {platform}",
-                f"make {action} on {platform}",
                 f"{platform} {action}",
-                f"{action} {platform}",
             ])
             
-            # Add platform-specific variations
+            # Add ONE platform-specific variation
             if 'post' in action:
-                phrases.extend([
-                    f"post on {platform}",
-                    f"create post on {platform}",
-                    f"make a post on {platform}",
-                    f"share on {platform}",
-                    f"publish on {platform}",
-                ])
+                phrases.append(f"post on {platform}")
             elif 'engage' in action:
-                phrases.extend([
-                    f"engage on {platform}",
-                    f"interact with {platform}",
-                    f"like and comment on {platform}",
-                ])
+                phrases.append(f"engage on {platform}")
             elif 'feed' in action:
-                phrases.extend([
-                    f"show {platform} feed",
-                    f"check {platform} feed",
-                    f"browse {platform}",
-                ])
+                phrases.append(f"show {platform} feed")
         else:
             # Single-part commands
             phrases.append(command_name.replace('_', ' '))

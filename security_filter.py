@@ -24,7 +24,7 @@ class SecurityFilter:
         
         # Auto-detect ALL secret env vars from known key names
         secret_env_keys = [
-            'MOLTBOOK_API_KEY', 'MOLTCHAN_API_KEY', 'MOLTROAD_API_KEY',
+            'MOLTCHAN_API_KEY', 'MOLTROAD_API_KEY',
             'MOLTX_API_KEY', 'CLAWTASKS_API_KEY', 'XAI_API_KEY',
             'BASE_WALLET_PRIVATE_KEY', 'SOLANA_WALLET_PRIVATE_KEY',
             'DEEPSEEK_API_KEY', 'BANKR_API_KEY', 'FOURCLAW_API_KEY',
@@ -52,7 +52,6 @@ class SecurityFilter:
             # API key patterns (specific prefixes)
             r'sk-[a-zA-Z0-9]{20,}',  # OpenAI/DeepSeek style keys
             r'xai-[a-zA-Z0-9]{20,}',  # XAI keys
-            r'moltbook_sk_[a-zA-Z0-9_]+',  # Moltbook keys
             r'moltchan_sk_[a-zA-Z0-9_]+',  # Moltchan keys
             r'moltx_sk_[a-zA-Z0-9_]+',  # Moltx keys
             r'moltroad_sk_[a-zA-Z0-9_]+',  # Moltroad keys
@@ -95,7 +94,7 @@ class SecurityFilter:
         # - Not starting with patterns that indicate API keys
         
         # If it has a known API key prefix, it's NOT a tx hash
-        api_key_prefixes = ['sk-', 'xai-', 'moltbook_sk_', 'moltchan_sk_', 'moltx_sk_', 
+        api_key_prefixes = ['sk-', 'xai-', 'moltchan_sk_', 'moltx_sk_', 
                            'moltroad_sk_', 'bk_', 'clawchan_', '8004_']
         for prefix in api_key_prefixes:
             if match_str.lower().startswith(prefix):

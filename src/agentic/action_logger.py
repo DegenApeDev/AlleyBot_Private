@@ -196,6 +196,78 @@ class ActionLogger:
             conn.commit()
         
         logger.info(f"📊 Logged outcome for {action_id}: {outcome}")
+
+    def log_outcome_record(self, outcome_record: Dict[str, Any]) -> Optional[ActionRecord]:
+        """Ingest a canonical router outcome record into the action log store."""
+        if not outcome_record:
+            return None
+
+        validation = outcome_record.get('validation', {})
+        field_state = validation.get('field_state') or {}
+        trigger = outcome_record.get('trigger', 'scheduled')
+        success = outcome_record.get('success', False)
+        prediction_evaluation = outcome_record.get('prediction_evaluation', {}) or {}
+        reflection_summary = outcome_record.get('reflection_summary') or prediction_evaluation.get('reflection_summary', '')
+        mismatch_score = outcome_record.get('mismatch_score', prediction_evaluation.get('mismatch_score'))
+
+        record = ActionRecord(
+            id=outcome_record.get('action_id', f"action_{datetime.now().strftime('%Y%m%d%H%M%S')}")[:32],
+            timestamp=datetime.fromisoformat(outcome_record.get('timestamp', datetime.now().isoformat())),
+            action_type=outcome_record.get('action_type', 'unknown'),
+            plugin=outcome_record.get('plugin', 'unknown'),
+            target_id=None,
+            target_name=outcome_record.get('goal_description'),
+            content=outcome_record.get('params_summary'),
+            confidence=validation.get('synergy_score') or 0.0,
+            field_status=field_state.get('phase', 'Unknown') if isinstance(field_state, dict) else 'Unknown',
+            impedance=0.0,
+            justification=validation.get('synergy_reasoning', ''),
+            trigger_type=trigger,
+            trigger_data={
+                'goal_id': outcome_record.get('goal_id'),
+                'source': outcome_record.get('source'),
+                'impact': outcome_record.get('impact'),
+                'validation': validation,
+                'prediction': outcome_record.get('prediction'),
+                'prediction_evaluation': prediction_evaluation,
+                'mismatch_score': mismatch_score,
+                'reflection_summary': reflection_summary,
+            },
+            outcome='success' if success else 'failure',
+            outcome_data={
+                'result_summary': outcome_record.get('result_summary'),
+                'prediction_evaluation': prediction_evaluation,
+                'mismatch_score': mismatch_score,
+                'reflection_summary': reflection_summary,
+            },
+            engagement_received=0.0,
+        )
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''
+                INSERT OR REPLACE INTO actions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                record.id,
+                record.timestamp.isoformat(),
+                record.action_type,
+                record.plugin,
+                record.target_id,
+                record.target_name,
+                record.content,
+                record.confidence,
+                record.field_status,
+                record.impedance,
+                record.justification,
+                record.trigger_type,
+                json.dumps(record.trigger_data),
+                record.outcome,
+                json.dumps(record.outcome_data) if record.outcome_data else None,
+                record.engagement_received
+            ))
+            conn.commit()
+
+        logger.info(f"🧾 Logged canonical outcome record: {record.action_type} by {record.plugin}")
+        return record
     
     def get_recent_actions(self, 
                            plugin: Optional[str] = None,
@@ -307,6 +379,105 @@ class ActionLogger:
             'success_rate': self.get_success_rate(hours=hours)
         }
     
+    def get_action_performance_summary(self, hours: int = 72, limit: int = 25) -> Dict[str, Dict[str, Any]]:
+        """Return recent per-action outcome summaries for memory-informed decision ranking."""
+        from datetime import timedelta
+
+        cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
+
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute('''
+                SELECT
+                    action_type,
+                    plugin,
+                    COUNT(*) as total,
+                    SUM(CASE WHEN outcome = 'success' THEN 1 ELSE 0 END) as successes,
+                    SUM(CASE WHEN outcome = 'failure' THEN 1 ELSE 0 END) as failures,
+                    AVG(confidence) as avg_confidence,
+                    AVG(engagement_received) as avg_engagement,
+                    MAX(timestamp) as last_seen
+                FROM actions
+                WHERE timestamp > ?
+                  AND action_type IS NOT NULL
+                GROUP BY action_type, plugin
+                ORDER BY total DESC, last_seen DESC
+                LIMIT ?
+            ''', [cutoff, limit]).fetchall()
+
+        summary = {}
+        for row in rows:
+            action_type, plugin, total, successes, failures, avg_confidence, avg_engagement, last_seen = row
+            action_id = f"{plugin}:{action_type}" if plugin and plugin != 'unknown' else action_type
+            total = total or 0
+            successes = successes or 0
+            failures = failures or 0
+            records = self.get_recent_actions(plugin=plugin, action_type=action_type, limit=min(limit, max(total, 1)))
+
+            mismatch_scores = []
+            overconfident_count = 0
+            underconfident_count = 0
+            well_calibrated_count = 0
+            high_mismatch_count = 0
+            reflection_summaries = []
+            predicted_successes = 0
+            predicted_failures = 0
+
+            for record in records:
+                outcome_data = record.outcome_data or {}
+                prediction_evaluation = outcome_data.get('prediction_evaluation', {}) or {}
+                mismatch_score = outcome_data.get('mismatch_score', prediction_evaluation.get('mismatch_score'))
+                if isinstance(mismatch_score, (int, float)):
+                    mismatch_scores.append(float(mismatch_score))
+                    if float(mismatch_score) >= 0.6:
+                        high_mismatch_count += 1
+
+                calibration = prediction_evaluation.get('confidence_calibration')
+                if calibration == 'overconfident':
+                    overconfident_count += 1
+                elif calibration == 'underconfident':
+                    underconfident_count += 1
+                elif calibration == 'well_calibrated':
+                    well_calibrated_count += 1
+
+                if prediction_evaluation.get('predicted_success') is True:
+                    predicted_successes += 1
+                elif prediction_evaluation.get('predicted_success') is False:
+                    predicted_failures += 1
+
+                reflection_summary = outcome_data.get('reflection_summary') or prediction_evaluation.get('reflection_summary')
+                if reflection_summary:
+                    reflection_summaries.append(reflection_summary)
+
+            avg_mismatch = sum(mismatch_scores) / len(mismatch_scores) if mismatch_scores else 0.0
+            summary[action_id] = {
+                'action_type': action_type,
+                'plugin': plugin,
+                'total': total,
+                'successes': successes,
+                'failures': failures,
+                'success_rate': (successes / total) if total else 0.0,
+                'avg_confidence': float(avg_confidence or 0.0),
+                'avg_engagement': float(avg_engagement or 0.0),
+                'avg_mismatch_score': round(avg_mismatch, 4),
+                'high_mismatch_rate': round((high_mismatch_count / total), 4) if total else 0.0,
+                'overconfident_count': overconfident_count,
+                'underconfident_count': underconfident_count,
+                'well_calibrated_count': well_calibrated_count,
+                'calibration_bias': (
+                    'overconfident'
+                    if overconfident_count > underconfident_count and overconfident_count > 0
+                    else 'underconfident'
+                    if underconfident_count > overconfident_count and underconfident_count > 0
+                    else 'balanced'
+                ),
+                'predicted_successes': predicted_successes,
+                'predicted_failures': predicted_failures,
+                'recent_reflections': reflection_summaries[:3],
+                'last_seen': last_seen,
+            }
+
+        return summary
+
     def _row_to_record(self, row: sqlite3.Row) -> ActionRecord:
         """Convert database row to ActionRecord"""
         return ActionRecord(

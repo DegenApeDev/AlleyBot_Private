@@ -377,9 +377,35 @@ class AutonomousGoalManager:
         active_goals.sort(key=lambda g: (g.priority_score, -g.current_step), reverse=True)
         
         top_goal = active_goals[0]
+
+        def build_action(plugin: str, action_type: str, params: Dict[str, Any]) -> Dict[str, Any]:
+            return {
+                'plugin': plugin,
+                'action_type': action_type,
+                'params': params,
+                'context': {
+                    'goal_driven': True,
+                    'goal_id': top_goal.id,
+                    'goal_description': top_goal.description,
+                    'impact': 'high',
+                    'source': 'goal_manager',
+                },
+                'step': top_goal.current_step + 1,
+                'total_steps': len(top_goal.action_plan),
+                'origin': top_goal.origin.value,
+            }
         
         if top_goal.current_step < len(top_goal.action_plan):
             action = top_goal.action_plan[top_goal.current_step]
+
+            action_text = str(action).lower()
+            if 'engage' in action_text or 'reply' in action_text or 'comment' in action_text:
+                return build_action('moltx', 'moltx_engage', {'count': 3})
+            if 'post' in action_text or 'write' in action_text or 'publish' in action_text:
+                return build_action('moltx', 'moltx_intelligent_post', {'topic': top_goal.description})
+            if 'analy' in action_text or 'performance' in action_text or 'metric' in action_text:
+                return build_action('analytics', 'analyze_performance', {'time_window': '7d'})
+
             return {
                 'goal_id': top_goal.id,
                 'goal_description': top_goal.description,

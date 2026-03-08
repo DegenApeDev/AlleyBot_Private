@@ -101,8 +101,9 @@ class ContextSystem:
                 try:
                     results = mem.semantic_search('recent activity engagement', top_k=5)
                     recent = [{'content': r.get('content', ''), 'type': r.get('type', '')} for r in results]
-                except Exception:
-                    pass
+                except Exception as e:
+                    import logging
+                    logging.debug(f"Could not fetch recent activity: {e}")
             
             return {
                 'available': True,
@@ -180,7 +181,7 @@ class ContextSystem:
                 
                 info = {
                     'loaded': True,
-                    'has_heartbeat': hasattr(plugin, 'moltx_heartbeat') or hasattr(plugin, 'moltbook_heartbeat'),
+                    'has_heartbeat': hasattr(plugin, 'moltx_heartbeat'),
                     'has_feed': hasattr(plugin, 'feed_command'),
                     'has_engage': hasattr(plugin, 'engage_feed_command'),
                     'has_post': hasattr(plugin, 'create_post') or hasattr(plugin, 'create_post_command'),
@@ -240,8 +241,9 @@ class ContextSystem:
                         'top_styles': [s[0] for s in sorted_styles[:3]],
                         'tracked_posts': len(mem.get('feedback_post_tracker') or []),
                     }
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.debug(f"Could not get learning insights: {e}")
             
             return {
                 'total_recent': total,
@@ -309,7 +311,9 @@ class ContextSystem:
                     return actions[-10:]
             
             return []
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.debug(f"Could not get recent actions: {e}")
             return []
     
     def build_context_summary(self) -> str:

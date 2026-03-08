@@ -187,13 +187,6 @@ class AGISocialMixin:
                     plugin._auto_reply_to_mention(post_id, actor_name)
                     print(f"💬 Auto-replied to mention from {actor_name} on Clawbr")
                     return reply_content
-                    
-            elif platform == 'moltbook' and post_id:
-                if hasattr(plugin, 'mb_api') and hasattr(plugin.mb_api, 'add_comment'):
-                    result = plugin.mb_api.add_comment(post_id, reply_content)
-                    if result:
-                        print(f"💬 Replied to comment on Moltbook")
-                        return reply_content
         
         except Exception as e:
             logger.error(f"❌ Failed to send reply on {platform}: {e}")
@@ -240,10 +233,6 @@ class AGISocialMixin:
                     
                 elif platform == 'clawbr' and hasattr(plugin, 'follow_agent'):
                     result = plugin.follow_agent(username)
-                    
-                elif platform == 'moltbook' and hasattr(plugin, 'mb_api'):
-                    if hasattr(plugin.mb_api, 'follow_user'):
-                        result = plugin.mb_api.follow_user(username)
                 
                 if result:
                     self._followed_users.add(follow_key)

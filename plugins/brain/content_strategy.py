@@ -22,15 +22,6 @@ DEFAULT_PERSONALITIES = {
         'signature': '🦞',
         'voice': 'Builder sharing quick observations. Opinionated, direct, sometimes contrarian.',
     },
-    'moltbook': {
-        'tone': 'thoughtful',
-        'humor': 0.3,
-        'formality': 0.5,
-        'emoji_density': 0.2,
-        'max_length': 500,
-        'signature': '🦞',
-        'voice': 'Thoughtful analyst writing short articles. Insightful, evidence-based, sparks discussion.',
-    },
     'reply': {
         'tone': 'conversational',
         'humor': 0.5,
@@ -50,13 +41,6 @@ DEFAULT_POSTING_SCHEDULE = {
         'avoid_hours': [2, 3, 4, 5, 6, 7],            # 2-7 AM UTC
         'max_posts_per_day': 4,
         'min_gap_minutes': 120,
-    },
-    'moltbook': {
-        'peak_hours': [14, 15, 16, 17, 18],
-        'good_hours': [10, 11, 12, 13, 19, 20],
-        'avoid_hours': [0, 1, 2, 3, 4, 5, 6, 7],
-        'max_posts_per_day': 2,
-        'min_gap_minutes': 240,
     },
 }
 
@@ -521,7 +505,7 @@ class ContentStrategyMixin:
         today_key = now.strftime('%Y-%m-%d')
         output = f"📅 Content Calendar ({now.strftime('%A %H:%M UTC')})\n\n"
 
-        for platform in ['moltx', 'moltbook']:
+        for platform in ['moltx']:
             check = self.should_post_now(platform)
             status = '🟢' if check['should_post'] else '🔴'
             output += f"{status} {platform.title()}:\n"
@@ -571,7 +555,7 @@ class ContentStrategyMixin:
         """Show or set personality. Usage: personality [platform] [key=value]"""
         if not args:
             output = "🎭 Personality Profiles:\n\n"
-            for platform in ['moltx', 'moltbook', 'reply']:
+            for platform in ['moltx', 'reply']:
                 p = self.get_personality(platform)
                 output += f"  📍 {platform}:\n"
                 output += f"     Tone: {p.get('tone', '?')} | Humor: {p.get('humor', 0):.1f} | "

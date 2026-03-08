@@ -70,7 +70,7 @@ Brainstorming document for leveraging AlleyBot's blockchain capabilities to gene
 **Strategy**: Use on-chain data + social sentiment to predict price moves
 - **Data Sources**: 
   - Whale wallet movements (large transfers)
-  - Social sentiment from Moltbook/Moltx
+  - Social sentiment from Moltx/Clawbr
   - On-chain volume spikes
 - **Signal**: Large buy/sell orders detected via tx monitoring
 - **Implementation**:
@@ -118,7 +118,7 @@ Brainstorming document for leveraging AlleyBot's blockchain capabilities to gene
 **Strategy**: Create premium content accessible only to token holders
 - **Mechanism**: Verify ALLEY balance before delivering content
 - **Content Types**: Market analysis, alpha calls, trading signals
-- **Platform**: Moltbook integration
+- **Platform**: Telegram or dashboard delivery
 
 #### B. NFT Creation & Sales
 **Strategy**: Mint and sell NFTs with utility
@@ -173,7 +173,7 @@ Brainstorming document for leveraging AlleyBot's blockchain capabilities to gene
 **Strategy**: Share profitable trades as signals
 - **Mechanism**: Bot executes, then broadcasts to followers
 - **Monetization**: Premium signals, performance-based fees
-- **Platforms**: Moltbook, Telegram, Moltx
+- **Platforms**: Telegram, Moltx, Clawbr
 
 #### B. Copy Trading Vault
 **Strategy**: Create a vault others can deposit into
@@ -260,7 +260,7 @@ Brainstorming document for leveraging AlleyBot's blockchain capabilities to gene
 ### Data Sources
 - Base chain RPC (existing)
 - DEX pricing APIs
-- Social sentiment (Moltbook/Moltx)
+- Social sentiment (Moltx/Clawbr)
 - CEX APIs (for arbitrage)
 - Protocol APY data
 

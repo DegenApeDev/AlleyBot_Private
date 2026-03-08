@@ -179,7 +179,7 @@ class SyModTruthFilterMixin:
         }
         
         # Check 1: Golden Window alignment (for high-value actions)
-        high_value_actions = ['moltbit_post', 'moltbook_post', 'moltx_post', 'a2a_task']
+        high_value_actions = ['moltbit_post', 'moltx_post', 'a2a_task']
         if action_id in high_value_actions or any(hv in action_id for hv in high_value_actions):
             # Get current block height from context or query
             block_height = context.get('block_height', 0)

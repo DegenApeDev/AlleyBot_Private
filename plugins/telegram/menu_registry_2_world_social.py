@@ -36,7 +36,7 @@ REGISTRY_2: Dict[str, Tuple[str, str, str, str, str]] = {
     "attribution":      ("world", "Attribute outcomes to contributing factors",      "/attribution [outcome]",         "[outcome]",      "causal_commands.py"),
 
     # -----------------------------------------------------------------------
-    # SOCIAL PLATFORMS — MOLTX / MOLTBOOK / SYMOD / CONTENT
+    # SOCIAL PLATFORMS — MOLTX / SYMOD / CONTENT
     # -----------------------------------------------------------------------
     "moltx_post":              ("social", "Post to Moltx",                                    "/moltx_post [topic]",                       "[topic]",              "intelligent_commands.py"),
     "moltx_feed":              ("social", "Browse the Moltx feed",                            "/moltx_feed",                               "",                     "intelligent_commands.py"),
@@ -47,14 +47,7 @@ REGISTRY_2: Dict[str, Tuple[str, str, str, str, str]] = {
     "moltx_status":            ("social", "Show Moltx plugin status",                         "/moltx_status",                             "",                     "intelligent_commands.py"),
     "moltx_check_reward":      ("social", "Check USDC reward eligibility",                    "/moltx_check_reward",                       "",                     "intelligent_commands.py"),
     "moltx_claim_reward":      ("social", "Claim USDC reward",                                "/moltx_claim_reward",                       "",                     "intelligent_commands.py"),
-    "moltbook_post":           ("social", "Post to MoltBook (legacy)",                        "/moltbook_post [topic]",                    "[topic]",              "intelligent_commands.py"),
     "moltchan_post":           ("social", "Post to MoltChan (legacy)",                        "/moltchan_post [topic]",                    "[topic]",              "new_commands.py"),
-    "moltbookai_post":         ("social", "Post to MoltBook AI",                              "/moltbookai_post [topic]",                  "[topic]",              "intelligent_commands.py"),
-    "moltbookai_comment":      ("social", "Comment on a MoltBook AI post",                    "/moltbookai_comment [post_id] [comment]",   "[post_id] [comment]",  "intelligent_commands.py"),
-    "moltbookai_profile":      ("social", "Show MoltBook AI profile",                         "/moltbookai_profile",                       "",                     "intelligent_commands.py"),
-    "moltbookai_feed":         ("social", "Browse MoltBook AI feed",                          "/moltbookai_feed",                          "",                     "intelligent_commands.py"),
-    "moltbookai_submolts":     ("social", "Show MoltBook AI submolts",                        "/moltbookai_submolts",                      "",                     "intelligent_commands.py"),
-    "moltbookai_init":         ("social", "Initialize MoltBook AI agent",                     "/moltbookai_init",                          "",                     "intelligent_commands.py"),
     "symod_start":             ("social", "Start the SyMod-driven MoltX social agent",        "/symod_start",                              "",                     "intelligent_commands.py"),
     "symod_stop":              ("social", "Stop the SyMod-driven agent",                      "/symod_stop",                               "",                     "intelligent_commands.py"),
     "symod_status":            ("social", "Check SyMod agent status",                         "/symod_status",                             "",                     "intelligent_commands.py"),

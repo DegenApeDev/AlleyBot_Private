@@ -299,8 +299,8 @@ class DecisionSystem:
                 **action_info,
                 'last_run': last_run.isoformat() if last_run else None,
             })
-        
-        return available
+
+        return self._filter_bounded_self_improvement_actions(available)
     
     def decide_next_action(self, context: Dict[str, Any]) -> Optional[Dict]:
         """
@@ -364,6 +364,138 @@ class DecisionSystem:
         
         return None
 
+    def _get_work_item_driven_action(self, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Resolve a lightweight action preference from active meaningful work items."""
+        active_work_items = context.get('active_work_items', []) or []
+        if not active_work_items:
+            return None
+
+        available = self.get_available_actions()
+        if not available:
+            return None
+
+        for top_item in active_work_items:
+            capability_judgment = top_item.get('capability_judgment') or (top_item.get('metadata') or {}).get('capability_judgment') or {}
+            if capability_judgment and not capability_judgment.get('can_execute_now'):
+                continue
+
+            command_candidates = self._get_work_item_command_candidates(top_item, available)
+            if not command_candidates:
+                continue
+
+            best_candidate = command_candidates[0]
+            selected_action = best_candidate.get('action') or {}
+            if not selected_action:
+                continue
+
+            candidate = dict(selected_action)
+            candidate_context = dict(candidate.get('context', {}) or {})
+            candidate_context['active_work_item'] = top_item
+            candidate_context['capability_judgment'] = capability_judgment
+            candidate_context['matched_command_candidates'] = [
+                {
+                    'action_id': entry.get('action', {}).get('id'),
+                    'score': round(float(entry.get('score', 0.0) or 0.0), 3),
+                    'why': entry.get('why', []),
+                }
+                for entry in command_candidates[:3]
+            ]
+            candidate['context'] = candidate_context
+            candidate['work_item_priority'] = top_item
+            candidate['why_this_command'] = best_candidate.get('why', [])
+            candidate['matched_command_score'] = round(float(best_candidate.get('score', 0.0) or 0.0), 3)
+            return candidate
+
+        return None
+
+    def _get_work_item_command_candidates(self, work_item: Dict[str, Any], available: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Score routed commands by how well they fit an active work item."""
+        if not work_item or not available:
+            return []
+
+        candidates: List[Dict[str, Any]] = []
+        capability_judgment = work_item.get('capability_judgment') or (work_item.get('metadata') or {}).get('capability_judgment') or {}
+        action_family = str(work_item.get('recommended_action_family') or '').lower()
+        work_type = str(work_item.get('type') or '').lower()
+        topic = str(work_item.get('topic') or '').lower()
+        summary = str(work_item.get('summary') or '').lower()
+        trust_bucket = str(capability_judgment.get('trust_bucket', 'healthy') or 'healthy').lower()
+        matching_actions = set(capability_judgment.get('matching_actions') or [])
+        performance_summary = self.action_logger.get_action_performance_summary(hours=72, limit=50)
+
+        for action in available:
+            score = 0.0
+            why: List[str] = []
+            action_id = str(action.get('id', '') or '')
+            action_blob = " ".join([
+                action_id,
+                str(action.get('description', '') or ''),
+                str(action.get('platform', '') or ''),
+                str(action.get('requires', '') or ''),
+            ]).lower()
+
+            if action_id in matching_actions:
+                score += 0.4
+                why.append('matches routed capability judgment')
+
+            if action_family and action_family in action_blob:
+                score += 0.2
+                why.append(f'matches action family `{action_family}`')
+
+            if work_type and any(token in action_blob for token in work_type.split('_')):
+                score += 0.1
+                why.append(f'relevant to work-item type `{work_type}`')
+
+            if topic and topic in action_blob:
+                score += 0.1
+                why.append('aligns with work-item topic')
+            elif topic and any(token in action_blob for token in topic.split() if len(token) > 3):
+                score += 0.05
+                why.append('shares topic keywords with work item')
+
+            if summary and any(token in action_blob for token in summary.split() if len(token) > 4):
+                score += 0.05
+                why.append('advances current active thread')
+
+            platform = str(action.get('platform', '') or '').lower()
+            if work_type in {'interaction_followup', 'debate_continuation'} and platform in {'moltx', 'clawbr'}:
+                score += 0.1
+                why.append('platform fits social follow-up work')
+            elif work_type == 'trend_opportunity' and 'analy' in action_blob:
+                score += 0.1
+                why.append('platform/action fit favors analysis-first trend handling')
+
+            if trust_bucket in {'healthy', 'recovering'}:
+                score += 0.05
+                why.append(f'trust state `{trust_bucket}` supports execution')
+            elif trust_bucket in {'cooling_down', 'degraded'}:
+                score -= 0.25
+                why.append(f'trust state `{trust_bucket}` weakens command fit')
+
+            performance = performance_summary.get(action_id, {}) or performance_summary.get(f"{platform}:{action_id}", {})
+            success_rate = float(performance.get('success_rate', 0.0) or 0.0)
+            if success_rate >= 0.7:
+                score += 0.08
+                why.append('recent success on similar tasks is strong')
+            elif performance and success_rate <= 0.3:
+                score -= 0.08
+                why.append('recent success on similar tasks is weak')
+
+            cooldown_minutes = float(action.get('cooldown_minutes', 0) or 0)
+            if cooldown_minutes <= 60:
+                score += 0.03
+                why.append('current cooldown/readiness is favorable')
+
+            if score > 0:
+                candidates.append({
+                    'action': action,
+                    'score': score,
+                    'why': why,
+                })
+
+        candidates.sort(key=lambda entry: entry.get('score', 0.0), reverse=True)
+        return candidates
+
     def _build_decision_context(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Build one coherent decision context from memory, goals, and recent outcomes."""
         context = dict(context or {})
@@ -417,6 +549,7 @@ class DecisionSystem:
                 world_state_summary = {}
 
         last_routed_outcome_summary = world_state_summary.get('last_routed_outcome_summary', {}) or {}
+        active_work_items = context.get('active_work_items', []) or []
         decision_caution = {
             'recent_golden_path_escape': bool(last_routed_outcome_summary.get('legacy_fallback_used')),
             'recent_dispatch_path': last_routed_outcome_summary.get('dispatch_path'),
@@ -456,6 +589,7 @@ class DecisionSystem:
             'recent_failures': recent_failures,
             'recent_successes': recent_successes,
             'active_goals': active_goals,
+            'active_work_items': active_work_items,
             'top_goal_descriptions': top_goal_descriptions,
             'goal_stack_summary': goal_stack_summary,
             'introspection': introspection,
@@ -465,7 +599,76 @@ class DecisionSystem:
             'last_routed_outcome_summary': last_routed_outcome_summary,
             'decision_caution': decision_caution,
             'allow_exploration': context.get('allow_exploration', True),
+            'matched_command_candidates': self._summarize_work_item_command_candidates(context.get('active_work_items', [])),
+            'bounded_upgrade_candidates': self._get_bounded_upgrade_candidates(active_work_items),
         }
+
+    def _filter_bounded_self_improvement_actions(self, available: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Fail-close self-improvement actions unless bounded repeated evidence supports them."""
+        bounded_candidates = self._get_bounded_upgrade_candidates(getattr(self.agi, 'get_active_work_items', lambda limit=5: [])(limit=5)) if hasattr(self.agi, 'get_active_work_items') else []
+        allow_upgrade = bool(bounded_candidates)
+
+        filtered: List[Dict[str, Any]] = []
+        for action in available:
+            action_id = str(action.get('id', '') or '')
+            if action_id in {'self_improve', 'auto_fix_error'} and not allow_upgrade:
+                continue
+            filtered.append(action)
+        return filtered
+
+    def _get_bounded_upgrade_candidates(self, active_work_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Return bounded upgrade objectives that are supported by repeated evidence and policy."""
+        candidates: List[Dict[str, Any]] = []
+        for item in active_work_items or []:
+            metadata = item.get('metadata') or {}
+            judgment = item.get('capability_judgment') or metadata.get('capability_judgment') or {}
+            objective = metadata.get('bounded_upgrade_objective') or {}
+            if not objective:
+                continue
+            if not judgment.get('upgrade_allowed'):
+                continue
+            candidates.append({
+                'work_item_id': item.get('id'),
+                'summary': item.get('summary'),
+                'objective': objective,
+                'evidence_count': judgment.get('upgrade_evidence_count', 0),
+                'gap_type': judgment.get('gap_type'),
+            })
+        return candidates
+
+    def _summarize_work_item_command_candidates(self, active_work_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Expose top matched routed command candidates for active executable work items."""
+        if not active_work_items:
+            return []
+
+        available = self.get_available_actions()
+        if not available:
+            return []
+
+        summaries: List[Dict[str, Any]] = []
+        for item in active_work_items[:3]:
+            capability_judgment = item.get('capability_judgment') or (item.get('metadata') or {}).get('capability_judgment') or {}
+            if capability_judgment and not capability_judgment.get('can_execute_now'):
+                continue
+
+            candidates = self._get_work_item_command_candidates(item, available)
+            if not candidates:
+                continue
+
+            summaries.append({
+                'work_item_id': item.get('id'),
+                'work_item_summary': item.get('summary'),
+                'command_candidates': [
+                    {
+                        'action_id': entry.get('action', {}).get('id'),
+                        'score': round(float(entry.get('score', 0.0) or 0.0), 3),
+                        'why': entry.get('why', []),
+                    }
+                    for entry in candidates[:3]
+                ],
+            })
+
+        return summaries
 
     def _get_plan_alignment(self, action: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """Estimate whether a candidate action advances an active or revised routed plan."""
@@ -627,7 +830,11 @@ class DecisionSystem:
         This is the AGI behavior - actions driven by autonomous goals.
         """
         if not hasattr(self.agi, 'goal_manager'):
-            return None
+            return self._get_work_item_driven_action(context)
+
+        work_item_candidate = self._get_work_item_driven_action(context)
+        if work_item_candidate:
+            return work_item_candidate
         
         # Get next action from goal system
         next_action = self.agi.goal_manager.get_next_action()
@@ -871,6 +1078,7 @@ If no action is appropriate right now, respond with "none".
 
         performance_summary = context.get('performance_summary') or self.action_logger.get_action_performance_summary(hours=72, limit=50)
         top_goals = context.get('top_goal_descriptions', [])
+        active_work_items = context.get('active_work_items', []) or []
         recent_failures = set(context.get('recent_failures', []))
         active_plan_summary = context.get('active_plan_summary', {}) or {}
         decision_caution = context.get('decision_caution', {}) or {}
@@ -892,6 +1100,11 @@ If no action is appropriate right now, respond with "none".
             description_blob = f"{action.get('id', '')} {action.get('description', '')}".lower()
             if any(goal.lower() in description_blob or any(token in description_blob for token in goal.lower().split()[:3]) for goal in top_goals if goal):
                 score += 0.35
+
+            top_work_item = active_work_items[0] if active_work_items else {}
+            work_item_blob = f"{top_work_item.get('summary', '')} {top_work_item.get('recommended_action_family', '')}".lower()
+            if work_item_blob and any(token for token in work_item_blob.split()[:4] if token and token in description_blob):
+                score += 0.28
 
             if plan_alignment.get('aligned'):
                 score += 0.55

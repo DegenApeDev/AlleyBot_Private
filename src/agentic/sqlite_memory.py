@@ -124,15 +124,22 @@ class SQLiteMemorySystem:
     
     @contextmanager
     def _get_connection(self):
-        """Thread-safe database connection context manager"""
+        """Get thread-local connection with proper row factory"""
         if not hasattr(self._local, 'connection'):
-            self._local.connection = sqlite3.connect(self.db_path)
+            self._local.connection = sqlite3.connect(self.db_path, check_same_thread=False)
             self._local.connection.row_factory = sqlite3.Row
         try:
             yield self._local.connection
         except Exception:
             self._local.connection.rollback()
             raise
+        finally:
+            # Commit changes if no exception occurred
+            if self._local.connection:
+                try:
+                    self._local.connection.commit()
+                except Exception:
+                    pass
     
     def _init_database(self):
         """Initialize database schema"""

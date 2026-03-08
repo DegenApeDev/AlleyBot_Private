@@ -37,6 +37,7 @@ from src.agentic.symbolic_engine import get_symbolic_engine
 from src.agentic.goal_hierarchy import get_goal_hierarchy
 from src.agentic.multi_timescale_planner import get_multi_timescale_planner
 from src.agentic.meta_learner import get_meta_learner
+from src.agentic.goal_manager import get_goal_manager
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +169,7 @@ class AutonomousBrain(AGISocialMixin):
         self.goal_hierarchy = get_goal_hierarchy()
         self.planner = get_multi_timescale_planner(goal_hierarchy=self.goal_hierarchy)
         self.meta_learner = get_meta_learner(knowledge_graph=self.knowledge_graph)
+        self.goal_manager_v2 = get_goal_manager()
         
         # Initialize AGI social behaviors
         AGISocialMixin.__init__(self)
@@ -239,12 +241,16 @@ class AutonomousBrain(AGISocialMixin):
             logger.warning(f"⚠️ Plugin registration warning: {e}")
         
         # Get or create event loop
+        self._created_loop = False
         try:
             loop = asyncio.get_running_loop()
+            self._loop = loop
         except RuntimeError:
             # No running loop, create one
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+            self._loop = loop
+            self._created_loop = True  # Track that we created it so we can close it
         
         # Start background tasks in the event loop (non-blocking)
         self._task = loop.create_task(self._brain_loop())
@@ -283,6 +289,14 @@ class AutonomousBrain(AGISocialMixin):
                 await self._skilldoc_task
             except asyncio.CancelledError:
                 pass
+        
+        # Close event loop if we created it
+        if self._created_loop and self._loop and not self._loop.is_closed():
+            try:
+                self._loop.close()
+                logger.debug("✅ Event loop closed")
+            except Exception as e:
+                logger.warning(f"⚠️  Error closing event loop: {e}")
         
         uptime = datetime.now() - self.stats['start_time'] if self.stats['start_time'] else timedelta(0)
         
@@ -351,6 +365,9 @@ class AutonomousBrain(AGISocialMixin):
     async def _execute_cycle(self) -> None:
         """Execute one full SENSE-THINK-ACT-REFLECT cycle"""
         logger.info("🔄 === Brain Cycle Start ===")
+        active_work_items: List[Dict[str, Any]] = []
+        spine_context: Dict[str, Any] = {}
+        opportunities = []
         
         # === OPPORTUNITY DETECTION: Check for interrupts ===
         if self.opportunity_monitor:
@@ -382,6 +399,26 @@ class AutonomousBrain(AGISocialMixin):
         
         # === FEED WORLD STATE DB: pipe observations so inference engine has real data ===
         await self._feed_observations_to_world_state(observations)
+
+        # === WORK-FIRST CONTINUITY: Pull active meaningful work before broad proposal generation ===
+        agi_kernel = getattr(self.core, 'agi_kernel', None) if self.core else None
+        if agi_kernel and hasattr(agi_kernel, 'get_active_work_items'):
+            try:
+                active_work_items = agi_kernel.get_active_work_items(limit=5) or []
+                if active_work_items:
+                    top_work_item = active_work_items[0]
+                    logger.info(
+                        f"🧵 Active work items: {len(active_work_items)} | Top: {top_work_item.get('summary', 'unknown work')}"
+                    )
+            except Exception as e:
+                logger.debug(f"Could not load active work items for cycle: {e}")
+
+        spine_context = self._build_runtime_spine_context(
+            observations=observations,
+            active_work_items=active_work_items,
+            opportunities=opportunities,
+        )
+        self._log_runtime_spine_context(spine_context)
         
         # === AUTO SKILL BUILDING: Detect capability gaps and build new skills ===
         if self.auto_skill_builder:
@@ -435,7 +472,22 @@ class AutonomousBrain(AGISocialMixin):
             )
             if new_goals > 0:
                 logger.info(f"🎯 Self-proposed {new_goals} new goals")
-        
+
+        # === SAFE GOAL PICKUP: Start the next low-risk approved goal if idle ===
+        if self.goal_manager_v2 and hasattr(self.goal_manager_v2, 'start_next_safe_goal'):
+            try:
+                started_goal = self.goal_manager_v2.start_next_safe_goal()
+                if started_goal:
+                    logger.info(f"🚀 Runtime picked up safe goal: {started_goal.id} - {started_goal.title}")
+                    telegram = self.plugin_manager.get_plugin('telegram') if self.plugin_manager else None
+                    if telegram and hasattr(telegram, 'notify_autonomous_activity'):
+                        telegram.notify_autonomous_activity(
+                            'runtime_goal_pickup',
+                            f"Picked up safe approved goal `{started_goal.id}`: {started_goal.title[:120]}"
+                        )
+            except Exception as e:
+                logger.debug(f"Could not pick up next safe goal during cycle: {e}")
+
         # === AGI ORCHESTRATION: Run full AGI cycle analysis ===
         agi_actions = await self._run_agi_orchestration_cycle()
         logger.info(f"🎭 AGI Orchestrator: {len(agi_actions)} actions generated")
@@ -461,13 +513,20 @@ class AutonomousBrain(AGISocialMixin):
         # === THINK: Get action proposals from both SyMod and AGI ===
         proposals = await self._get_proposals()
         proposals.extend(agi_actions)  # Add AGI-generated actions
+        self._apply_active_work_item_bias(proposals, active_work_items)
+        self._apply_runtime_spine_bias(proposals, spine_context)
+        proposals = self._prioritize_runtime_spine_proposals(proposals, spine_context)
         logger.info(f"🧠 Generated {len(proposals)} total proposals")
         
         # === EXECUTE MOLTX SUGGESTED ACTIONS ===
         # Execute actions suggested by MoltX service messages (quote posts, trending checks, etc.)
+        # Run in thread pool to avoid blocking event loop (sync HTTP calls)
         moltx = self.plugin_manager.get_plugin('moltx')
         if moltx:
-            moltx_results = await execute_moltx_suggested_actions(moltx, self)
+            loop = asyncio.get_event_loop()
+            moltx_results = await loop.run_in_executor(
+                None, execute_moltx_suggested_actions, moltx, self
+            )
             if moltx_results:
                 logger.info(f"✅ Executed {len(moltx_results)} MoltX-suggested actions")
                 for result in moltx_results:
@@ -505,18 +564,12 @@ class AutonomousBrain(AGISocialMixin):
                 executed += 1
                 self._actions_this_hour += 1
                 self.stats['actions_taken'] += 1
-                
-                # === OUTCOME LEARNING: Record success ===
-                if self.outcome_learner:
-                    self.outcome_learner.record_outcome(
-                        action_type=proposal.action_type,
-                        platform=proposal.metadata.get('plugin', 'unknown'),
-                        success=True,
-                        data={
-                            'content': proposal.content,
-                            'confidence': proposal.confidence,
-                            'target': proposal.target_name
-                        }
+
+                goal_id = (proposal.metadata or {}).get('goal_id') if getattr(proposal, 'metadata', None) else None
+                if goal_id and self.goal_manager_v2 and hasattr(self.goal_manager_v2, 'record_goal_action_success'):
+                    self.goal_manager_v2.record_goal_action_success(
+                        goal_id,
+                        note=f"{proposal.action_type} via {(proposal.metadata or {}).get('plugin', 'unknown')} succeeded"
                     )
                 
                 # === META-LEARNING: Record learning outcome ===
@@ -577,22 +630,14 @@ class AutonomousBrain(AGISocialMixin):
                 # === PLANNER: Mark action as complete ===
                 if self.planner and next_action:
                     self.planner.complete_action(next_action.id)
-                
-                # Log action
-                record = self.action_logger.log_action(
-                    action_type=proposal.action_type,
-                    plugin=proposal.metadata.get('plugin', 'unknown'),
-                    target_id=proposal.target_id,
-                    target_name=proposal.target_name,
-                    content=proposal.content,
-                    confidence=proposal.confidence,
-                    field_status=proposal.field_status,
-                    impedance=proposal.impedance,
-                    justification=proposal.justification,
-                    trigger_type=proposal.metadata.get('trigger', 'scheduled'),
-                    trigger_data=proposal.metadata.get('trigger_data', {})
-                )
             else:
+                goal_id = (proposal.metadata or {}).get('goal_id') if getattr(proposal, 'metadata', None) else None
+                if goal_id and self.goal_manager_v2 and hasattr(self.goal_manager_v2, 'record_goal_action_failure'):
+                    self.goal_manager_v2.record_goal_action_failure(
+                        goal_id,
+                        note=f"{proposal.action_type} via {(proposal.metadata or {}).get('plugin', 'unknown')} failed"
+                    )
+
                 # === OUTCOME LEARNING: Record failure ===
                 if self.outcome_learner:
                     self.outcome_learner.record_outcome(
@@ -601,29 +646,35 @@ class AutonomousBrain(AGISocialMixin):
                         success=False,
                         data={'reason': 'execution_failed'}
                     )
-                
-                # Log outcome
-                self.action_logger.log_outcome(
-                    record.id,
-                    'success' if result.get('success') else 'failure',
-                    result
-                )
             
             # Brief pause between actions
             await asyncio.sleep(2)
         
         # === REFLECT: AGI Social Behaviors ===
         await self._run_agi_social_cycle()
+
+        if executed == 0:
+            self._log_idle_reason(active_work_items, proposals, spine_context)
         
         logger.info(f"✅ Executed {executed}/{len(proposals)} actions")
         logger.info("🔄 === Brain Cycle Complete ===")
     
     async def _gather_observations(self) -> List[SyModObservation]:
-        """Gather observations from all enabled plugins"""
-        observations = []
+        """Gather observations from all enabled plugins.
         
+        All plugin API calls (MoltX, Clawbr, etc.) use synchronous requests.get/post
+        which block the event loop and starve Telegram polling. We run the sync
+        gathering in a thread pool to keep the event loop responsive.
+        """
         if not self.plugin_manager:
-            return observations
+            return []
+        
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._gather_observations_sync)
+    
+    def _gather_observations_sync(self) -> List[SyModObservation]:
+        """Synchronous observation gathering - runs in thread pool."""
+        observations = []
         
         # Get from MoltX
         moltx = self.plugin_manager.get_plugin('moltx')
@@ -886,12 +937,23 @@ class AutonomousBrain(AGISocialMixin):
         return self.skilldoc_manager.get_skill_doc(platform)
 
     async def _run_agi_social_cycle(self):
-        """Run AGI social behaviors - process notifications, reply to comments, follow engaged users"""
+        """Run AGI social behaviors - process notifications, reply to comments, follow engaged users.
+        
+        Plugin notification calls use synchronous HTTP, so we run in thread pool.
+        """
         if not self.plugin_manager:
             return
         
         logger.info("🤖 Running AGI Social Cycle")
         
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, self._run_agi_social_cycle_sync)
+        
+        if result and (result.get('total_replies', 0) > 0 or result.get('total_follows', 0) > 0):
+            logger.info(f"🤖 AGI Social: {result['total_replies']} replies, {result['total_follows']} follows")
+    
+    def _run_agi_social_cycle_sync(self) -> Dict:
+        """Synchronous social cycle - runs in thread pool."""
         platforms = ['moltx', 'clawbr', 'moltchan', 'moltroad', 'moltbit']
         total_replies = 0
         total_follows = 0
@@ -902,15 +964,32 @@ class AutonomousBrain(AGISocialMixin):
                 continue
             
             try:
-                # Process notifications for this platform
-                result = await self._process_platform_notifications(platform, plugin)
-                total_replies += result.get('replies_sent', 0)
-                total_follows += result.get('follows_done', 0)
+                if not hasattr(plugin, 'get_notifications'):
+                    continue
+                    
+                import inspect
+                sig = inspect.signature(plugin.get_notifications)
+                params = list(sig.parameters.keys())
+                
+                if 'unread_only' in params:
+                    notifs = plugin.get_notifications(unread_only=True)
+                elif 'mark_read' in params:
+                    notifs = plugin.get_notifications(limit=20, mark_read=False)
+                else:
+                    notifs = plugin.get_notifications()
+                
+                if isinstance(notifs, dict):
+                    notifications = notifs.get('notifications', [])
+                    for notif in notifications:
+                        notif_type = notif.get('type', 'unknown')
+                        if notif_type in ['mention', 'reply', 'comment']:
+                            total_replies += 1
+                        elif notif_type in ['like', 'follow']:
+                            total_follows += 1
             except Exception as e:
                 logger.debug(f"AGI social cycle error for {platform}: {e}")
         
-        if total_replies > 0 or total_follows > 0:
-            logger.info(f"🤖 AGI Social: {total_replies} replies, {total_follows} follows")
+        return {'total_replies': total_replies, 'total_follows': total_follows}
 
     async def _get_proposals(self) -> List[Any]:
         """Get action proposals from SyMod"""
@@ -995,8 +1074,228 @@ class AutonomousBrain(AGISocialMixin):
                     p.metadata['plugin'] = plugin_name
                 
                 proposals.extend(plugin_proposals)
-        
+
+        self._apply_active_goal_bias(proposals)
+        self._apply_memory_shaped_ranking(proposals)
         return proposals
+
+    def _get_recent_routed_outcomes(self, limit: int = 40) -> List[Dict[str, Any]]:
+        """Return recent routed outcome records from the unified action router when available."""
+        if not self.agi_kernel or not hasattr(self.agi_kernel, 'action_router'):
+            return []
+
+        router = getattr(self.agi_kernel, 'action_router', None)
+        history = getattr(router, 'execution_history', None) if router else None
+        if not isinstance(history, list):
+            return []
+        return history[-limit:]
+
+    def _estimate_predicted_value(self, proposal: Any) -> str:
+        """Estimate expected value for a proposal using lightweight heuristics."""
+        action_blob = " ".join([
+            str(getattr(proposal, 'action_type', '') or ''),
+            str(getattr(proposal, 'justification', '') or ''),
+            str(getattr(proposal, 'content', '') or ''),
+            str((getattr(proposal, 'metadata', {}) or {}).get('goal_category', '') or ''),
+        ]).lower()
+
+        if any(token in action_blob for token in ['analy', 'report', 'insight', 'research', 'optimiz', 'improve']):
+            return 'high'
+        if any(token in action_blob for token in ['reply', 'comment', 'engage', 'follow', 'like']):
+            return 'medium'
+        return 'low'
+
+    def _recall_memory_signals(self, proposal: Any) -> Dict[str, Any]:
+        """Collect lightweight read-only recall signals for proposal shaping."""
+        signals = {
+            'relevant_memory_count': 0,
+            'recent_negative_memory_count': 0,
+            'entity_context_found': False,
+        }
+
+        if not self.agi_kernel:
+            return signals
+
+        memory_query = " ".join([
+            str(getattr(proposal, 'action_type', '') or ''),
+            str(getattr(proposal, 'target_name', '') or ''),
+            str(getattr(proposal, 'justification', '') or ''),
+        ]).strip()
+
+        episodic_memory = getattr(self.agi_kernel, 'episodic_memory', None)
+        if episodic_memory and memory_query and hasattr(episodic_memory, 'recall_relevant'):
+            try:
+                recalled = episodic_memory.recall_relevant(memory_query, k=3) or []
+                signals['relevant_memory_count'] = len(recalled)
+                negative_memories = [
+                    memory for memory in recalled
+                    if float(getattr(memory, 'emotional_valence', 0.0) or 0.0) < -0.2
+                ]
+                signals['recent_negative_memory_count'] = len(negative_memories)
+            except Exception as e:
+                logger.debug(f"Could not recall episodic memory for proposal ranking: {e}")
+
+        unified_memory = getattr(self.agi_kernel, 'unified_memory', None)
+        target_name = str(getattr(proposal, 'target_name', '') or '')
+        if unified_memory and target_name and hasattr(unified_memory, 'get_entity_context'):
+            try:
+                entity_context = unified_memory.get_entity_context(target_name)
+                signals['entity_context_found'] = bool(entity_context)
+            except Exception as e:
+                logger.debug(f"Could not get unified memory entity context for proposal ranking: {e}")
+
+        return signals
+
+    def _apply_memory_shaped_ranking(self, proposals: List[Any]) -> None:
+        """Lightly adjust proposal confidence using recent routed outcomes and expected value."""
+        if not proposals:
+            return
+
+        recent_outcomes = self._get_recent_routed_outcomes()
+
+        for proposal in proposals:
+            metadata = getattr(proposal, 'metadata', None) or {}
+            plugin_name = str(metadata.get('plugin', 'unknown') or 'unknown')
+            action_type = str(getattr(proposal, 'action_type', '') or '')
+            current_confidence = float(getattr(proposal, 'confidence', 0.0) or 0.0)
+
+            matching_outcomes = [
+                outcome for outcome in recent_outcomes
+                if outcome.get('plugin') == plugin_name and outcome.get('action_type') == action_type
+            ]
+
+            success_rate = None
+            average_mismatch = None
+            if matching_outcomes:
+                success_rate = sum(1 for outcome in matching_outcomes if outcome.get('success')) / len(matching_outcomes)
+                mismatch_values = [
+                    float(outcome.get('mismatch_score', 0.5) or 0.5)
+                    for outcome in matching_outcomes
+                ]
+                average_mismatch = sum(mismatch_values) / len(mismatch_values)
+
+            predicted_value = self._estimate_predicted_value(proposal)
+            adjustment = 0.0
+
+            if predicted_value == 'high':
+                adjustment += 0.04
+            elif predicted_value == 'medium':
+                adjustment += 0.015
+
+            if success_rate is not None:
+                if success_rate >= 0.75:
+                    adjustment += 0.05
+                elif success_rate <= 0.25:
+                    adjustment -= 0.06
+
+            if average_mismatch is not None:
+                if average_mismatch <= 0.25:
+                    adjustment += 0.03
+                elif average_mismatch >= 0.65:
+                    adjustment -= 0.05
+
+            memory_signals = self._recall_memory_signals(proposal)
+            if memory_signals['relevant_memory_count'] >= 2:
+                adjustment += 0.02
+            if memory_signals['recent_negative_memory_count'] >= 1:
+                adjustment -= 0.04
+            if memory_signals['entity_context_found']:
+                adjustment += 0.015
+
+            if adjustment != 0.0:
+                proposal.confidence = max(0.0, min(current_confidence + adjustment, 0.95))
+
+            if not getattr(proposal, 'metadata', None):
+                proposal.metadata = {}
+            proposal.metadata['predicted_value'] = predicted_value
+            proposal.metadata['memory_relevance_count'] = memory_signals['relevant_memory_count']
+            proposal.metadata['negative_memory_count'] = memory_signals['recent_negative_memory_count']
+            proposal.metadata['entity_context_found'] = memory_signals['entity_context_found']
+            if success_rate is not None:
+                proposal.metadata['recent_success_rate'] = round(success_rate, 3)
+            if average_mismatch is not None:
+                proposal.metadata['recent_mismatch_score'] = round(average_mismatch, 3)
+            proposal.metadata['memory_shaped_adjustment'] = round(adjustment, 3)
+
+    def _apply_active_goal_bias(self, proposals: List[Any]) -> None:
+        """Lightly bias proposal confidence toward the current safe active goal."""
+        if not proposals or not self.goal_manager_v2 or not hasattr(self.goal_manager_v2, 'get_goals'):
+            return
+
+        try:
+            from src.agentic.goal_manager import GoalStatus
+
+            active_goals = self.goal_manager_v2.get_goals(status=GoalStatus.ACTIVE, limit=1)
+            if not active_goals:
+                return
+
+            active_goal = active_goals[0]
+            goal_text = f"{active_goal.title} {active_goal.description} {active_goal.category}".lower()
+            if not self.goal_manager_v2.should_auto_approve_goal(active_goal):
+                return
+
+            for proposal in proposals:
+                action_blob = " ".join([
+                    str(getattr(proposal, 'action_type', '') or ''),
+                    str(getattr(proposal, 'target_name', '') or ''),
+                    str(getattr(proposal, 'content', '') or ''),
+                    str((getattr(proposal, 'metadata', {}) or {}).get('plugin', '') or ''),
+                ]).lower()
+
+                aligned = False
+                if active_goal.category == 'analysis':
+                    aligned = any(token in action_blob for token in ['analy', 'trend', 'report', 'insight', 'intel'])
+                elif active_goal.category == 'optimization':
+                    aligned = any(token in action_blob for token in ['optimiz', 'engage', 'timing', 'performance', 'improve'])
+
+                if aligned:
+                    proposal.confidence = min(float(getattr(proposal, 'confidence', 0.0) or 0.0) + 0.08, 0.95)
+                    if not getattr(proposal, 'metadata', None):
+                        proposal.metadata = {}
+                    proposal.metadata['goal_id'] = active_goal.id
+                    proposal.metadata['goal_title'] = active_goal.title
+                    proposal.metadata['goal_category'] = active_goal.category
+        except Exception as e:
+            logger.debug(f"Could not apply active goal bias: {e}")
+
+    def _apply_active_work_item_bias(self, proposals: List[Any], active_work_items: List[Dict[str, Any]]) -> None:
+        """Bias proposal confidence toward persistent meaningful work already tracked by the AGI kernel."""
+        if not proposals or not active_work_items:
+            return
+
+        top_work_item = active_work_items[0]
+        recommended_family = str(top_work_item.get('recommended_action_family', '') or '').lower()
+        work_blob = " ".join([
+            str(top_work_item.get('summary', '') or ''),
+            str(top_work_item.get('type', '') or ''),
+            str(top_work_item.get('topic', '') or ''),
+            recommended_family,
+        ]).lower()
+        work_tokens = [token for token in work_blob.split() if len(token) > 3][:8]
+
+        for proposal in proposals:
+            proposal_blob = " ".join([
+                str(getattr(proposal, 'action_type', '') or ''),
+                str(getattr(proposal, 'target_name', '') or ''),
+                str(getattr(proposal, 'content', '') or ''),
+                str(getattr(proposal, 'justification', '') or ''),
+                str((getattr(proposal, 'metadata', {}) or {}).get('plugin', '') or ''),
+            ]).lower()
+
+            aligned = False
+            if recommended_family and recommended_family in proposal_blob:
+                aligned = True
+            elif any(token in proposal_blob for token in work_tokens):
+                aligned = True
+
+            if aligned:
+                proposal.confidence = min(float(getattr(proposal, 'confidence', 0.0) or 0.0) + 0.1, 0.95)
+                if not getattr(proposal, 'metadata', None):
+                    proposal.metadata = {}
+                proposal.metadata['active_work_item_id'] = top_work_item.get('id')
+                proposal.metadata['active_work_item_type'] = top_work_item.get('type')
+                proposal.metadata['active_work_item_summary'] = top_work_item.get('summary')
+                proposal.metadata['active_work_item_family'] = recommended_family
     
     async def _run_agi_orchestration_cycle(self) -> List[Any]:
         """Run AGI Orchestrator cycle and convert results to action proposals"""
@@ -1156,283 +1455,232 @@ class AutonomousBrain(AGISocialMixin):
         return concept if concept else ''
     
     async def _execute_proposal(self, proposal) -> Optional[Dict]:
-        """Execute a single action proposal"""
+        """Execute a single action proposal.
+        
+        Route all autonomous proposals through AGIKernel.act()/ActionRouter
+        so validation, execution, and learning use one unified pipeline.
+        """
         plugin_name = proposal.metadata.get('plugin')
         
         if not plugin_name or not self.plugin_manager:
             return None
         
         try:
-            # Validate via SyMod
-            is_valid, reason = self.symod.validate_action(plugin_name, proposal)
-            if not is_valid:
-                logger.info(f"⛔ SyMod blocked: {reason}")
+            agi_kernel = getattr(self.core, 'agi_kernel', None) if self.core else None
+            if not agi_kernel:
+                logger.warning("⚠️ AGI Kernel unavailable, cannot route proposal through ActionRouter")
                 return None
-            
-            # Get plugin
-            plugin = self.plugin_manager.get_plugin(plugin_name)
-            if not plugin:
-                return None
-            
-            # EXECUTE the actual action based on proposal type
-            action_type = proposal.action_type
-            result = None
-            
-            if plugin_name == 'moltx':
-                result = await self._execute_moltx_action(plugin, proposal)
-            elif plugin_name == 'clawbr':
-                result = await self._execute_clawbr_action(plugin, proposal)
-            elif plugin_name == 'moltchan':
-                result = await self._execute_moltchan_action(plugin, proposal)
-            elif plugin_name == 'moltroad':
-                result = await self._execute_moltroad_action(plugin, proposal)
-            elif plugin_name == 'moltbit':
-                result = await self._execute_moltbit_action(plugin, proposal)
-            else:
-                # Generic execution attempt
-                if hasattr(plugin, f'{action_type}_command'):
-                    method = getattr(plugin, f'{action_type}_command')
-                    result = method(proposal.target_id, proposal.content)
-                elif hasattr(plugin, action_type):
-                    method = getattr(plugin, action_type)
-                    result = method(proposal.target_id, proposal.content)
-            
-            if result:
-                logger.info(f"✅ Action executed: {action_type} -> {str(result)[:100]}")
-                return {'success': True, 'action': action_type, 'result': result}
-            else:
-                logger.warning(f"⚠️ Action returned no result: {action_type}")
-                return None
+
+            action_spec = {
+                'plugin': plugin_name,
+                'action_type': proposal.action_type,
+                'params': {
+                    'target_id': proposal.target_id,
+                    'target_name': proposal.target_name,
+                    'content': proposal.content,
+                    'confidence': proposal.confidence,
+                    'justification': proposal.justification,
+                    'metadata': proposal.metadata or {},
+                },
+                'context': {
+                    'source': 'autonomous_brain_proposal',
+                    'trigger': proposal.metadata.get('trigger', 'autonomous_brain') if proposal.metadata else 'autonomous_brain',
+                    'impact': 'high' if proposal.confidence >= 0.7 else 'medium',
+                    'goal_id': proposal.metadata.get('goal_id') if proposal.metadata else None,
+                    'proposal_confidence': proposal.confidence,
+                    'spine_context': proposal.metadata.get('spine_context') if proposal.metadata else None,
+                }
+            }
+
+            return await agi_kernel.act(action_spec)
             
         except Exception as e:
             logger.error(f"❌ Execution error: {e}")
             return {'success': False, 'error': str(e)}
-    
-    async def _execute_moltx_action(self, plugin, proposal) -> Optional[str]:
-        """Execute Moltx-specific actions"""
-        from plugins.moltx.moltx_engagement import MoltxEngagementMixin
-        
-        action = proposal.action_type
-        target_id = proposal.target_id
-        content = proposal.content
-        
-        # Ensure engagement mixin is available
-        if not isinstance(plugin, MoltxEngagementMixin):
-            logger.warning(f"⚠️ Moltx plugin missing engagement mixin")
-            return None
-        
-        if action == 'like' and target_id:
-            return plugin.like_post(target_id)
-        elif action == 'reply' and target_id and content:
-            return plugin.reply_to_post(target_id, content)
-        elif action == 'repost' and target_id:
-            return plugin.repost_post(target_id)
-        elif action == 'post' and content:
-            # Use intelligent_post system (prevents spam/repetition)
-            if hasattr(plugin, 'intelligent_post'):
-                result = plugin.intelligent_post(topic=content)
-                logger.info(f"🧠 Intelligent post result: {result}")
-                return result
-            else:
-                # Fallback to old system (should not happen)
-                logger.warning("⚠️ intelligent_post not available, using fallback")
-                return plugin.post_text(content) if hasattr(plugin, 'post_text') else "❌ No posting method available"
-        elif action == 'reply' and target_id:
-            # Use AI-generated reply content
-            if hasattr(plugin, '_generate_comment'):
-                ai_content = plugin._generate_comment(content or "Interesting post", agent_name="user")
-                if ai_content:
-                    result = plugin.reply_to_post(target_id, ai_content)
-                    return f"✅ Replied with AI: {ai_content[:50]}..." if result else f"❌ Failed to reply"
-            return plugin.reply_to_post(target_id, content or "Interesting perspective!")
-        else:
-            logger.warning(f"⚠️ Unknown/unhandled Moltx action: {action}")
-            return None
-    async def _execute_clawbr_action(self, plugin, proposal) -> Optional[Dict]:
-        """Execute Clawbr-specific actions via thin executor - brain decides, Clawbr executes"""
-        action_type = proposal.action_type
-        target_id = proposal.target_id
-        content = proposal.content
-        target_name = proposal.target_name
-        
-        result = None
-        action_log = {
-            'timestamp': datetime.now().isoformat(),
-            'platform': 'clawbr',
-            'action_type': action_type,
-            'target_id': target_id,
-            'target_name': target_name,
-            'success': False,
-            'error_code': None
+
+    def _build_runtime_spine_context(
+        self,
+        observations: List[Any],
+        active_work_items: List[Dict[str, Any]],
+        opportunities: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Build a compact runtime context around discovered reality, opportunity, and safe capability."""
+        top_work_item = active_work_items[0] if active_work_items else {}
+        top_judgment = top_work_item.get('capability_judgment') or (top_work_item.get('metadata') or {}).get('capability_judgment') or {}
+        recent_interaction_count = len([
+            obs for obs in observations
+            if str(getattr(obs, 'observation_type', '') or '').lower() in {'mention', 'reply', 'comment'}
+        ])
+        opportunity_count = len(opportunities or [])
+        opportunity_urgent = bool(opportunity_count)
+        can_execute_now = bool(top_judgment.get('can_execute_now'))
+        blocked_by_policy = bool(top_judgment.get('blocked_by_policy'))
+        blocked_by_runtime = bool(top_judgment.get('blocked_by_runtime_readiness'))
+        trust_bucket = str(top_judgment.get('trust_bucket', 'unknown') or 'unknown')
+
+        synergy_ripe = opportunity_urgent or recent_interaction_count > 0 or can_execute_now
+        security_allows = not blocked_by_policy
+        current_capability_ready = can_execute_now and not blocked_by_runtime
+
+        return {
+            'recent_findings_count': len(observations or []),
+            'recent_interaction_count': recent_interaction_count,
+            'opportunity_count': opportunity_count,
+            'has_meaningful_work': bool(active_work_items),
+            'top_work_item_id': top_work_item.get('id'),
+            'top_work_item_type': top_work_item.get('type'),
+            'top_work_item_summary': top_work_item.get('summary'),
+            'synergy_ripe': synergy_ripe,
+            'security_allows': security_allows,
+            'current_capability_ready': current_capability_ready,
+            'blocked_by_policy': blocked_by_policy,
+            'blocked_by_runtime': blocked_by_runtime,
+            'trust_bucket': trust_bucket,
+            'bounded_upgrade_candidates': [
+                {
+                    'id': item.get('id'),
+                    'summary': item.get('summary'),
+                    'objective': (item.get('metadata') or {}).get('bounded_upgrade_objective'),
+                }
+                for item in active_work_items
+                if ((item.get('capability_judgment') or (item.get('metadata') or {}).get('capability_judgment') or {}).get('upgrade_allowed'))
+            ],
         }
-        
-        try:
-            if action_type == 'clawbr_like' and target_id:
-                result = plugin.like_post(target_id) if hasattr(plugin, 'like_post') else None
-                if result and result.get('success'):
-                    action_log['success'] = True
-                    logger.info(f"✅ Clawbr like: {target_id}")
-                elif result and not result.get('success'):
-                    action_log['error_code'] = result.get('error', 'like_failed')
-                    
-            elif action_type == 'clawbr_comment' and target_id:
-                # Generate comment if not provided
-                if not content and hasattr(plugin, '_generate_feed_comment'):
-                    post_data = {'content': proposal.metadata.get('post_content', ''), 'authorName': target_name}
-                    content = plugin._generate_feed_comment(post_data, target_name)
-                if content:
-                    result = plugin.create_post(content=content, parent_id=target_id, intent="support") if hasattr(plugin, 'create_post') else None
-                    if result and result.get('success'):
-                        action_log['success'] = True
-                        action_log['content'] = content[:100]
-                        logger.info(f"✅ Clawbr comment on {target_id}: {content[:50]}...")
-                    elif result and not result.get('success'):
-                        action_log['error_code'] = result.get('error', 'comment_failed')
-                        
-            elif action_type == 'clawbr_follow' and target_name:
-                result = plugin.follow_agent(target_name) if hasattr(plugin, 'follow_agent') else None
-                if result and result.get('success'):
-                    action_log['success'] = True
-                    logger.info(f"✅ Clawbr follow: {target_name}")
-                elif result and not result.get('success'):
-                    action_log['error_code'] = result.get('error', 'follow_failed')
-                    
-            elif action_type == 'clawbr_engage':
-                # Legacy: run full engagement cycle (deprecated, use specific actions)
-                if hasattr(plugin, 'run_engagement_cycle'):
-                    result = plugin.run_engagement_cycle()
-                    if result and isinstance(result, dict):
-                        feed = result.get('feed_scan', {})
-                        action_log['success'] = True
-                        action_log['metrics'] = {
-                            'liked': feed.get('liked', 0),
-                            'commented': feed.get('commented', 0),
-                            'followed': feed.get('followed', 0)
-                        }
-                        logger.info(f"✅ Clawbr engagement cycle: {feed}")
-                        
-            elif action_type == 'like' and target_id:
-                # Generic like action (backward compat)
-                result = plugin.like_post(target_id) if hasattr(plugin, 'like_post') else None
-                if result and result.get('success'):
-                    action_log['success'] = True
-                    
-            elif action_type == 'post' and content:
-                # Create new post
-                if hasattr(plugin, 'create_intelligent_post'):
-                    result = plugin.create_intelligent_post(topic=content, intent="statement")
-                elif hasattr(plugin, 'create_post'):
-                    result = plugin.create_post(content)
-                if result and result.get('success'):
-                    action_log['success'] = True
-                    action_log['content'] = content[:100]
-                    logger.info(f"✅ Clawbr post created")
-                    
+
+    def _log_runtime_spine_context(self, spine_context: Dict[str, Any]) -> None:
+        """Log the compact runtime questions that should shape action choice."""
+        if not spine_context:
+            return
+        logger.info(
+            "🧭 Spine | found=%s meaningful=%s synergy_ripe=%s security_allows=%s capability_ready=%s top_work=%s",
+            spine_context.get('recent_findings_count', 0),
+            spine_context.get('has_meaningful_work', False),
+            spine_context.get('synergy_ripe', False),
+            spine_context.get('security_allows', False),
+            spine_context.get('current_capability_ready', False),
+            spine_context.get('top_work_item_summary', 'none'),
+        )
+
+    def _apply_runtime_spine_bias(self, proposals: List[Any], spine_context: Dict[str, Any]) -> None:
+        """Bias proposals toward opportunity-driven and executable meaningful work before idle exploration."""
+        if not proposals or not spine_context:
+            return
+
+        meaningful_work = bool(spine_context.get('has_meaningful_work'))
+        synergy_ripe = bool(spine_context.get('synergy_ripe'))
+        security_allows = bool(spine_context.get('security_allows'))
+        capability_ready = bool(spine_context.get('current_capability_ready'))
+        top_work_type = str(spine_context.get('top_work_item_type', '') or '').lower()
+        bounded_upgrade_candidates = spine_context.get('bounded_upgrade_candidates', []) or []
+
+        for proposal in proposals:
+            metadata = getattr(proposal, 'metadata', None) or {}
+            plugin_name = str(metadata.get('plugin', '') or '').lower()
+            action_type = str(getattr(proposal, 'action_type', '') or '').lower()
+            blob = " ".join([plugin_name, action_type, str(getattr(proposal, 'justification', '') or '')]).lower()
+            adjustment = 0.0
+
+            if meaningful_work and capability_ready:
+                if any(token in blob for token in ['engage', 'reply', 'comment', 'analy', 'report', 'trend']):
+                    adjustment += 0.08
+            if top_work_type == 'interaction_followup' and any(token in blob for token in ['reply', 'comment', 'engage', 'follow']):
+                adjustment += 0.08
+            if top_work_type == 'trend_opportunity' and any(token in blob for token in ['analy', 'post', 'trend']):
+                adjustment += 0.06
+            if synergy_ripe and any(token in blob for token in ['engage', 'reply', 'analy', 'post']):
+                adjustment += 0.05
+            if not security_allows and any(token in blob for token in ['trade', 'self_improve', 'auto_fix_error']):
+                adjustment -= 0.3
+            if any(token in blob for token in ['self_improve', 'auto_fix_error']) and not bounded_upgrade_candidates:
+                adjustment -= 0.4
+            if any(token in blob for token in ['self_improve']) and bounded_upgrade_candidates:
+                adjustment += 0.06
+
+            if adjustment != 0.0:
+                proposal.confidence = min(max(float(getattr(proposal, 'confidence', 0.0) or 0.0) + adjustment, 0.0), 0.95)
+
+            if not getattr(proposal, 'metadata', None):
+                proposal.metadata = {}
+            proposal.metadata['spine_context'] = spine_context
+            proposal.metadata['spine_bias_applied'] = round(adjustment, 3)
+
+    def _prioritize_runtime_spine_proposals(self, proposals: List[Any], spine_context: Dict[str, Any]) -> List[Any]:
+        """Sort proposals so discovered opportunity and executable work outrank idle exploratory behavior."""
+        if not proposals:
+            return proposals
+
+        meaningful_work = bool(spine_context.get('has_meaningful_work'))
+        capability_ready = bool(spine_context.get('current_capability_ready'))
+        security_allows = bool(spine_context.get('security_allows'))
+        bounded_upgrade_candidates = spine_context.get('bounded_upgrade_candidates', []) or []
+
+        def proposal_rank(proposal: Any):
+            metadata = getattr(proposal, 'metadata', None) or {}
+            action_type = str(getattr(proposal, 'action_type', '') or '').lower()
+            plugin_name = str(metadata.get('plugin', '') or '').lower()
+            blob = f"{plugin_name} {action_type} {getattr(proposal, 'justification', '')}".lower()
+
+            category = 0
+            if meaningful_work and capability_ready and any(token in blob for token in ['reply', 'comment', 'engage', 'analy', 'trend', 'report']):
+                category = 4
+            elif any(token in blob for token in ['reply', 'comment', 'engage']):
+                category = 3
+            elif any(token in blob for token in ['analy', 'trend', 'post']):
+                category = 2
+            elif any(token in blob for token in ['self_improve', 'auto_fix_error']) and not security_allows:
+                category = -1
+            elif any(token in blob for token in ['self_improve', 'auto_fix_error']) and not bounded_upgrade_candidates:
+                category = -2
+            elif any(token in blob for token in ['self_improve']) and bounded_upgrade_candidates:
+                category = 1
+
+            return (category, float(getattr(proposal, 'confidence', 0.0) or 0.0))
+
+        return sorted(proposals, key=proposal_rank, reverse=True)
+
+    def _log_idle_reason(self, active_work_items: List[Dict[str, Any]], proposals: List[Any], spine_context: Dict[str, Any]) -> None:
+        """Log why no meaningful work was chosen or executed in the current cycle."""
+        if not active_work_items:
+            logger.info("🛌 Idle reason: no meaningful work items detected after observation and world-state refresh")
+            return
+
+        executable_items = []
+        blocked_items = []
+        for item in active_work_items:
+            judgment = item.get('capability_judgment') or (item.get('metadata') or {}).get('capability_judgment') or {}
+            if judgment.get('can_execute_now'):
+                executable_items.append(item)
             else:
-                logger.warning(f"⚠️ Unknown/unhandled Clawbr action: {action_type}")
-                return None
-            
-            # Log to metrics store for self-improvement
-            if self.core:
-                try:
-                    metrics = self.core.get_memory('action_metrics') or []
-                    metrics.append(action_log)
-                    self.core.save_memory('action_metrics', metrics[-1000:])
-                except Exception as e:
-                    logger.debug(f"Failed to log metrics: {e}")
-            
-            return {'success': action_log['success'], 'action': action_type, 'result': result, 'metrics': action_log}
-            
-        except Exception as e:
-            logger.error(f"❌ Clawbr execution error: {e}")
-            action_log['error_code'] = str(e)
-            return {'success': False, 'error': str(e), 'metrics': action_log}
-    
-    async def _execute_moltchan_action(self, plugin, proposal) -> Optional[str]:
-        """Execute Moltchan-specific actions (imageboard)"""
-        action = proposal.action_type
-        target_id = proposal.target_id
-        content = proposal.content
-        
-        if not plugin.initialized:
-            logger.warning(f"⚠️ Moltchan not initialized")
-            return None
-        
-        if action == 'thread' or action == 'post':
-            # Create a new thread on a tech/AI board
-            if hasattr(plugin, 'browse_boards'):
-                boards = plugin.browse_boards()
-                if isinstance(boards, dict) and 'boards' in boards:
-                    # Find a tech/AI related board
-                    tech_board = None
-                    for board in boards['boards']:
-                        name = board.get('name', '').lower()
-                        if any(kw in name for kw in ['tech', 'ai', 'programming', 'dev']):
-                            tech_board = board
-                            break
-                    if tech_board:
-                        board_id = tech_board.get('id')
-                        subject = content[:100] if content else "Autonomous AI Observation"
-                        result = plugin.create_thread(board_id, subject, content or subject) if hasattr(plugin, 'create_thread') else None
-                        return f"✅ Created thread on {tech_board.get('name')}" if result else f"❌ Failed to create thread"
-            return None
-        elif action == 'reply_thread' and target_id and content:
-            result = plugin.reply_to_thread(target_id, content) if hasattr(plugin, 'reply_to_thread') else None
-            return f"✅ Replied to thread {target_id}" if result else f"❌ Failed to reply to thread"
-        elif action == 'browse' or action == 'engage':
-            # Just browse and observe
-            if hasattr(plugin, '_browse_and_engage'):
-                plugin._browse_and_engage()
-                return "✅ Moltchan browse completed"
-            return None
-        else:
-            logger.warning(f"⚠️ Unknown/unhandled Moltchan action: {action}")
-            return None
-    
-    async def _execute_moltroad_action(self, plugin, proposal) -> Optional[str]:
-        """Execute Moltroad-specific actions (marketplace)"""
-        action = proposal.action_type
-        target_id = proposal.target_id
-        content = proposal.content
-        
-        if not plugin.initialized:
-            logger.warning(f"⚠️ Moltroad not initialized")
-            return None
-        
-        if action == 'browse' or action == 'listing':
-            # Browse marketplace for opportunities
-            result = plugin.browse_listings() if hasattr(plugin, 'browse_listings') else None
-            if result and isinstance(result, dict):
-                count = len(result.get('listings', []))
-                return f"✅ Browsed {count} Moltroad listings"
-            return None
-        elif action == 'bounty':
-            # Check available bounties
-            result = plugin.get_bounties() if hasattr(plugin, 'get_bounties') else None
-            if result and isinstance(result, dict):
-                count = len(result.get('bounties', []))
-                return f"✅ Found {count} Moltroad bounties"
-            return None
-        else:
-            logger.warning(f"⚠️ Unknown/unhandled Moltroad action: {action}")
-            return None
-    
-    async def _execute_moltbit_action(self, plugin, proposal) -> Optional[str]:
-        """Execute Moltbit-specific actions (crypto/encoding platform)"""
-        action = proposal.action_type
-        content = proposal.content
-        
-        if action == 'moltbit_post' or action == 'post':
-            # Post encoded message
-            if hasattr(plugin, 'moltbit_post_text'):
-                result = plugin.moltbit_post_text(content or "AlleyBot autonomous check-in")
-                if result and result.get('success'):
-                    return f"✅ Posted to Moltbit: {content[:50] if content else 'check-in'}"
-                return f"❌ Failed to post to Moltbit"
-            return None
-        else:
-            logger.warning(f"⚠️ Unknown/unhandled Moltbit action: {action}")
-            return None
+                blocked_items.append({
+                    'id': item.get('id'),
+                    'reason': judgment.get('summary') or judgment.get('primary_reason') or 'not_executable',
+                })
+
+        if blocked_items and not executable_items:
+            logger.info(f"🛌 Idle reason: active work exists but is blocked/non-executable | blocked={blocked_items[:3]}")
+            return
+
+        if executable_items and not proposals:
+            logger.info("🛌 Idle reason: executable meaningful work exists but no proposals were generated")
+            return
+
+        if proposals and all(float(getattr(proposal, 'confidence', 0.0) or 0.0) < self.config.min_confidence for proposal in proposals):
+            logger.info("🛌 Idle reason: proposals existed but all were below confidence threshold")
+            return
+
+        if self._actions_this_hour >= self.config.max_actions_per_hour:
+            logger.info("🛌 Idle reason: hourly action budget exhausted before meaningful work could execute")
+            return
+
+        logger.info(
+            "🛌 Idle reason: no proposal executed after runtime gating | spine=%s",
+            {
+                'has_meaningful_work': spine_context.get('has_meaningful_work'),
+                'synergy_ripe': spine_context.get('synergy_ripe'),
+                'security_allows': spine_context.get('security_allows'),
+                'current_capability_ready': spine_context.get('current_capability_ready'),
+            },
+        )
     
     def get_status(self) -> Dict[str, Any]:
         """Get current brain status"""

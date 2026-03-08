@@ -32,6 +32,7 @@ Usage:
 
 import json
 import logging
+import asyncio
 from typing import Dict, List, Optional, Any, Tuple, Set
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -481,14 +482,14 @@ class MultiPlatformEngine:
             base.extend(['#Blockchain', '#Innovation'])
         
         return base
-    
+
     # =================================================================
     # Execution
     # =================================================================
-    
-    def execute_campaign(self, 
-                         campaign: MultiPlatformCampaign,
-                         a2a_coordination: bool = False) -> Dict[Platform, Dict]:
+
+    async def execute_campaign(self, 
+                               campaign: MultiPlatformCampaign,
+                               a2a_coordination: bool = False) -> Dict[Platform, Dict]:
         """
         Execute a multi-platform campaign.
         
@@ -505,7 +506,7 @@ class MultiPlatformEngine:
         # Post to each platform
         for piece in campaign.content_pieces:
             try:
-                result = self._post_to_platform(piece)
+                result = await self._post_to_platform(piece)
                 results[piece.platform] = result
                 
                 if result.get('success'):
@@ -518,32 +519,86 @@ class MultiPlatformEngine:
                 results[piece.platform] = {'success': False, 'error': str(e)}
         
         return results
-    
-    def _post_to_platform(self, piece: ContentPiece) -> Dict[str, Any]:
+
+    async def _post_to_platform(self, piece: ContentPiece) -> Dict[str, Any]:
         """Post content to a specific platform"""
+        routed_result = await self._post_to_platform_via_kernel(piece)
+        if routed_result is not None:
+            return routed_result
+
         plugin = self._get_platform_plugin(piece.platform)
         if not plugin:
             return {'success': False, 'error': 'Plugin not available'}
-        
+
         if piece.platform == Platform.MOLTX:
-            # Create Moltx post
             full_text = f"{piece.text}\n\n{' '.join(piece.hashtags)}"
             return plugin.create_post(full_text)
-        
+
         elif piece.platform == Platform.CLAWBR:
-            # Create Clawbr post (or debate if appropriate)
             if piece.content_type == ContentType.DEBATE:
                 return plugin.create_post(piece.text)
             else:
                 return plugin.create_post(piece.text)
-        
+
         elif piece.platform == Platform.MOLTBOOK:
-            # Moltbook typically uses different API
             return plugin.create_post(piece.text) if hasattr(plugin, 'create_post') else \
                    {'success': False, 'error': 'Moltbook posting not implemented'}
-        
+
         return {'success': False, 'error': f'Posting not implemented for {piece.platform.value}'}
-    
+
+    async def _post_to_platform_via_kernel(self, piece: ContentPiece) -> Optional[Dict[str, Any]]:
+        """Route supported campaign posts through AGIKernel/ActionRouter when safe to do so."""
+        kernel = getattr(self.core, 'agi_kernel', None) if self.core else None
+        if not kernel:
+            return None
+
+        action_spec = self._build_action_spec_for_piece(piece)
+        if not action_spec:
+            return None
+
+        try:
+            return await kernel.act(action_spec)
+        except Exception as e:
+            logger.warning(f"⚠️ Routed campaign execution failed for {piece.platform.value}: {e}")
+            return {'success': False, 'error': str(e), 'routed': True}
+
+    def _build_action_spec_for_piece(self, piece: ContentPiece) -> Optional[Dict[str, Any]]:
+        """Build a canonical action spec for supported campaign content pieces."""
+        if piece.platform == Platform.MOLTX:
+            full_text = f"{piece.text}\n\n{' '.join(piece.hashtags)}".strip()
+            return {
+                'plugin': 'moltx',
+                'action_type': 'moltx_intelligent_post',
+                'params': {
+                    'topic': full_text,
+                },
+                'context': {
+                    'source': 'multi_platform_engine',
+                    'trigger': 'multi_platform_campaign',
+                    'impact': 'high',
+                    'platform': piece.platform.value,
+                    'content_type': piece.content_type.value,
+                }
+            }
+
+        if piece.platform == Platform.CLAWBR:
+            return {
+                'plugin': 'clawbr',
+                'action_type': 'clawbr_post',
+                'params': {
+                    'content': piece.text,
+                },
+                'context': {
+                    'source': 'multi_platform_engine',
+                    'trigger': 'multi_platform_campaign',
+                    'impact': 'high',
+                    'platform': piece.platform.value,
+                    'content_type': piece.content_type.value,
+                }
+            }
+
+        return None
+
     def _coordinate_a2a(self, campaign: MultiPlatformCampaign) -> None:
         """Coordinate with A2A agents for collaborative posting"""
         if not self.core or 'a2a' not in getattr(self.core, 'plugins', {}):

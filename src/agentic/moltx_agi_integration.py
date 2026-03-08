@@ -189,7 +189,7 @@ def should_check_trending(moltx_plugin) -> bool:
     return False
 
 
-async def execute_moltx_suggested_actions(moltx_plugin, brain_instance) -> List[Dict[str, Any]]:
+def execute_moltx_suggested_actions(moltx_plugin, brain_instance) -> List[Dict[str, Any]]:
     """
     Execute actions suggested by MoltX service messages
     
