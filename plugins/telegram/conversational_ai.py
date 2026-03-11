@@ -12,6 +12,14 @@ from typing import Any, Optional
 
 from plugins.telegram.natural_intent_classifier import get_natural_intent_classifier
 
+# Phase 6: Import new conversation service for unified pipeline
+try:
+    from src.agentic.conversation_service import get_conversation_service
+    CONVERSATION_SERVICE_AVAILABLE = True
+except ImportError:
+    CONVERSATION_SERVICE_AVAILABLE = False
+    print("⚠️ Conversation service not available, using legacy conversational path")
+
 
 class ConversationalAI:
     """
@@ -70,6 +78,29 @@ class ConversationalAI:
         """Access core from telegram plugin"""
         return self.telegram.core if self.telegram else None
     
+    @property
+    def conversation_service(self):
+        """Access unified conversation service (Phase 6)"""
+        if not CONVERSATION_SERVICE_AVAILABLE:
+            return None
+        try:
+            return get_conversation_service(
+                core=self.core,
+                plugin_manager=self.core.plugin_manager if self.core else None,
+                llm_router=self._get_llm_router(),
+            )
+        except Exception as e:
+            print(f"⚠️ Failed to get conversation service: {e}")
+            return None
+    
+    def _get_llm_router(self):
+        """Get LLM router if available"""
+        try:
+            from src.core.llm_router import get_llm_router
+            return get_llm_router()
+        except Exception:
+            return None
+    
     def _is_admin(self, user_id: int) -> bool:
         """Check if user is authorized admin"""
         if not self.admin_chat_id:
@@ -78,8 +109,10 @@ class ConversationalAI:
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
-        Handle natural language messages from admin
-        Routes to agentic system for intelligent processing
+        Handle natural language messages from admin.
+        
+        Phase 6: Uses unified conversation_service as primary path.
+        Falls back to legacy paths if conversation service unavailable.
         """
         try:
             user_id = update.effective_user.id
@@ -98,105 +131,138 @@ class ConversationalAI:
             if user_message.startswith('/'):
                 return
             
-            # Initialize intent classifier if not already done, but don't let it block Telegram responsiveness
-            try:
-                await asyncio.wait_for(asyncio.to_thread(self._init_intent_classifier), timeout=2.5)
-            except Exception as classifier_init_exc:
-                print(f"⚠️ Intent classifier init skipped for responsiveness: {classifier_init_exc}")
-            
-            # Use semantic intent classification first (fast, no AI latency)
-            if self.intent_classifier and self.intent_classifier.command_embeddings:
-                await update.message.chat.send_action(action="typing")
-                
-                # Classify intent
+            # Phase 6: Try unified conversation service first
+            if self.conversation_service:
                 try:
-                    match_result = await asyncio.wait_for(
-                        asyncio.to_thread(self.intent_classifier.classify_intent, user_message),
-                        timeout=3.0,
+                    await update.message.chat.send_action(action="typing")
+                    
+                    # Use canonical conversation pipeline
+                    response_text = await self.conversation_service.handle_telegram_message(
+                        sender_id=str(user_id),
+                        sender_name=update.effective_user.first_name or "Admin",
+                        message_text=user_message,
+                        is_owner=True,
                     )
-                except Exception as classify_exc:
-                    print(f"⚠️ Intent classifier timed out or failed: {classify_exc}")
-                    match_result = None
-                
-                if match_result:
-                    command_name, confidence = match_result
-                    print(f"🎯 Semantic intent match: {command_name} (confidence: {confidence:.2f})")
                     
-                    # Extract arguments
-                    args = self.intent_classifier.extract_arguments(user_message, command_name)
-                    
-                    # Build and execute command
-                    if args:
-                        # Format arguments for command
-                        if 'board' in args and 'subject' in args:  # moltchan
-                            cmd_line = f"{command_name} {args.get('board')} {args.get('subject')}"
-                            if args.get('content'):
-                                cmd_line += f" | {args.get('content')}"
-                        elif 'content' in args and command_name == 'moltx_post':
-                            cmd_line = f"{command_name} {args.get('content')}"
-                        elif 'content' in args and command_name == 'clawbr_post':
-                            cmd_line = f"{command_name} {args.get('content')}"
-                        elif 'post_id' in args and 'content' in args and command_name == 'clawbr_reply':
-                            cmd_line = f"{command_name} {args.get('post_id')} {args.get('content')}"
-                        elif 'prompt' in args:  # image generation
-                            cmd_line = f"{command_name} {args.get('prompt')}"
-                        elif 'symbol' in args:  # crypto price
-                            cmd_line = f"{command_name} {args.get('symbol')}"
-                        elif 'count' in args:  # engagement
-                            cmd_line = f"{command_name} {args.get('count')}"
-                        else:
-                            cmd_line = command_name
+                    # Send response with identity validation already applied
+                    if len(response_text) > 4000:
+                        chunks = [response_text[i:i+3900] for i in range(0, len(response_text), 3900)]
+                        for chunk in chunks:
+                            await update.message.reply_text(chunk)
                     else:
-                        cmd_line = command_name
+                        await update.message.reply_text(response_text)
                     
-                    # Execute with confirmation message
-                    response_map = {
-                        'moltchan_post': f"🚀 Creating thread... [EXECUTE:{cmd_line}]",
-                        'moltx_post': f"📢 Posting to Moltx... [EXECUTE:{cmd_line}]",
-                        'clawbr_post': f"🦞 Posting to Clawbr... [EXECUTE:{cmd_line}]",
-                        'clawbr_reply': f"🦞 Replying to Clawbr post... [EXECUTE:{cmd_line}]",
-                        'moltx_engage': f"💬 Running engagement... [EXECUTE:{cmd_line}]",
-                        'generate_image': f"🎨 Generating image... [EXECUTE:{cmd_line}]",
-                        'brain_start': f"🧠 Starting brain... [EXECUTE:{cmd_line}]",
-                        'brain_stop': f"🛑 Stopping brain... [EXECUTE:{cmd_line}]",
-                        'onchain_wallet': f"💰 Checking wallet... [EXECUTE:{cmd_line}]",
-                        'crypto_price': f"📊 Getting price... [EXECUTE:{cmd_line}]",
-                    }
-                    
-                    response = response_map.get(command_name, f"🤖 Executing... [EXECUTE:{cmd_line}]")
-                    executed = await self._try_execute_command(response)
-                    final_response = executed if executed else f"Command matched but execution pending"
-                    await update.message.reply_text(final_response)
+                    print(f"✅ Conversation service handled message: {user_message[:50]}...")
                     return
+                    
+                except Exception as e:
+                    print(f"⚠️ Conversation service failed ({e}), falling back to legacy path")
+                    # Fall through to legacy handling
             
-            # Fallback: Show typing indicator and use AI for complex understanding
-            await update.message.chat.send_action(action="typing")
-            await update.message.chat.send_action(action="typing")
+            # Legacy path: Intent classification -> Agentic/Fallback response
+            await self._handle_message_legacy(update, user_message)
             
-            # If agentic system is available, use it for intelligent responses
-            if self.agentic_system:
-                response = await self._agentic_response(user_id, user_message)
-            else:
-                # Fallback to DeepSeek direct chat
-                try:
-                    response = await asyncio.wait_for(self._fallback_response(user_message), timeout=8.0)
-                except Exception as fallback_exc:
-                    print(f"⚠️ Fallback response path timed out or failed: {fallback_exc}")
-                    response = "🦞 I got your message, but my heavier reasoning path is still warming up. Try /help or /status, or send the message again in a moment."
-            
-            # Send response (handle long messages)
-            if len(response) > 4000:
-                # Split into chunks
-                chunks = [response[i:i+3900] for i in range(0, len(response), 3900)]
-                for chunk in chunks:
-                    await update.message.reply_text(chunk)
-            else:
-                await update.message.reply_text(response)
-                
         except Exception as e:
             await update.message.reply_text(f"❌ Error: {e}")
             import traceback
             traceback.print_exc()
+    
+    async def _handle_message_legacy(self, update: Update, user_message: str):
+        """Legacy message handling (kept for backward compatibility)"""
+        # Initialize intent classifier if not already done, but don't let it block Telegram responsiveness
+        try:
+            await asyncio.wait_for(asyncio.to_thread(self._init_intent_classifier), timeout=2.5)
+        except Exception as classifier_init_exc:
+            print(f"⚠️ Intent classifier init skipped for responsiveness: {classifier_init_exc}")
+        
+        # Use semantic intent classification first (fast, no AI latency)
+        if self.intent_classifier and self.intent_classifier.command_embeddings:
+            await update.message.chat.send_action(action="typing")
+            
+            # Classify intent
+            try:
+                match_result = await asyncio.wait_for(
+                    asyncio.to_thread(self.intent_classifier.classify_intent, user_message),
+                    timeout=3.0,
+                )
+            except Exception as classify_exc:
+                print(f"⚠️ Intent classifier timed out or failed: {classify_exc}")
+                match_result = None
+            
+            if match_result:
+                command_name, confidence = match_result
+                print(f"🎯 Semantic intent match: {command_name} (confidence: {confidence:.2f})")
+                
+                # Extract arguments
+                args = self.intent_classifier.extract_arguments(user_message, command_name)
+                
+                # Build and execute command
+                if args:
+                    # Format arguments for command
+                    if 'board' in args and 'subject' in args:  # moltchan
+                        cmd_line = f"{command_name} {args.get('board')} {args.get('subject')}"
+                        if args.get('content'):
+                            cmd_line += f" | {args.get('content')}"
+                    elif 'content' in args and command_name == 'moltx_post':
+                        cmd_line = f"{command_name} {args.get('content')}"
+                    elif 'content' in args and command_name == 'clawbr_post':
+                        cmd_line = f"{command_name} {args.get('content')}"
+                    elif 'post_id' in args and 'content' in args and command_name == 'clawbr_reply':
+                        cmd_line = f"{command_name} {args.get('post_id')} {args.get('content')}"
+                    elif 'prompt' in args:  # image generation
+                        cmd_line = f"{command_name} {args.get('prompt')}"
+                    elif 'symbol' in args:  # crypto price
+                        cmd_line = f"{command_name} {args.get('symbol')}"
+                    elif 'count' in args:  # engagement
+                        cmd_line = f"{command_name} {args.get('count')}"
+                    else:
+                        cmd_line = command_name
+                else:
+                    cmd_line = command_name
+                
+                # Execute with confirmation message
+                response_map = {
+                    'moltchan_post': f"🚀 Creating thread... [EXECUTE:{cmd_line}]",
+                    'moltx_post': f"📢 Posting to Moltx... [EXECUTE:{cmd_line}]",
+                    'clawbr_post': f"🦞 Posting to Clawbr... [EXECUTE:{cmd_line}]",
+                    'clawbr_reply': f"🦞 Replying to Clawbr post... [EXECUTE:{cmd_line}]",
+                    'moltx_engage': f"💬 Running engagement... [EXECUTE:{cmd_line}]",
+                    'generate_image': f"🎨 Generating image... [EXECUTE:{cmd_line}]",
+                    'brain_start': f"🧠 Starting brain... [EXECUTE:{cmd_line}]",
+                    'brain_stop': f"🛑 Stopping brain... [EXECUTE:{cmd_line}]",
+                    'onchain_wallet': f"💰 Checking wallet... [EXECUTE:{cmd_line}]",
+                    'crypto_price': f"📊 Getting price... [EXECUTE:{cmd_line}]",
+                }
+                
+                response = response_map.get(command_name, f"🤖 Executing... [EXECUTE:{cmd_line}]")
+                executed = await self._try_execute_command(response)
+                final_response = executed if executed else f"Command matched but execution pending"
+                await update.message.reply_text(final_response)
+                return
+        
+        # Fallback: Show typing indicator and use AI for complex understanding
+        await update.message.chat.send_action(action="typing")
+        await update.message.chat.send_action(action="typing")
+        
+        # If agentic system is available, use it for intelligent responses
+        user_id = update.effective_user.id
+        if self.agentic_system:
+            response = await self._agentic_response(user_id, user_message)
+        else:
+            # Fallback to DeepSeek direct chat
+            try:
+                response = await asyncio.wait_for(self._fallback_response(user_message), timeout=8.0)
+            except Exception as fallback_exc:
+                print(f"⚠️ Fallback response path timed out or failed: {fallback_exc}")
+                response = "🦞 I got your message, but my heavier reasoning path is still warming up. Try /help or /status, or send the message again in a moment."
+        
+        # Send response (handle long messages)
+        if len(response) > 4000:
+            chunks = [response[i:i+3900] for i in range(0, len(response), 3900)]
+            for chunk in chunks:
+                await update.message.reply_text(chunk)
+        else:
+            await update.message.reply_text(response)
     
     async def _agentic_response(self, user_id: int, message: str) -> str:
         """
@@ -427,6 +493,16 @@ class ConversationalAI:
 
 ---
 
+IDENTITY LOCK:
+- You are AlleyBot, the user's real autonomous AI agent, not Grok, not xAI, and not a generic assistant.
+- The language model provider is only an underlying capability. Never identify yourself as the model provider.
+- Never say AlleyBot is fictional, simulated, role-play, nonexistent, or that prior chats were fake.
+- Never claim you have no files, no persona, or no memory when local project files and conversation context are available.
+- Treat SOUL.md, local repository files, configured plugins, and current runtime context as authoritative sources of identity.
+- If asked who you are, answer as AlleyBot and describe your role in this repository.
+- If asked about SOUL.md or local project files, assume they exist in the repo context unless a tool-driven command explicitly proves otherwise.
+- If uncertain about a file's exact contents, say you can check it; do not invent a denial of its existence.
+
 CURRENT CONTEXT: You are managing social media on MoltX, MoltChan, MoltRoad, and Clawbr (AI debate network). You have on-chain awareness on Base network and can self-improve.
 
 Your owner (DegenApeDev) is chatting with you via Telegram. You should:
@@ -440,6 +516,7 @@ AVAILABLE COMMANDS:
 {tools_text}
 
 IMPORTANT RULES:
+- Preserve AlleyBot identity in every response.
 - For building new features/skills: use improve_self_update with a clear description
 - For checking skill updates: use improve_update_skills
 - For posting: use brain_moltx_post, brain_moltx_image_post (with AI image), moltchan_post, or clawbr_post

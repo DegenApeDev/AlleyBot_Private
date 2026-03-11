@@ -21,6 +21,20 @@ from src.agentic.action_logger import get_action_logger
 from src.agentic.planning import get_plan_manager
 
 
+from src.agentic.contracts import (
+    ActionEnvelope,
+    ActionOutcome,
+    ValidationProfile,
+    PredictionRecord,
+    PredictionEvaluation,
+    ImpactLevel,
+    RiskLevel,
+    TrustLevel,
+    action_spec_to_envelope,
+    envelope_to_action_spec,
+)
+
+
 class ActionRouter:
     """
     Single entry point for all actions.
@@ -1045,6 +1059,169 @@ class ActionRouter:
             'failures': total - successes,
             'success_rate': successes / total if total > 0 else 0.0,
             'recent_actions': self.execution_history[-5:]
+        }
+
+    # ------------------------------------------------------------------
+    # Canonical Contract Methods (Phase 4 Hardening)
+    # ------------------------------------------------------------------
+    
+    async def route(
+        self,
+        envelope: ActionEnvelope,
+    ) -> ActionOutcome:
+        """
+        Canonical action routing with typed contracts.
+        
+        This is the Phase 4 hardened entry point that uses ActionEnvelope
+        and ActionOutcome for type-safe action routing.
+        
+        Args:
+            envelope: Canonical action specification
+            
+        Returns:
+            ActionOutcome with full reflection metadata
+        """
+        start_time = datetime.now()
+        
+        print(f"🔄 Routing canonical action: {envelope.action_id}")
+        
+        # Convert to dict for internal processing (backward compatibility)
+        action_spec = envelope.to_dict()
+        
+        # Run existing routing logic
+        result_dict = await self.route_action(action_spec)
+        
+        # Build canonical outcome
+        execution_time_ms = (datetime.now() - start_time).total_seconds() * 1000
+        
+        outcome = ActionOutcome.from_result_dict(result_dict, envelope)
+        outcome.execution_time_ms = execution_time_ms
+        
+        # Attach prediction/evaluation if present
+        if 'prediction' in result_dict:
+            outcome.prediction = result_dict.get('prediction')
+        if 'prediction_evaluation' in result_dict:
+            outcome.prediction_evaluation = result_dict.get('prediction_evaluation')
+        
+        return outcome
+    
+    async def route_with_prediction(
+        self,
+        envelope: ActionEnvelope,
+        expected_outcome: str,
+        confidence: float = 0.7,
+    ) -> ActionOutcome:
+        """
+        Route action with explicit prediction for reflection.
+        
+        Args:
+            envelope: Canonical action specification
+            expected_outcome: Human-readable expected outcome
+            confidence: Confidence level (0.0-1.0)
+            
+        Returns:
+            ActionOutcome with prediction evaluation
+        """
+        # Build validation profile for prediction
+        validation_profile = ValidationProfile.from_action_spec(envelope.to_dict())
+        
+        # Create prediction record
+        prediction = PredictionRecord.from_action_spec(
+            action_spec=envelope.to_dict(),
+            validation={'approved': True, 'reason': 'Pre-validated'},
+            validation_profile=validation_profile,
+        )
+        prediction.expected_outcome = expected_outcome
+        prediction.confidence = max(0.0, min(float(confidence), 1.0))
+        
+        # Attach to envelope
+        envelope.prediction = prediction
+        envelope.validation_profile = validation_profile
+        
+        # Route with prediction attached
+        return await self.route(envelope)
+    
+    def create_envelope(
+        self,
+        plugin: str,
+        action_type: str,
+        params: Optional[Dict[str, Any]] = None,
+        context: Optional[Dict[str, Any]] = None,
+        impact: ImpactLevel = ImpactLevel.MEDIUM,
+        risk_level: RiskLevel = RiskLevel.MEDIUM,
+        trust_level: TrustLevel = TrustLevel.NORMAL,
+    ) -> ActionEnvelope:
+        """
+        Factory method to create canonical action envelopes with proper metadata.
+        
+        Args:
+            plugin: Target plugin name
+            action_type: Action to execute
+            params: Action parameters
+            context: Additional context
+            impact: Impact classification
+            risk_level: Risk classification  
+            trust_level: Trust classification
+            
+        Returns:
+            Configured ActionEnvelope
+        """
+        merged_context = context or {}
+        merged_context.update({
+            'impact': impact.value,
+            'risk_level': risk_level.value,
+            'trust_level': trust_level.value,
+        })
+        
+        return ActionEnvelope(
+            plugin=plugin,
+            action_type=action_type,
+            params=params or {},
+            context=merged_context,
+            validation_profile=ValidationProfile(
+                impact=impact,
+                risk_level=risk_level,
+                trust_level=trust_level,
+            ),
+        )
+    
+    async def validate_envelope(
+        self,
+        envelope: ActionEnvelope,
+    ) -> Dict[str, Any]:
+        """
+        Pre-validate an envelope without executing.
+        
+        Returns validation result without side effects.
+        """
+        action_spec = envelope.to_dict()
+        
+        validation_trace = []
+        
+        # AGI validation
+        agi_validation = self._normalize_validation_result(
+            'agi_validation',
+            await self._validate_with_agi(action_spec),
+            fail_closed=True,
+        )
+        validation_trace.append(agi_validation)
+        
+        # Synergy validation
+        synergy_validation = self._normalize_validation_result(
+            'synergy_validation',
+            self._validate_with_synergy(action_spec),
+            fail_closed=envelope.validation_profile.requires_strict_validation if envelope.validation_profile else False,
+        )
+        validation_trace.append(synergy_validation)
+        
+        return {
+            'action_id': envelope.action_id,
+            'approved': all(v.get('approved', False) for v in validation_trace),
+            'validation_trace': validation_trace,
+            'requires_strict_validation': (
+                envelope.validation_profile.requires_strict_validation 
+                if envelope.validation_profile else False
+            ),
         }
 
 

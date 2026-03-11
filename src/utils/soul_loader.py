@@ -10,7 +10,6 @@ def load_soul_prompt() -> str:
     try:
         # Try multiple possible locations
         possible_paths = [
-            Path('/home/degendev/Dev/Agents/MoltbookBot/SOUL.md'),  # Absolute path
             Path(__file__).parent.parent.parent / 'SOUL.md',  # From src/utils/
             Path(__file__).parent.parent.parent.parent / 'SOUL.md',  # From plugins/
             Path.cwd() / 'SOUL.md',  # Current working directory

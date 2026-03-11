@@ -494,3 +494,237 @@ AlleyBot will analyze markets every 30 minutes."""
 Use /trading_enable to start autonomous trading."""
         
         await update.message.reply_text(msg, parse_mode='Markdown')
+
+    async def best_swap_quote(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Get best swap quote from multiple aggregators"""
+        if not await self._verify_owner(update):
+            await update.message.reply_text("❌ Owner-only command")
+            return
+        
+        if not context.args or len(context.args) < 4:
+            await update.message.reply_text(
+                "**Best Swap Quote**\n\n"
+                "Get the best price from multiple DEX aggregators (1inch, Paraswap, 0x, Kyber, Odos, OKX)\n\n"
+                "Usage: `/best_swap_quote <network> <from_token> <to_token> <amount>`\n\n"
+                "Examples:\n"
+                "• `/best_swap_quote ethereum USDC WETH 1000`\n"
+                "• `/best_swap_quote base USDC ETH 500`\n"
+                "• `/best_swap_quote arbitrum WETH USDC 0.5`\n\n"
+                "Networks: ethereum, base, arbitrum, polygon, plasma\n"
+                "Tokens: Use symbols like USDC, WETH, ETH, USDT, DAI",
+                parse_mode='Markdown'
+            )
+            return
+        
+        network = context.args[0].lower()
+        from_token = context.args[1].upper()
+        to_token = context.args[2].upper()
+        
+        try:
+            amount = float(context.args[3])
+        except ValueError:
+            await update.message.reply_text("❌ Invalid amount")
+            return
+        
+        await update.message.reply_text(f"🔍 Finding best price for {amount} {from_token} → {to_token} on {network}...")
+        
+        try:
+            # Import and use the skill
+            import sys
+            import os
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            from skills.best_crypto_swap_price.best_crypto_swap_skill import BestCryptoSwapSkill
+            
+            skill = BestCryptoSwapSkill()
+            
+            # Get wallet address
+            user_address = os.getenv(f'{network.upper()}_WALLET_PUBLIC_ADDRESS') or os.getenv('BASE_WALLET_PUBLIC_ADDRESS', '0x0000000000000000000000000000000000000000')
+            
+            # Get token addresses
+            sell_token = skill.get_token_address(network, from_token)
+            buy_token = skill.get_token_address(network, to_token)
+            
+            if not sell_token:
+                await update.message.reply_text(f"❌ Unknown token: {from_token} on {network}")
+                return
+            if not buy_token:
+                await update.message.reply_text(f"❌ Unknown token: {to_token} on {network}")
+                return
+            
+            # Calculate decimals
+            decimals = 6 if from_token in ['USDC', 'USDT'] else 18
+            amount_raw = int(amount * (10 ** decimals))
+            
+            # Get quote
+            result = skill.get_best_quote(
+                network=network,
+                sell_token=sell_token,
+                buy_token=buy_token,
+                sell_amount=str(amount_raw),
+                user_address=user_address,
+                slippage=1.0
+            )
+            
+            if not result.get('success'):
+                await update.message.reply_text(f"❌ Failed to get quote: {result.get('error', 'Unknown error')}")
+                return
+            
+            best = result['best_route']
+            summary = result['summary']
+            
+            msg = f"📊 **Best Swap Quote on {network.upper()}**\n\n"
+            msg += f"🔄 **{from_token} → {to_token}**\n"
+            msg += f"💰 Sell: {amount} {from_token}\n"
+            msg += f"🏆 **Best Route: {best.display_name}**\n"
+            msg += f"📈 Buy Amount: {best.buy_amount[:30]}... (raw units)\n"
+            msg += f"⚡ Price Impact: {best.price_impact}%\n"
+            msg += f"⛽ Gas Price: {best.gas_price}\n\n"
+            
+            # Show all routes
+            if len(result['all_routes']) > 1:
+                msg += "🏆 **All Aggregators:**\n"
+                for i, route in enumerate(result['all_routes'][:5], 1):
+                    impact = f" ({route.price_impact}% impact)" if route.price_impact else ""
+                    msg += f"  {i}. {route.display_name}: {route.buy_amount[:20]}...{impact}\n"
+            
+            msg += f"\n💡 To execute: `/best_swap_execute {network} {from_token} {to_token} {amount}`"
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error getting quote: {str(e)[:200]}")
+
+    async def best_swap_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Execute swap using best price"""
+        if not await self._verify_owner(update):
+            await update.message.reply_text("❌ Owner-only command")
+            return
+        
+        if not context.args or len(context.args) < 4:
+            await update.message.reply_text(
+                "**Execute Best Swap**\n\n"
+                "Execute a swap using the best aggregator price.\n\n"
+                "Usage: `/best_swap_execute <network> <from_token> <to_token> <amount>`\n\n"
+                "Example: `/best_swap_execute base USDC ETH 100`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        network = context.args[0].lower()
+        from_token = context.args[1].upper()
+        to_token = context.args[2].upper()
+        
+        try:
+            amount = float(context.args[3])
+        except ValueError:
+            await update.message.reply_text("❌ Invalid amount")
+            return
+        
+        # Get private key
+        import os
+        private_key = os.getenv(f'{network.upper()}_PRIVATE_KEY') or os.getenv('BASE_WALLET_PRIVATE_KEY')
+        user_address = os.getenv(f'{network.upper()}_WALLET_PUBLIC_ADDRESS') or os.getenv('BASE_WALLET_PUBLIC_ADDRESS')
+        
+        if not private_key or not user_address:
+            await update.message.reply_text(f"❌ Wallet not configured for {network}. Check your .env file.")
+            return
+        
+        await update.message.reply_text(f"🚀 Executing swap: {amount} {from_token} → {to_token} on {network}...")
+        
+        try:
+            import sys
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            from skills.best_crypto_swap_price.best_crypto_swap_skill import quick_swap
+            
+            decimals = 6 if from_token in ['USDC', 'USDT'] else 18
+            
+            result = quick_swap(
+                network=network,
+                from_token_symbol=from_token,
+                to_token_symbol=to_token,
+                amount=amount,
+                user_address=user_address,
+                private_key=private_key,
+                from_decimals=decimals,
+                slippage=1.0
+            )
+            
+            if result.get('success'):
+                msg = f"""✅ **Swap Executed Successfully!**
+
+🏆 Aggregator: {result.get('aggregator')}
+🔗 Tx Hash: `{result.get('tx_hash', 'N/A')[:30]}...`
+📦 Buy Amount: {result.get('buy_amount', 'N/A')[:30]}...
+⚡ Price Impact: {result.get('price_impact', 'N/A')}%
+⛽ Gas Used: {result.get('gas_used', 'N/A')}"""
+                
+                if result.get('explorer_url'):
+                    msg += f"\n\n📄 [View on Explorer]({result['explorer_url']})"
+                
+                await update.message.reply_text(msg, parse_mode='Markdown', disable_web_page_preview=True)
+            else:
+                await update.message.reply_text(f"❌ Swap failed: {result.get('error', 'Unknown error')}")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Execution error: {str(e)[:200]}")
+
+    async def best_swap_compare(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Compare all aggregator prices"""
+        if not await self._verify_owner(update):
+            await update.message.reply_text("❌ Owner-only command")
+            return
+        
+        if not context.args or len(context.args) < 4:
+            await update.message.reply_text(
+                "**Compare Aggregators**\n\n"
+                "Compare prices across all DEX aggregators.\n\n"
+                "Usage: `/best_swap_compare <network> <from_token> <to_token> <amount>`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        network = context.args[0].lower()
+        from_token = context.args[1].upper()
+        to_token = context.args[2].upper()
+        
+        try:
+            amount = float(context.args[3])
+        except ValueError:
+            await update.message.reply_text("❌ Invalid amount")
+            return
+        
+        await update.message.reply_text(f"📊 Comparing all aggregators for {amount} {from_token} → {to_token}...")
+        
+        try:
+            import sys
+            import os
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            from skills.best_crypto_swap_price.best_crypto_swap_skill import BestCryptoSwapSkill
+            
+            skill = BestCryptoSwapSkill()
+            
+            user_address = os.getenv(f'{network.upper()}_WALLET_PUBLIC_ADDRESS') or os.getenv('BASE_WALLET_PUBLIC_ADDRESS', '0x0000000000000000000000000000000000000000')
+            
+            sell_token = skill.get_token_address(network, from_token)
+            buy_token = skill.get_token_address(network, to_token)
+            
+            if not sell_token or not buy_token:
+                await update.message.reply_text("❌ Unknown token(s)")
+                return
+            
+            decimals = 6 if from_token in ['USDC', 'USDT'] else 18
+            amount_raw = int(amount * (10 ** decimals))
+            
+            comparison = skill.compare_aggregators(
+                network=network,
+                sell_token=sell_token,
+                buy_token=buy_token,
+                sell_amount=str(amount_raw),
+                user_address=user_address,
+                slippage=1.0
+            )
+            
+            await update.message.reply_text(comparison, parse_mode='Markdown')
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {str(e)[:200]}")

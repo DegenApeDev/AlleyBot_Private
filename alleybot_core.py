@@ -54,6 +54,14 @@ except ImportError as e:
     AGI_KERNEL_AVAILABLE = False
     print(f"⚠️ AGI Kernel unavailable: {e}")
 
+# Import Service Integration Layer (Phase 8)
+try:
+    from src.agentic.service_integration import initialize_services, check_system_health
+    SERVICE_INTEGRATION_AVAILABLE = True
+except ImportError as e:
+    SERVICE_INTEGRATION_AVAILABLE = False
+    print(f"⚠️ Service Integration Layer unavailable: {e}")
+
 class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
     """Minimal core that orchestrates plugins with SQLite memory"""
     
@@ -105,6 +113,30 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
             except Exception as e:
                 print(f"⚠️ AGI Kernel initialization failed: {e}")
         
+        # Service Integration Layer - Unified foundation services (Phase 8)
+        self.services = None
+        if SERVICE_INTEGRATION_AVAILABLE:
+            try:
+                self.services = initialize_services(
+                    core=self,
+                    plugin_manager=self.plugin_manager,
+                    telegram_plugin=None,  # Will be set after Telegram plugin loads
+                    llm_router=None,  # Will be set after LLM router available
+                )
+                print("✅ Service Integration Layer initialized")
+                
+                # Health check
+                health = check_system_health()
+                if health['healthy']:
+                    print("   🎯 All foundation services operational")
+                else:
+                    print(f"   ⚠️ Some services unavailable: {health['services']}")
+                    
+            except Exception as e:
+                print(f"⚠️ Service Integration initialization failed: {e}")
+                import traceback
+                traceback.print_exc()
+        
         # Load configuration
         self.config = self._load_config()
         
@@ -115,12 +147,38 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
             self
         )
         
-        # Initialize AGI Kernel decision systems after plugins are loaded
-        if self.agi_kernel:
+        # Initialize AGI Kernel decision systems (requires plugin_manager)
+        if self.agi_kernel and hasattr(self.agi_kernel, 'initialize_decision_systems'):
             try:
                 self.agi_kernel.initialize_decision_systems(self.plugin_manager)
+                print("✅ AGI Kernel decision systems initialized")
             except Exception as e:
                 print(f"⚠️ AGI Kernel decision systems initialization failed: {e}")
+        
+        # Link Telegram plugin to service integration layer if available
+        if self.services and 'telegram' in self.plugin_manager.plugins:
+            try:
+                telegram_plugin = self.plugin_manager.plugins['telegram']
+                self.services.telegram = telegram_plugin
+                
+                # Update notification service with Telegram
+                if self.services.notifications:
+                    self.services.notifications.telegram = telegram_plugin
+                    print("   🔗 Telegram linked to notification service")
+                    
+                print("   🔗 Telegram plugin linked to service layer")
+            except Exception as e:
+                print(f"   ⚠️ Failed to link Telegram: {e}")
+        
+        # Link LLM router if available
+        try:
+            from src.core.llm_router import get_llm_router
+            llm_router = get_llm_router()
+            if self.services:
+                self.services.conversation.llm_router = llm_router
+                print("   🔗 LLM Router linked to conversation service")
+        except Exception as e:
+            print(f"   ⚠️ LLM Router not linked: {e}")
 
         # Add core commands
         self._add_core_commands()

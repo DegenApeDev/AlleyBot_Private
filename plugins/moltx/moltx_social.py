@@ -504,7 +504,10 @@ class MoltxSocialMixin:
             logger.info("🔄 Starting background engagement task...")
             
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(None, engagement_func, *args, **kwargs)
+            # run_in_executor doesn't accept kwargs, so use partial to bind them
+            import functools
+            bound_func = functools.partial(engagement_func, *args, **kwargs)
+            result = await loop.run_in_executor(None, bound_func)
             
             logger.info(f"✅ Background engagement complete: {result}")
             return result

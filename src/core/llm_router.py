@@ -154,6 +154,7 @@ class LLMRouter:
                         if 'reasoning' in model or 'complex' in prompt.lower():
                             response = model_instance.reason(
                                 prompt=prompt,
+                                system_prompt=system_prompt,
                                 temperature=temperature,
                                 max_tokens=max_tokens
                             )

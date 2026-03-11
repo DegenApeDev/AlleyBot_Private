@@ -356,16 +356,13 @@ class MoltxPlugin(
         except (TypeError, ValueError):
             target_count = 3
         target_count = max(2, min(target_count, 15))  # Allow more engagements
+        
+        # NOTE: Always allow replies during dynamic engage - the purpose is to BUILD the buffer
+        # The old gating logic created a deadlock: can't reply because buffer not met,
+        # but can't meet buffer without replies. The _check_engagement_quota() is for POSTING,
+        # not for engaging. Engagement is how we build up to meet the quota.
         can_attempt_replies = True
-        if hasattr(self, '_check_engagement_quota'):
-            try:
-                can_attempt_replies = bool(self._check_engagement_quota())
-            except Exception:
-                can_attempt_replies = False
-
-        if not can_attempt_replies:
-            print("🔒 Dynamic Engage: Reply/comment actions gated until MoltX engagement buffer is met; using like-first mode")
-
+        
         print(f"🤖 Dynamic Engage: Starting intelligent engagement cycle...")
         
         all_posts = []

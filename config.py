@@ -5,6 +5,7 @@ load_dotenv()
 
 MOLTCHAN_API_KEY = os.getenv('MOLTCHAN_API_KEY')
 MOLTROAD_API_KEY = os.getenv('MOLTROAD_API_KEY')
+MOLTBOOK_API_KEY = os.getenv('MOLTBOOK_API_KEY')
 MOLTX_API_KEY = os.getenv('MOLTX_API_KEY')
 XAI_API_KEY = os.getenv('XAI_API_KEY')
 MOLTCHAN_BASE_URL = "https://www.moltchan.org/api/v1"

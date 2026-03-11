@@ -76,14 +76,95 @@ async def execute_trade(plugin, market, analysis):
     """Execute a trade (paper or live)"""
     try:
         from plugins.polymarket.polymarket import Position
+        from plugins.polymarket.live_trading import execute_live_trade, get_trading_mode, TRADING_MODE
         
-        if plugin.paper_trading:
-            # Paper trading - just track the position
+        # Record trade in performance tracker
+        try:
+            import sys
+            sys.path.append(plugin.project_root)
+            from src.trading.performance_tracker import TradeRecord, get_tracker
+            
+            tracker = get_tracker()
+            trade_id = f"pm-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{market.id[:8]}"
+            
+            trade_record = TradeRecord(
+                trade_id=trade_id,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                venue='polymarket',
+                market=market.question,
+                strategy='prediction_market',
+                side='buy',
+                outcome=analysis.predicted_outcome,
+                size_usd=analysis.position_size * plugin._get_bankroll(),
+                entry_price=market.yes_price if analysis.predicted_outcome == 'YES' else market.no_price,
+                exit_price=None,
+                pnl_usd=None,
+                pnl_percent=None,
+                edge_at_entry=analysis.edge,
+                confidence=analysis.confidence,
+                status='open',
+                paper_trade=plugin.paper_trading,
+                tx_hash=None,
+                reasoning=analysis.reasoning,
+                lessons_learned=None
+            )
+            tracker.record_trade(trade_record)
+            
+            # Store trade_id on position for later closing
+            trade_ref = {'trade_id': trade_id, 'tracker': tracker}
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to record trade in tracker: {e}")
+            trade_ref = None
+        
+        # Check trading mode
+        current_mode = get_trading_mode()
+        
+        if current_mode == TRADING_MODE['LIVE'] and not plugin.paper_trading:
+            # LIVE TRADING MODE
+            logger.info(f"🎯 LIVE TRADING MODE - Executing real trade")
+            
+            result = await execute_live_trade(plugin, market, analysis)
+            
+            if result.get('success'):
+                # Create position tracking for live trade
+                position = Position(
+                    market_id=market.id,
+                    market_question=market.question,
+                    outcome=analysis.predicted_outcome,
+                    shares=analysis.position_size * 100,  # Convert to shares
+                    avg_price=market.yes_price if analysis.predicted_outcome == 'YES' else market.no_price,
+                    current_price=market.yes_price if analysis.predicted_outcome == 'YES' else market.no_price,
+                    invested=analysis.position_size * 100 * (market.yes_price if analysis.predicted_outcome == 'YES' else market.no_price),
+                    current_value=analysis.position_size * 100 * (market.yes_price if analysis.predicted_outcome == 'YES' else market.no_price),
+                    pnl=0.0,
+                    opened_at=datetime.now(timezone.utc)
+                )
+                
+                plugin.active_positions[market.id] = position
+                plugin.stats['total_trades'] += 1
+                
+                logger.info(f"✅ LIVE TRADE EXECUTED: {analysis.predicted_outcome} on '{market.question[:50]}...'")
+                logger.info(f"   Size: {analysis.position_size:.1%} | Tx: {result.get('tx_hash', 'N/A')}")
+                
+                # Send Telegram notification
+                if hasattr(plugin, 'core') and hasattr(plugin.core, 'telegram'):
+                    try:
+                        plugin.core.telegram.send_message(
+                            chat_id=plugin.core.telegram.default_chat_id,
+                            text=f"🎯 LIVE TRADE: {analysis.predicted_outcome} on '{market.question[:40]}...'\nSize: {analysis.position_size:.1%} | Edge: {analysis.edge:.1%}"
+                        )
+                    except:
+                        pass
+            else:
+                logger.error(f"❌ Live trade failed: {result.get('error', 'Unknown error')}")
+                
+        else:
+            # PAPER TRADING MODE
             position = Position(
                 market_id=market.id,
                 market_question=market.question,
                 outcome=analysis.predicted_outcome,
-                shares=analysis.position_size * 100,  # Convert to shares
+                shares=analysis.position_size * 100,
                 avg_price=market.yes_price if analysis.predicted_outcome == 'YES' else market.no_price,
                 current_price=market.yes_price if analysis.predicted_outcome == 'YES' else market.no_price,
                 invested=analysis.position_size * 100 * (market.yes_price if analysis.predicted_outcome == 'YES' else market.no_price),
@@ -93,19 +174,15 @@ async def execute_trade(plugin, market, analysis):
             )
             
             plugin.active_positions[market.id] = position
-            
-            # Update stats
             plugin.stats['total_trades'] += 1
             
             logger.info(f"📝 PAPER TRADE: {analysis.predicted_outcome} on '{market.question[:50]}...'")
             logger.info(f"   Size: {analysis.position_size:.1%} | Price: ${position.avg_price:.2f} | Edge: {analysis.edge:.1%}")
-        else:
-            # Live trading - use CLOB client
-            logger.warning("⚠️ Live trading not implemented yet - staying in paper mode")
-            # TODO: Implement live trading via py-clob-client
     
     except Exception as e:
         logger.error(f"❌ Failed to execute trade: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 async def update_positions(plugin):
@@ -134,8 +211,8 @@ async def update_positions(plugin):
         logger.error(f"❌ Failed to update positions: {e}")
 
 
-async def settle_position(plugin, market_id, market):
-    """Settle a resolved position"""
+async def settle_position(plugin, market_id, market, trade_ref=None):
+    """Settle a resolved position and record in performance tracker"""
     position = plugin.active_positions.get(market_id)
     if not position:
         return
@@ -161,6 +238,20 @@ async def settle_position(plugin, market_id, market):
         total_trades = plugin.stats['winning_trades'] + plugin.stats['losing_trades']
         if total_trades > 0:
             plugin.stats['win_rate'] = plugin.stats['winning_trades'] / total_trades
+        
+        # Record in performance tracker
+        if trade_ref:
+            try:
+                exit_price = 1.0 if won else 0.0
+                lessons = f"Market resolved {market.resolution}. Prediction was {'correct' if won else 'wrong'}."
+                trade_ref['tracker'].close_trade(
+                    trade_ref['trade_id'],
+                    exit_price=exit_price,
+                    pnl_usd=position.pnl,
+                    lessons=lessons
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to record trade closure: {e}")
         
         # Remove from active positions
         del plugin.active_positions[market_id]

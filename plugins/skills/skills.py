@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 """
 Agent Skills Plugin
-Lightweight skill framework following agentskills.io specification
+Enhanced skill framework with OpenClaw/ElizaOS compatibility
 
-Composes:
+Features:
 - SkillDiscoveryMixin: Scan and index SKILL.md files
 - SkillLoaderMixin: Progressive disclosure, activate on demand  
 - SkillExecutorMixin: Execute instructions and bundled scripts
-
-Skills are stored in skills/<name>/SKILL.md with optional:
-- scripts/ - Executable code
-- references/ - Documentation
-- assets/ - Templates, resources
+- SkillAutonomousExecutorMixin: OpenClaw-style heartbeat & triggers
+- SkillFormatAdapterMixin: Import/export OpenClaw/ElizaOS skills
 """
 import os
 import sys
@@ -26,16 +23,28 @@ from plugins.skills.skill_templates import SkillTemplatesMixin
 from plugins.skills.skill_generator import SkillGeneratorMixin
 from plugins.skills.skill_oasf_bridge import OASFSkillBridgeMixin
 from plugins.skills.skill_performance import SkillPerformanceMixin
-
-
 from plugins.skills.skill_marketplace import SkillMarketplaceMixin
+from plugins.skills.skill_autonomous import SkillAutonomousExecutorMixin
+from plugins.skills.skill_format_adapter import SkillFormatAdapterMixin
+from plugins.skills.skill_swarm import SwarmManagerMixin
 
 
-class SkillsPlugin(SkillDiscoveryMixin, SkillLoaderMixin, SkillExecutorMixin, 
-                   SkillValidationMixin, SkillTemplatesMixin, SkillGeneratorMixin, 
-                   OASFSkillBridgeMixin, SkillPerformanceMixin, SkillMarketplaceMixin, 
-                   AlleyBotPlugin):
-    """Agent Skills framework for AlleyBot"""
+class SkillsPlugin(
+    SwarmManagerMixin,              # NEW: Multi-agent swarm control
+    SkillAutonomousExecutorMixin,  # Autonomous execution & tools
+    SkillFormatAdapterMixin,     # OpenClaw/ElizaOS compatibility
+    SkillDiscoveryMixin,
+    SkillLoaderMixin,
+    SkillExecutorMixin,
+    SkillValidationMixin,
+    SkillTemplatesMixin,
+    SkillGeneratorMixin,
+    OASFSkillBridgeMixin,
+    SkillPerformanceMixin,
+    SkillMarketplaceMixin,
+    AlleyBotPlugin
+):
+    """Agent Skills framework for AlleyBot - With Swarm Control!"""
 
     def __init__(self, config):
         # Set project_root BEFORE super().__init__() so mixins can access it
@@ -45,7 +54,12 @@ class SkillsPlugin(SkillDiscoveryMixin, SkillLoaderMixin, SkillExecutorMixin,
 
     def initialize(self, api, core):
         super().initialize(api, core)
+        self.initialize_swarm()
         print(f"✅ Agent Skills plugin initialized ({len(self.skill_index)} skills)")
+        print(f"   🔧 Tools available: {len(self.tool_registry)}")
+        print(f"   🤖 Autonomous mode: Ready (use /autonomous_start)")
+        print(f"   🔄 OpenClaw/ElizaOS: Import ready")
+        print(f"   🐝 Swarm control: {len(self.swarm_nodes)} nodes active")
 
     def get_tasks(self):
         """Return scheduled tasks"""
@@ -54,6 +68,7 @@ class SkillsPlugin(SkillDiscoveryMixin, SkillLoaderMixin, SkillExecutorMixin,
     def get_commands(self):
         """Return CLI commands for skill management"""
         return {
+            # Core skill management
             'skills_list': self.list_skills_command,
             'skills_info': self.skill_info_command,
             'skills_history': self.skill_history_command,
@@ -65,8 +80,9 @@ class SkillsPlugin(SkillDiscoveryMixin, SkillLoaderMixin, SkillExecutorMixin,
             'skills_suggest': self.suggest_skills_command,
             'skills_stats': self.skills_stats_command,
             'skills_recommend': self.skills_recommend_command,
+            # Skill execution
             'skill_exec': self.skill_exec_command,
-            'skill_chain': self.skill_chain_command,  # NEW: Skill composition
+            'skill_chain': self.skill_chain_command,
             'skill_find': self.find_skill_command,
             'skill_activate': self.activate_skill_command,
             'skill_lint': self.lint_skill_command,
@@ -77,6 +93,25 @@ class SkillsPlugin(SkillDiscoveryMixin, SkillLoaderMixin, SkillExecutorMixin,
             'skill_publish': self.marketplace_publish_command,
             'skill_import': self.marketplace_import_command,
             'skill_market_list': self.marketplace_list_command,
+            # NEW: Autonomous execution
+            'autonomous_start': self.autonomous_start_command,
+            'autonomous_stop': self.autonomous_stop_command,
+            'autonomous_status': self.autonomous_status_command,
+            # NEW: Tool registry
+            'tool_list': self.tool_list_command,
+            'tool_exec': self.tool_exec_command,
+            # NEW: Format adapters
+            'skill_import_openclaw': self.skill_import_openclaw_command,
+            'skill_import_elizaos': self.skill_import_elizaos_command,
+            'skill_export_openclaw': self.skill_export_openclaw_command,
+            # NEW: Swarm control
+            'swarm_spawn': self.swarm_spawn_command,
+            'swarm_kill': self.swarm_kill_command,
+            'swarm_list': self.swarm_list_command,
+            'swarm_delegate': self.swarm_delegate_command,
+            'swarm_result': self.swarm_result_command,
+            'swarm_status': self.swarm_status_command,
+            'swarm_parallel': self.swarm_parallel_command,
         }
 
     def get_endpoints(self):

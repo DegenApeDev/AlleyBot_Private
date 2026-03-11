@@ -81,6 +81,7 @@ graph TB
         A_DEBATE["⚔️ Debate\nClawbr arena"]
         A_CHESS["♟️ Chess\nClawChess (Stockfish d18-22)"]
         A_CHAIN["⛓️ On-Chain\nBase L2 · DeFi · x402"]
+        A_SWAP["💱 Best Swap\nMoltx API · 6 aggregators\nEthereum/Base/Arbitrum"]
         A_CODE["🔧 Self-Improve\nAutonomousCoder → new skills"]
     end
 
@@ -145,6 +146,9 @@ graph TB
     %% Outcomes flow into memory
     ACT -->|"outcome"| ACTION_LOG
     ACT -->|"experience + valence"| EPIMEM
+    
+    %% Swap skill uses AI for decisions
+    A_SWAP --> GROK
 
     %% Learn closes the loop
     ACTION_LOG -->|"outcomes"| L_REFLECT

@@ -441,6 +441,11 @@ class Telegram(AlleyBotPlugin):
         self.application.add_handler(CommandHandler("trading_disable", self.trading_commands.trading_disable))
         self.application.add_handler(CommandHandler("trading_status", self.trading_commands.trading_status))
         
+        # Best Crypto Swap commands (new skill)
+        self.application.add_handler(CommandHandler("best_swap_quote", self.trading_commands.best_swap_quote))
+        self.application.add_handler(CommandHandler("best_swap_execute", self.trading_commands.best_swap_execute))
+        self.application.add_handler(CommandHandler("best_swap_compare", self.trading_commands.best_swap_compare))
+        
         # Polymarket commands
         self.application.add_handler(CommandHandler("polymarket_status", self.polymarket_commands.polymarket_status))
         self.application.add_handler(CommandHandler("polymarket_markets", self.polymarket_commands.polymarket_markets))

@@ -590,7 +590,9 @@ class PolymarketPlugin(AsyncPluginMixin, AlleyBotPlugin):
             'polymarket_markets': self.markets_command,
             'polymarket_analyze': self.analyze_command,
             'polymarket_positions': self.positions_command,
-            'polymarket_stats': self.stats_command
+            'polymarket_stats': self.stats_command,
+            'polymarket_enable_live': self.enable_live_trading_command,
+            'polymarket_paper_mode': self.paper_mode_command,
         }
     
     def status_command(self):
@@ -710,3 +712,29 @@ class PolymarketPlugin(AsyncPluginMixin, AlleyBotPlugin):
         self.autonomous_running = False
         logger.info("🎲 Autonomous trading stopped")
         return "✅ Autonomous trading stopped"
+    
+    def enable_live_trading_command(self):
+        """Enable LIVE trading mode (DANGEROUS - uses real money)"""
+        from plugins.polymarket.live_trading import set_trading_mode
+        
+        # Require confirmation
+        if not self.wallet:
+            return "❌ Cannot enable live trading: Wallet not configured\nSet POLYGON_PRIVATE_KEY in .env"
+        
+        if not self.clob_client:
+            return "❌ Cannot enable live trading: CLOB client not initialized"
+        
+        # Set to live mode
+        set_trading_mode('live')
+        self.paper_trading = False
+        
+        return "🚨 LIVE TRADING ENABLED 🚨\n\n⚠️ WARNING: Trades will use REAL MONEY\n📊 Starting with paper trading OFF\n✅ Trades will execute on blockchain\n\nUse /polymarket_paper_mode to switch back to safe mode"
+    
+    def paper_mode_command(self):
+        """Switch back to PAPER trading mode (safe)"""
+        from plugins.polymarket.live_trading import set_trading_mode
+        
+        set_trading_mode('paper')
+        self.paper_trading = True
+        
+        return "📝 PAPER TRADING MODE\n\n✅ Safe mode - no real money at risk\n📊 Trades are simulated only\n🧪 Perfect for testing strategies\n\nUse /polymarket_enable_live to enable real trading (when ready)"

@@ -39,6 +39,14 @@ from src.agentic.multi_timescale_planner import get_multi_timescale_planner
 from src.agentic.meta_learner import get_meta_learner
 from src.agentic.goal_manager import get_goal_manager
 
+# Phase 8-9: Service Integration Layer
+from src.agentic.service_integration import (
+    get_integrated_work_item_service,
+    get_integrated_notification_service,
+    get_integrated_memory_service,
+)
+from src.agentic.contracts import WorkItemState, NotificationPriority
+
 logger = logging.getLogger(__name__)
 
 
@@ -170,6 +178,22 @@ class AutonomousBrain(AGISocialMixin):
         self.planner = get_multi_timescale_planner(goal_hierarchy=self.goal_hierarchy)
         self.meta_learner = get_meta_learner(knowledge_graph=self.knowledge_graph)
         self.goal_manager_v2 = get_goal_manager()
+        
+        # Phase 8-9: Foundation Services Integration
+        self.work_item_service = get_integrated_work_item_service()
+        self.notification_service = get_integrated_notification_service()
+        self.memory_service = get_integrated_memory_service()
+        
+        # Flag for service availability
+        self._services_available = all([
+            self.work_item_service is not None,
+            self.notification_service is not None,
+        ])
+        
+        if self._services_available:
+            logger.info("✅ Foundation Services connected (work items + notifications)")
+        else:
+            logger.warning("⚠️ Some foundation services unavailable, using fallbacks")
         
         # Initialize AGI social behaviors
         AGISocialMixin.__init__(self)
@@ -377,6 +401,45 @@ class AutonomousBrain(AGISocialMixin):
             if interrupt_opps:
                 logger.warning(f"🚨 {len(interrupt_opps)} high-priority opportunities detected!")
                 # Handle interrupts (could expand this to actually interrupt)
+            
+            # === WORK ITEM CREATION: Create durable work from opportunities ===
+            if self.work_item_service and self._services_available and opportunities:
+                try:
+                    for opp in opportunities[:3]:  # Top 3 opportunities
+                        opp_title = opp.get('title', 'Autonomous opportunity')
+                        opp_desc = opp.get('description', 'Detected by opportunity monitor')
+                        opp_type = opp.get('type', 'opportunity')
+                        
+                        # Check if similar work item already exists
+                        existing = self.work_item_service.get_active_items()
+                        duplicate = any(
+                            o.title == opp_title for o in existing
+                        )
+                        
+                        if not duplicate:
+                            work_item = self.work_item_service.create_work_item(
+                                title=opp_title,
+                                description=opp_desc,
+                                work_type=opp_type,
+                                priority=opp.get('priority', 2),
+                                source_signal={
+                                    'source': 'opportunity_monitor',
+                                    'confidence': opp.get('confidence', 0.5),
+                                    'detected_at': datetime.now().isoformat(),
+                                },
+                            )
+                            logger.info(f"📌 Created work item from opportunity: {work_item.id}")
+                            
+                            # Notify owner of new opportunity-based work
+                            if self.notification_service:
+                                await self.notification_service.notify(
+                                    title="🎯 New Work Item Created",
+                                    message=f"Opportunity detected: {opp_title}",
+                                    priority=NotificationPriority.LOW,
+                                    source_work_item=work_item.id,
+                                )
+                except Exception as e:
+                    logger.debug(f"Work item creation error (non-critical): {e}")
         
         # === SENSE: Gather observations from all platforms ===
         observations = await self._gather_observations()
@@ -1459,6 +1522,8 @@ class AutonomousBrain(AGISocialMixin):
         
         Route all autonomous proposals through AGIKernel.act()/ActionRouter
         so validation, execution, and learning use one unified pipeline.
+        
+        Also notifies owner of high-impact actions via notification service.
         """
         plugin_name = proposal.metadata.get('plugin')
         
@@ -1492,7 +1557,59 @@ class AutonomousBrain(AGISocialMixin):
                 }
             }
 
-            return await agi_kernel.act(action_spec)
+            result = await agi_kernel.act(action_spec)
+            
+            # === NOTIFICATION: Alert owner of meaningful autonomous actions ===
+            if result and self.notification_service and self._services_available:
+                try:
+                    success = result.get('success', False)
+                    action_type = proposal.action_type
+                    impact = action_spec['context'].get('impact', 'medium')
+                    
+                    # Determine if this is worth notifying about
+                    should_notify = False
+                    priority = NotificationPriority.LOW
+                    
+                    # High-impact successes
+                    if success and impact == 'high':
+                        should_notify = True
+                        priority = NotificationPriority.NORMAL
+                        
+                    # Failures on high-confidence proposals
+                    if not success and proposal.confidence >= 0.7:
+                        should_notify = True
+                        priority = NotificationPriority.HIGH
+                    
+                    # Certain action types are always notable
+                    notable_actions = ['post', 'trade', 'debate', 'self_improve', 'auto_fix']
+                    if any(a in action_type.lower() for a in notable_actions):
+                        should_notify = True
+                        if success:
+                            priority = NotificationPriority.NORMAL
+                        else:
+                            priority = NotificationPriority.HIGH
+                    
+                    if should_notify:
+                        await self.notification_service.notify(
+                            title=f"🤖 Autonomous: {action_type}",
+                            message=f"{'✅' if success else '❌'} {action_type} via {plugin_name} "
+                                    f"(confidence: {proposal.confidence:.2f})",
+                            priority=priority,
+                            details={
+                                'action_type': action_type,
+                                'plugin': plugin_name,
+                                'success': success,
+                                'confidence': proposal.confidence,
+                                'justification': proposal.justification[:100] if proposal.justification else '',
+                            },
+                            source_action=f"{plugin_name}:{action_type}",
+                        )
+                        logger.info(f"🔔 Notification sent: {action_type} {'succeeded' if success else 'failed'}")
+                        
+                except Exception as e:
+                    logger.debug(f"Notification error (non-critical): {e}")
+            
+            return result
             
         except Exception as e:
             logger.error(f"❌ Execution error: {e}")
