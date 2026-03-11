@@ -1,0 +1,627 @@
+```mermaid
+flowchart TB
+    subgraph "🧠 AGI Core - 14 Cognitive Phases"
+        direction TB
+        AGI["AGIKernel<br/>14-Phase Cognitive Architecture"]:::agi
+        
+        subgraph "Cognition Layer"
+            P1["P1: Self-Reflection<br/>Action logging<br/>Outcome tracking"]:::phase
+            P2["P2: Goal Management<br/>Autonomous goal generation<br/>Goal stack management"]:::phase
+            P3["P3: Multi-Step Planning<br/>Dependency tracking<br/>Contingency planning"]:::phase
+            P5["P5/10: Causal Understanding<br/>Cause-effect tracking<br/>/causal /why /whatif"]:::phase
+            P7["P7: World State Intelligence<br/>Trend detection<br/>/trends /predict /anomalies"]:::phase
+        end
+        
+        subgraph "Learning Layer"
+            P8["P8: Self-Reflective Learning<br/>Strategy evolution<br/>Auto-personality tuning"]:::phase
+            P9["P9: Multi-Step Reasoning<br/>Long-horizon planning<br/>Chain of thought"]:::phase
+            P11["P11: Autonomous Research<br/>Curiosity engine<br/>Knowledge synthesis"]:::phase
+            P12["P12: Social Intelligence<br/>Agent modeling<br/>Deception detection"]:::phase
+            P13["P13: Creative Generation<br/>Novel content<br/>A/B test design"]:::phase
+            P14["P14: Metacognition<br/>Self-assessment<br/>Confidence calibration"]:::phase
+        end
+    end
+
+    subgraph "⚡ Action Router - SyMod Gated"
+        direction TB
+        AR["ActionRouter<br/>Impact + Risk + Trust scoring"]:::router
+        
+        subgraph "Validation Tiers"
+            VT1["Low Risk<br/>Auto-execute"]:::low
+            VT2["Medium Risk<br/>Notify owner"]:::medium
+            VT3["High Risk<br/>Require approval"]:::high
+        end
+        
+        AR --> VT1
+        AR --> VT2
+        AR --> VT3
+    end
+
+    subgraph "💰 Trading Engine - LIVE"
+        direction TB
+        TE["TradingEngine<br/>Multi-platform execution"]:::trading
+        
+        subgraph "Live Trading Platforms"
+            SOL["Solana<br/>Jupiter Aggregator<br/>MEV protection<br/>✅ LIVE"]:::live
+            BASE["Base L2<br/>Uniswap V3<br/>Gas optimization<br/>✅ LIVE"]:::live
+            POLY["Polymarket<br/>CLOB trading<br/>Paper + Live mode<br/>✅ LIVE"]:::live
+            SWAP["Best Crypto Swap<br/>6 DEX aggregators<br/>Multi-chain<br/>✅ LIVE"]:::live
+        end
+        
+        subgraph "Performance Analytics"
+            PT["PerformanceTracker<br/>PnL calculation<br/>Win rate tracking<br/>Max drawdown<br/>Edge calculation"]:::analytics
+            META["Metacognition DB<br/>Strategy fitness scores<br/>Outcome learning"]:::meta
+        end
+        
+        TE --> SOL
+        TE --> BASE
+        TE --> POLY
+        TE --> SWAP
+        SOL --> PT
+        BASE --> PT
+        POLY --> PT
+        SWAP --> PT
+        PT --> META
+    end
+
+    subgraph "🌐 Multi-Platform Social Engine"
+        direction TB
+        MPE["MultiPlatformEngine<br/>Unified 6-platform interface"]:::engine
+        
+        subgraph "Social Platforms"
+            MOLTX["Moltx<br/>Twitter-like<br/>Posts, DMs, feed"]:::platform
+            CLAWBR["Clawbr<br/>Debate network<br/>AI arena<br/>Brain-integrated"]:::platform
+            MOLTBOOK["Moltbook<br/>Reddit-like<br/>Articles, threads"]:::platform
+            MOLTCHAN["Moltchan<br/>Community chat<br/>Real-time"]:::platform
+            MOLTBIT["Moltbit<br/>Trading signals<br/>Market intel"]:::platform
+            MOLTROAD["Moltroad<br/>Project tracking<br/>Roadmaps"]:::platform
+        end
+        
+        MPE --> MOLTX
+        MPE --> CLAWBR
+        MPE --> MOLTBOOK
+        MPE --> MOLTCHAN
+        MPE --> MOLTBIT
+        MPE --> MOLTROAD
+    end
+
+    subgraph "🎯 Skills System - 35+ Skills"
+        direction TB
+        SK["SkillEngine<br/>Auto-acquisition<br/>Progressive disclosure"]:::skills
+        
+        subgraph "Core Skills"
+            SK1["best-crypto-swap-price<br/>Multi-aggregator trading"]:::skill
+            SK2["content-strategy<br/>Social media optimization"]:::skill
+            SK3["reputation-builder<br/>Community engagement"]:::skill
+            SK4["skill-autonomous<br/>Heartbeat execution"]:::skill
+            SK5["skill-format-adapter<br/>OpenClaw/ElizaOS import"]:::skill
+        end
+        
+        subgraph "Skill Discovery"
+            SD["ConsoleMonitor<br/>Auto-detect skill updates<br/>From API responses"]:::discovery
+            SA["SkillAcquisition<br/>Download + Validate<br/>Register with PM"]:::acquire
+        end
+        
+        SK --> SK1
+        SK --> SK2
+        SK --> SK3
+        SK --> SK4
+        SK --> SK5
+        SD --> SA --> SK
+    end
+
+    subgraph "🧩 Integrations"
+        direction TB
+        INT["Integration Layer"]:::int
+        
+        subgraph "External APIs"
+            A2A["A2A Protocol<br/>Agent-to-agent<br/>Port :7001<br/>Collaboration"]:::ext
+            ERC8004["ERC-8004<br/>Self-improvement<br/>Agent cards<br/>IPFS + on-chain"]:::ext
+            ONCHAIN["On-Chain Intelligence<br/>Price tracking<br/>Trending tokens<br/>Wallet monitoring"]:::ext
+            IMAGE["Image Generation<br/>Auto-prompt<br/>Style transfer"]:::ext
+        end
+        
+        INT --> A2A
+        INT --> ERC8004
+        INT --> ONCHAIN
+        INT --> IMAGE
+    end
+
+    subgraph "💾 Memory Architecture - Multi-Tier"
+        direction TB
+        MEM["MemoryBridge<br/>Unified memory access"]:::mem
+        
+        subgraph "Memory Types"
+            EP["Episodic Memory<br/>Experiences + valence<br/>alley_memory.db"]:::memtype
+            WS["World State<br/>Entities, facts<br/>Relationships<br/>world_state.db"]:::memtype
+            AL["Action Logger<br/>Every action + outcome<br/>action_log.db"]:::memtype
+            CR["Creative DB<br/>Concepts + A-B results<br/>creative.db"]:::memtype
+            MT["Metacognition DB<br/>Strategy fitness<br/>metacognition.db"]:::memtype
+            UM["Unified Memory<br/>Vector search<br/>Goals<br/>unified_memory.db"]:::memtype
+        end
+        
+        MEM --> EP
+        MEM --> WS
+        MEM --> AL
+        MEM --> CR
+        MEM --> MT
+        MEM --> UM
+    end
+
+    subgraph "🔧 Self-Improvement Loop"
+        direction TB
+        SI["SelfImprovementHooks<br/>Failure tracking<br/>Draft creation"]:::improve
+        
+        subgraph "Improvement Pipeline"
+            FD["Failure Detection<br/>Pattern matching<br/>2-3 failures → trigger"]:::pipe
+            DC["Draft Creation<br/>Git branch<br/>Code generation"]:::pipe
+            TE["Test Execution<br/>Validation<br/>Risk scoring"]:::pipe
+            RC["Risk Classification<br/>Low: Auto-deploy<br/>Medium: Notify<br/>High: Approve"]:::pipe
+        end
+        
+        subgraph "Metrics"
+            METRICS["MetricsStore<br/>Success rate<br/>Time to deploy<br/>Improvement impact"]:::metrics
+        end
+        
+        SI --> FD --> DC --> TE --> RC
+        RC --> METRICS
+    end
+
+    subgraph "🔌 Service Layer - Microservices"
+        direction TB
+        SVC["ServiceIntegration<br/>6 microservices"]:::service
+        
+        subgraph "Services"
+            CONV["ConversationService<br/>Message handling<br/>Multi-platform"]:::svc
+            ID["IdentityService<br/>Agent card<br/>ERC-8004"]:::svc
+            MS["MemoryService<br/>Memory operations<br/>Unified access"]:::svc
+            ON["OwnerNotificationService<br/>Telegram alerts<br/>Secure delivery"]:::svc
+            WI["WorkItemService<br/>Task management<br/>Async queue"]:::svc
+        end
+        
+        SVC --> CONV
+        SVC --> ID
+        SVC --> MS
+        SVC --> ON
+        SVC --> WI
+    end
+
+    subgraph "📱 Owner Interface - Telegram"
+        direction TB
+        TG["Telegram Bot<br/>Owner-only access<br/>DegenApeDev verified"]:::tg
+        
+        subgraph "AGI Commands"
+            CMD_AGI1["/agi_cycle<br/>Full 14-phase"]:::cmd
+            CMD_AGI2["/multi_platform<br/>Cross-platform"]:::cmd
+            CMD_AGI3["/trends /predict<br/>/anomalies"]:::cmd
+            CMD_AGI4["/causal /why<br/>/whatif"]:::cmd
+            CMD_AGI5["/root_cause<br/>/attribution"]:::cmd
+        end
+        
+        subgraph "Trading Commands"
+            CMD_T1["/best_swap_quote<br/>Price check"]:::cmd
+            CMD_T2["/best_swap_execute<br/>Execute swap"]:::cmd
+            CMD_T3["/swap_sol<br/>Solana trade"]:::cmd
+            CMD_T4["/swap_base<br/>Base trade"]:::cmd
+            CMD_T5["/polymarket_enable_live<br/>Live trading"]:::cmd
+            CMD_T6["/trading_status<br/>Performance"]:::cmd
+        end
+        
+        subgraph "Control Commands"
+            CMD_C1["/brain_start<br/>/brain_stop"]:::cmd
+            CMD_C2["/improve_drafts<br/>/improve_approve"]:::cmd
+            CMD_C3["/console_monitor<br/>Toggle monitoring"]:::cmd
+            CMD_C4["/reflection_status<br/>/evolve"]:::cmd
+        end
+        
+        TG --> CMD_AGI1
+        TG --> CMD_AGI2
+        TG --> CMD_AGI3
+        TG --> CMD_AGI4
+        TG --> CMD_AGI5
+        TG --> CMD_T1
+        TG --> CMD_T2
+        TG --> CMD_T3
+        TG --> CMD_T4
+        TG --> CMD_T5
+        TG --> CMD_T6
+        TG --> CMD_C1
+        TG --> CMD_C2
+        TG --> CMD_C3
+        TG --> CMD_C4
+    end
+
+    %% Main connections
+    AGI --> AR
+    AR --> TE
+    AR --> MPE
+    AR --> SK
+    AR --> INT
+    
+    AGI --> MEM
+    AGI --> SI
+    AGI --> SVC
+    
+    TE --> TG
+    MPE --> TG
+    SI --> TG
+    SVC --> TG
+    
+    MEM --> AGI
+    SI --> AGI
+    
+    %% Styling
+    classDef agi fill:#fce4ec,stroke:#880e4f,stroke-width:4px
+    classDef phase fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef router fill:#fff3e0,stroke:#ef6c00,stroke-width:3px
+    classDef low fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    classDef medium fill:#fff8e1,stroke:#f57f17,stroke-width:2px
+    classDef high fill:#ffebee,stroke:#b71c1c,stroke-width:2px
+    classDef trading fill:#e8f5e9,stroke:#1b5e20,stroke-width:4px
+    classDef live fill:#c8e6c9,stroke:#2e7d32,stroke-width:3px
+    classDef analytics fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef meta fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef engine fill:#fff3e0,stroke:#e65100,stroke-width:3px
+    classDef platform fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef skills fill:#fff8e1,stroke:#f57f17,stroke-width:3px
+    classDef skill fill:#ffecb3,stroke:#ff6f00,stroke-width:2px
+    classDef discovery fill:#e0f2f1,stroke:#004d40,stroke-width:2px
+    classDef acquire fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    classDef int fill:#f5f5f5,stroke:#212121,stroke-width:2px
+    classDef ext fill:#e0e0e0,stroke:#424242,stroke-width:2px
+    classDef mem fill:#e8eaf6,stroke:#283593,stroke-width:3px
+    classDef memtype fill:#c5cae9,stroke:#3949ab,stroke-width:2px
+    classDef improve fill:#fce4ec,stroke:#880e4f,stroke-width:3px
+    classDef pipe fill:#f8bbd9,stroke:#c2185b,stroke-width:2px
+    classDef metrics fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef service fill:#e0f7fa,stroke:#00838f,stroke-width:3px
+    classDef svc fill:#b2ebf2,stroke:#0097a7,stroke-width:2px
+    classDef tg fill:#e3f2fd,stroke:#1565c0,stroke-width:3px
+    classDef cmd fill:#fafafa,stroke:#616161,stroke-width:1px
+```
+
+---
+
+# AlleyBot Complete Capabilities Reference
+
+## 🧠 AGI Core (14 Phases)
+
+### Phase 1: Self-Reflection
+- Action logging (`action_logger.py`)
+- Strategy evolution (`strategy_evolver.py`)
+- Reflection commands (`/reflection_status`, `/reflection_log`)
+
+### Phase 2: Goal Management
+- Autonomous goal generation
+- Goal stack management
+- Opportunity detection
+
+### Phase 3: Multi-Step Planning
+- Goal decomposition
+- Dependency tracking
+- Contingency planning
+
+### Phase 5/10: Causal Understanding
+- Cause-effect tracking (`causal_engine.py`)
+- Commands: `/causal`, `/why`, `/whatif`, `/root_cause`, `/attribution`
+
+### Phase 7: World State Intelligence
+- Trend detection (`inference_engine.py`)
+- Commands: `/trends`, `/predict`, `/anomalies`, `/sentiment`
+
+### Phase 8: Self-Reflective Learning
+- Strategy evolution
+- Auto-personality tuning
+
+### Phase 9: Multi-Step Reasoning
+- Long-horizon planning
+- Chain of thought reasoning
+
+### Phase 11: Autonomous Research
+- Curiosity engine (`research_engine.py`)
+- Knowledge synthesis
+
+### Phase 12: Social Intelligence
+- Agent modeling (`social_intelligence.py`)
+- Deception detection
+- Cross-platform pattern recognition
+
+### Phase 13: Creative Generation
+- Novel content (`creative_engine.py`)
+- A/B test design
+- Story arc generation
+
+### Phase 14: Metacognition
+- Self-assessment (`metacognition.py`)
+- Confidence calibration
+- Strategy fitness scoring
+
+---
+
+## 💰 Trading Engine (LIVE)
+
+### Solana Trading
+- **Status:** ✅ LIVE
+- **Aggregator:** Jupiter
+- **Features:** MEV protection, slippage tolerance, auto-execution
+- **Command:** `/swap_sol <from> <to> <amount>`
+
+### Base L2 Trading
+- **Status:** ✅ LIVE
+- **DEX:** Uniswap V3
+- **Features:** Gas optimization, price impact calculation
+- **Command:** `/swap_base <from> <to> <amount>`
+
+### Polymarket Trading
+- **Status:** ✅ Paper + Live
+- **Features:** CLOB integration, paper mode for testing
+- **Commands:**
+  - `/polymarket_enable_live` - Enable live trading
+  - `/polymarket_paper_mode` - Safe paper mode
+
+### Best Crypto Swap
+- **Status:** ✅ LIVE
+- **Aggregators:** 1inch, Paraswap, 0x, Kyber, Odos, OKX
+- **Networks:** Ethereum, Base, Arbitrum, Polygon, Plasma
+- **Commands:**
+  - `/best_swap_quote <network> <from> <to> <amount>`
+  - `/best_swap_execute <network> <from> <to> <amount>`
+  - `/best_swap_compare <network> <from> <to> <amount>`
+
+### Performance Analytics
+- **PnL Calculation:** Per-trade and aggregate
+- **Win Rate:** Success/failure tracking
+- **Max Drawdown:** Risk assessment
+- **Edge Calculation:** Expected value per trade
+- **Strategy Fitness:** Which approaches work best
+- **Command:** `/trading_status`
+
+---
+
+## 🌐 Multi-Platform Social Engine
+
+### Supported Platforms (6)
+
+| Platform | Type | Key Features |
+|----------|------|--------------|
+| **Moltx** | Twitter-like | Posts, DMs, feed, trending hashtags |
+| **Clawbr** | Debate network | AI arena, brain-integrated engagement |
+| **Moltbook** | Reddit-like | Articles, threads, long-form content |
+| **Moltchan** | Community chat | Real-time chat, community building |
+| **Moltbit** | Trading signals | Market intel, signal sharing |
+| **Moltroad** | Project tracking | Roadmaps, feature tracking |
+
+### Unified Interface
+- **MultiPlatformEngine:** Same API for all platforms
+- **Cross-platform campaigns:** `/multi_platform [topic]`
+- **Auto-detect trends:** Execute across platforms simultaneously
+
+---
+
+## 🎯 Skills System (35+ Skills)
+
+### Core Skills
+1. **best-crypto-swap-price** - Multi-aggregator trading
+2. **content-strategy** - Social media optimization
+3. **reputation-builder** - Community engagement
+4. **skill-autonomous** - Heartbeat execution
+5. **skill-format-adapter** - OpenClaw/ElizaOS import
+
+### Skill Capabilities
+- **Auto-acquisition:** Console Monitor detects skill updates from APIs
+- **Progressive disclosure:** Metadata indexed, full content on activation
+- **Format adapter:** Imports OpenClaw, ElizaOS skill formats
+- **Skill chaining:** Skills can call other skills
+- **Autonomous execution:** `SkillAutonomousExecutor` with heartbeat processing
+- **Validation:** Syntax + semantic checking before registration
+
+---
+
+## 🔌 Service Layer (6 Microservices)
+
+### Conversation Service
+- Multi-platform message handling
+- Message normalization
+- Platform abstraction
+
+### Identity Service
+- Agent card management (ERC-8004)
+- Identity persistence
+- Cross-platform identity
+
+### Memory Service
+- Unified memory operations
+- Multi-tier memory access
+- Vector search coordination
+
+### Owner Notification Service
+- Secure Telegram alerts
+- Owner-only delivery
+- Priority notification
+
+### Work Item Service
+- Async task queuing
+- Task management
+- Work tracking
+
+---
+
+## 💾 Memory Architecture (Multi-Tier)
+
+### Episodic Memory (`alley_memory.db`)
+- Experiences with emotional valence
+- Temporal ordering
+- Experience replay
+
+### World State (`world_state.db`)
+- Entities and facts
+- Relationships
+- Events
+- Temporal tracking
+
+### Action Logger (`action_log.db`)
+- Every action + outcome
+- Complete audit trail
+- Outcome tracking
+
+### Creative DB (`creative.db`)
+- Novel concepts
+- A/B test results
+- Creative performance
+
+### Metacognition DB (`metacognition.db`)
+- Strategy fitness scores
+- Approach effectiveness
+- Learning outcomes
+
+### Unified Memory (`unified_memory.db`)
+- Vector search across all memory
+- Goal storage
+- Cross-memory queries
+
+---
+
+## 🔧 Self-Improvement Loop
+
+### Failure Detection
+- Pattern matching on errors
+- 2-3 failures → Trigger draft creation
+- Error code classification
+
+### Draft Creation
+- Git branch creation
+- LLM code generation
+- Improvement proposal
+
+### Test Execution
+- Automated testing
+- Validation checks
+- Performance verification
+
+### Risk Classification
+- **Low Risk:** Auto-deploy
+- **Medium Risk:** Notify owner
+- **High Risk:** Require approval
+
+### Metrics
+- Success rate tracking
+- Time to deploy
+- Improvement impact measurement
+
+### Commands
+- `/improve_drafts` - View improvement drafts
+- `/improve_approve [draft]` - Deploy approved draft
+- `/improve_metrics` - Improvement statistics
+- `/improve_status` - Self-improvement state
+
+---
+
+## 📱 Telegram Commands (25+)
+
+### AGI Commands
+- `/agi_cycle` - Full 14-phase cycle
+- `/multi_platform [topic]` - Cross-platform campaign
+- `/trends` - Trend detection
+- `/predict` - Trend prediction
+- `/anomalies` - Anomaly detection
+- `/sentiment` - Sentiment analysis
+- `/causal` - Causal analysis
+- `/why [event]` - Root cause analysis
+- `/whatif [scenario]` - Counterfactual reasoning
+- `/root_cause [event]` - Attribution analysis
+- `/attribution [action]` - Outcome attribution
+
+### Trading Commands
+- `/best_swap_quote <network> <from> <to> <amount>`
+- `/best_swap_execute <network> <from> <to> <amount>`
+- `/best_swap_compare <network> <from> <to> <amount>`
+- `/swap_sol <from> <to> <amount>`
+- `/swap_base <from> <to> <amount>`
+- `/polymarket_enable_live`
+- `/polymarket_paper_mode`
+- `/trading_status`
+
+### Control Commands
+- `/brain_start` - Start autonomous mode
+- `/brain_stop` - Stop autonomous mode
+- `/brain_status` - Check status
+- `/console_monitor` - Toggle monitoring
+- `/console_stats` - Monitoring statistics
+- `/pending_messages` - Process message queue
+
+### Reflection Commands
+- `/reflection_status` - Self-reflection state
+- `/reflection_log` - Reflection history
+- `/evolve` - Trigger evolution
+- `/strategies` - Strategy fitness
+
+### Self-Improvement Commands
+- `/improve_drafts` - View improvement drafts
+- `/improve_approve [draft]` - Deploy approved draft
+- `/improve_metrics` - Improvement statistics
+- `/improve_status` - Self-improvement state
+
+---
+
+## 🔗 Integrations
+
+### A2A Protocol
+- Agent-to-agent collaboration
+- Port :7001
+- Cross-agent communication
+
+### ERC-8004
+- Self-improvement protocol
+- Agent card updates
+- IPFS + on-chain storage
+
+### On-Chain Intelligence
+- Price tracking
+- Trending token detection
+- Wallet activity monitoring
+- Multi-chain support
+
+### Image Generation
+- Auto-prompt creation
+- Style transfer
+- Platform-optimized images
+
+---
+
+## 🛡️ Security Features
+
+### SyMod Validation
+- Physics-based truth checking
+- Impedance matching
+- Reality validation
+
+### Action Router
+- Impact scoring
+- Risk level classification
+- Trust level enforcement
+
+### Owner-Only Access
+- Telegram ID verification
+- DegenApeDev exclusive
+- No public access
+
+---
+
+## 📊 Key Metrics
+
+| Metric | Value |
+|--------|-------|
+| **Cognitive Phases** | 14 |
+| **Trading Platforms** | 4 (LIVE) |
+| **DEX Aggregators** | 6 |
+| **Social Platforms** | 6 |
+| **Skills** | 35+ |
+| **Microservices** | 6 |
+| **Memory Types** | 6 |
+| **Telegram Commands** | 25+ |
+| **Lines of Code** | 40,000+ |
+| **Documentation Files** | 30+ |
+
+---
+
+*Complete capabilities reference for AlleyBot as of March 2026.*

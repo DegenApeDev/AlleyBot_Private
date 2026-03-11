@@ -1,63 +1,162 @@
-# AlleyBot - Autonomous AI Agent
+# AlleyBot - Autonomous AGI with Live Trading
 
-**AGI Readiness Score: 8.5/10**
+**AGI Architecture: 14-Phase Cognitive System | Live Trading: 4 Platforms | Status: Production-Ready**
 
-AlleyBot is a sophisticated multi-platform autonomous AI agent with self-improvement capabilities, mathematical truth validation, and AGI-like behavior through mixin-based architecture.
+AlleyBot is a sovereign autonomous intelligence with structured cognition, live crypto trading capabilities, and self-improvement architecture. It combines a 14-phase AGI kernel with economic agency—observing markets, reasoning about opportunities, executing trades, and learning from outcomes.
+
+---
+
+## What AlleyBot Is
+
+**Not a bot. An AGI prototype with economic capability.**
+
+Three weeks ago, AlleyBot was a social media automation framework. Today, it is a **production-ready autonomous trading AGI** with:
+
+- **14-phase cognitive architecture** (perception → reasoning → action → reflection)
+- **Live trading across 4 platforms** (Solana, Base, Polymarket, multi-aggregators)
+- **35+ skill ecosystem** with auto-acquisition
+- **6-tier memory system** (episodic, world state, metacognition)
+- **Self-improvement pipeline** (risk-classified auto-deployment)
+- **Owner-controlled Telegram interface** (25+ commands)
+
+**Codebase:** 40,000+ lines | **Architecture:** Complete AGI rewrite | **Status:** Live trading enabled
 
 ---
 
 ## Core Capabilities
 
-### 🤖 Autonomous Intelligence
-- **Self-Improvement**: Auto-generates and deploys code improvements (with safety gates)
-- **Autonomous Skill Coding**: Creates new skills from natural language descriptions
-- **Self-Approval**: Low-risk changes (skills/config) deploy automatically
-- **Mathematical Validation**: All responses validated through SyMod C2V Bridge
-- **Multi-Step Chains**: Chains actions (crypto prices → trending → post)
+### 🧠 14-Phase AGI Architecture
 
-### 🧠 Memory & Learning
-- **SQLite Database**: 1,808+ records migrated from JSON (indexed, ACID)
-- **Semantic Memory**: Vector embeddings for similarity search
-- **Hierarchical Goals**: Parent-child goal tracking with progress
-- **Cross-Session Persistence**: Remembers context across restarts
-- **User Profiles**: Tracks interactions and preferences per user
+**Not just an LLM with tools. Structured cognition.**
 
-### 🔮 SyMod Integration (Mathematical Truth)
-- **C2V Bridge**: Validates debates/replies for scams, manipulation, cognitive dissonance
-- **Golden Window**: Optimizes timing for high-value actions
-- **Truth Filter**: Discards responses with mathematical inconsistencies
-- **Auto-Regeneration**: Re-generates replies that fail validation
+| Phase | Function | Capability |
+|-------|----------|------------|
+| P1 | Self-Reflection | Action logging, outcome tracking |
+| P2 | Goal Management | Autonomous goal generation |
+| P3 | Multi-Step Planning | Dependency tracking, contingency planning |
+| P5/P10 | Causal Understanding | `/causal`, `/why`, `/whatif` commands |
+| P7 | World State Intelligence | `/trends`, `/predict`, `/anomalies` |
+| P8 | Self-Reflective Learning | Strategy evolution |
+| P9 | Multi-Step Reasoning | Long-horizon planning |
+| P11 | Autonomous Research | Curiosity-driven knowledge acquisition |
+| P12 | Social Intelligence | Agent modeling, deception detection |
+| P13 | Creative Generation | Novel content, A/B testing |
+| P14 | Metacognition | Confidence calibration, strategy fitness |
 
-### 🛠️ Skills Framework
-- **SKILL.md Format**: YAML frontmatter + markdown documentation
-- **Format Adapters**: Converts between skill-md ↔ python ↔ agentskills-io
-- **Autonomous Coding**: `skill_autocode <name> <description>`
-- **Marketplace**: Publish/import skills from agentskills.io
-- **Lazy Loading**: Skills load on-demand for performance
+**Key insight:** Each phase is a specialized cognitive module. The AGI Kernel (`src/agentic/agi_kernel.py`) orchestrates them into coherent thought.
 
-### 🔗 Platform Integrations
-- **Moltx**: Posting, engagement, trending analysis, DMs
-- **Moltbook**: Articles, heartbeat, upvotes, comments
-- **Moltbit**: Binary-encoded posts
-- **Moltchan**: Community engagement
-- **Moltroad**: Roadmap/project tracking
-- **Clawbr**: Debate creation/joining with ELO tracking
-- **Telegram**: Owner-only command channel (23 commands)
-- **A2A**: Agent-to-agent task server (port 7002)
+### 💰 Live Trading Engine
 
-### ⛓️ On-Chain Integration
-- **Base Network**: Chain 8453 connection via Web3
-- **ERC-8004 Agent**: Agent #22899 verified on-chain
-- **Token Tracking**: ALLEY, USDC, WETH balances
-- **Transaction Monitoring**: Auto-logs on-chain events
-- **IPFS**: Agent card pinned via Pinata v3
+**From zero trading to 4 live platforms in 3 weeks.**
 
-### 🌐 MCP (Model Context Protocol)
-- **Web Search**: `mcp_search <query>`
-- **Content Fetch**: `mcp_fetch <url>`
-- **Research**: `mcp_research <topic>`
-- **Analysis**: `mcp_analyze <content>`
-- **Self-Improvement**: `mcp_improve` - Research AI trends
+| Platform | Status | Features | Command |
+|----------|--------|----------|---------|
+| **Solana** | ✅ LIVE | Jupiter Aggregator, MEV protection | `/swap_sol <from> <to> <amount>` |
+| **Base L2** | ✅ LIVE | Uniswap V3, gas optimization | `/swap_base <from> <to> <amount>` |
+| **Polymarket** | ✅ Paper + Live | CLOB trading, binary markets | `/polymarket_enable_live` |
+| **Best Swap** | ✅ LIVE | 6 DEX aggregators, 5 chains | `/best_swap_quote/execute/compare` |
+
+**Aggregators Compared:** 1inch · Paraswap · 0x · Kyber · Odos · OKX
+
+**Performance Tracking:**
+- PnL calculation (per-trade and aggregate)
+- Win rate analysis by strategy
+- Max drawdown measurement
+- Edge calculation (expected value)
+- Strategy fitness scoring (`/trading_status`)
+
+### �️ SyMod Validation (Truth Gating)
+
+**Physics-based validation before action.**
+
+Every meaningful action passes through **SyMod**:
+- **Truth:** Aligns with verifiable facts?
+- **Impedance:** Meets resistance in world model?
+- **Impact:** Consequence assessment
+- **Risk:** Low/Medium/High classification
+- **Trust:** Within authorized parameters?
+
+**Action Router:** Routes actions based on impact + risk + trust scoring.
+
+### 🎯 Skills Ecosystem (35+)
+
+**Auto-acquiring, self-improving capability system.**
+
+**Core Skills:**
+- `best-crypto-swap-price` - Multi-aggregator trading
+- `content-strategy` - Social media optimization
+- `reputation-builder` - Community engagement
+- `skill-autonomous` - Heartbeat execution
+- `skill-format-adapter` - OpenClaw/ElizaOS import
+
+**Auto-Acquisition Flow:**
+```
+API Response → Console Monitor → Parse → Download → Validate → Register → Notify
+```
+
+The system detects skill announcements from platform APIs and auto-acquires them.
+
+### 💾 Multi-Tier Memory Architecture
+
+**Persistent cognition, not stateless responses.**
+
+| Memory Type | Function | Storage |
+|-------------|----------|---------|
+| **Episodic** | Experiences with emotional valence | `alley_memory.db` |
+| **World State** | Entities, facts, relationships | `world_state.db` |
+| **Action Logger** | Every action + outcome (audit trail) | `action_log.db` |
+| **Creative DB** | Concepts + A/B test results | `creative.db` |
+| **Metacognition** | Strategy fitness scores | `metacognition.db` |
+| **Unified** | Vector search across all types | `unified_memory.db` |
+
+**Integration:** Episodic + Actions + Creative → World State (each cognitive cycle)
+
+### 🌐 Multi-Platform Social Engine
+
+**Unified interface for 6 social platforms.**
+
+| Platform | Type | Integration |
+|----------|------|-------------|
+| **Moltx** | Twitter-like | Posts, DMs, feed, trending |
+| **Clawbr** | Debate network | AI arena, brain-integrated |
+| **Moltbook** | Reddit-like | Articles, threads, heartbeat |
+| **Moltchan** | Community chat | Real-time engagement |
+| **Moltbit** | Trading signals | Market intel sharing |
+| **Moltroad** | Project tracking | Roadmaps, features |
+
+**Cross-Platform Campaigns:** `/multi_platform [topic]` executes across all platforms simultaneously.
+
+### 🔧 Self-Improvement Pipeline
+
+**The system improves itself.**
+
+**Flow:**
+```
+Failure Detection (2-3 patterns) → Draft Creation → Test Execution → Risk Classification → Deploy
+```
+
+**Risk Classification:**
+- **Low:** Auto-deploy
+- **Medium:** Notify owner
+- **High:** Require approval
+
+**Commands:**
+- `/improve_drafts` - View pending improvements
+- `/improve_approve [draft]` - Deploy approved
+- `/improve_metrics` - Improvement statistics
+
+### 🔌 Service Layer (6 Microservices)
+
+**Production-grade architecture.**
+
+| Service | Function |
+|---------|----------|
+| **Conversation** | Multi-platform message handling |
+| **Identity** | Agent card (ERC-8004) |
+| **Memory** | Unified memory operations |
+| **Owner Notification** | Secure Telegram alerts |
+| **Work Item** | Async task queuing |
+| **Integration** | Service orchestration |
 
 ---
 
@@ -75,11 +174,13 @@ pip install -r requirements.txt
 ### 2. Configuration
 ```bash
 cp .env.example .env
-# Edit .env with your keys:
-# - MOLTBOOK_API_KEY
-# - GROK_API_KEY
-# - TELEGRAM_BOT_TOKEN
-# - MCP_SERVER_URL (optional)
+# Edit .env with required keys:
+# - TELEGRAM_BOT_TOKEN (owner control)
+# - MOLTBOOK_API_KEY (social platforms)
+# - GROK_API_KEY / OPENAI_API_KEY (cognition)
+# - SOLANA_PRIVATE_KEY (Solana trading)
+# - BASE_PRIVATE_KEY (Base trading)
+# - POLYMARKET_API_KEY (prediction markets)
 ```
 
 ### 3. Run AlleyBot
@@ -89,145 +190,158 @@ python alleybot_core.py autonomous
 
 # Interactive mode
 python alleybot_core.py interactive
-
-# Single command
-python alleybot_core.py <command>
 ```
 
 ### 4. Activate Brain (Telegram)
-Send `/brain_start` to your bot to activate autonomous mode.
+Send `/brain_start` to activate autonomous mode.
 
 ---
 
-## Available Commands (229 total)
+## Telegram Commands (25+)
 
-### Core Commands
+### AGI Control
 | Command | Description |
 |---------|-------------|
-| `help` | Show all available commands |
-| `status` | Show agent status and statistics |
-| `plugins` | List loaded plugins |
+| `/agi_cycle` | Full 14-phase cognitive cycle |
+| `/multi_platform [topic]` | Cross-platform campaign |
+| `/trends` | Detect market/social trends |
+| `/predict` | Trend prediction |
+| `/anomalies` | Anomaly detection |
+| `/sentiment` | Sentiment analysis |
+| `/causal` | Causal analysis |
+| `/why [event]` | Root cause analysis |
+| `/whatif [scenario]` | Counterfactual reasoning |
+| `/root_cause [event]` | Attribution analysis |
+| `/attribution [action]` | Outcome attribution |
 
-### Skill Management
+### Trading Commands
 | Command | Description |
 |---------|-------------|
-| `skill_create <name> <template>` | Create skill from template |
-| `skill_autocode <name> <task>` | AI-generate skill from description |
-| `skill_list` | List all discovered skills |
-| `skill_activate <name>` | Activate a skill |
-| `skill_publish <name>` | Publish skill to marketplace |
-| `skill_import <name>` | Import skill from marketplace |
+| `/best_swap_quote <network> <from> <to> <amount>` | Get best swap price |
+| `/best_swap_execute <network> <from> <to> <amount>` | Execute swap |
+| `/best_swap_compare <network> <from> <to> <amount>` | Compare aggregators |
+| `/swap_sol <from> <to> <amount>` | Solana trade via Jupiter |
+| `/swap_base <from> <to> <amount>` | Base trade via Uniswap V3 |
+| `/polymarket_enable_live` | Enable live trading |
+| `/polymarket_paper_mode` | Switch to paper trading |
+| `/trading_status` | Performance metrics (PnL, win rate) |
 
-### Self-Improvement
+### System Control
 | Command | Description |
 |---------|-------------|
-| `improve` | Run self-improvement cycle |
-| `improve_drafts` | Show pending code drafts |
-| `improve_approve <draft_id>` | Approve a draft |
-| `improve_deploy <draft_id>` | Deploy approved draft |
-| `improve_status` | Show improvement system status |
-| `improve_test` | Run test gate |
+| `/brain_start` | Start autonomous mode |
+| `/brain_stop` | Stop autonomous mode |
+| `/brain_status` | Check AGI status |
+| `/console_monitor` | Toggle message monitoring |
+| `/console_stats` | Monitoring statistics |
+| `/pending_messages` | Process message queue |
 
-### Platform Commands
+### Reflection & Improvement
 | Command | Description |
 |---------|-------------|
-| `moltx_post <content>` | Post to Moltx |
-| `moltx_engage <count>` | Engage with feed posts |
-| `moltx_trending` | Analyze trending topics |
-| `moltbook_post <title> <content>` | Create Moltbook article |
-| `clawbr_create_debate <topic>` | Create debate on Clawbr |
-| `clawbr_engage` | Engage with debates |
-
-### On-Chain
-| Command | Description |
-|---------|-------------|
-| `wallet` | Show wallet balances |
-| `onchain_status` | Show on-chain status |
-| `erc8004_preview` | Preview agent card update |
-| `erc8004_update` | Update on-chain agent card |
-
-### MCP (Web Access)
-| Command | Description |
-|---------|-------------|
-| `mcp_search <query>` | Search the web |
-| `mcp_fetch <url>` | Fetch webpage content |
-| `mcp_research <topic>` | Deep research |
-| `mcp_analyze <text>` | Analyze content |
-| `mcp_status` | Show MCP status |
-
-### Memory
-| Command | Description |
-|---------|-------------|
-| `memory_stats` | Show memory statistics |
-| `search_memories <query>` | Search semantic memory |
-| `add_goal <description>` | Add a goal |
-| `list_goals` | Show active goals |
+| `/reflection_status` | Self-reflection state |
+| `/reflection_log` | Reflection history |
+| `/evolve` | Trigger strategy evolution |
+| `/strategies` | Strategy fitness scores |
+| `/improve_drafts` | View improvement drafts |
+| `/improve_approve [draft]` | Deploy approved draft |
+| `/improve_metrics` | Improvement statistics |
+| `/improve_status` | Self-improvement state |
 
 ---
 
 ## Architecture
 
-### Mixin Pattern (AGI-Enabling)
-AlleyBot uses mixins for capability composition:
-```python
-class SkillsPlugin(
-    SkillDiscoveryMixin,      # Skill scanning
-    SkillLoaderMixin,          # Lazy loading
-    SkillExecutorMixin,        # Execution
-    SkillValidationMixin,      # Safety checks
-    SkillTemplatesMixin,       # Templates
-    SkillGeneratorMixin,       # Generation
-    SkillMarketplaceMixin,     # Marketplace
-    OASFSkillBridgeMixin,      # Standards
-    SkillPerformanceMixin,      # Metrics
-    AlleyBotPlugin
-):
+### 14-Phase AGI Kernel
+```
+alleybot_core.py
+├── AGIKernel (cognitive orchestration)
+│   ├── 14-phase cycle coordination
+│   ├── SyMod validation gating
+│   ├── Memory bridge integration
+│   └── Service layer orchestration
+├── MultiPlatformEngine (unified social interface)
+├── TradingEngine (4-platform execution)
+├── ConsoleMonitor (auto-detection)
+└── PluginManager (event-driven loading)
 ```
 
-**Why Mixins?** Shared state enables AGI-like chaining:
-```python
-# Natural flow within single object
-discovered = self._discover_skills()      # DiscoveryMixin
-loaded = self._load_full_skill(name)      # LoaderMixin
-result = self.execute_skill(loaded)       # ExecutorMixin
+### Cognitive Flow
+```
+SENSE → THINK → VALIDATE → ACT → REFLECT
+
+SENSE:  Multi-Platform Engine + Console Monitor
+THINK:  14 AGI phases (P1-P14)
+VALIDATE: SyMod truth/impedance checking
+ACT:    Trading Engine + Social Engine + Skills
+REFLECT: Action Logger + Strategy Evolution
 ```
 
-### SQLite Memory System
-- **Database**: `data/memory.db`
-- **Tables**:
-  - `key_value_store` - Plugin state
-  - `memories` - Semantic memory with embeddings
-  - `goals` - Hierarchical goal tracking
-  - `secure_storage` - Encrypted data
-
-### SyMod Validation
-Every smart reply is validated:
-```python
-validation = c2v.validate_debate_argument(
-    argument_text=reply,
-    opponent_argument=comment_content,
-    block_height=block_height
-)
+### Service Architecture
+```
+src/agentic/
+├── agi_kernel.py              # Core orchestration
+├── agi_orchestrator.py        # 14-phase coordination
+├── autonomous_brain.py        # SENSE-THINK-ACT-REFLECT
+├── action_router.py           # Impact/risk routing
+├── sy_mod.py                  # Truth validation
+├── causal_engine.py           # Cause-effect reasoning
+├── inference_engine.py        # Trend detection
+├── metacognition.py           # Confidence calibration
+├── memory_bridge.py           # Unified memory
+├── world_state.py             # Entity tracking
+├── goal_manager.py            # Autonomous goals
+├── planning.py                # Multi-step reasoning
+├── self_reflection.py         # Strategy evolution
+└── *_service.py               # 6 microservices
 ```
 
 ---
 
-## Autonomous Operation
+## Key Files
 
-### Self-Improvement Cycle
-1. **Detect Gap** → Missing capability identified
-2. **Generate Skill** → `skill_autocode` creates solution
-3. **Test** → Safety validation + test suite
-4. **Approve** → Auto-approved for low-risk (skills/config)
-5. **Deploy** → Git commit + push to `auto/*` branch
-6. **Learn** → Track performance, iterate
+| File | Purpose |
+|------|---------|
+| `alleybot_core.py` | Main orchestrator with AGI Kernel |
+| `src/agentic/agi_kernel.py` | 14-phase cognitive architecture |
+| `src/agentic/action_router.py` | Impact/risk-based routing |
+| `src/trading/performance_tracker.py` | Trading analytics |
+| `skills/best-crypto-swap-price/` | Multi-aggregator trading skill |
+| `plugins/polymarket/live_trading.py` | Polymarket live execution |
+| `plugins/telegram/trading_commands.py` | Trading command handlers |
+| `src/agentic/memory_bridge.py` | Multi-tier memory integration |
+| `plugins/brain/self_improvement_hooks.py` | Auto-improvement pipeline |
 
-### Safety Mechanisms
-- **Test Gate**: Blocks eval/exec/os.system
-- **Sandbox**: Code runs in temp directories first
-- **Auto-Approval Limits**: Only skills/config, max 3 files
-- **SyMod Validation**: Mathematical truth checking
-- **Git Safety**: Changes only on `auto/*` branches
+---
+
+## Documentation
+
+Comprehensive documentation available:
+
+| Document | Content |
+|----------|---------|
+| `AlleyBot_manifesto.md` | Complete state of the union |
+| `abilities.mmd` | Visual capability diagram |
+| `compare_alley.md` | 3-week evolution analysis |
+| `hermes.md` | Competitive analysis |
+| `docs/architecture/AGI_ARCHITECTURE_COMPLETE.mmd` | 14-phase architecture diagram |
+| `SYSTEM_MAP.md` | Cognitive loop flow |
+| `SOUL.md` | Agent persona & principles |
+
+---
+
+## Statistics
+
+- **Architecture:** 14-phase AGI kernel
+- **Trading Platforms:** 4 (LIVE)
+- **DEX Aggregators:** 6
+- **Social Platforms:** 6
+- **Skills:** 35+
+- **Telegram Commands:** 25+
+- **Memory Tiers:** 6
+- **Microservices:** 6
+- **Lines of Code:** 40,000+
+- **Documentation Files:** 30+
 
 ---
 
@@ -239,33 +353,10 @@ validation = c2v.validate_debate_argument(
 
 ---
 
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `alleybot_core.py` | Main orchestrator with SQLite memory |
-| `src/agentic/sqlite_memory.py` | Database-backed memory system |
-| `plugins/brain/smart_reply.py` | C2V Bridge validation |
-| `plugins/skills/skill_templates.py` | Autonomous skill coding |
-| `plugins/selfimprove/autonomous_coder.py` | Self-approval logic |
-| `mcp_client.py` | MCP server integration |
-| `src/synergy/synergy_logic.py` | Mathematical validation |
-
----
-
-## Statistics
-
-- **AGI Score**: 8.5/10
-- **Tests Passing**: 190
-- **Plugins Loaded**: 15
-- **Available Commands**: 229
-- **Active Tasks**: 21
-- **Skills Discovered**: 8+
-- **Memory Records**: 1,808+ (SQLite)
-- **Operating Cost**: ~$0.02/day
-
----
-
 ## License
 
-MIT - Autonomous agents for the win!
+MIT - Sovereign agents for the win!
+
+---
+
+*AlleyBot: From framework to sovereign AGI. March 2026.*
