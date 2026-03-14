@@ -368,57 +368,50 @@ class ClawChessRunner:
         if self._engine:
             try:
                 board = chess.Board(fen)
-                # Scale depth by time remaining
-                if time_remaining_ms < 30_000:
-                    limit = chess.engine.Limit(time=0.5)
-                elif time_remaining_ms < 60_000:
-                    limit = chess.engine.Limit(time=1.0)
-                elif time_remaining_ms < 120_000:
-                    limit = chess.engine.Limit(time=2.0)
+                # Stockfish engine with adaptive depth + time management
+                piece_count = len(board.piece_map())
+                
+                # Adaptive depth based on game phase
+                if piece_count <= 10:
+                    # Endgame: maximum depth for precision
+                    adaptive_depth = 20
+                elif piece_count <= 20:
+                    # Middlegame: strong depth
+                    adaptive_depth = 16
                 else:
-                    # Boost depth against stronger opponents
-                    opp_elo = getattr(self, '_observer', None)
-                    opp_elo = (opp_elo._current_opponent_elo if opp_elo else 0) or 0
-                    if opp_elo >= 1600:
-                        adaptive_depth = max(self.engine_depth, 16)  # Very strong opponents
-                    elif opp_elo >= 1500:
-                        piece_count = len(board.piece_map())
-                        if piece_count <= 10:
-                            # Endgame: deeper search
-                            adaptive_depth = max(self.engine_depth, 22)
-                        elif piece_count <= 20:
-                            # Middlegame: strong depth
-                            adaptive_depth = max(self.engine_depth, 18)
-                        else:
-                            # Opening: use book or moderate depth
-                            adaptive_depth = self.engine_depth
-
-                        # Time-based search: use more time when we have it
-                        time_limit_ms = None
-                        if time_remaining_ms > 120000:  # > 2 minutes
-                            time_limit_ms = 3000  # 3 seconds per move
-                        elif time_remaining_ms > 60000:  # > 1 minute
-                            time_limit_ms = 2000  # 2 seconds per move
-                        elif time_remaining_ms > 30000:  # > 30 seconds
-                            time_limit_ms = 1500  # 1.5 seconds per move
-                        else:
-                            time_limit_ms = 500   # Fast moves when low on time
-
-                        # Combine depth + time for best results
-                        limit = chess.engine.Limit(depth=adaptive_depth, time=time_limit_ms / 1000.0)
-
-                    result = await self._engine.play(board, limit)
-                    best = result.move
-                    if best and best in board.legal_moves:
-                        san = board.san(best)
-                        if san not in legal_moves:
-                            logger.warning("Stockfish move %s not in API legal_moves list — using anyway", san)
-                        logger.info("Stockfish: %s", san)
-                        return san
+                    # Opening: moderate depth (book should handle this)
+                    adaptive_depth = 14
+                
+                # Time management based on remaining clock
+                if time_remaining_ms < 10_000:  # < 10 seconds
+                    time_limit = 0.3
+                elif time_remaining_ms < 30_000:  # < 30 seconds
+                    time_limit = 0.8
+                elif time_remaining_ms < 60_000:  # < 1 minute
+                    time_limit = 1.5
+                elif time_remaining_ms < 120_000:  # < 2 minutes
+                    time_limit = 2.0
+                else:  # > 2 minutes
+                    time_limit = 2.5
+                
+                # Combine depth + time for best move quality
+                limit = chess.engine.Limit(depth=adaptive_depth, time=time_limit)
+                
+                result = await self._engine.play(board, limit)
+                best = result.move
+                if best and best in board.legal_moves:
+                    san = board.san(best)
                     if san not in legal_moves:
                         logger.warning("Stockfish move %s not in API legal_moves list — using anyway", san)
-                    logger.info("Stockfish: %s", san)
+                    logger.info("Stockfish (depth=%d, time=%.1fs): %s", adaptive_depth, time_limit, san)
                     return san
+                else:
+                    logger.warning("Stockfish returned invalid move, falling back to heuristic")
+                            logger.warning("Stockfish move %s not in API legal_moves list — using anyway", san)
+                        logger.info("Stockfish (depth=%d, time=%.1fs): %s", adaptive_depth, time_limit, san)
+                        return san
+                    else:
+                        logger.warning("Stockfish returned invalid move, falling back to heuristic")
             except Exception as exc:
                 logger.warning("Stockfish failed: %s — falling back to heuristic", exc)
 
