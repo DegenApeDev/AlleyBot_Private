@@ -33,16 +33,22 @@ class BrainCommands:
         return self._core
     
     async def _get_brain(self):
-        """Lazy-get brain instance (non-blocking)"""
+        """Get brain instance from AGI Kernel (or create if needed)"""
         if self._brain is None:
             core = self._get_core()
-            if core and hasattr(core, 'plugin_manager'):
-                # Run in executor to avoid blocking
-                loop = asyncio.get_running_loop()
-                def create_brain():
-                    from src.agentic.autonomous_brain import AutonomousBrain
-                    return AutonomousBrain(core, core.plugin_manager)
-                self._brain = await loop.run_in_executor(None, create_brain)
+            if core:
+                # First try to get existing brain from AGI Kernel
+                if hasattr(core, 'agi') and hasattr(core.agi, 'autonomous_brain'):
+                    self._brain = core.agi.autonomous_brain
+                    logger.info("✅ Using existing brain from AGI Kernel")
+                # Fallback: create new brain if needed
+                elif hasattr(core, 'plugin_manager'):
+                    loop = asyncio.get_running_loop()
+                    def create_brain():
+                        from src.agentic.autonomous_brain import AutonomousBrain
+                        return AutonomousBrain(core, core.plugin_manager)
+                    self._brain = await loop.run_in_executor(None, create_brain)
+                    logger.info("⚠️ Created new brain instance (AGI Kernel not available)")
         return self._brain
     
     async def brain_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
