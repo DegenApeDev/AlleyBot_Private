@@ -275,7 +275,7 @@ class ConversationService:
         request: ConversationRequest,
         context: ConversationContext,
     ) -> ConversationResponse:
-        """Handle freeform conversational message."""
+        """Handle freeform conversational message - with action intent detection."""
         
         # Check for identity questions first
         if self._is_identity_question(request.message_text):
@@ -286,7 +286,14 @@ class ConversationService:
                 identity_validated=True,
             )
         
-        # Build prompt with full context
+        # Step 1: Check for natural language action intent
+        intent_result = self._detect_action_intent(request.message_text)
+        if intent_result:
+            command_name, confidence, args = intent_result
+            print(f"🎯 Natural intent detected: {command_name} (confidence: {confidence:.2f})")
+            return await self._execute_natural_intent(request, context, command_name, args)
+        
+        # Step 2: No action intent detected - proceed with chat
         system_prompt = self.get_system_prompt(request)
         user_prompt = self._build_user_prompt(request, context)
         
@@ -333,6 +340,122 @@ class ConversationService:
     # ------------------------------------------------------------------
     # Helper Methods
     # ------------------------------------------------------------------
+    
+    def _detect_action_intent(self, message_text: str) -> Optional[tuple]:
+        """
+        Detect if user message contains an action intent using NaturalIntentClassifier.
+        
+        Returns:
+            Tuple of (command_name, confidence, extracted_args) or None
+        """
+        try:
+            # Import the natural intent classifier
+            from plugins.telegram.natural_intent_classifier import get_natural_intent_classifier
+            
+            # Get or create classifier
+            classifier = get_natural_intent_classifier()
+            
+            # Auto-register commands if not already done
+            if not classifier.command_embeddings and self.plugin_manager:
+                classifier.register_commands_from_plugin_manager(self.plugin_manager)
+            
+            # Classify the intent
+            result = classifier.classify_intent(message_text)
+            if result:
+                command_name, confidence = result
+                # Extract arguments
+                args = classifier.extract_arguments(message_text, command_name)
+                return (command_name, confidence, args)
+            
+        except Exception as e:
+            print(f"⚠️ Intent detection error: {e}")
+        
+        return None
+    
+    async def _execute_natural_intent(
+        self,
+        request: ConversationRequest,
+        context: ConversationContext,
+        command_name: str,
+        args: dict
+    ) -> ConversationResponse:
+        """
+        Execute a natural language intent through the ActionRouter.
+        
+        This is the key method that makes AlleyBot actually DO things
+        instead of just chatting about them.
+        """
+        # Build action envelope
+        action = ActionEnvelope(
+            plugin="telegram",  # Route through telegram for natural language
+            action_type=f"natural_intent_{command_name}",
+            params={
+                "command": command_name,
+                "args": args,
+                "original_message": request.message_text,
+                "sender_id": request.sender_id,
+                "is_owner": request.is_owner,
+            },
+            context={
+                "conversation_id": request.conversation_id,
+                "trust_level": request.trust_level.value,
+                "source": "conversation_service_natural_intent",
+                "extracted_args": args,
+            },
+        )
+        
+        # Execute through ActionRouter or AGI Kernel
+        try:
+            print(f"🔄 Executing natural intent: {command_name} with action type: natural_intent_{command_name}")
+            if self.core and hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
+                result = await self.core.agi_kernel.act(action.to_dict())
+                print(f"📊 Action result: {result}")
+                
+                # Format response based on result
+                if result.get('success'):
+                    response_text = result.get('message', f"✅ Executed {command_name}")
+                    response_type = "action_confirmation"
+                else:
+                    error = result.get('error', 'Unknown error')
+                    response_text = f"❌ Failed to execute {command_name}: {error}"
+                    response_type = "action_error"
+                
+                return ConversationResponse(
+                    response_text=response_text,
+                    response_type=response_type,
+                    executed_action=command_name,
+                    identity_validated=True,
+                )
+            else:
+                # Fallback: try to execute directly through plugin manager
+                if self.plugin_manager and command_name in self.plugin_manager.commands:
+                    func = self.plugin_manager.commands[command_name]
+                    # Call with extracted args
+                    if args:
+                        result = func(**args)
+                    else:
+                        result = func()
+                    
+                    return ConversationResponse(
+                        response_text=str(result) if result else f"✅ Executed {command_name}",
+                        response_type="action_confirmation",
+                        executed_action=command_name,
+                        identity_validated=True,
+                    )
+                else:
+                    return ConversationResponse(
+                        response_text=f"⚠️ AGI Kernel unavailable and command {command_name} not found in plugins",
+                        response_type="error",
+                    )
+                    
+        except Exception as e:
+            print(f"❌ Natural intent execution error: {e}")
+            import traceback
+            traceback.print_exc()  # Print full stack trace to console
+            return ConversationResponse(
+                response_text=f"❌ Failed to execute {command_name}: {str(e)[:200]}",
+                response_type="error",
+            )
     
     def _is_identity_question(self, text: str) -> bool:
         """Check if message is asking about identity/self."""

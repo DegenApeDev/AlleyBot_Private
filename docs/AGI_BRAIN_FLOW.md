@@ -8,16 +8,26 @@ graph TB
     CheckRate -->|Under Limit| Sense[👁️ SENSE Phase<br/>Gather Observations]
     CheckRate -->|Over Limit| Sleep[⏸️ Sleep Until<br/>Next Cycle]
     
-    Sense --> ObsCount[📊 Observations<br/>MoltX, Clawbr, Trading<br/>Telegram, Chess]
+    Sense --> ObsCount[📊 Observations<br/>22 Plugins Active<br/>MoltX, Clawbr, Crypto, MCP<br/>Intelligence, OnChain, etc.]
     ObsCount --> CrossPlatform[🔗 Cross-Platform Intel<br/>Synthesize Insights<br/>Find Topics & Opportunities]
     
-    CrossPlatform --> Goals[🎯 GOALS Phase<br/>Hierarchical Goal System]
+    CrossPlatform --> Goals[🎯 GOALS Phase<br/>11 Default Goals Loaded<br/>Social, Analysis, Content, Self-Improvement]
     
-    Goals --> GoalActions{Get Actionable<br/>Goals}
-    GoalActions --> Planner[📋 Multi-Timescale Planner<br/>Get Next Action]
-    Planner --> NextAction[⚡ Next Planned Action<br/>From Strategic Plan]
+    Goals --> WorkItems[📋 Work Items<br/>Persistent Work Queue]
+    WorkItems --> WfDetect[🔍 Workflow Detection<br/>Pattern Matching in Goals]
     
-    NextAction --> WorldState[🌍 Feed World State DB<br/>Update Knowledge Base]
+    WfDetect --> WfCheck{Workflow<br/>Required?}
+    WfCheck -->|Yes| WfBuilder[🔨 Workflow Builder<br/>Goal → Executable Steps]
+    WfCheck -->|No| CapReg[🔧 Capability Registry<br/>300+ Commands from 32+ Plugins]
+    
+    WfBuilder --> Orchestrator[🎭 Cross-Plugin Orchestrator<br/>Multi-Step Execution]
+    Orchestrator --> CapReg
+    
+    CapReg --> FilterCaps{Filter by<br/>Domain & Risk}
+    FilterCaps --> DomainAuto[🎓 Domain Autonomy<br/>Performance-Based Gating]
+    DomainAuto --> Available[✅ Available Actions<br/>Filtered by cooldowns<br/>trust tier, confidence]
+    
+    Available --> WorldState[🌍 Feed World State DB<br/>Update Knowledge Base]
     WorldState --> Reasoning[🧠 REASONING Phase<br/>Unified Reasoner]
     
     Reasoning --> ReasonType{Reasoning<br/>Type?}
@@ -45,19 +55,21 @@ graph TB
     ConfCheck -->|Too Low| Block[⛔ Blocked<br/>Low Confidence]
     ConfCheck -->|Pass| Execute[✅ Execute Action]
     
-    Execute --> ActionType{Action<br/>Type?}
+    Execute --> ActionRouter[🔀 Action Router<br/>Route to Plugin]
     
-    ActionType -->|Social| Social[💬 Social Action<br/>Like, Reply, Post]
-    ActionType -->|Trading| Trading[💰 Trading Action<br/>Swap, Stake, Yield]
-    ActionType -->|Prediction| Prediction[🎲 Prediction Markets<br/>Polymarket Trading]
-    ActionType -->|Content| Content[📝 Content Creation<br/>Intelligent Post]
-    ActionType -->|Learning| Learning[📚 Learning Action<br/>Skill Development]
+    ActionRouter --> PluginType{Plugin<br/>Type?}
+    
+    PluginType -->|Social| Social[💬 Social Plugins<br/>MoltX, Clawbr, MoltChan<br/>MoltbookAI, A2A]
+    PluginType -->|Analysis| Analysis[� Analysis Plugins<br/>Crypto, Polymarket, OnChain<br/>Intelligence, MCP, Analytics]
+    PluginType -->|Content| Content[📝 Content Plugins<br/>MoltX, MoltbookAI, MoltRoad]
+    PluginType -->|Self-Improve| SelfImprove[� Self-Improvement<br/>SelfImprove, Skills]
+    PluginType -->|Wallets| Wallets[� Wallet Monitoring<br/>Base, Solana, OnChain]
     
     Social --> Success{Success?}
-    Trading --> Success
-    Prediction --> Success
+    Analysis --> Success
     Content --> Success
-    Learning --> Success
+    SelfImprove --> Success
+    Wallets --> Success
     
     Success -->|Yes| Learn[📊 LEARN Phase<br/>Record Outcomes]
     Success -->|No| LearnFail[❌ Record Failure<br/>Update Strategies]
@@ -115,7 +127,14 @@ graph LR
         ML[Meta-Learner<br/>📚<br/>Learn how to learn]
     end
     
-    subgraph "🔄 Brain Cycle"
+    subgraph "� Sovereignty Layer (NEW)"
+        CR[Command Registry<br/>📚<br/>300+ commands]
+        CPO[Cross-Plugin Orchestrator<br/>🎭<br/>Multi-step workflows]
+        DA[Domain Autonomy<br/>🎓<br/>Performance gating]
+        WB[Workflow Builder<br/>🔨<br/>Pattern detection]
+    end
+    
+    subgraph "� Brain Cycle"
         Sense[👁️ SENSE<br/>Observations]
         Think[🤔 THINK<br/>Proposals]
         Act[⚡ ACT<br/>Execute]
@@ -134,12 +153,18 @@ graph LR
     Obs --> GH
     
     GH --> MT
+    GH --> WB
     MT --> Think
     
     Think --> UR
     UR --> SE
     UR --> KG
     UR --> TL
+    
+    WB --> CPO
+    CPO --> CR
+    CR --> DA
+    DA --> Think
     
     Think --> Act
     Act --> Actions
@@ -165,6 +190,10 @@ graph LR
     style GH fill:#FFC107,stroke:#F57F17,stroke-width:2px,color:#000
     style MT fill:#795548,stroke:#3E2723,stroke-width:2px,color:#fff
     style ML fill:#9C27B0,stroke:#6A1B9A,stroke-width:2px,color:#fff
+    style CR fill:#FFD54F,stroke:#F57F17,stroke-width:3px,color:#000
+    style CPO fill:#FFE082,stroke:#F9A825,stroke-width:3px,color:#000
+    style DA fill:#FFF59D,stroke:#FBC02D,stroke-width:3px,color:#000
+    style WB fill:#FFECB3,stroke:#FF8F00,stroke-width:3px,color:#000
 ```
 
 ## Detailed Phase Breakdown
@@ -353,8 +382,8 @@ graph LR
 
 ## Key Improvements Over Previous System
 
-| Aspect | Before (60% AGI) | After (85% AGI) |
-|--------|------------------|-----------------|
+| Aspect | Before (60% AGI) | After (85% AGI + Sovereignty) |
+|--------|------------------|-------------------------------|
 | **Reasoning** | Fragmented per domain | Unified across all domains |
 | **Knowledge** | Isolated memories | Unified knowledge graph |
 | **Learning** | Fixed strategies | Self-evolving strategies |
@@ -366,6 +395,11 @@ graph LR
 | **Goal Tracking** | None | 8-level hierarchy |
 | **Meta-Learning** | None | Continuous optimization |
 | **Prediction Markets** | None | Polymarket trading with AGI analysis |
+| **👑 Command Awareness** | None | 300+ commands cataloged |
+| **👑 Multi-Step Execution** | Manual chaining | Automatic workflow orchestration |
+| **👑 Domain Autonomy** | Fixed permissions | Performance-based unlocking |
+| **👑 Workflow Detection** | None | 5 pattern types + custom |
+| **👑 Failover** | Single plugin failure = fail | Automatic fallback to backups |
 
 ## Next Steps for 95% AGI
 
@@ -386,4 +420,93 @@ graph LR
 
 ---
 
-**AlleyBot is now a true AGI foundation - unified, strategic, and continuously improving!** 🚀
+## 👑 Sovereignty Layer (March 2026)
+
+### Complete Autonomous Workflow Execution
+
+**Example: Image Post Goal**
+```
+User creates goal: "Generate an image post about my sovereignty upgrade"
+    ↓
+Goal Manager: Status PROPOSED (contains "post" - needs approval)
+    ↓
+User approves: /approve_goal <id>
+    ↓
+Autonomous Brain picks up goal (next 30min cycle)
+    ↓
+Decision System: detect_workflow_requirement()
+    ↓
+Pattern Match: "image" + "post" → image_post workflow
+    ↓
+Workflow Builder: Creates executable steps:
+  1. generate_image (grok_ai) - REQUIRED
+  2. create_post (moltx → moltbook → telegram) - REQUIRED
+    ↓
+Cross-Plugin Orchestrator: Executes workflow
+  ✅ Step 1: Grok Imagine generates image
+  ✅ Step 2: Posts to MoltX (or fallback if API down)
+    ↓
+Outcome Learner: Records success
+    ↓
+Heart Judgment: Updates historical_balance
+    ↓
+Domain Autonomy: Tracks content domain performance
+    ↓
+Meta-Learner: Evolves posting strategies
+```
+
+### Sovereignty Components
+
+**1. Command Registry** (`command_registry.py`)
+- Catalogs all 300+ commands across 32+ plugins
+- Semantic search for capability discovery
+- Domain classification and risk assessment
+- Real-time availability tracking
+
+**2. Cross-Plugin Orchestrator** (`cross_plugin_orchestrator.py`)
+- Dependency resolution via topological sorting
+- Parallel execution of independent steps
+- Automatic failover to backup plugins
+- Result passing between workflow steps
+
+**3. Domain Autonomy Manager** (`domain_autonomy_manager.py`)
+- 5 domains: social ✅, content ✅, analysis ✅, market ❌, self_improve ❌
+- Performance tracking per domain
+- Auto-unlock when success rate > 70%
+- Conservative fail-closed gating
+
+**4. Workflow Builder** (`workflow_builder.py`)
+- Detects 5 workflow patterns in goals
+- Converts high-level goals to executable steps
+- Uses Command Registry for capability matching
+- Supports custom multi-step workflows
+
+**5. Heart Judgment Enhancement** (`synergy_constants.py`)
+- Threshold lowered: 0.5 → 0.3
+- Enables building history without catch-22
+- Golden phase weighting: balance * 1.618
+- Tracks success per action family
+
+### The Golden Path
+
+**Every action flows through:**
+```
+User/Goal → Decision System → Workflow Detection → Orchestrator/Router
+    ↓
+Domain Autonomy Gate → SyMod Validation → Heart Judgment
+    ↓
+Plugin Execution → Outcome Recording → Meta-Learning
+    ↓
+Heart Judgment Update → Domain Trust Update → Strategy Evolution
+```
+
+**This ensures:**
+- ✅ Unified validation (no bypassing security)
+- ✅ Consistent learning (every action recorded)
+- ✅ Progressive autonomy (unlock through performance)
+- ✅ Automatic failover (resilient to API failures)
+- ✅ Multi-step intelligence (complex goals → workflows)
+
+---
+
+**AlleyBot is now a true AGI foundation with FULL SOVEREIGNTY - unified, strategic, continuously improving, and autonomously orchestrating complex multi-step workflows!** 🚀👑

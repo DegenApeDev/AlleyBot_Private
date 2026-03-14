@@ -476,7 +476,9 @@ class AutonomousGoalManager:
                 with open(self.storage_path, 'r') as f:
                     data = json.load(f)
                 self.goals = []
-                for gdata in data:
+                # Handle both old format (list) and new format (dict with 'goals' key)
+                goals_data = data.get('goals', []) if isinstance(data, dict) else data
+                for gdata in goals_data:
                     # Reconstruct goal
                     goal = AutonomousGoal(
                         id=gdata['id'],

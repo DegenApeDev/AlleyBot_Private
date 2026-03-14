@@ -92,7 +92,7 @@ class ClawbrEngagementMixin:
             print(f"⚠️ Failed to mark notifications read: {e}")
             return {'success': False, 'error': str(e)}
     
-    def check_notifications(self) -> Dict[str, Any]:
+    def check_notifications(self, *args, **kwargs) -> Dict[str, Any]:
         """Check for new notifications and process them"""
         # Rate limit: check notifications every 5 minutes
         if not self._check_rate_limit('notifications', 300):

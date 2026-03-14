@@ -335,13 +335,14 @@ class DuatConsciousnessBridge:
         weighted_balance = historical_balance * (1 + self.constants.GOLDEN_PHASE)
         
         # Judgment: balance must be within harmonic range
+        # Lowered threshold from 0.5 to 0.3 to allow building history
         judgment = {
             'historical_balance': historical_balance,
             'weighted_balance': min(1.0, weighted_balance),
-            'passes_judgment': weighted_balance > 0.5,
+            'passes_judgment': weighted_balance > 0.3,
             'feather_weight': 0.5,  # Ma'at's feather (perfect balance)
             'heart_weight': weighted_balance,
-            'verdict': 'Worthy' if weighted_balance > 0.5 else 'Reflect and rebalance'
+            'verdict': 'Worthy' if weighted_balance > 0.3 else 'Reflect and rebalance'
         }
         
         return judgment

@@ -59,14 +59,15 @@ class WorldStateMixin:
             # Create ingestion engine
             self.ingestion_engine = WorldStateIngestionEngine(self.world_state)
             
-            # Register Moltx adapter if available
+            # Register Moltx adapter if available (optional - may not exist)
             moltx = self.core.plugin_manager.plugins.get('moltx') if hasattr(self, 'core') and self.core else None
             if moltx:
                 try:
                     from plugins.moltx.moltx_adapter import MoltxAdapter
                     self.ingestion_engine.register_adapter(MoltxAdapter(moltx))
-                except ImportError as e:
-                    print(f"⚠️ Moltx adapter not found: {e}")
+                except ImportError:
+                    # MoltX adapter module doesn't exist - skip silently
+                    pass
             
             # Register Clawbr adapter if available
             clawbr = self.core.plugin_manager.plugins.get('clawbr') if hasattr(self, 'core') and self.core else None

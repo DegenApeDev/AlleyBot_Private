@@ -7,10 +7,13 @@ continuity across cycles and restarts.
 """
 
 import json
+import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class WorkItemManager:
@@ -36,10 +39,12 @@ class WorkItemManager:
 
     def _init_db(self) -> None:
         with self._get_connection() as conn:
+            # Create table if not exists
             conn.execute(
                 '''
                 CREATE TABLE IF NOT EXISTS work_items (
                     id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL DEFAULT '',
                     type TEXT NOT NULL,
                     source TEXT NOT NULL,
                     summary TEXT NOT NULL,
@@ -61,6 +66,14 @@ class WorkItemManager:
                 )
                 '''
             )
+            # Migration: Add missing columns if they don't exist
+            self._migrate_add_column(conn, 'title', 'TEXT NOT NULL DEFAULT \'\'')  
+            self._migrate_add_column(conn, 'status', 'TEXT DEFAULT \'active\'')
+            self._migrate_add_column(conn, 'blocked_reason', 'TEXT')
+            self._migrate_add_column(conn, 'capability_gap_hint', 'TEXT')
+            self._migrate_add_column(conn, 'last_attempt_at', 'TEXT')
+            self._migrate_add_column(conn, 'last_outcome', 'TEXT')
+            
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_work_items_status ON work_items(status)"
             )
@@ -74,6 +87,18 @@ class WorkItemManager:
                 "CREATE INDEX IF NOT EXISTS idx_work_items_last_seen ON work_items(last_seen_at DESC)"
             )
             conn.commit()
+
+    def _migrate_add_column(self, conn: sqlite3.Connection, column: str, col_type: str) -> None:
+        """Add a column if it doesn't exist (handles schema migrations)."""
+        try:
+            conn.execute(f"SELECT {column} FROM work_items LIMIT 1")
+        except sqlite3.OperationalError as e:
+            if "no such column" in str(e).lower():
+                logger.info(f"🔄 Migrating database: adding column '{column}'")
+                conn.execute(f"ALTER TABLE work_items ADD COLUMN {column} {col_type}")
+                conn.commit()
+            else:
+                raise
 
     def upsert_work_item(self, item: Dict[str, Any]) -> bool:
         if not item or not item.get('id'):
@@ -102,12 +127,13 @@ class WorkItemManager:
             conn.execute(
                 '''
                 INSERT INTO work_items (
-                    id, type, source, summary, goal_id, source_event_id,
-                    source_entity_id, recommended_action_family, urgency, status,
+                    id, title, type, source, summary, goal_id, source_event_id,
+                    source_entity_id, recommended_action_family, urgency, status, state,
                     topic, metadata, first_seen_at, last_seen_at, updated_at,
                     last_attempt_at, last_outcome, blocked_reason, capability_gap_hint
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
+                    title = excluded.title,
                     type = excluded.type,
                     source = excluded.source,
                     summary = excluded.summary,
@@ -120,6 +146,10 @@ class WorkItemManager:
                         WHEN work_items.status IN ('completed', 'abandoned') AND excluded.status = 'active' THEN work_items.status
                         ELSE COALESCE(excluded.status, work_items.status)
                     END,
+                    state = CASE
+                        WHEN work_items.state IN ('completed', 'abandoned') AND excluded.state = 'active' THEN work_items.state
+                        ELSE COALESCE(excluded.state, work_items.state)
+                    END,
                     topic = COALESCE(excluded.topic, work_items.topic),
                     metadata = excluded.metadata,
                     last_seen_at = excluded.last_seen_at,
@@ -131,6 +161,7 @@ class WorkItemManager:
                 ''',
                 (
                     item['id'],
+                    item.get('title') or item.get('summary', '')[:50] or 'work item',
                     item.get('type') or 'unknown',
                     item.get('source') or 'unknown',
                     item.get('summary') or 'meaningful work item',
@@ -140,6 +171,7 @@ class WorkItemManager:
                     item.get('recommended_action_family'),
                     item.get('urgency') or 'medium',
                     status,
+                    status,  # state column (same as status for compatibility)
                     item.get('topic'),
                     json.dumps(metadata),
                     item.get('first_seen_at') or now,

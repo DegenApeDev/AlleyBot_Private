@@ -31,6 +31,10 @@ from .world_state_bridge import WorldStateBridge, create_world_state_bridge
 from .goal_stack import GoalStackBridge, create_goal_stack
 from .planning import get_plan_manager
 from .work_item_manager import WorkItemManager, create_work_item_manager
+from .default_goals import get_default_goal_seeder
+from .command_registry import GlobalCommandRegistry, create_command_registry
+from .cross_plugin_orchestrator import CrossPluginOrchestrator, create_cross_plugin_orchestrator
+from .domain_autonomy_manager import DomainAutonomyManager, create_domain_autonomy_manager
 
 
 class AGIKernel:
@@ -110,7 +114,18 @@ class AGIKernel:
         # Goal stack (persistent goal tracking and execution)
         self.goal_stack = None  # Initialized after plugin_manager available
         self.plan_manager = get_plan_manager()
-        self.work_item_manager = create_work_item_manager(core)
+        
+        # Work Item Manager (persistent work tracking)
+        self.work_item_manager = None
+        
+        # Command Registry (global command awareness)
+        self.command_registry = None
+        
+        # Cross-Plugin Orchestrator (complex workflow execution)
+        self.orchestrator = None
+        
+        # Domain Autonomy Manager (graduated autonomy based on performance)
+        self.domain_autonomy_manager = None
         
         # Behavior modulator (episodic learning feedback loop)
         self.behavior_modulator = None  # Initialized with episodic memory
@@ -324,6 +339,35 @@ class AGIKernel:
         if not self.goal_stack:
             self.goal_stack = create_goal_stack(self)
             print("✅ Goal Stack integrated into AGI Kernel")
+        
+        # Command Registry (global command awareness)
+        if not self.command_registry and self.core and hasattr(self.core, 'plugin_manager'):
+            self.command_registry = create_command_registry(self.core.plugin_manager)
+            stats = self.command_registry.get_stats()
+            print(f"✅ Command Registry initialized ({stats['total_commands']} commands across {stats['total_plugins']} plugins)")
+            print(f"   📊 Domains: {', '.join(f'{k}={v}' for k, v in sorted(stats['by_domain'].items()))}")
+        
+        # Cross-Plugin Orchestrator (complex workflow execution)
+        if not self.orchestrator:
+            self.orchestrator = create_cross_plugin_orchestrator(self)
+            print("✅ Cross-Plugin Orchestrator initialized (multi-plugin workflows enabled)")
+        
+        # Domain Autonomy Manager (graduated autonomy)
+        if not self.domain_autonomy_manager:
+            self.domain_autonomy_manager = create_domain_autonomy_manager(self)
+            locked_domains = [d for d, p in self.domain_autonomy_profiles.items() if not p['enabled']]
+            if locked_domains:
+                print(f"🎯 Domain Autonomy Manager initialized ({len(locked_domains)} domains locked, will unlock based on performance)")
+                print(f"   🔒 Locked: {', '.join(locked_domains)}")
+        
+        # Seed default goals for autonomous operation
+        try:
+            goal_seeder = get_default_goal_seeder(self)
+            seeded_count = goal_seeder.seed_goals_if_needed()
+            if seeded_count > 0:
+                print(f"🌱 Seeded {seeded_count} default goals for autonomous operation")
+        except Exception as e:
+            print(f"⚠️ Default goal seeding failed: {e}")
         
         print("🧠 AGI Kernel fully operational - autonomous thinking + self-healing + intelligent context + smart replies + goal generation + content strategy + world state + goal stack enabled")
     
@@ -696,9 +740,19 @@ class AGIKernel:
         available_actions = []
         if self.decision_system and hasattr(self.decision_system, 'get_available_actions'):
             try:
-                available_actions = self.decision_system.get_available_actions() or []
+                # Guard against recursion: get_available_actions may call get_active_work_items
+                # which calls this method again. Use a simple flag to prevent infinite loop.
+                if not hasattr(self, '_evaluating_work_item'):
+                    self._evaluating_work_item = True
+                    available_actions = self.decision_system.get_available_actions() or []
+                    self._evaluating_work_item = False
+                else:
+                    # Already evaluating, skip to prevent recursion
+                    available_actions = []
             except Exception:
                 available_actions = []
+                if hasattr(self, '_evaluating_work_item'):
+                    self._evaluating_work_item = False
 
         matching_actions = []
         required_plugins = set()
@@ -830,6 +884,14 @@ class AGIKernel:
         Returns:
             Result dict with success, data, and learning metadata
         """
+        # Check if this is a workflow action that requires orchestrator
+        if action_spec.get('type') == 'workflow' and action_spec.get('requires_orchestrator'):
+            if not self.orchestrator:
+                print("⚠️ Orchestrator not initialized")
+                return {'success': False, 'error': 'Orchestrator not available for workflow execution'}
+            
+            return await self._execute_workflow(action_spec)
+        
         if not self.action_router:
             print("⚠️ Action router not initialized")
             return {'success': False, 'error': 'Action router not available'}
@@ -852,6 +914,42 @@ class AGIKernel:
         
         return result
 
+    async def _execute_workflow(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute a multi-step workflow using the Cross-Plugin Orchestrator.
+        
+        Args:
+            action_spec: Action spec with workflow_spec
+        
+        Returns:
+            Workflow execution result
+        """
+        workflow_spec = action_spec.get('workflow_spec', {})
+        
+        # Build executable workflow from specification
+        from .workflow_builder import create_workflow_builder
+        builder = create_workflow_builder(self)
+        workflow_def = builder.build_workflow_from_spec(workflow_spec)
+        
+        # Create workflow using orchestrator
+        workflow = self.orchestrator.create_workflow(
+            name=workflow_def['name'],
+            description=workflow_def['description'],
+            steps=workflow_def['steps']
+        )
+        
+        # Execute workflow
+        print(f"🔄 Executing workflow: {workflow.name}")
+        result = await self.orchestrator.execute_workflow(workflow)
+        
+        # Record outcome for learning
+        if result['success']:
+            print(f"✅ Workflow completed: {result['completed_steps']} steps succeeded")
+        else:
+            print(f"❌ Workflow failed: {result['failed_steps']} steps failed")
+        
+        return result
+    
     def _evaluate_domain_autonomy_gate(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
         """Gate real-world autonomy by trusted domain before execution reaches the router."""
         plugin = str(action_spec.get('plugin', '') or '').lower()
@@ -1004,8 +1102,103 @@ class AGIKernel:
             'reflection_priority': 'high' if money_sensitive or persistent_external_state else 'medium' if reputation_sensitive else 'low',
         }
 
+    def _verify_outcome_world_state(self, outcome_record: Dict[str, Any], work_item_id: str) -> bool:
+        """VERIFICATION STEP: Ensure world state actually changed before marking work complete.
+        
+        Prevents Outcome Hallucination where ActionRouter reports success
+        but the external world state is unchanged.
+        """
+        plugin = str(outcome_record.get('plugin', '') or '').lower()
+        action_type = str(outcome_record.get('action_type', '') or '').lower()
+        result = outcome_record.get('result', {})
+        result_summary = str(outcome_record.get('result_summary', '') or '').lower()
+        
+        # Check for explicit failure indicators
+        if isinstance(result, dict):
+            if not result.get('success', True):
+                return False
+            if result.get('error') or result.get('failed'):
+                return False
+        
+        # Check result_summary for failure keywords
+        failure_keywords = ['failed', 'error', 'timeout', 'rejected', 'cancelled', 'no change']
+        if any(kw in result_summary for kw in failure_keywords):
+            return False
+        
+        # For money-sensitive actions, verify transaction hash or confirmation
+        if plugin in {'onchain', 'polymarket'} or 'trade' in action_type:
+            tx_hash = result.get('tx_hash') if isinstance(result, dict) else None
+            if not tx_hash:
+                # No transaction hash means no on-chain change
+                return False
+        
+        # For reputation-sensitive actions, verify external state change
+        if plugin in {'moltx', 'clawbr'} or any(kw in action_type for kw in ['post', 'reply', 'comment', 'debate']):
+            external_id = result.get('post_id') or result.get('id') or result.get('external_id') if isinstance(result, dict) else None
+            if not external_id and not any(kw in result_summary for kw in ['created', 'posted', 'sent', 'published']):
+                # No external ID and no confirmation keywords
+                return False
+        
+        return True
+
+    def _evaluate_retry_opportunity(self, outcome_record: Dict[str, Any], work_item_id: str) -> bool:
+        """COST-TO-RETRY: Evaluate if the opportunity is still valid before retrying.
+        
+        In the Degen world, a failed transaction or missed notification has literal cost.
+        If gas spiked, price moved, or the window closed, self-destruct rather than loop.
+        """
+        work_item = self.work_item_manager.get_work_item(work_item_id) if self.work_item_manager else None
+        if not work_item:
+            return True  # Can't evaluate, default to retry
+        
+        failure_reason = str(outcome_record.get('error') or outcome_record.get('reason') or '').lower()
+        result = outcome_record.get('result', {})
+        
+        # Check retry count - abandon after too many attempts
+        retry_count = work_item.get('retry_count', 0) or 0
+        if retry_count >= 5:
+            return False  # Too many retries, opportunity likely stale
+        
+        # Check for opportunity expiration signals
+        expiration_signals = [
+            'expired', 'too late', 'window closed', 'price moved', 'slippage',
+            'insufficient liquidity', 'position closed', 'already filled',
+            'nonce too low', 'replacement transaction', 'gas price too low'
+        ]
+        if any(sig in failure_reason for sig in expiration_signals):
+            return False  # Opportunity window closed
+        
+        # For on-chain actions, check if gas is reasonable for retry
+        if any(kw in failure_reason for kw in ['gas', 'fee', 'underpriced']):
+            # Check if this was a gas issue - if so, retry might still be valid
+            # but we should check current network conditions
+            pass  # Allow retry, but gas cost will be evaluated at execution time
+        
+        # Check work item age - abandon if too old
+        created_at = work_item.get('created_at')
+        if created_at:
+            try:
+                from datetime import datetime, timedelta
+                import json
+                if isinstance(created_at, str):
+                    created_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                else:
+                    created_dt = datetime.fromisoformat(str(created_at))
+                age_hours = (datetime.now(created_dt.tzinfo) - created_dt).total_seconds() / 3600
+                if age_hours > 24:
+                    return False  # Work item too old, opportunity likely stale
+            except Exception:
+                pass  # Can't parse date, default to retry
+        
+        return True  # Opportunity still valid, can retry
+
     def _update_work_item_from_outcome(self, success: bool, outcome_record: Dict[str, Any], outcome: str) -> None:
-        """Update durable work-item state from routed action outcomes."""
+        """Update durable work-item state from routed action outcomes.
+        
+        Implements:
+        - VERIFICATION STEP: Check world state changed before marking complete
+        - COST-TO-RETRY: Evaluate if opportunity still valid before retry
+        """
         if not self.work_item_manager:
             return
 
@@ -1017,16 +1210,38 @@ class AGIKernel:
         self.work_item_manager.record_attempt(work_item_id, outcome)
 
         if success:
-            self.work_item_manager.complete_work_item(work_item_id, outcome)
+            # VERIFICATION STEP: Ensure world state actually changed
+            verification_passed = self._verify_outcome_world_state(outcome_record, work_item_id)
+            if verification_passed:
+                self.work_item_manager.complete_work_item(work_item_id, outcome)
+                print(f"✅ Work item {work_item_id} COMPLETED with verified outcome")
+            else:
+                # Outcome hallucination detected - don't mark complete
+                self.work_item_manager.update_status(
+                    work_item_id, 'verification_failed',
+                    blocked_reason='Outcome reported success but world state unchanged',
+                    last_outcome=outcome
+                )
+                print(f"⚠️ Work item {work_item_id} VERIFICATION FAILED - outcome hallucination detected")
             return
 
+        # COST-TO-RETRY: Evaluate if opportunity still valid before allowing retry
+        can_retry = self._evaluate_retry_opportunity(outcome_record, work_item_id)
+        
         prediction_evaluation = outcome_record.get('prediction_evaluation') or {}
         mismatch_score = float(prediction_evaluation.get('mismatch_score', 0.0) or 0.0)
         failure_reason = str(outcome_record.get('error') or outcome_record.get('reason') or outcome or 'execution_failed')
+        
         if mismatch_score >= 0.75 or any(token in failure_reason.lower() for token in ['policy', 'forbidden', 'degraded', 'denied']):
             self.work_item_manager.abandon_work_item(work_item_id, outcome, failure_reason)
+            print(f"🚫 Work item {work_item_id} ABANDONED - policy violation or high mismatch")
+        elif not can_retry:
+            # Opportunity no longer valid (gas spiked, price moved, etc)
+            self.work_item_manager.abandon_work_item(work_item_id, outcome, 'opportunity_expired')
+            print(f"⏰ Work item {work_item_id} ABANDONED - opportunity expired (cost-to-retry too high)")
         else:
             self.work_item_manager.update_status(work_item_id, 'blocked', blocked_reason=failure_reason, last_outcome=outcome)
+            print(f"🔄 Work item {work_item_id} BLOCKED - will retry (opportunity still valid)")
     
     # =================================================================
     # Autonomous Operations

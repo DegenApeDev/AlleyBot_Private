@@ -102,11 +102,13 @@ class WorkItemService:
     
     def _row_to_work_item(self, row: tuple) -> WorkItem:
         """Convert database row to WorkItem dataclass."""
+        # Database has 35 columns due to merged schemas, only use first 20 for WorkItem
         (
             id_, title, description, state, work_type, goal_id, parent_id,
             priority, created_at, updated_at, due_at, capability_judgment,
             attempts, last_attempt_at, last_error, source_signal,
-            required_plugins, required_context, completion_criteria, success_metrics
+            required_plugins, required_context, completion_criteria, success_metrics,
+            *_  # Ignore extra columns (status, blocked_reason, etc. from work_item_manager schema)
         ) = row
         
         return WorkItem(

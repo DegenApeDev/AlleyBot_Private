@@ -374,7 +374,7 @@ class MetaLearningEngine:
                         transfer_score=edata.get('transfer_score', 0.5),
                         exploration_rate=edata.get('exploration_rate', 0.3),
                         memory_depth=edata.get('memory_depth', 10),
-                        would_repeat=edata.get('would_repeat', success),
+                        would_repeat=edata.get('would_repeat', edata['success']),
                         notes=edata.get('notes', '')
                     )
                     self.episodes.append(episode)

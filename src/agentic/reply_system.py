@@ -169,12 +169,21 @@ class ReplySystem:
                 import logging
                 logging.debug(f"Could not fetch onchain context: {e}")
         
-        # Try Grok first (better reasoning), then DeepSeek
-        reply = self._generate_with_grok(
+        # MEMORY-FIRST APPROACH: Use AlleyBot's own intelligence before Grok
+        # Try memory-based reply first (sentence transformers + local context)
+        reply = self._generate_memory_based_reply(
             comment_content, commenter_name, post_context,
             platform, user_context, memory_context, onchain_context
         )
         
+        # Only use Grok if memory-based approach fails or for complex reasoning
+        if not reply:
+            reply = self._generate_with_grok(
+                comment_content, commenter_name, post_context,
+                platform, user_context, memory_context, onchain_context
+            )
+        
+        # DeepSeek as final fallback
         if not reply:
             reply = self._generate_with_deepseek(
                 comment_content, commenter_name, post_context,
@@ -203,6 +212,100 @@ class ReplySystem:
                 logging.debug(f"Could not log episodic memory: {e}")
         
         return reply
+    
+    def _generate_memory_based_reply(self, comment: str, author: str, post_ctx: str,
+                                      platform: str, user_ctx: str, mem_ctx: str,
+                                      chain_ctx: str) -> Optional[str]:
+        """
+        Generate reply using AlleyBot's own memory and sentence transformers.
+        
+        This is the PRIMARY reply method - uses local intelligence first.
+        Only falls back to Grok for complex reasoning if this fails.
+        """
+        try:
+            # Get sentence transformer model
+            from plugins.telegram.intent_classifier import get_sentence_model
+            model = get_sentence_model()
+            if not model:
+                return None
+            
+            # Search memory for similar interactions
+            if not self.agi or not hasattr(self.agi, 'unified_memory'):
+                return None
+            
+            mem = self.agi.unified_memory
+            if not hasattr(mem, 'semantic_search'):
+                return None
+            
+            # Find similar past interactions using sentence transformers
+            query = f"{author} {comment} {post_ctx[:100]}"
+            similar_memories = mem.semantic_search(query, top_k=5)
+            
+            if not similar_memories or len(similar_memories) < 2:
+                return None  # Not enough context, fall back to Grok
+            
+            # Build reply from memory patterns
+            reply_patterns = []
+            for memory in similar_memories:
+                content = memory.get('content', '')
+                # Extract reply patterns from past successful interactions
+                if 'reply' in content.lower() or 'response' in content.lower():
+                    reply_patterns.append(content[:200])
+            
+            if not reply_patterns:
+                return None
+            
+            # Synthesize reply from memory patterns
+            # Use most relevant memory as base, adapt to current context
+            base_reply = reply_patterns[0]
+            
+            # Simple template-based adaptation
+            # Extract key phrases and adapt to current comment
+            reply_template = self._extract_reply_template(base_reply, comment)
+            
+            if reply_template and len(reply_template) > 20:
+                # Add context awareness
+                if user_ctx:
+                    reply_template = f"{reply_template} {self._personalize_reply(reply_template, author)}"
+                
+                # Keep it concise
+                if len(reply_template) > 280:
+                    reply_template = reply_template[:277] + "..."
+                
+                print(f"💭 Generated memory-based reply (using {len(similar_memories)} similar interactions)")
+                return reply_template
+            
+            return None
+            
+        except Exception as e:
+            import logging
+            logging.debug(f"Memory-based reply generation failed: {e}")
+            return None
+    
+    def _extract_reply_template(self, memory_content: str, current_comment: str) -> Optional[str]:
+        """Extract and adapt reply template from memory"""
+        # Simple extraction - look for conversational patterns
+        # This is a basic implementation - can be enhanced with better NLP
+        
+        # Remove metadata/timestamps
+        content = memory_content.split('\n')[0] if '\n' in memory_content else memory_content
+        
+        # If it looks like a reply (starts with @, has conversational markers)
+        if any(marker in content.lower() for marker in ['@', 'thanks', 'interesting', 'agree', 'think']):
+            return content
+        
+        return None
+    
+    def _personalize_reply(self, reply: str, username: str) -> str:
+        """Add personalization based on user history"""
+        profile = self._get_user_profile(username)
+        
+        if profile['interactions'] > 5:
+            return f"(We've chatted {profile['interactions']} times!)"
+        elif profile['interactions'] > 0:
+            return ""
+        
+        return ""
     
     def _validate_with_symod(self, reply: str, comment: str) -> str:
         """

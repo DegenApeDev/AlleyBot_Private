@@ -421,6 +421,19 @@ class GoalHierarchy:
         goal_ids = self.domain_index.get(domain, set())
         return [self.goals[gid] for gid in goal_ids]
     
+    def get_goals(self, status: Optional[GoalStatus] = None, level: Optional[GoalLevel] = None, domain: Optional[str] = None) -> List[Goal]:
+        """Get goals with optional filtering by status, level, or domain."""
+        goals = list(self.goals.values())
+        
+        if status:
+            goals = [g for g in goals if g.status == status]
+        if level:
+            goals = [g for g in goals if g.level == level]
+        if domain:
+            goals = [g for g in goals if g.domain == domain]
+            
+        return goals
+    
     def get_actionable_goals(self) -> List[Goal]:
         """Get goals that can be worked on now"""
         actionable = []

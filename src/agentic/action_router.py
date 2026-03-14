@@ -258,6 +258,9 @@ class ActionRouter:
                 for insight in modulated_action['episodic_insights']:
                     print(insight)
 
+        # Get validation profile early - needed for both Synergy and SyMod validation
+        validation_profile = self._get_validation_profile(modulated_action)
+
         # Step 3: Synergy validation (field / harmonic approval)
         synergy_check = self._normalize_validation_result(
             'synergy_validation',
@@ -276,7 +279,6 @@ class ActionRouter:
             }
         
         # Step 4: SyMod verification (for high-impact actions)
-        validation_profile = self._get_validation_profile(modulated_action)
         if validation_profile['requires_strict_validation']:
             symod_check = self._normalize_validation_result(
                 'symod_verification',
@@ -609,6 +611,8 @@ class ActionRouter:
                     return None
                 opening = params.get('opening') or f"Debate topic: {topic}"
                 return {'method': 'create_debate', 'args': [topic, opening]}
+            if action_type == 'check_notifications':
+                return {'method': 'check_notifications', 'args': [], 'kwargs': {}}
 
         if plugin_name == 'analytics':
             if action_type == 'analyze_performance':

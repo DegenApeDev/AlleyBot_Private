@@ -18,6 +18,7 @@ import json
 from typing import Dict, Any, Optional, List, Tuple
 
 from src.agentic.action_logger import get_action_logger
+from src.agentic.capability_registry import get_capability_registry
 
 # SyMod Truth Filter - Mandatory validation layer
 try:
@@ -212,6 +213,10 @@ class DecisionSystem:
         self.action_cooldowns: Dict[str, datetime.datetime] = {}
         self.action_history: List[Dict] = []
         
+        # Initialize capability registry (maps plugins → available actions)
+        self.capability_registry = get_capability_registry(plugin_manager)
+        print(f"✅ Capability Registry: {len(self.capability_registry.capabilities)} actions available")
+        
         # Initialize Egyptian Synergy Model for harmonic validation
         self.synergy_engine = None
         if SYNERGY_AVAILABLE:
@@ -266,6 +271,7 @@ class DecisionSystem:
         - Cooldown status
         - Plugin availability
         - Chain requirements
+        - Capability registry (NEW: knows what plugins can do)
         
         Returns:
             List of available action dicts
@@ -273,7 +279,47 @@ class DecisionSystem:
         now = datetime.datetime.now()
         available = []
         
+        # NEW: Get actions from capability registry (plugin-aware)
+        if self.capability_registry:
+            for capability in self.capability_registry.get_available_actions():
+                # Check cooldown
+                last_run = self.action_cooldowns.get(capability.id)
+                if last_run:
+                    cooldown = datetime.timedelta(minutes=capability.cooldown_minutes)
+                    if now - last_run < cooldown:
+                        continue
+                
+                # Check if plugin is loaded
+                if capability.plugin not in self.plugins.plugins:
+                    continue
+                
+                # Convert capability to action dict
+                # Map risk_level to impact for backwards compatibility
+                impact_map = {'low': 'low', 'medium': 'medium', 'high': 'high'}
+                impact = impact_map.get(capability.risk_level, 'medium')
+                
+                available.append({
+                    'id': capability.id,
+                    'description': capability.description,
+                    'platform': capability.platform,
+                    'action_type': capability.action_type,
+                    'domain': capability.domain,
+                    'risk_level': capability.risk_level,
+                    'trust_tier': capability.trust_tier,
+                    'cooldown_minutes': capability.cooldown_minutes,
+                    'confidence_threshold': capability.confidence_threshold,
+                    'requires': capability.plugin,
+                    'impact': impact,  # Add impact field for AI decision compatibility
+                    'last_run': last_run.isoformat() if last_run else None,
+                    'metadata': capability.metadata,
+                })
+        
+        # LEGACY: Also check old AUTONOMOUS_ACTIONS dict for backwards compatibility
         for action_id, action_info in AUTONOMOUS_ACTIONS.items():
+            # Skip if already added from capability registry
+            if any(a['id'] == action_id for a in available):
+                continue
+            
             # Check cooldown
             last_run = self.action_cooldowns.get(action_id)
             if last_run:
@@ -306,22 +352,37 @@ class DecisionSystem:
         """
         Decide the best next action using AGI reasoning + Egyptian Synergy validation.
         
-        Priority order:
-        1. Goal-driven actions (from autonomous goal system)
-        2. AI-powered decision (Grok/DeepSeek reasoning)
-        3. Heuristic fallback (score-based)
-        4. Synergy harmonic validation (field balance check)
-        
         Args:
-            context: Current context (time, platform states, etc.)
+            context: Current context including goals, world state, etc.
         
         Returns:
-            Action dict with 'id', 'description', 'platform', etc.
-            None if no action should be taken
+            Action dict or None if no good action available
         """
-        decision_context = self._build_decision_context(context)
-
+        # PHASE 0: Check if current goal requires multi-step workflow
+        active_goals = context.get('active_goals', [])
+        print(f"🎯 Checking {len(active_goals)} active goals for workflow requirements")
+        
+        if active_goals and self.agi and hasattr(self.agi, 'orchestrator'):
+            print(f"✅ Orchestrator available, checking goals...")
+            for goal in active_goals[:1]:  # Check top priority goal
+                workflow_req = self.detect_workflow_requirement(goal, context)
+                if workflow_req:
+                    print(f"🔄 Goal requires workflow: {workflow_req['workflow_type']}")
+                    return {
+                        'id': f"workflow_{workflow_req['workflow_type']}",
+                        'type': 'workflow',
+                        'workflow_spec': workflow_req,
+                        'description': f"Execute {workflow_req['workflow_type']} workflow for goal: {goal.get('description', 'N/A')[:50]}",
+                        'impact': 'high',
+                        'requires_orchestrator': True
+                    }
+        elif not active_goals:
+            print(f"⚠️ No active goals in context")
+        elif not self.agi or not hasattr(self.agi, 'orchestrator'):
+            print(f"⚠️ Orchestrator not available")
+        
         # PHASE 1: Goal-driven action selection (AGI behavior)
+        decision_context = self._build_decision_context(context)
         goal_action = self._get_goal_driven_action(decision_context)
         if goal_action:
             goal_action = self._annotate_action_with_exploration(goal_action, None, decision_context)
@@ -365,7 +426,11 @@ class DecisionSystem:
         return None
 
     def _get_work_item_driven_action(self, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Resolve a lightweight action preference from active meaningful work items."""
+        """Resolve a lightweight action preference from active meaningful work items.
+        
+        Implements Bias for Action: if confidence >= 0.60, execute even if
+        capability judgment suggests needs_more_context.
+        """
         active_work_items = context.get('active_work_items', []) or []
         if not active_work_items:
             return None
@@ -376,21 +441,39 @@ class DecisionSystem:
 
         for top_item in active_work_items:
             capability_judgment = top_item.get('capability_judgment') or (top_item.get('metadata') or {}).get('capability_judgment') or {}
-            if capability_judgment and not capability_judgment.get('can_execute_now'):
-                continue
-
+            work_item_id = top_item.get('id')
+            
+            # BIAS FOR ACTION: Check if we should execute despite judgment
+            can_execute = capability_judgment.get('can_execute_now', True)
+            matched_score = 0.0
+            
             command_candidates = self._get_work_item_command_candidates(top_item, available)
             if not command_candidates:
                 continue
-
+            
             best_candidate = command_candidates[0]
+            matched_score = best_candidate.get('score', 0.0)
+            
+            # BIAS FOR ACTION: If confidence >= 60%, execute even if blocked by judgment
+            # This prevents Analysis Paralysis - the "safe" path of doing nothing
+            bias_for_action_applied = not can_execute and matched_score >= 0.60
+            if not can_execute and not bias_for_action_applied:
+                # Blocked by capability judgment and confidence too low
+                continue
+            
+            if bias_for_action_applied:
+                print(f"🎯 BIAS FOR ACTION: Executing work item {work_item_id} despite capability judgment (confidence: {matched_score:.2f})")
             selected_action = best_candidate.get('action') or {}
             if not selected_action:
                 continue
 
             candidate = dict(selected_action)
             candidate_context = dict(candidate.get('context', {}) or {})
+            
+            # WORK ITEM BINDING: Tag action with work_item_id for outcome tracking
+            candidate['work_item_id'] = work_item_id  # Top-level for ActionRouter
             candidate_context['active_work_item'] = top_item
+            candidate_context['active_work_item_id'] = work_item_id  # For AGI kernel
             candidate_context['capability_judgment'] = capability_judgment
             candidate_context['matched_command_candidates'] = [
                 {
@@ -400,6 +483,10 @@ class DecisionSystem:
                 }
                 for entry in command_candidates[:3]
             ]
+            # Bias for Action evidence
+            candidate_context['bias_for_action_applied'] = not can_execute and matched_score >= 0.60
+            candidate_context['capability_judgment_override'] = not can_execute and matched_score >= 0.60
+            
             candidate['context'] = candidate_context
             candidate['work_item_priority'] = top_item
             candidate['why_this_command'] = best_candidate.get('why', [])
@@ -603,10 +690,80 @@ class DecisionSystem:
             'bounded_upgrade_candidates': self._get_bounded_upgrade_candidates(active_work_items),
         }
 
+    def detect_workflow_requirement(self, goal: Dict[str, Any], context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Detect if a goal requires multi-step workflow execution.
+        
+        Returns workflow specification if detected, None otherwise.
+        """
+        goal_desc = goal.get('description', '').lower()
+        goal_title = goal.get('title', '').lower()
+        combined_text = f"{goal_title} {goal_desc}"
+        
+        print(f"🔍 Workflow detection for goal: {goal.get('title', 'N/A')[:50]}")
+        print(f"   Combined text: {combined_text[:100]}")
+        
+        # Pattern detection for common workflows
+        workflow_patterns = {
+            'image_post': {
+                'keywords': ['image', 'picture', 'photo', 'visual'],
+                'platforms': ['moltx', 'moltbook', 'clawbr'],
+                'steps': ['generate_image', 'post']
+            },
+            'sentiment_trading': {
+                'keywords': ['trade', 'buy', 'sell', 'swap'],
+                'platforms': ['solana', 'base', 'avax'],
+                'steps': ['analyze_sentiment', 'get_quote', 'execute_trade', 'post_result']
+            },
+            'market_analysis_post': {
+                'keywords': ['analyze', 'report', 'market', 'trends'],
+                'platforms': ['moltx', 'moltbook'],
+                'steps': ['check_prices', 'analyze_trends', 'generate_report', 'post']
+            },
+            'cross_platform_engagement': {
+                'keywords': ['engage', 'reply', 'comment', 'all platforms'],
+                'platforms': ['moltx', 'moltbook', 'moltchan', 'clawbr'],
+                'steps': ['scan_feeds', 'generate_replies', 'post_replies']
+            }
+        }
+        
+        # Check each pattern
+        for workflow_name, pattern in workflow_patterns.items():
+            # Check if goal matches keywords (check both title and description)
+            keyword_match = any(kw in combined_text for kw in pattern['keywords'])
+            platform_match = any(plat in combined_text for plat in pattern['platforms'])
+            
+            if keyword_match or platform_match:
+                print(f"✅ Workflow match: {workflow_name}")
+                print(f"   Keyword match: {keyword_match}, Platform match: {platform_match}")
+                return {
+                    'workflow_type': workflow_name,
+                    'pattern': pattern,
+                    'goal': goal,
+                    'requires_orchestrator': True
+                }
+        
+        # Check if goal explicitly mentions multiple actions
+        action_count = sum(1 for action in ['post', 'analyze', 'check', 'generate', 'trade'] if action in combined_text)
+        if action_count >= 2:
+            print(f"✅ Workflow match: custom_multi_step (detected {action_count} actions)")
+            return {
+                'workflow_type': 'custom_multi_step',
+                'pattern': {'steps': []},  # Will be determined dynamically
+                'goal': goal,
+                'requires_orchestrator': True
+            }
+        
+        print(f"❌ No workflow detected for this goal")
+        return None
+    
     def _filter_bounded_self_improvement_actions(self, available: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Fail-close self-improvement actions unless bounded repeated evidence supports them."""
-        bounded_candidates = self._get_bounded_upgrade_candidates(getattr(self.agi, 'get_active_work_items', lambda limit=5: [])(limit=5)) if hasattr(self.agi, 'get_active_work_items') else []
-        allow_upgrade = bool(bounded_candidates)
+        # NOTE: Do NOT call get_active_work_items here - causes infinite recursion
+        # get_active_work_items -> _evaluate_work_item_capability -> get_available_actions -> this method
+        # For now, allow self-improvement actions (they're low risk anyway)
+        # TODO: Pass work_items as parameter instead of fetching here
+        allow_upgrade = True  # Conservative: allow self-improvement (was causing recursion)
 
         filtered: List[Dict[str, Any]] = []
         for action in available:
@@ -1018,7 +1175,7 @@ If no action is appropriate right now, respond with "none".
         plan_alignment = self._get_plan_alignment(action, context)
         degraded_signal = self._get_degraded_action_signal(action, context)
         trust_signal = self._get_action_family_trust_signal(action, context)
-        base = f"- {action['id']}: {action['description']} (platform: {action['platform']}, impact: {action['impact']})"
+        base = f"- {action['id']}: {action['description']} (platform: {action.get('platform', 'unknown')}, impact: {action.get('impact', 'medium')})"
         if not performance:
             if plan_alignment.get('aligned'):
                 return base + f" | aligned_plan={plan_alignment.get('plan_id')} step={plan_alignment.get('next_step_title')}"

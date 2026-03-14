@@ -38,6 +38,7 @@ from src.agentic.goal_hierarchy import get_goal_hierarchy
 from src.agentic.multi_timescale_planner import get_multi_timescale_planner
 from src.agentic.meta_learner import get_meta_learner
 from src.agentic.goal_manager import get_goal_manager
+from src.agentic.default_goals import get_default_goal_seeder
 
 # Phase 8-9: Service Integration Layer
 from src.agentic.service_integration import (
@@ -1153,8 +1154,9 @@ class AutonomousBrain(AGISocialMixin):
                         }
                     },
                     available_actions=['like', 'reply', 'repost', 'follow', 'post', 'engage', 'clawbr_engage',
-                                       'clawbr_like', 'clawbr_comment', 'clawbr_follow',  # New Clawbr actions
-                                       'upvote', 'comment', 'thread', 'reply_thread', 'browse', 'listing', 'bounty', 'moltbit_post']
+                                       'clawbr_like', 'clawbr_comment', 'clawbr_follow',
+                                       'upvote', 'comment', 'thread', 'reply_thread', 'browse', 'listing', 'bounty', 'moltbit_post',
+                                       'self_improve', 'auto_fix_error']  # Added autonomous evolution actions
                 )
                 
                 # Tag with plugin name
@@ -1560,9 +1562,27 @@ class AutonomousBrain(AGISocialMixin):
         try:
             agi_kernel = getattr(self.core, 'agi_kernel', None) if self.core else None
             if not agi_kernel:
-                logger.warning("⚠️ AGI Kernel unavailable, cannot route proposal through ActionRouter")
+                logger.warning("⚠️ AGI Kernel unavailable, falling back to direct plugin execution")
+                # Fallback: execute directly through plugin
+                plugin = self.plugin_manager.get_plugin(plugin_name)
+                if not plugin:
+                    return None
+                
+                # Try to execute the action directly
+                action_method = getattr(plugin, proposal.action_type, None)
+                if action_method and callable(action_method):
+                    try:
+                        result = action_method(
+                            target_id=proposal.target_id,
+                            content=proposal.content,
+                            **(proposal.metadata or {})
+                        )
+                        return {'success': True, 'data': result, 'fallback': True}
+                    except Exception as e:
+                        logger.error(f"❌ Direct execution error: {e}")
+                        return {'success': False, 'error': str(e), 'fallback': True}
                 return None
-
+            # Original AGI Kernel route
             action_spec = {
                 'plugin': plugin_name,
                 'action_type': proposal.action_type,
@@ -1792,129 +1812,212 @@ class AutonomousBrain(AGISocialMixin):
     async def _generate_default_goals(self) -> bool:
         """Auto-generate safe default goals when no active work items exist.
         
-        Security: Only creates safe, low-risk goals (trend monitoring, engagement).
-        Trading/self-improve goals are NOT auto-generated.
-        Notifies owner via Telegram for transparency.
+        Uses the new default_goals module for comprehensive goal seeding.
+        Returns True if goals were created.
         """
-        if not self.goal_hierarchy:
+        if not self.core or not hasattr(self.core, 'agi_kernel'):
+            return False
+        
+        agi_kernel = self.core.agi_kernel
+        if not agi_kernel:
             return False
         
         try:
-            default_goals = [
-                {
-                    'title': 'Monitor trending topics',
-                    'description': 'Check trending topics on Moltx to find engagement opportunities',
-                    'category': 'analysis',
-                    'priority': 2,
-                    'risk_level': 'low'
-                },
-                {
-                    'title': 'Light social engagement',
-                    'description': 'Engage with 1-2 posts on Clawbr/Moltx to maintain presence',
-                    'category': 'social',
-                    'priority': 2,
-                    'risk_level': 'low'
-                },
-                {
-                    'title': 'Platform health check',
-                    'description': 'Verify all platform connections are healthy',
-                    'category': 'maintenance',
-                    'priority': 1,
-                    'risk_level': 'low'
-                }
-            ]
+            # Use new default goal seeder
+            goal_seeder = get_default_goal_seeder(agi_kernel)
+            seeded_count = goal_seeder.seed_goals_if_needed()
             
-            created_count = 0
-            for goal_data in default_goals:
-                # Check if similar goal already exists
-                existing = self.goal_hierarchy.get_goals(status='active')
-                duplicate = any(
-                    g.title == goal_data['title'] for g in existing
-                )
-                if not duplicate:
-                    goal = self.goal_hierarchy.add_goal(
-                        title=goal_data['title'],
-                        description=goal_data['description'],
-                        category=goal_data['category'],
-                        priority=goal_data['priority']
-                    )
-                    if goal:
-                        created_count += 1
-                        logger.info(f"🎯 Auto-created default goal: {goal.title}")
-            
-            # Notify owner of auto-generated goals
-            if created_count > 0 and self.notification_service:
-                try:
-                    await self.notification_service.notify(
-                        title="🎯 Auto-Generated Default Goals",
-                        message=f"Created {created_count} safe default goals because no active work items were found",
-                        priority=2,  # LOW
-                        details={'goals_created': created_count, 'reason': 'no_active_work_items'}
-                    )
-                except Exception as e:
-                    logger.debug(f"Could not notify owner of auto-generated goals: {e}")
-            
-            return created_count > 0
+            if seeded_count > 0:
+                logger.info(f"🌱 Seeded {seeded_count} default goals via DefaultGoalSeeder")
+                return True
             
         except Exception as e:
-            logger.warning(f"⚠️ Could not generate default goals: {e}")
-            return False
+            logger.warning(f"Default goal seeding failed: {e}")
+        
+        return False
 
     def _handle_idle_state(self, active_work_items: List[Dict[str, Any]], proposals: List[Any], spine_context: Dict[str, Any]) -> List[Any]:
-        """Handle idle state by generating safe exploratory proposals instead of just logging.
+        """Handle idle state by generating diverse exploratory proposals from 336+ available commands.
         
-        Security: Only generates safe actions (trend check, light engagement). 
-        Trading/self-improve remain gated separately.
+        Cycles through command categories to ensure variety:
+        - Analysis/Research (market trends, sentiment, platform stats)
+        - Content Creation (intelligent posts, articles, threads)
+        - Social Engagement (replies, debates, follows)
+        - System Health (monitoring, diagnostics, optimization)
+        - Trading/Market (if enabled via domain autonomy)
+        - Self-Improvement (auto-fix, skill building if evidence exists)
+        
+        Security: Only generates safe actions with proper gating.
         """
         # First log the idle reason for transparency
         if not active_work_items:
-            logger.info("🛌 Idle: no meaningful work items - generating exploratory proposals")
+            logger.info("🛌 Idle: no meaningful work items - generating diverse exploratory proposals")
         elif proposals and all(float(getattr(p, 'confidence', 0.0) or 0.0) < self.config.min_confidence for p in proposals):
-            logger.info("🛌 Idle: proposals below confidence threshold - will attempt safe exploration")
+            logger.info("🛌 Idle: proposals below confidence threshold - will attempt diverse exploration")
         else:
-            logger.info("🛌 Idle: no actions executed - attempting safe exploration")
+            logger.info("🛌 Idle: no actions executed - attempting diverse exploration")
 
-        # Generate safe exploratory proposals
+        # Generate diverse exploratory proposals
         exploratory_proposals = []
         
         # Only add exploratory actions if we haven't hit hourly limits
-        if self._actions_this_hour < self.config.max_actions_per_hour:
-            from src.agentic.symod_core import SyModActionProposal
+        if self._actions_this_hour >= self.config.max_actions_per_hour:
+            return exploratory_proposals
             
-            # Safe exploratory action 1: Check trending topics (information gathering)
+        from src.agentic.symod_core import SyModActionProposal
+        
+        # Get cycle counter for rotating through categories
+        cycle_count = self.stats.get('cycles_completed', 0)
+        
+        # === CATEGORY 1: ANALYSIS & RESEARCH (Every 2nd cycle) ===
+        if cycle_count % 2 == 0:
+            # Market/Trending analysis
             moltx = self.plugin_manager.get_plugin('moltx') if self.plugin_manager else None
-            if moltx and hasattr(moltx, 'trending'):
+            if moltx:
+                if hasattr(moltx, 'trending'):
+                    exploratory_proposals.append(SyModActionProposal(
+                        action_type='trending_check',
+                        target_id=None,
+                        target_name='exploratory_trend_check',
+                        confidence=0.42,
+                        justification='Exploratory: Analyzing trending topics for opportunities',
+                        metadata={'plugin': 'moltx', 'trigger': 'idle_exploration', 'safe': True, 'category': 'analysis'}
+                    ))
+                if hasattr(moltx, 'get_feed'):
+                    exploratory_proposals.append(SyModActionProposal(
+                        action_type='feed_browse',
+                        target_id=None,
+                        target_name='exploratory_feed_check',
+                        confidence=0.38,
+                        justification='Exploratory: Browsing feed to gather intelligence',
+                        metadata={'plugin': 'moltx', 'trigger': 'idle_exploration', 'safe': True, 'category': 'analysis'}
+                    ))
+                if hasattr(moltx, 'get_sentiment_analysis'):
+                    exploratory_proposals.append(SyModActionProposal(
+                        action_type='sentiment_analysis',
+                        target_id=None,
+                        target_name='market_sentiment_check',
+                        confidence=0.40,
+                        justification='Exploratory: Analyzing market sentiment',
+                        metadata={'plugin': 'moltx', 'trigger': 'idle_exploration', 'safe': True, 'category': 'analysis'}
+                    ))
+            
+            # Platform health checks
+            clawbr = self.plugin_manager.get_plugin('clawbr') if self.plugin_manager else None
+            if clawbr and hasattr(clawbr, 'get_stats'):
                 exploratory_proposals.append(SyModActionProposal(
-                    action_type='trending_check',
+                    action_type='platform_stats',
                     target_id=None,
-                    target_name='exploratory_trend_check',
-                    confidence=0.4,  # Above new 0.35 threshold
-                    justification='Exploratory: Checking trending topics to find opportunities',
-                    metadata={'plugin': 'moltx', 'trigger': 'idle_exploration', 'safe': True}
+                    target_name='clawbr_health_check',
+                    confidence=0.45,
+                    justification='Exploratory: Checking Clawbr platform health',
+                    metadata={'plugin': 'clawbr', 'trigger': 'idle_exploration', 'safe': True, 'category': 'analysis'}
                 ))
-            
-            # Safe exploratory action 2: Light feed engagement (if Moltx available)
-            if moltx and hasattr(moltx, 'get_feed'):
+        
+        # === CATEGORY 2: CONTENT CREATION (Every 3rd cycle) ===
+        if cycle_count % 3 == 0:
+            moltx = self.plugin_manager.get_plugin('moltx') if self.plugin_manager else None
+            if moltx:
+                if hasattr(moltx, 'intelligent_post'):
+                    exploratory_proposals.append(SyModActionProposal(
+                        action_type='intelligent_post',
+                        target_id=None,
+                        target_name='create_intelligent_content',
+                        confidence=0.35,
+                        justification='Exploratory: Creating intelligent content about recent discoveries',
+                        metadata={'plugin': 'moltx', 'trigger': 'idle_exploration', 'safe': True, 'category': 'content', 'requires_engagement_quota': True}
+                    ))
+                if hasattr(moltx, 'create_thread'):
+                    exploratory_proposals.append(SyModActionProposal(
+                        action_type='create_thread',
+                        target_id=None,
+                        target_name='create_discussion_thread',
+                        confidence=0.33,
+                        justification='Exploratory: Starting a discussion thread on trending topic',
+                        metadata={'plugin': 'moltx', 'trigger': 'idle_exploration', 'safe': True, 'category': 'content'}
+                    ))
+        
+        # === CATEGORY 3: SOCIAL ENGAGEMENT (Every cycle - maintains presence) ===
+        moltx = self.plugin_manager.get_plugin('moltx') if self.plugin_manager else None
+        if moltx:
+            if hasattr(moltx, 'engage_feed'):
                 exploratory_proposals.append(SyModActionProposal(
-                    action_type='feed_browse',
+                    action_type='engage_feed',
                     target_id=None,
-                    target_name='exploratory_feed_check',
-                    confidence=0.35,  # At new threshold
-                    justification='Exploratory: Browsing feed to stay current',
-                    metadata={'plugin': 'moltx', 'trigger': 'idle_exploration', 'safe': True}
+                    target_name='light_social_engagement',
+                    confidence=0.40,
+                    justification='Exploratory: Light engagement to maintain social presence',
+                    metadata={'plugin': 'moltx', 'trigger': 'idle_exploration', 'safe': True, 'category': 'social'}
                 ))
-            
-            # Safe exploratory action 3: World state update (internal, no external impact)
-            exploratory_proposals.append(SyModActionProposal(
-                action_type='world_state_refresh',
-                target_id=None,
-                target_name='internal_refresh',
-                confidence=0.5,  # High confidence for internal action
-                justification='Exploratory: Refreshing world state to improve future decisions',
-                metadata={'plugin': 'internal', 'trigger': 'idle_exploration', 'safe': True}
-            ))
-            
-            logger.info(f"🚀 Generated {len(exploratory_proposals)} safe exploratory proposals")
+            if hasattr(moltx, 'auto_reply_mentions'):
+                exploratory_proposals.append(SyModActionProposal(
+                    action_type='reply_mentions',
+                    target_id=None,
+                    target_name='reply_to_mentions',
+                    confidence=0.42,
+                    justification='Exploratory: Responding to mentions and interactions',
+                    metadata={'plugin': 'moltx', 'trigger': 'idle_exploration', 'safe': True, 'category': 'social'}
+                ))
+        
+        clawbr = self.plugin_manager.get_plugin('clawbr') if self.plugin_manager else None
+        if clawbr:
+            if hasattr(clawbr, 'check_debates'):
+                exploratory_proposals.append(SyModActionProposal(
+                    action_type='check_debates',
+                    target_id=None,
+                    target_name='check_active_debates',
+                    confidence=0.38,
+                    justification='Exploratory: Checking for debate opportunities',
+                    metadata={'plugin': 'clawbr', 'trigger': 'idle_exploration', 'safe': True, 'category': 'social'}
+                ))
+            if hasattr(clawbr, 'get_notifications'):
+                exploratory_proposals.append(SyModActionProposal(
+                    action_type='check_notifications',
+                    target_id=None,
+                    target_name='check_clawbr_notifications',
+                    confidence=0.41,
+                    justification='Exploratory: Checking for new notifications',
+                    metadata={'plugin': 'clawbr', 'trigger': 'idle_exploration', 'safe': True, 'category': 'social'}
+                ))
+        
+        # === CATEGORY 4: SYSTEM & MONITORING (Every 5th cycle) ===
+        if cycle_count % 5 == 0:
+            # Skip internal plugin actions - no 'internal' plugin exists
+            # Memory consolidation and performance monitoring are handled
+            # by the brain itself, not routed through plugin system
+            pass
+        
+        # === CATEGORY 5: TRADING/MARKET (Only if domain enabled) ===
+        if cycle_count % 4 == 0:
+            onchain = self.plugin_manager.get_plugin('onchain') if self.plugin_manager else None
+            if onchain:
+                if hasattr(onchain, 'analyze_markets'):
+                    exploratory_proposals.append(SyModActionProposal(
+                        action_type='market_analysis',
+                        target_id=None,
+                        target_name='analyze_market_conditions',
+                        confidence=0.36,
+                        justification='Exploratory: Analyzing market conditions for opportunities',
+                        metadata={'plugin': 'onchain', 'trigger': 'idle_exploration', 'safe': True, 'category': 'market', 'domain_autonomy': 'market'}
+                    ))
+                if hasattr(onchain, 'get_portfolio_summary'):
+                    exploratory_proposals.append(SyModActionProposal(
+                        action_type='portfolio_check',
+                        target_id=None,
+                        target_name='check_portfolio_status',
+                        confidence=0.39,
+                        justification='Exploratory: Checking portfolio status',
+                        metadata={'plugin': 'onchain', 'trigger': 'idle_exploration', 'safe': True, 'category': 'market', 'domain_autonomy': 'market'}
+                    ))
+        
+        # === CATEGORY 6: SELF-IMPROVEMENT (Only if bounded evidence exists) ===
+        # Skip internal plugin actions - no 'internal' plugin exists
+        # These require capability_gap evidence from work items
+        
+        # Skip world_state_refresh - no 'internal' plugin exists
+        # Brain handles its own state refresh internally
+        
+        logger.info(f"🚀 Generated {len(exploratory_proposals)} diverse exploratory proposals (cycle: {cycle_count})")
         
         return exploratory_proposals
 

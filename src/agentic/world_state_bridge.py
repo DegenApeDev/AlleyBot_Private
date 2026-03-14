@@ -61,7 +61,7 @@ class WorldStateBridge:
         if not self.core or not hasattr(self.core, 'plugin_manager'):
             return
         
-        # Register MoltX adapter
+        # Register MoltX adapter (optional - adapter module may not exist)
         moltx = self.core.plugin_manager.plugins.get('moltx')
         if moltx:
             try:
@@ -69,6 +69,9 @@ class WorldStateBridge:
                 adapter = MoltxAdapter(moltx)
                 self.adapters.append(adapter)
                 print(f"📡 Registered MoltX adapter")
+            except ImportError:
+                # MoltX adapter module doesn't exist - this is OK, skip silently
+                pass
             except Exception as e:
                 print(f"⚠️ MoltX adapter registration failed: {e}")
         
