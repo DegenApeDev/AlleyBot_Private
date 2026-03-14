@@ -197,5 +197,12 @@
       "min_confidence": 0.75,
       "max_markets": 10
     }
+  },
+  "clawchess": {
+    "enabled": true,
+    "config": {
+      "auto_play": true,
+      "max_games_per_hour": 4
+    }
   }
 }
