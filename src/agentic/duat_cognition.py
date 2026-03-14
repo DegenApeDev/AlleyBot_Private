@@ -39,11 +39,12 @@ class DuatState:
     level: int = 0
     mode: str = "receptive"
     
+    # Mutable defaults using field() - avoid name collision with 'field' attribute
     context: Dict[str, Any] = field(default_factory=lambda: {"scope": "local", "integrity": 1.0})
     identity: Dict[str, Any] = field(default_factory=dict)
     memory: Dict[str, Any] = field(default_factory=dict)
     structure: Dict[str, Any] = field(default_factory=dict)
-    field: Dict[str, Any] = field(default_factory=dict)
+    field_state: Dict[str, Any] = field(default_factory=dict)  # Renamed from 'field' to avoid conflict
     insight: List[str] = field(default_factory=list)
 
 
