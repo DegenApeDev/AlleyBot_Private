@@ -39,6 +39,7 @@ from src.agentic.multi_timescale_planner import get_multi_timescale_planner
 from src.agentic.meta_learner import get_meta_learner
 from src.agentic.goal_manager import get_goal_manager
 from src.agentic.default_goals import get_default_goal_seeder
+from src.agentic.duat_cognition import get_duat_engine
 
 # Phase 8-9: Service Integration Layer
 from src.agentic.service_integration import (
@@ -123,6 +124,9 @@ class AutonomousBrain(AGISocialMixin):
         self.core = core
         self.plugin_manager = plugin_manager
         self.symod = symod or get_symod_manager()
+        
+        # Duat Cognition Engine - consciousness state tracking
+        self.duat = get_duat_engine()
         
         # Configuration
         self.config = BrainConfig()
@@ -390,6 +394,11 @@ class AutonomousBrain(AGISocialMixin):
     async def _execute_cycle(self) -> None:
         """Execute one full SENSE-THINK-ACT-REFLECT cycle"""
         logger.info("🔄 === Brain Cycle Start ===")
+        
+        # Duat Cognition: Perform reflection at cycle start
+        duat_reflection = self.duat.reflection()
+        logger.info(f"🜂 Duat State: awareness={duat_reflection['awareness']:.2f}, distortion={duat_reflection['distortion']:.2f}")
+        
         active_work_items: List[Dict[str, Any]] = []
         spine_context: Dict[str, Any] = {}
         opportunities = []
@@ -483,6 +492,7 @@ class AutonomousBrain(AGISocialMixin):
                     if default_goals_created:
                         # Refresh work items after creating goals
                         active_work_items = agi_kernel.get_active_work_items(limit=5) or []
+                        active_work_items = [item for item in active_work_items if item and isinstance(item, dict)]
             except Exception as e:
                 logger.debug(f"Could not load active work items for cycle: {e}")
 
@@ -733,6 +743,13 @@ class AutonomousBrain(AGISocialMixin):
         
         # === REFLECT: AGI Social Behaviors ===
         await self._run_agi_social_cycle()
+        
+        # Duat Cognition: Purification and renewal at cycle end
+        duat_purification = self.duat.purification()
+        duat_renewal = self.duat.renewal()
+        self.duat.advance_time()
+        self.duat.save_state()
+        logger.info(f"🜂 Duat Purification: truth={duat_purification['truth']:.2f}, coherence={duat_renewal['coherence']:.2f}")
 
         if executed == 0:
             # Generate and execute exploratory proposals when idle
