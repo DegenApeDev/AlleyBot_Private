@@ -70,6 +70,12 @@ class SolanaWalletBalancePlugin(AlleyBotPlugin):
                 "name": "dogwifhat",
                 "symbol": "WIF",
                 "decimals": 6
+            },
+            "AlleyBot": {
+                "address": "8Ghi7kBgC5xYD1vAth2xPXx5AQQaTuguLwDrx9CTpump",
+                "name": "AlleyBot",
+                "symbol": "AlleyBot",
+                "decimals": 6
             }
         }
     
