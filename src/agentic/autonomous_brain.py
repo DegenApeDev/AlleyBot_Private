@@ -469,6 +469,8 @@ class AutonomousBrain(AGISocialMixin):
         if agi_kernel and hasattr(agi_kernel, 'get_active_work_items'):
             try:
                 active_work_items = agi_kernel.get_active_work_items(limit=5) or []
+                # Filter out None items and ensure they're dicts
+                active_work_items = [item for item in active_work_items if item and isinstance(item, dict)]
                 if active_work_items:
                     top_work_item = active_work_items[0]
                     logger.info(
