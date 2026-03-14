@@ -95,10 +95,14 @@ class GoalCommands:
             # Group by status
             by_status = {}
             for goal in goals:
-                status = goal.status.name
-                if status not in by_status:
-                    by_status[status] = []
-                by_status[status].append(goal)
+                try:
+                    status = goal.status.name if hasattr(goal.status, 'name') else str(goal.status)
+                    if status not in by_status:
+                        by_status[status] = []
+                    by_status[status].append(goal)
+                except Exception as e:
+                    logger.warning(f"Skipping malformed goal: {e}")
+                    continue
             
             msg = "🎯 Goals Overview\n\n"
             
@@ -107,8 +111,14 @@ class GoalCommands:
                     count = len(by_status[status])
                     msg += f"**{status}** ({count} goals)\n"
                     for goal in by_status[status][:3]:  # Show top 3 per status
-                        priority_emoji = "🔴" if goal.effective_priority >= 8 else "🟡" if goal.effective_priority >= 5 else "🟢"
-                        msg += f"  {priority_emoji} {goal.id}: {goal.title[:40]}\n"
+                        try:
+                            priority_emoji = "🔴" if goal.effective_priority >= 8 else "🟡" if goal.effective_priority >= 5 else "🟢"
+                            goal_id = str(goal.id) if goal.id else "unknown"
+                            goal_title = str(goal.title)[:40] if goal.title else "No title"
+                            msg += f"  {priority_emoji} {goal_id}: {goal_title}\n"
+                        except Exception as e:
+                            logger.warning(f"Error displaying goal: {e}")
+                            msg += f"  ⚠️ Error displaying goal\n"
                     msg += "\n"
             
             msg += "\n📊 Use /goals_stats for detailed statistics"
