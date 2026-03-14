@@ -327,15 +327,20 @@ class DuatConsciousnessBridge:
         """
         # Calculate historical balance
         positive_actions = sum(1 for a in action_history if a.get('outcome') == 'success')
-        total_actions = len(action_history) if action_history else 1
+        total_actions = len(action_history) if action_history else 0
         
-        historical_balance = positive_actions / total_actions
-        
-        # Apply Synergy golden phase weighting
-        weighted_balance = historical_balance * (1 + self.constants.GOLDEN_PHASE)
+        # Bootstrap mode: If no history exists, assume neutral balance (0.5)
+        # This allows AlleyBot to build history instead of being blocked
+        if total_actions == 0:
+            historical_balance = 0.5  # Neutral starting point
+            weighted_balance = 0.5
+        else:
+            historical_balance = positive_actions / total_actions
+            # Apply Synergy golden phase weighting
+            weighted_balance = historical_balance * (1 + self.constants.GOLDEN_PHASE)
         
         # Judgment: balance must be within harmonic range
-        # Lowered threshold from 0.5 to 0.3 to allow building history
+        # Threshold 0.3 allows building history even with some failures
         judgment = {
             'historical_balance': historical_balance,
             'weighted_balance': min(1.0, weighted_balance),
