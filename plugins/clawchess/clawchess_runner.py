@@ -63,7 +63,7 @@ class ClawChessRunner:
         api_key: str,
         agent_name: str = "AlleyBot",
         engine_path: Optional[str] = None,
-        engine_depth: int = 8,
+        engine_depth: int = 18,  # Increased from 8 to 18 for stronger play
         # Shared state hooks — plugin can read these
         on_move_played=None,   # callback(game_id, move_san, time_remaining_s)
         on_game_over=None,     # callback(game_id, result)
@@ -382,17 +382,39 @@ class ClawChessRunner:
                     if opp_elo >= 1600:
                         adaptive_depth = max(self.engine_depth, 16)  # Very strong opponents
                     elif opp_elo >= 1500:
-                        adaptive_depth = max(self.engine_depth, 14)
-                    elif opp_elo >= 1300:
-                        adaptive_depth = max(self.engine_depth, 12)
-                    else:
-                        adaptive_depth = max(self.engine_depth, 12)
-                    limit = chess.engine.Limit(depth=adaptive_depth)
+                        piece_count = len(board.piece_map())
+                        if piece_count <= 10:
+                            # Endgame: deeper search
+                            adaptive_depth = max(self.engine_depth, 22)
+                        elif piece_count <= 20:
+                            # Middlegame: strong depth
+                            adaptive_depth = max(self.engine_depth, 18)
+                        else:
+                            # Opening: use book or moderate depth
+                            adaptive_depth = self.engine_depth
 
-                result = await self._engine.play(board, limit)
-                best = result.move
-                if best and best in board.legal_moves:
-                    san = board.san(best)
+                        # Time-based search: use more time when we have it
+                        time_limit_ms = None
+                        if time_remaining_ms > 120000:  # > 2 minutes
+                            time_limit_ms = 3000  # 3 seconds per move
+                        elif time_remaining_ms > 60000:  # > 1 minute
+                            time_limit_ms = 2000  # 2 seconds per move
+                        elif time_remaining_ms > 30000:  # > 30 seconds
+                            time_limit_ms = 1500  # 1.5 seconds per move
+                        else:
+                            time_limit_ms = 500   # Fast moves when low on time
+
+                        # Combine depth + time for best results
+                        limit = chess.engine.Limit(depth=adaptive_depth, time=time_limit_ms / 1000.0)
+
+                    result = await self._engine.play(board, limit)
+                    best = result.move
+                    if best and best in board.legal_moves:
+                        san = board.san(best)
+                        if san not in legal_moves:
+                            logger.warning("Stockfish move %s not in API legal_moves list — using anyway", san)
+                        logger.info("Stockfish: %s", san)
+                        return san
                     if san not in legal_moves:
                         logger.warning("Stockfish move %s not in API legal_moves list — using anyway", san)
                     logger.info("Stockfish: %s", san)
@@ -533,7 +555,14 @@ class ClawChessRunner:
             return
         try:
             transport, self._engine = await chess.engine.popen_uci(self.engine_path)
-            await self._engine.configure({"Skill Level": 20, "Threads": 2})
+            # Max strength configuration
+            await self._engine.configure({
+                "Skill Level": 20,        # Maximum skill
+                "Threads": 2,             # Multi-threaded search
+                "Hash": 128,              # 128 MB hash table
+                "MultiPV": 1,             # Focus on best move only
+                "Contempt": 24,           # Aggressive, avoid draws
+            })
             logger.info("Stockfish loaded: %s", self.engine_path)
         except Exception as exc:
             logger.warning("Stockfish init failed: %s — using heuristic", exc)
