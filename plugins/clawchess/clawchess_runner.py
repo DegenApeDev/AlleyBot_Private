@@ -407,11 +407,6 @@ class ClawChessRunner:
                     return san
                 else:
                     logger.warning("Stockfish returned invalid move, falling back to heuristic")
-                            logger.warning("Stockfish move %s not in API legal_moves list — using anyway", san)
-                        logger.info("Stockfish (depth=%d, time=%.1fs): %s", adaptive_depth, time_limit, san)
-                        return san
-                    else:
-                        logger.warning("Stockfish returned invalid move, falling back to heuristic")
             except Exception as exc:
                 logger.warning("Stockfish failed: %s — falling back to heuristic", exc)
 
