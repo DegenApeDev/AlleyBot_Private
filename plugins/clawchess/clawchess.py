@@ -26,7 +26,7 @@ class ClawChessPlugin(AlleyBotPlugin):
         
         # Chess engine for move analysis
         self.engine = None
-        self.engine_depth = 8  # Reduced depth for faster blitz games
+        self.engine_depth = 18  # Strong depth for competitive play (was 8)
         
         # Game tracking
         self.games_played = 0
