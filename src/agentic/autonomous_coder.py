@@ -11,13 +11,43 @@ import os
 import json
 import logging
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from src.agentic.skill_generator import SkillSpecification, get_skill_generator
-
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SkillSpecification:
+    """Specification for a skill to be generated"""
+    id: str
+    name: str
+    description: str
+    category: str
+    file_structure: Dict[str, str] = field(default_factory=dict)
+    dependencies: List[str] = field(default_factory=list)
+    evidence: List[str] = field(default_factory=list)
+    
+    def to_skill_md(self) -> str:
+        """Convert to SKILL.md format"""
+        return f"""# {self.name}
+
+## Description
+{self.description}
+
+## Category
+{self.category}
+
+## Evidence
+{chr(10).join(f"- {e}" for e in self.evidence)}
+
+## Dependencies
+{chr(10).join(f"- {d}" for d in self.dependencies)}
+
+## Files
+{chr(10).join(f"- {f}: {desc}" for f, desc in self.file_structure.items())}
+"""
 
 
 @dataclass
@@ -406,6 +436,41 @@ class TestSkill:
         result = client.process(invalid_param=True)
         assert isinstance(result, dict)
 '''
+    
+    def deploy_skill(self, skill: GeneratedSkill) -> bool:
+        """
+        Deploy a generated skill to production.
+        
+        This marks the skill as deployed and makes it available for use.
+        
+        Args:
+            skill: GeneratedSkill to deploy
+            
+        Returns:
+            True if deployment successful
+        """
+        try:
+            if skill.status != 'generated':
+                logger.warning(f"Cannot deploy skill {skill.skill_name} - status is {skill.status}")
+                return False
+            
+            # Update skill status
+            skill.status = 'deployed'
+            self.generated_skills[skill.spec_id] = skill
+            
+            logger.info(f"🚀 Deployed skill: {skill.skill_name} at {skill.skill_path}")
+            logger.info(f"   Files: {len(skill.files_created)}")
+            
+            # TODO: In future, could hot-reload the skill into the plugin system
+            # For now, skills will be loaded on next restart
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Skill deployment failed: {e}")
+            skill.status = 'failed'
+            skill.errors.append(f"Deployment error: {str(e)}")
+            return False
     
     def get_skill_status(self, spec_id: str) -> Optional[GeneratedSkill]:
         """Get status of generated skill"""

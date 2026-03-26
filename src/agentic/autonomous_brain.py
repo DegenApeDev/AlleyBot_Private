@@ -518,6 +518,78 @@ class AutonomousBrain(AGISocialMixin):
             except Exception as e:
                 logger.warning(f"⚠️ Auto skill building error: {e}")
         
+        # === AUTONOMOUS CODING: Detect skill gaps and generate code ===
+        # This is VERTICAL intelligence - self-improvement through code generation
+        skill_gaps = await self._detect_skill_gaps(agi_kernel)
+        
+        if skill_gaps:
+            logger.info(f"🔍 Detected {len(skill_gaps)} skill gaps")
+            
+            # Get self-improvement plugin
+            selfimprove_plugin = self.plugin_manager.get_plugin('selfimprove') if self.plugin_manager else None
+            
+            if selfimprove_plugin:
+                # Process highest priority gap
+                gap = max(skill_gaps, key=lambda g: g['priority'])
+                
+                # Check if we should auto-generate code for this gap
+                if gap['priority'] >= 7 and gap['type'] == 'repeated_failure':
+                    logger.info(f"🤖 Auto-generating skill for gap: {gap['description']}")
+                    
+                    try:
+                        # Generate skill specification
+                        from src.agentic.autonomous_coder import SkillSpecification
+                        
+                        spec = SkillSpecification(
+                            id=f"fix_{gap['action_type'].replace(':', '_')}_{int(datetime.now().timestamp())}",
+                            name=f"Fix {gap['action_type']}",
+                            description=gap['description'],
+                            category='fix',
+                            file_structure={
+                                '__init__.py': 'Package initialization',
+                                'client.py': 'Main skill client',
+                                'actions.py': 'Action handlers'
+                            },
+                            dependencies=[],
+                            evidence=gap.get('error_patterns', [])
+                        )
+                        
+                        # Generate code using autonomous coder
+                        from src.agentic.autonomous_coder import AutonomousCoder
+                        coder = AutonomousCoder()
+                        
+                        skill = coder.generate_skill(spec)
+                        
+                        if skill.status == 'generated':
+                            logger.info(f"✅ Generated skill: {skill.skill_name}")
+                            
+                            # Test in sandbox
+                            test_result = selfimprove_plugin.test_code_in_sandbox(
+                                code=open(skill.files_created[0]).read() if skill.files_created else "",
+                                test_code=None
+                            )
+                            
+                            if test_result['success']:
+                                # Deploy if safe
+                                coder.deploy_skill(skill)
+                                logger.info(f"🚀 Deployed skill: {skill.skill_name}")
+                                
+                                # Record in episodic memory
+                                if agi_kernel and hasattr(agi_kernel, 'episodic_memory'):
+                                    agi_kernel.episodic_memory.record_episode(
+                                        action_type='skill_generation',
+                                        context={'gap': gap, 'skill': skill.skill_name},
+                                        outcome={'success': True, 'deployed': True}
+                                    )
+                            else:
+                                logger.warning(f"⚠️ Skill failed sandbox test: {test_result.get('error', 'Unknown error')}")
+                        else:
+                            logger.warning(f"⚠️ Skill generation failed: {skill.errors}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Autonomous coding error: {e}")
+                        import traceback
+                        logger.debug(traceback.format_exc())
+        
         # === AUTONOMOUS TRADING: Analyze markets and execute SyMod-validated trades ===
         # ENABLED: Trading is now fully autonomous when trading system is available
         if self.autonomous_trading:
@@ -2035,6 +2107,132 @@ class AutonomousBrain(AGISocialMixin):
         
         return False
 
+    async def _detect_skill_gaps(self, agi_kernel) -> List[Dict]:
+        """
+        Detect capability gaps that require new skills.
+        
+        This is VERTICAL intelligence - identifying what we need to learn.
+        
+        Analyzes:
+        1. Repeated failures (3+ failures = skill gap)
+        2. Missing capabilities (referenced but not implemented)
+        3. Performance bottlenecks (slow actions)
+        
+        Returns:
+            List of skill gap dicts with priority scores
+        """
+        skill_gaps = []
+        
+        try:
+            # 1. Analyze recent failures from episodic memory
+            if hasattr(agi_kernel, 'episodic_memory'):
+                recent_failures = []
+                
+                # Get recent episodes
+                try:
+                    episodes = agi_kernel.episodic_memory.get_recent_episodes(
+                        filters={'outcome': 'failure'},
+                        limit=50
+                    )
+                    recent_failures = episodes if episodes else []
+                except:
+                    # Fallback: try alternative method
+                    if hasattr(agi_kernel.episodic_memory, 'episodes'):
+                        all_episodes = agi_kernel.episodic_memory.episodes[-50:]
+                        recent_failures = [e for e in all_episodes if e.outcome.get('success') == False]
+                
+                # Group failures by action type
+                failure_patterns = {}
+                for episode in recent_failures:
+                    action_type = episode.context.get('action_type', 'unknown')
+                    if action_type not in failure_patterns:
+                        failure_patterns[action_type] = []
+                    failure_patterns[action_type].append(episode)
+                
+                # Identify repeated failures (skill gap indicator)
+                for action_type, failures in failure_patterns.items():
+                    if len(failures) >= 3:  # 3+ failures = skill gap
+                        error_patterns = []
+                        for f in failures:
+                            error = f.outcome.get('error', 'Unknown error')
+                            if error not in error_patterns:
+                                error_patterns.append(error)
+                        
+                        skill_gaps.append({
+                            'type': 'repeated_failure',
+                            'action_type': action_type,
+                            'failure_count': len(failures),
+                            'error_patterns': error_patterns[:5],  # Top 5 unique errors
+                            'priority': min(10, len(failures) * 2),  # More failures = higher priority
+                            'description': f"Repeated failures in {action_type} - need better implementation"
+                        })
+            
+            # 2. Analyze missing capabilities from action logger
+            if hasattr(agi_kernel, 'action_router'):
+                try:
+                    from src.agentic.action_logger import get_action_logger
+                    action_logger = get_action_logger()
+                    
+                    # Get recent actions with "not found" errors
+                    recent_actions = action_logger.get_recent_outcomes(limit=50)
+                    
+                    for action in recent_actions:
+                        error = action.get('error', '')
+                        if 'not found' in error.lower() or 'missing' in error.lower():
+                            action_type = action.get('action_type', 'unknown')
+                            plugin = action.get('plugin', 'unknown')
+                            
+                            skill_gaps.append({
+                                'type': 'missing_capability',
+                                'action_type': action_type,
+                                'plugin': plugin,
+                                'priority': 7,
+                                'description': f"Missing capability: {action_type} in {plugin}",
+                                'error_patterns': [error]
+                            })
+                except Exception as e:
+                    logger.debug(f"Missing capability detection error: {e}")
+            
+            # 3. Analyze performance bottlenecks
+            if hasattr(agi_kernel, 'action_router'):
+                try:
+                    from src.agentic.action_logger import get_action_logger
+                    action_logger = get_action_logger()
+                    
+                    # Get actions with high duration
+                    recent_actions = action_logger.get_recent_outcomes(limit=50)
+                    
+                    # Group by action type and calculate avg duration
+                    action_durations = {}
+                    for action in recent_actions:
+                        action_type = action.get('action_type', 'unknown')
+                        duration = action.get('duration_ms', 0)
+                        
+                        if action_type not in action_durations:
+                            action_durations[action_type] = []
+                        action_durations[action_type].append(duration)
+                    
+                    # Identify slow actions (avg > 5000ms)
+                    for action_type, durations in action_durations.items():
+                        if len(durations) >= 3:
+                            avg_duration = sum(durations) / len(durations)
+                            if avg_duration > 5000:
+                                skill_gaps.append({
+                                    'type': 'performance_bottleneck',
+                                    'action_type': action_type,
+                                    'avg_duration_ms': avg_duration,
+                                    'priority': 6,
+                                    'description': f"Slow action: {action_type} ({avg_duration:.0f}ms avg)",
+                                    'error_patterns': []
+                                })
+                except Exception as e:
+                    logger.debug(f"Performance bottleneck detection error: {e}")
+        
+        except Exception as e:
+            logger.debug(f"Skill gap detection error: {e}")
+        
+        return skill_gaps
+    
     def _handle_idle_state(self, active_work_items: List[Dict[str, Any]], proposals: List[Any], spine_context: Dict[str, Any]) -> List[Any]:
         """Handle idle state by generating diverse exploratory proposals from 336+ available commands.
         
