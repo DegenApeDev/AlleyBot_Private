@@ -636,7 +636,7 @@ class ActionRouter:
             prediction_evaluation = self._build_prediction_evaluation(modulated_action, result)
             
             # Step 6: Reflect and learn through the unified AGI pathway
-            await self._reflect_on_outcome(modulated_action, result, validation)
+            await self._reflect_on_outcome(modulated_action, result, validation, prediction_evaluation)
             result['outcome_record'] = self._build_outcome_record(
                 modulated_action,
                 result,
