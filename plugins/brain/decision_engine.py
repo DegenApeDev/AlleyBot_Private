@@ -307,6 +307,35 @@ class DecisionEngineMixin(SyModTruthFilterMixin if SYMOD_AVAILABLE else object):
         if not available:
             return None
 
+        # PHASE 2.5: FairMind VDM scoring (Ethical Consciousness)
+        # Enhance actions with value analysis before AI decision
+        if hasattr(self.core, 'agi_kernel') and hasattr(self.core.agi_kernel, 'fairmind'):
+            try:
+                for action in available:
+                    # Calculate value for each action
+                    value_analysis = self.core.agi_kernel.fairmind.calculate_action_value({
+                        'action_type': action.get('id', 'unknown'),
+                        'description': action.get('description', ''),
+                        'time_invested': action.get('cooldown_minutes', 60) / 60.0,  # Convert to hours
+                        'utility_produced': 1.0 if action.get('impact') == 'high' else 0.5,
+                        'dependencies': []
+                    })
+                    
+                    # Add value score to action
+                    action['value_svu'] = value_analysis.total
+                    action['value_components'] = value_analysis.to_dict()
+                    
+                # Sort by value (higher is better)
+                available.sort(key=lambda a: a.get('value_svu', 0), reverse=True)
+                
+                # Log top value actions
+                if available:
+                    top_action = available[0]
+                    print(f"💎 Top value action: {top_action['id']} ({top_action.get('value_svu', 0):.2f} SVU)")
+                    
+            except Exception as e:
+                print(f"⚠️ FairMind VDM scoring error (non-critical): {e}")
+
         # Build context summary for AI
         context_summary = self.build_context_summary()
 

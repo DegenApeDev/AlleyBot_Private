@@ -218,6 +218,84 @@ class FairMindIntegration:
         
         return recommendations
     
+    # ===== ACTION VALIDATION =====
+    
+    def validate_action(self, action_type: str, params: Dict, context: Dict) -> Dict:
+        """
+        Validate an action before execution using FairMind principles.
+        
+        This is called by ActionRouter before executing any action.
+        
+        Args:
+            action_type: Type of action to validate
+            params: Action parameters
+            context: Execution context
+            
+        Returns:
+            Dict with:
+            - approved: bool (True if action should proceed)
+            - reason: str (explanation)
+            - violations: list (any truth violations detected)
+            - health_score: float (sovereign health 0-100)
+            - value_analysis: dict (VDM analysis)
+        """
+        # Build action dict for analysis
+        action = {
+            'action_type': action_type,
+            'params': params,
+            'context': context,
+            'description': f"{action_type} action",
+            'time_invested': 0.1,  # Assume 6 minutes per action
+            'utility_produced': 1.0,  # Default utility
+            'dependencies': []
+        }
+        
+        # Calculate value
+        value = self.calculate_action_value(action)
+        inversion = self.inversion_test(action)
+        
+        # Check cognitive health
+        cognitive_health = self.get_cognitive_health()
+        
+        # Determine if action should be approved
+        approved = True
+        reasons = []
+        violations = []
+        
+        # Block if value is strongly negative
+        if value.total < -5.0:
+            approved = False
+            reasons.append(f"Negative value: {value.total:.2f} SVU")
+        
+        # Block if entropy merchant behavior detected
+        if inversion['inversion_score'] < -0.5:
+            approved = False
+            reasons.append(f"Entropy extraction detected: {inversion['verdict']}")
+        
+        # Block if cognitive health is critical
+        if cognitive_health['grade'] == 'CRITICAL':
+            approved = False
+            reasons.append("Cognitive health critical - coherence restoration needed")
+        
+        # Warn if coherence is low but don't block
+        if cognitive_health['coherence'] < 0.5 and approved:
+            reasons.append("Warning: Low coherence - consider stabilization")
+        
+        # Build response
+        return {
+            'approved': approved,
+            'reason': '; '.join(reasons) if reasons else 'Action validated by FairMind',
+            'violations': violations,
+            'health_score': cognitive_health['coherence'] * 100,
+            'sovereign_health': self.get_sovereign_health()['sovereign_score'],
+            'value_analysis': {
+                'total_svu': value.total,
+                'components': value.to_dict(),
+                'inversion_score': inversion['inversion_score'],
+                'verdict': inversion['verdict']
+            }
+        }
+    
     # ===== INTEGRATION WITH EXISTING SYSTEMS =====
     
     def enhance_reflection(self, reflection_data: Dict) -> Dict:

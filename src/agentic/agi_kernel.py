@@ -74,6 +74,14 @@ class AGIKernel:
         self.symod = get_symod_manager(core)
         print("🔢 SyMod Core Manager initialized")
         
+        # FairMind DNA (Sovereign Cognition Layer)
+        from src.cognition.fairmind_integration import get_fairmind_integration
+        self.fairmind = get_fairmind_integration()
+        print("🧬 FairMind DNA integrated into AGI Kernel")
+        print("   ✅ Truth Violations Matrix (108 violations)")
+        print("   ✅ Duat Cognition Engine (60+ primitives, 190+ actions)")
+        print("   ✅ Value Dynamics Model (thermodynamic ethics)")
+        
         # Goal system
         self.goal_manager = create_autonomous_goal_manager(
             unified_memory=self.unified_memory,

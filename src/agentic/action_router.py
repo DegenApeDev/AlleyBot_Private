@@ -526,6 +526,48 @@ class ActionRouter:
                 'validation_trace': validation_trace,
             }
         
+        # Step 1.5: FairMind DNA validation (Ethical Consciousness)
+        if self.agi and hasattr(self.agi, 'fairmind'):
+            try:
+                fairmind_check = self.agi.fairmind.validate_action(
+                    action_type=action_spec.get('action_type', 'unknown'),
+                    params=action_spec.get('params', {}),
+                    context=action_spec.get('context', {})
+                )
+                
+                fairmind_validation = self._normalize_validation_result(
+                    'fairmind_validation',
+                    fairmind_check,
+                    fail_closed=False,  # Don't fail-closed, just warn
+                )
+                validation_trace.append(fairmind_validation)
+                
+                if not fairmind_check['approved']:
+                    print(f"⚠️ FairMind rejected action: {fairmind_check['reason']}")
+                    return {
+                        'success': False,
+                        'error': f"FairMind validation failed: {fairmind_check['reason']}",
+                        'stage': 'fairmind_validation',
+                        'action_id': action_id,
+                        'validation_trace': validation_trace,
+                        'truth_violations': fairmind_check.get('violations', []),
+                        'sovereign_health': fairmind_check.get('sovereign_health', 0),
+                        'value_analysis': fairmind_check.get('value_analysis', {})
+                    }
+                
+                # Add FairMind metadata to validation
+                validation['fairmind_approved'] = True
+                validation['sovereign_health'] = fairmind_check.get('sovereign_health', 0)
+                validation['value_svu'] = fairmind_check.get('value_analysis', {}).get('total_svu', 0)
+                
+                # Log value analysis
+                value_analysis = fairmind_check.get('value_analysis', {})
+                if value_analysis.get('total_svu', 0) != 0:
+                    print(f"💎 Value: {value_analysis['total_svu']:.2f} SVU ({value_analysis['verdict']})")
+                
+            except Exception as e:
+                print(f"⚠️ FairMind validation error (non-critical): {e}")
+        
         # Step 2: Apply episodic learning modulation
         modulated_action = action_spec
         if hasattr(self.agi, 'behavior_modulator'):
