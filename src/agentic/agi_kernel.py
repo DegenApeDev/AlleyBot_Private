@@ -82,6 +82,15 @@ class AGIKernel:
         print("   ✅ Duat Cognition Engine (60+ primitives, 190+ actions)")
         print("   ✅ Value Dynamics Model (thermodynamic ethics)")
         
+        # Cross-Domain Pattern Detector (Horizontal Synthesis)
+        from src.agentic.cross_domain_pattern_detector import get_cross_domain_pattern_detector
+        self.pattern_detector = get_cross_domain_pattern_detector()
+        print("🔗 Cross-Domain Pattern Detector initialized")
+        print("   ✅ Crypto-social correlation detection")
+        print("   ✅ Sentiment-price correlation detection")
+        print("   ✅ Cross-platform trend detection")
+        print("   ✅ Multi-domain strategy generation")
+        
         # Goal system
         self.goal_manager = create_autonomous_goal_manager(
             unified_memory=self.unified_memory,

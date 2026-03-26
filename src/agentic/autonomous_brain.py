@@ -466,6 +466,34 @@ class AutonomousBrain(AGISocialMixin):
             if opportunities:
                 logger.info(f"💡 Identified {len(opportunities)} cross-platform opportunities")
         
+        # === CROSS-DOMAIN PATTERN DETECTION: Horizontal Intelligence ===
+        # This is HORIZONTAL synthesis - detecting patterns across domains
+        if agi_kernel and hasattr(agi_kernel, 'pattern_detector'):
+            try:
+                patterns = agi_kernel.pattern_detector.detect_patterns(observations)
+                
+                if patterns:
+                    logger.info(f"🔍 Detected {len(patterns)} cross-domain patterns")
+                    
+                    # Log top patterns
+                    for pattern in patterns[:3]:  # Top 3
+                        logger.info(f"   📊 {pattern.pattern_type}: {pattern.description} (confidence: {pattern.confidence:.2f})")
+                    
+                    # Generate strategy from patterns
+                    strategy = agi_kernel.pattern_detector.generate_strategy_from_patterns(patterns)
+                    
+                    if strategy:
+                        logger.info(f"🎯 Generated multi-domain strategy from {strategy['based_on_pattern']} pattern")
+                        logger.info(f"   Actions: {len(strategy['actions'])} cross-domain actions")
+                        
+                        # Store strategy for execution
+                        if not hasattr(self, '_cross_domain_strategies'):
+                            self._cross_domain_strategies = []
+                        self._cross_domain_strategies.append(strategy)
+                        
+            except Exception as e:
+                logger.debug(f"Cross-domain pattern detection error: {e}")
+        
         # Submit to SyMod
         for obs in observations:
             self.symod.observe(obs)
