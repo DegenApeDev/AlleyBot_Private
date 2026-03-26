@@ -100,6 +100,17 @@ class AGIKernel:
         print("   ✅ Optimization recommendation engine")
         print("   ✅ Iterative improvement tracking")
         
+        # Meta-Cognition Engine (Self-Awareness)
+        from src.agentic.meta_cognition_engine import get_meta_cognition_engine
+        self.meta_cognition = get_meta_cognition_engine(self)
+        print("🧠 Meta-Cognition Engine initialized")
+        print("   ✅ Decision quality assessment")
+        print("   ✅ Goal-value alignment tracking")
+        print("   ✅ Learning rate monitoring")
+        print("   ✅ Ethical health evaluation")
+        print("   ✅ Cognitive coherence detection")
+        print("   ✅ Self-improvement goal generation")
+        
         # Goal system
         self.goal_manager = create_autonomous_goal_manager(
             unified_memory=self.unified_memory,

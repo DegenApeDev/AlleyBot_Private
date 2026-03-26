@@ -736,9 +736,61 @@ class AutonomousBrain(AGISocialMixin):
             if reasoning_result.confidence > 0.7:
                 logger.info(f"🧠 Unified Reasoning: {reasoning_result.explanation[:100]}...")
         
+        # === META-COGNITION: Reflect on cognitive state (every 100 cycles) ===
+        # This is CONSCIOUSNESS - self-awareness and introspection
+        cycle_count = self.stats.get('cycles_completed', 0)
+        if cycle_count > 0 and cycle_count % 100 == 0:
+            if agi_kernel and hasattr(agi_kernel, 'meta_cognition'):
+                try:
+                    logger.info("🧠 === META-COGNITION REFLECTION ===")
+                    
+                    # Reflect on cognitive state
+                    cognitive_state = agi_kernel.meta_cognition.reflect_on_cognitive_state()
+                    
+                    logger.info(f"   Overall Health: {cognitive_state.overall_health:.1%} ({cognitive_state.grade})")
+                    logger.info(f"   Decision Quality: {cognitive_state.decision_quality:.1%}")
+                    logger.info(f"   Goal Alignment: {cognitive_state.goal_alignment:.1%}")
+                    logger.info(f"   Learning Rate: {cognitive_state.learning_rate:.1%}")
+                    logger.info(f"   Ethical Health: {cognitive_state.ethical_health:.1%}")
+                    logger.info(f"   Cognitive Coherence: {cognitive_state.cognitive_coherence:.1%}")
+                    
+                    # Generate self-improvement goals if needed
+                    improvement_goals = agi_kernel.meta_cognition.generate_self_improvement_goals(cognitive_state)
+                    
+                    if improvement_goals:
+                        logger.info(f"   💡 {len(improvement_goals)} self-improvement goal(s) generated")
+                        
+                        # Add top priority goal to goal manager
+                        top_goal = max(improvement_goals, key=lambda g: g['priority'])
+                        logger.info(f"   🎯 Top priority: {top_goal['title']}")
+                        
+                        # Create goal in goal manager
+                        if hasattr(agi_kernel, 'goal_manager'):
+                            from src.agentic.goal_manager import Goal, GoalPriority
+                            
+                            new_goal = Goal(
+                                id=f"metacog_{int(datetime.now().timestamp())}",
+                                title=top_goal['title'],
+                                description=top_goal['description'],
+                                category=top_goal['category'],
+                                priority=GoalPriority.HIGH,
+                                impact_score=top_goal['priority'],
+                                effort_estimate='days',
+                                confidence=0.8,
+                                trigger_type='meta_cognition',
+                                evidence=[f"Cognitive health assessment: {cognitive_state.grade}"]
+                            )
+                            
+                            if agi_kernel.goal_manager.add_goal(new_goal):
+                                logger.info(f"   ✅ Self-improvement goal created: {new_goal.id}")
+                    else:
+                        logger.info("   ✅ Cognitive health is good - no improvements needed")
+                
+                except Exception as e:
+                    logger.debug(f"Meta-cognition reflection error: {e}")
+        
         # === PERFORMANCE OPTIMIZATION: Analyze and optimize (every 50 cycles) ===
         # This is VERTICAL expertise - improving through iteration
-        cycle_count = self.stats.get('cycles_completed', 0)
         if cycle_count > 0 and cycle_count % 50 == 0:
             if agi_kernel and hasattr(agi_kernel, 'performance_optimizer'):
                 try:
