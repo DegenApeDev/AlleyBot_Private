@@ -119,7 +119,6 @@ class IdentityService:
             "SOUL.md",
             "../SOUL.md",
             "../../SOUL.md",
-            "/home/alley/AlleyBot/SOUL.md",
         ]
         
         for path in search_paths:

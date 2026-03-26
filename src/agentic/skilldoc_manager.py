@@ -271,7 +271,7 @@ class SkillDocManager:
 _skilldoc_manager: Optional[SkillDocManager] = None
 
 
-def get_skilldoc_manager(base_path: str = '/home/alley/AlleyBot') -> SkillDocManager:
+def get_skilldoc_manager(base_path: str = None) -> SkillDocManager:
     """Get or create SkillDocManager singleton"""
     global _skilldoc_manager
     if _skilldoc_manager is None:
