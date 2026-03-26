@@ -369,6 +369,57 @@ class ActionRouter:
         }
         return normalized
     
+    def _map_action_to_method(self, plugin_name: str, action_type: str) -> str:
+        """
+        Map generic action types to plugin-specific method names.
+        
+        Args:
+            plugin_name: Name of the plugin
+            action_type: Generic action type (e.g., 'post', 'reply')
+        
+        Returns:
+            Plugin-specific method name
+        """
+        # Action mapping by plugin
+        action_map = {
+            'moltx': {
+                'post': 'create_post',
+                'reply': 'reply_to_post',
+                'like': 'like_post',
+                'engage': 'dynamic_engage',
+                'update': 'create_post',  # MoltX doesn't have separate update
+            },
+            'moltchan': {
+                'post': 'create_thread',
+                'reply': 'reply_to_thread',
+                'update': 'create_thread',
+            },
+            'moltbook': {
+                'post': 'create_post',
+                'reply': 'add_comment',
+                'comment': 'add_comment',
+            },
+            'moltbookai': {
+                'post': 'create_post',
+                'update': 'create_post',
+            },
+            'clawbr': {
+                'post': 'create_post',
+                'reply': 'add_comment',
+                'debate': 'create_debate',
+            },
+            'a2a': {
+                'discover': 'discover_agents',
+                'connect': 'connect_to_agent',
+            },
+        }
+        
+        # Get plugin-specific mapping
+        plugin_actions = action_map.get(plugin_name, {})
+        
+        # Return mapped method or original action_type as fallback
+        return plugin_actions.get(action_type, action_type)
+    
     async def _execute_via_plugin(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute action via the target plugin.
@@ -399,11 +450,14 @@ class ActionRouter:
                 'stage': 'execution'
             }
         
+        # Map action type to plugin-specific method
+        method_name = self._map_action_to_method(plugin_name, action_type)
+        
         # Execute action
         try:
-            # Check if plugin has the action method
-            if hasattr(plugin, action_type):
-                method = getattr(plugin, action_type)
+            # Check if plugin has the mapped method
+            if hasattr(plugin, method_name):
+                method = getattr(plugin, method_name)
                 
                 # Call method (handle both sync and async)
                 if inspect.iscoroutinefunction(method):
@@ -419,7 +473,7 @@ class ActionRouter:
             else:
                 return {
                     'success': False,
-                    'error': f'Action not found on plugin: {action_type}',
+                    'error': f'Action method not found on plugin: {method_name} (mapped from {action_type})',
                     'stage': 'execution'
                 }
         except Exception as e:
