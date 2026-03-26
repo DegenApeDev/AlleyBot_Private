@@ -242,7 +242,8 @@ class AGIOrchestrator:
     
     def _run_phase_7_detection(self) -> PhaseResult:
         """Phase 7: World State Intelligence - Detect patterns with world model validation"""
-        start = datetime.now()
+        from datetime import timezone
+        start = datetime.now(timezone.utc)
         
         try:
             # Detect trends using inference engine
@@ -380,7 +381,7 @@ class AGIOrchestrator:
                 success=True,
                 output=output,
                 confidence=overall_confidence,
-                duration_seconds=(datetime.now() - start).total_seconds(),
+                duration_seconds=(datetime.now(timezone.utc) - start).total_seconds(),
                 triggered_phases=triggered
             )
         

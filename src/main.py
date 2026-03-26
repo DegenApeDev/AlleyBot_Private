@@ -80,6 +80,20 @@ class ProductionAlleyBot:
             print("  • Webhook-Ready Integrations")
             print("="*60 + "\n")
             
+            # Auto-start autonomous brain if enabled
+            auto_start_brain = os.getenv('AUTO_START_BRAIN', 'true').lower() == 'true'
+            if auto_start_brain:
+                try:
+                    from src.agentic.autonomous_brain import get_autonomous_brain
+                    brain = get_autonomous_brain(self.core, self.core.plugin_manager)
+                    brain_mode = os.getenv('BRAIN_MODE', 'normal')
+                    await brain.start(mode=brain_mode)
+                    print(f"🧠 Autonomous Brain: AUTO-STARTED (mode: {brain_mode})")
+                except Exception as e:
+                    print(f"⚠️  Failed to auto-start brain: {e}")
+            else:
+                print("ℹ️  Autonomous Brain: Manual start required (AUTO_START_BRAIN=false)")
+            
             # Start Telegram polling asynchronously
             await self.telegram_webhook.start_polling_async()
             

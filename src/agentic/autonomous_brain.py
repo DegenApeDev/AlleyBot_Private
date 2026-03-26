@@ -36,6 +36,7 @@ class BrainConfig:
     max_actions_per_hour: int = 50
     min_confidence: float = 0.6
     require_owner_approval: bool = False
+    exploration_budget: float = 0.1  # 10% of actions can be exploratory (lower confidence)
     
     # Mode-specific overrides
     @classmethod
@@ -53,9 +54,10 @@ class BrainConfig:
                 enabled=True,
                 mode='normal',
                 cycle_interval_minutes=30,
-                max_actions_per_hour=50,
-                min_confidence=0.6,
-                require_owner_approval=False
+                max_actions_per_hour=60,
+                min_confidence=0.4,
+                require_owner_approval=False,
+                exploration_budget=0.1
             ),
             'aggressive': cls(
                 enabled=True,
@@ -296,12 +298,22 @@ class AutonomousBrain(AGISocialMixin):
         
         # === ACT: Execute proposals ===
         executed = 0
+        exploration_used = 0
+        exploration_limit = int(self.config.max_actions_per_hour * self.config.exploration_budget)
+        
         for proposal in proposals:
-            # Check confidence threshold
-            if proposal.confidence < self.config.min_confidence:
-                logger.debug(f"⛔ Blocked: confidence {proposal.confidence:.2f} < {self.config.min_confidence}")
-                self.stats['actions_blocked'] += 1
-                continue
+            # Check confidence threshold with exploration budget
+            is_exploratory = proposal.confidence < self.config.min_confidence
+            
+            if is_exploratory:
+                # Allow exploratory actions if within budget (0.3-0.5 confidence)
+                if proposal.confidence >= 0.3 and exploration_used < exploration_limit:
+                    logger.info(f"🔬 Exploratory action: {proposal.action_type} (confidence: {proposal.confidence:.2f})")
+                    exploration_used += 1
+                else:
+                    logger.debug(f"⛔ Blocked: confidence {proposal.confidence:.2f} < {self.config.min_confidence}")
+                    self.stats['actions_blocked'] += 1
+                    continue
             
             # Check if we have budget
             if self._actions_this_hour >= self.config.max_actions_per_hour:

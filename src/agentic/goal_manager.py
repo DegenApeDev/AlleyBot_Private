@@ -216,6 +216,18 @@ class GoalManager:
                 logger.debug(f"Goal '{goal.title}' already exists (duplicate)")
                 return False
             
+            # AUTO-APPROVE high-priority goals (priority >= 8.0 or HIGH/CRITICAL)
+            auto_approve = False
+            if goal.priority in [GoalPriority.HIGH, GoalPriority.CRITICAL]:
+                auto_approve = True
+            elif goal.impact_score >= 8.0 and goal.confidence >= 0.7:
+                auto_approve = True
+            
+            if auto_approve and goal.status == GoalStatus.PROPOSED:
+                goal.status = GoalStatus.APPROVED
+                goal.approved_at = datetime.now()
+                logger.info(f"🚀 AUTO-APPROVED high-priority goal: {goal.title}")
+            
             # Insert
             conn.execute('''
                 INSERT INTO goals VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

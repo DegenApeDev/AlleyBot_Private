@@ -278,7 +278,29 @@ class SelfImprovementHooks:
                     print(f"✅ Self-improvement draft created: {draft_id}")
                     print(f"   Risk: {risk_level}")
                     print(f"   Files: {len(draft['files'])}")
-                    print(f"   Run '/improve_approve {draft_id}' to deploy")
+                    
+                    # AUTO-APPROVE low-risk changes that pass tests
+                    tests_passed = result.get('tests_passed', False)
+                    if risk_level == 'low' and tests_passed:
+                        print(f"🚀 AUTO-DEPLOYING low-risk fix (tests passed)")
+                        try:
+                            deploy_result = coder.deploy_code(draft_id)
+                            if deploy_result.get('success'):
+                                draft['status'] = 'DEPLOYED'
+                                draft['deployed_at'] = datetime.now().isoformat()
+                                print(f"✅ Auto-deployed: {draft_id}")
+                            else:
+                                print(f"❌ Auto-deploy failed: {deploy_result.get('error', 'unknown')}")
+                                print(f"   Run '/improve_approve {draft_id}' to deploy manually")
+                        except Exception as e:
+                            print(f"❌ Auto-deploy error: {e}")
+                            print(f"   Run '/improve_approve {draft_id}' to deploy manually")
+                    else:
+                        if risk_level != 'low':
+                            print(f"   ⚠️  {risk_level.upper()} risk - manual approval required")
+                        if not tests_passed:
+                            print(f"   ⚠️  Tests failed - manual review required")
+                        print(f"   Run '/improve_approve {draft_id}' to deploy")
                 else:
                     print(f"❌ Draft creation failed: {result.get('error', 'unknown')}")
                 

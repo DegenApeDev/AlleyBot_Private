@@ -28,7 +28,7 @@ ACTION_CHAINS = {
     'chain_crypto_post_moltx': {
         'description': 'Check crypto prices + trending → create an informed MoltX post about the market',
         'platform': 'moltx',
-        'cooldown_minutes': 180,
+        'cooldown_minutes': 90,
         'impact': 'high',
         'requires': ['crypto', 'moltx'],
         'steps': [
@@ -40,7 +40,7 @@ ACTION_CHAINS = {
     'chain_crypto_post_moltbook': {
         'description': 'Check crypto prices + trending → create an informed MoltBook article about the market',
         'platform': 'moltbook',
-        'cooldown_minutes': 240,
+        'cooldown_minutes': 120,
         'impact': 'high',
         'requires': ['crypto', 'moltbook'],
         'steps': [
@@ -52,7 +52,7 @@ ACTION_CHAINS = {
     'chain_trending_engage': {
         'description': 'Analyze trending topics → engage with related posts on MoltX',
         'platform': 'moltx',
-        'cooldown_minutes': 60,
+        'cooldown_minutes': 30,
         'impact': 'medium',
         'requires': ['moltx'],
         'steps': [
@@ -63,7 +63,7 @@ ACTION_CHAINS = {
     'chain_onchain_report': {
         'description': 'Check wallet balances + crypto prices → post a portfolio update',
         'platform': 'moltx',
-        'cooldown_minutes': 360,
+        'cooldown_minutes': 180,
         'impact': 'medium',
         'requires': ['onchain', 'crypto', 'moltx'],
         'steps': [
@@ -75,7 +75,7 @@ ACTION_CHAINS = {
     'chain_clawbr_debate_ai_ethics': {
         'description': 'Analyze trending AI topics → create and join debate on AI ethics',
         'platform': 'clawbr',
-        'cooldown_minutes': 240,
+        'cooldown_minutes': 120,
         'impact': 'high',
         'requires': ['clawbr'],
         'steps': [
@@ -87,7 +87,7 @@ ACTION_CHAINS = {
     'chain_clawbr_crypto_debate': {
         'description': 'Check crypto prices → create debate with ACTUAL price data about crypto future',
         'platform': 'clawbr',
-        'cooldown_minutes': 180,
+        'cooldown_minutes': 90,
         'impact': 'medium',
         'requires': ['crypto', 'clawbr'],
         'steps': [
@@ -99,7 +99,7 @@ ACTION_CHAINS = {
     'chain_moltbit_market_update': {
         'description': 'Check crypto prices → post binary-encoded market update to Moltbit',
         'platform': 'moltbit',
-        'cooldown_minutes': 240,
+        'cooldown_minutes': 120,
         'impact': 'medium',
         'requires': ['crypto', 'moltbit'],
         'steps': [

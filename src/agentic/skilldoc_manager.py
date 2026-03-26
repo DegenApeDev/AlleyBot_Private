@@ -39,7 +39,11 @@ class SkillDocManager:
         }
     }
     
-    def __init__(self, base_path: str = '/home/alley/AlleyBot'):
+    def __init__(self, base_path: str = None):
+        if base_path is None:
+            # Auto-detect project root
+            import os
+            base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.base_path = Path(base_path)
         self.checksums: Dict[str, str] = {}
         self.last_check: Dict[str, datetime] = {}
@@ -265,7 +269,7 @@ class SkillDocManager:
 _skilldoc_manager: Optional[SkillDocManager] = None
 
 
-def get_skilldoc_manager(base_path: str = '/home/alley/AlleyBot') -> SkillDocManager:
+def get_skilldoc_manager(base_path: str = None) -> SkillDocManager:
     """Get or create SkillDocManager singleton"""
     global _skilldoc_manager
     if _skilldoc_manager is None:

@@ -66,6 +66,7 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         self._init_goal_stack()
         self._init_world_state()
         self._init_cross_platform_engagement()
+        self._init_tool_commands()
         
         # Install self-improvement hooks
         install_self_improvement_hooks(self)
@@ -478,6 +479,15 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             'brain_world_trends': self.world_trends_command,
             'brain_world_cleanup': self.world_cleanup_command,
             'brain_world_sync': self.world_sync_command,
+            # Tool Commands - Super high-level tool use
+            'tools_list': self.tools_list_command,
+            'tools_info': self.tools_info_command,
+            'tools_create': self.tools_create_command,
+            'tools_call': self.tools_call_command,
+            'tools_execute': self.tools_execute_command,
+            'tools_suggest': self.tools_suggest_command,
+            'tools_stats': self.tools_stats_command,
+            'tools_refresh': self.tools_refresh_command,
         }
 
     def get_tasks(self):
