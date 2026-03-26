@@ -39,7 +39,13 @@ class SkillDocManager:
         }
     }
     
-    def __init__(self, base_path: str = '/home/alley/AlleyBot'):
+    def __init__(self, base_path: str = None):
+        # Auto-detect project root if not provided
+        if base_path is None:
+            # Get project root from this file's location
+            current_file = Path(__file__).resolve()
+            project_root = current_file.parent.parent.parent
+            base_path = str(project_root)
         self.base_path = Path(base_path)
         self.checksums: Dict[str, str] = {}
         self.last_check: Dict[str, datetime] = {}

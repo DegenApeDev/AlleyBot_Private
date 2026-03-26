@@ -369,6 +369,67 @@ class ActionRouter:
         }
         return normalized
     
+    async def _execute_via_plugin(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute action via the target plugin.
+        
+        Args:
+            action_spec: Action specification with plugin, action_type, params
+        
+        Returns:
+            Result dict from plugin execution
+        """
+        plugin_name = action_spec.get('plugin')
+        action_type = action_spec.get('action_type')
+        params = action_spec.get('params', {})
+        
+        if not plugin_name or not action_type:
+            return {
+                'success': False,
+                'error': 'Missing plugin or action_type',
+                'stage': 'execution'
+            }
+        
+        # Get plugin
+        plugin = self.plugins.get_plugin(plugin_name)
+        if not plugin:
+            return {
+                'success': False,
+                'error': f'Plugin not found: {plugin_name}',
+                'stage': 'execution'
+            }
+        
+        # Execute action
+        try:
+            # Check if plugin has the action method
+            if hasattr(plugin, action_type):
+                method = getattr(plugin, action_type)
+                
+                # Call method (handle both sync and async)
+                if inspect.iscoroutinefunction(method):
+                    result = await method(**params)
+                else:
+                    result = method(**params)
+                
+                # Normalize result
+                if isinstance(result, dict):
+                    return result
+                else:
+                    return {'success': True, 'data': result}
+            else:
+                return {
+                    'success': False,
+                    'error': f'Action not found on plugin: {action_type}',
+                    'stage': 'execution'
+                }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'stage': 'execution',
+                'exception_type': type(e).__name__
+            }
+    
     async def route_action(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
         """
         Route action through complete AGI pipeline.
