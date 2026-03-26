@@ -91,6 +91,15 @@ class AGIKernel:
         print("   ✅ Cross-platform trend detection")
         print("   ✅ Multi-domain strategy generation")
         
+        # Performance Optimizer (Vertical Expertise)
+        from src.agentic.performance_optimizer import get_performance_optimizer
+        self.performance_optimizer = get_performance_optimizer()
+        print("📈 Performance Optimizer initialized")
+        print("   ✅ Action-level performance analysis")
+        print("   ✅ Success/failure pattern detection")
+        print("   ✅ Optimization recommendation engine")
+        print("   ✅ Iterative improvement tracking")
+        
         # Goal system
         self.goal_manager = create_autonomous_goal_manager(
             unified_memory=self.unified_memory,

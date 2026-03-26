@@ -736,6 +736,55 @@ class AutonomousBrain(AGISocialMixin):
             if reasoning_result.confidence > 0.7:
                 logger.info(f"🧠 Unified Reasoning: {reasoning_result.explanation[:100]}...")
         
+        # === PERFORMANCE OPTIMIZATION: Analyze and optimize (every 50 cycles) ===
+        # This is VERTICAL expertise - improving through iteration
+        cycle_count = self.stats.get('cycles_completed', 0)
+        if cycle_count > 0 and cycle_count % 50 == 0:
+            if agi_kernel and hasattr(agi_kernel, 'performance_optimizer'):
+                try:
+                    from src.agentic.action_logger import get_action_logger
+                    action_logger = get_action_logger()
+                    
+                    # Get most common action types
+                    recent_actions = action_logger.get_recent_outcomes(limit=100)
+                    action_types = {}
+                    for action in recent_actions:
+                        action_type = action.get('action_type', 'unknown')
+                        plugin = action.get('plugin', '')
+                        full_type = f"{plugin}:{action_type}" if plugin else action_type
+                        action_types[full_type] = action_types.get(full_type, 0) + 1
+                    
+                    # Analyze top 3 most common actions
+                    top_actions = sorted(action_types.items(), key=lambda x: x[1], reverse=True)[:3]
+                    
+                    for action_type, count in top_actions:
+                        # Analyze performance
+                        metrics = agi_kernel.performance_optimizer.analyze_action_type(
+                            action_type,
+                            action_logger
+                        )
+                        
+                        if metrics:
+                            logger.info(f"📊 Performance analysis: {action_type}")
+                            logger.info(f"   Success rate: {metrics.success_rate:.1%} ({metrics.successes}/{metrics.total_attempts})")
+                            logger.info(f"   Avg duration: {metrics.avg_duration_ms:.0f}ms")
+                            
+                            # Generate optimizations
+                            optimizations = agi_kernel.performance_optimizer.generate_optimizations(metrics)
+                            
+                            if optimizations:
+                                logger.info(f"   💡 {len(optimizations)} optimization(s) recommended")
+                                
+                                # Apply highest priority optimization
+                                top_opt = max(optimizations, key=lambda o: o.priority)
+                                logger.info(f"   🔧 Top priority: {top_opt.recommendation}")
+                                
+                                # For now, just log - in future, auto-apply safe optimizations
+                                # agi_kernel.performance_optimizer.apply_optimization(top_opt)
+                
+                except Exception as e:
+                    logger.debug(f"Performance optimization error: {e}")
+        
         # === GOAL-DRIVEN ACTIONS: Get next action from active autonomous goals ===
         goal_driven_action = None
         if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
