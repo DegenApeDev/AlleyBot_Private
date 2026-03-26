@@ -33,13 +33,15 @@ from plugins.brain.self_reflection import SelfReflectionMixin
 from plugins.brain.goal_stack_mixin import GoalStackMixin
 from plugins.brain.world_state_mixin import WorldStateMixin
 from plugins.brain.cross_platform_engagement import CrossPlatformEngagementMixin
+from plugins.brain.tool_commands import ToolCommandsMixin
 from plugins.brain.self_improvement_hooks import install_self_improvement_hooks
 
 
 class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, FeedbackLoopMixin, 
                   ContentStrategyMixin, DynamicSkillsMixin, OperationalResilienceMixin,
                   MultiAgentCollaborationMixin, ReputationSystemMixin, SelfReflectionMixin,
-                  GoalStackMixin, WorldStateMixin, CrossPlatformEngagementMixin, AlleyBotPlugin):
+                  GoalStackMixin, WorldStateMixin, CrossPlatformEngagementMixin, ToolCommandsMixin,
+                  AlleyBotPlugin):
     """AlleyBot's autonomous brain - decides what to do, when, and how"""
 
     def __init__(self, config):
@@ -54,6 +56,7 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         self.core = None
         self.voice_emotion_plugin = None
         self.current_voice_emotion: Optional[Dict[str, Any]] = None
+        self._init_tool_commands()
 
     def get_commands(self) -> Dict[str, callable]:
         return {
@@ -61,6 +64,15 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             "think": self.think_command,
             "startbrain": self.start_brain,
             "stopbrain": self.stop_brain,
+            # Tool Commands - Super high-level tool use
+            'tools_list': self.tools_list_command,
+            'tools_info': self.tools_info_command,
+            'tools_create': self.tools_create_command,
+            'tools_call': self.tools_call_command,
+            'tools_execute': self.tools_execute_command,
+            'tools_suggest': self.tools_suggest_command,
+            'tools_stats': self.tools_stats_command,
+            'tools_refresh': self.tools_refresh_command,
         }
 
     def brain_command(self, args: list) -> str:
