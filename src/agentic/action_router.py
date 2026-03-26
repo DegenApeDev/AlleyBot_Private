@@ -690,18 +690,24 @@ class ActionRouter:
             }
         }
 
-    async def _reflect_on_outcome(self, action_spec: Dict[str, Any], result: Dict[str, Any], prediction: Dict[str, Any], evaluation: Dict[str, Any]) -> None:
+    async def _reflect_on_outcome(self, action_spec: Dict[str, Any], result: Dict[str, Any], prediction: Dict[str, Any] = None, evaluation: Dict[str, Any] = None) -> None:
         """
         Reflect on action outcome and learn.
         
         This is the AGI feedback loop - every outcome improves future decisions.
+        
+        Args:
+            action_spec: The action specification
+            result: The execution result
+            prediction: Optional prediction dict (for compatibility)
+            evaluation: Optional evaluation dict (for compatibility)
         """
         action_id = f"{action_spec.get('plugin')}:{action_spec.get('action_type')}"
         success = result.get('success', False)
         validation_trace = result.get('validation_trace') or []
         
         # Build validation dict from result if not in trace
-        validation = {'approved': success, 'reason': result.get('error') or 'Success'}
+        validation = prediction if prediction else {'approved': success, 'reason': result.get('error') or 'Success'}
         
         outcome_record = self._build_outcome_record(
             action_spec,
