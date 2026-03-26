@@ -641,10 +641,34 @@ class AutonomousBrain(AGISocialMixin):
         if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
             try:
                 goal_manager = agi_kernel.goal_manager
-                if goal_manager and hasattr(goal_manager, 'get_next_action'):
-                    goal_driven_action = goal_manager.get_next_action()
-                    if goal_driven_action:
-                        logger.info(f"🎯 Goal-driven action ready: {goal_driven_action.get('action_type', 'unknown')}")
+                
+                # Get active goals
+                from src.agentic.goal_manager import GoalStatus
+                active_goals = goal_manager.get_goals(status=GoalStatus.ACTIVE, limit=5)
+                
+                if active_goals:
+                    # Get next action for highest priority goal
+                    for goal in sorted(active_goals, key=lambda g: g.impact_score, reverse=True):
+                        next_action = goal_manager.get_next_action_for_goal(goal)
+                        if next_action:
+                            goal_driven_action = next_action
+                            logger.info(f"🎯 Goal-driven action: {next_action['action_type']} for goal '{goal.title}'")
+                            break
+                
+                # If no active goals, scan for new opportunities
+                if not active_goals:
+                    onchain_plugin = self.plugin_manager.get_plugin('onchain') if self.plugin_manager else None
+                    new_goals = goal_manager.scan_and_generate(onchain_plugin=onchain_plugin)
+                    if new_goals:
+                        logger.info(f"🎯 Generated {len(new_goals)} new autonomous goals from observations")
+                        # Try to get action from newly created goals
+                        for goal in new_goals:
+                            if goal.status == GoalStatus.ACTIVE or goal.status == GoalStatus.APPROVED:
+                                next_action = goal_manager.get_next_action_for_goal(goal)
+                                if next_action:
+                                    goal_driven_action = next_action
+                                    logger.info(f"🎯 Goal-driven action from new goal: {next_action['action_type']}")
+                                    break
             except Exception as e:
                 logger.debug(f"Goal-driven action retrieval error: {e}")
         

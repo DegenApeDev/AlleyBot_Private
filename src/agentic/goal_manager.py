@@ -687,6 +687,257 @@ class GoalManager:
 
         return self.get_goal(next_goal.id)
     
+    def scan_and_generate(self, onchain_plugin=None) -> List[Goal]:
+        """
+        Scan observations and world state for opportunities.
+        Generate autonomous goals based on detected patterns.
+        
+        This is HORIZONTAL intelligence - cross-domain pattern detection.
+        
+        Args:
+            onchain_plugin: Optional onchain plugin for crypto opportunities
+        
+        Returns:
+            List of newly generated goals
+        """
+        new_goals = []
+        
+        try:
+            # 1. Scan for performance gaps (content underperforming)
+            performance_gaps = self._detect_performance_gaps()
+            for gap in performance_gaps:
+                goal = Goal(
+                    id=f"perf_{gap['platform']}_{int(datetime.now().timestamp())}",
+                    title=f"Improve {gap['metric']} on {gap['platform']}",
+                    description=gap['description'],
+                    category='optimization',
+                    priority=GoalPriority.MEDIUM if gap['priority'] < 7 else GoalPriority.HIGH,
+                    impact_score=gap['impact'],
+                    effort_estimate='days',
+                    confidence=gap.get('confidence', 0.7),
+                    trigger_type='performance_gap',
+                    trigger_data=gap['data'],
+                    evidence=[gap['description']],
+                    proposed_solution=gap.get('suggested_solution', 'Analyze and optimize'),
+                    implementation_plan=gap.get('suggested_actions', [])
+                )
+                if self.add_goal(goal):
+                    new_goals.append(goal)
+                    # Auto-approve high-priority, high-confidence goals
+                    if gap['priority'] >= 8.0 and gap.get('confidence', 0) >= 0.8:
+                        self.approve_goal(goal.id)
+                        logger.info(f"🎯 Auto-approved high-priority goal: {goal.title}")
+            
+            if new_goals:
+                logger.info(f"🎯 Generated {len(new_goals)} autonomous goals from observations")
+            
+        except Exception as e:
+            logger.debug(f"Goal generation error: {e}")
+        
+        return new_goals
+    
+    def get_next_action_for_goal(self, goal: Goal) -> Optional[Dict[str, Any]]:
+        """
+        Convert a goal into its next executable action.
+        
+        This is the bridge between HORIZONTAL (goals) and VERTICAL (execution).
+        
+        Args:
+            goal: The goal to get next action for
+        
+        Returns:
+            Action dict ready for ActionRouter, or None if goal complete
+        """
+        try:
+            # Get or generate implementation plan
+            plan_steps = goal.implementation_plan
+            if not plan_steps or not isinstance(plan_steps, list):
+                # Generate basic plan if missing
+                plan_steps = self._generate_basic_plan(goal)
+                if plan_steps:
+                    # Update goal with plan
+                    with sqlite3.connect(self.db_path) as conn:
+                        conn.execute(
+                            'UPDATE goals SET implementation_plan = ? WHERE id = ?',
+                            (json.dumps(plan_steps), goal.id)
+                        )
+                        conn.commit()
+            
+            if not plan_steps:
+                logger.debug(f"No implementation plan for goal {goal.id}")
+                return None
+            
+            # Parse plan if it's a JSON string
+            if isinstance(plan_steps, str):
+                try:
+                    plan_steps = json.loads(plan_steps)
+                except json.JSONDecodeError:
+                    # If it's a list of strings, convert to action format
+                    plan_steps = [{'description': step, 'status': 'pending'} for step in plan_steps if isinstance(step, str)]
+            
+            # Find next incomplete step
+            for idx, step in enumerate(plan_steps):
+                if isinstance(step, str):
+                    # Convert string step to dict
+                    step = {'description': step, 'status': 'pending'}
+                    plan_steps[idx] = step
+                
+                if step.get('status') != 'completed':
+                    # Convert step to action proposal
+                    action = self._step_to_action(step, goal, idx, len(plan_steps))
+                    if action:
+                        # Mark step as in progress
+                        step['status'] = 'in_progress'
+                        with sqlite3.connect(self.db_path) as conn:
+                            conn.execute(
+                                'UPDATE goals SET implementation_plan = ? WHERE id = ?',
+                                (json.dumps(plan_steps), goal.id)
+                            )
+                            conn.commit()
+                        return action
+            
+            # All steps completed - mark goal as done
+            self.complete_goal(goal.id, outcome="All planned actions executed")
+            logger.info(f"✅ Goal {goal.id} completed - all steps executed")
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Error getting next action for goal {goal.id}: {e}")
+            return None
+    
+    def _detect_performance_gaps(self) -> List[Dict]:
+        """Detect content/engagement performance gaps"""
+        gaps = []
+        
+        try:
+            # Check if we have action logger for performance analysis
+            from src.agentic.action_logger import get_action_logger
+            action_logger = get_action_logger()
+            
+            # Analyze recent action outcomes
+            recent_actions = action_logger.get_recent_outcomes(limit=50)
+            
+            # Group by platform and action type
+            platform_performance = {}
+            for action in recent_actions:
+                platform = action.get('plugin', 'unknown')
+                action_type = action.get('action_type', 'unknown')
+                success = action.get('success', False)
+                
+                key = f"{platform}:{action_type}"
+                if key not in platform_performance:
+                    platform_performance[key] = {'total': 0, 'success': 0, 'failures': []}
+                
+                platform_performance[key]['total'] += 1
+                if success:
+                    platform_performance[key]['success'] += 1
+                else:
+                    platform_performance[key]['failures'].append(action.get('error', 'Unknown error'))
+            
+            # Identify underperforming areas (success rate < 50%)
+            for key, perf in platform_performance.items():
+                if perf['total'] >= 5:  # Need at least 5 attempts
+                    success_rate = perf['success'] / perf['total']
+                    if success_rate < 0.5:
+                        platform, action_type = key.split(':', 1)
+                        gaps.append({
+                            'platform': platform,
+                            'metric': f"{action_type} success rate",
+                            'description': f"Low success rate ({success_rate:.1%}) on {platform} {action_type}",
+                            'data': {'success_rate': success_rate, 'total_attempts': perf['total']},
+                            'priority': 7.0 + (1.0 - success_rate) * 3,
+                            'urgency': 6.0,
+                            'impact': 7.0,
+                            'confidence': 0.8,
+                            'suggested_solution': f"Analyze failure patterns and optimize {action_type} implementation",
+                            'suggested_actions': [
+                                f"Analyze {action_type} failures",
+                                f"Identify common error patterns",
+                                f"Generate improved {action_type} code",
+                                f"Test and deploy optimization"
+                            ]
+                        })
+        except Exception as e:
+            logger.debug(f"Performance gap detection error: {e}")
+        
+        return gaps
+    
+    def _generate_basic_plan(self, goal: Goal) -> List[Dict]:
+        """Generate basic implementation plan for a goal"""
+        plan = []
+        
+        if goal.category == 'optimization':
+            plan = [
+                {'description': f"Analyze current {goal.title} performance", 'status': 'pending'},
+                {'description': 'Identify optimization opportunities', 'status': 'pending'},
+                {'description': 'Implement improvements', 'status': 'pending'},
+                {'description': 'Test and validate results', 'status': 'pending'}
+            ]
+        elif goal.category == 'social':
+            plan = [
+                {'description': 'Review user interaction history', 'status': 'pending'},
+                {'description': 'Engage with user content', 'status': 'pending'},
+                {'description': 'Build rapport through replies', 'status': 'pending'}
+            ]
+        elif goal.category == 'trading':
+            plan = [
+                {'description': 'Analyze market conditions', 'status': 'pending'},
+                {'description': 'Validate trading opportunity', 'status': 'pending'},
+                {'description': 'Execute trade if conditions met', 'status': 'pending'}
+            ]
+        else:
+            # Generic plan
+            plan = [
+                {'description': f"Work on {goal.title}", 'status': 'pending'}
+            ]
+        
+        return plan
+    
+    def _step_to_action(self, step: Dict, goal: Goal, step_number: int, total_steps: int) -> Optional[Dict]:
+        """Convert a plan step to an executable action"""
+        
+        # Map step descriptions to action types
+        description = step.get('description', '').lower()
+        
+        # Determine action type and plugin from step description
+        action_type = 'analyze'  # Default
+        plugin = 'brain'  # Default
+        params = {}
+        
+        if 'analyze' in description or 'review' in description:
+            action_type = 'analyze'
+            plugin = 'brain'
+            params = {'topic': description}
+        elif 'engage' in description or 'reply' in description:
+            action_type = 'engage'
+            plugin = 'moltx'
+            params = {'strategy': 'build_relationship'}
+        elif 'post' in description or 'create' in description:
+            action_type = 'post'
+            plugin = 'moltx'
+            params = {'topic': goal.title}
+        elif 'trade' in description or 'execute' in description:
+            action_type = 'trade'
+            plugin = 'onchain'
+            params = {'strategy': 'conservative'}
+        
+        return {
+            'action_type': action_type,
+            'plugin': plugin,
+            'params': params,
+            'goal_id': goal.id,
+            'goal_description': goal.title,
+            'confidence': 0.75,
+            'justification': f"Executing step {step_number + 1}/{total_steps} of goal: {goal.title}",
+            'metadata': {
+                'source': 'goal_driven',
+                'goal_id': goal.id,
+                'step_number': step_number + 1,
+                'total_steps': total_steps,
+                'step_description': step.get('description')
+            }
+        }
+    
     def _row_to_goal(self, row: sqlite3.Row) -> Goal:
         """Convert database row to Goal"""
         # Helper to safely get column values
