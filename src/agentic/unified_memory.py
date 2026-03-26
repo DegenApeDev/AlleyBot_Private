@@ -36,14 +36,19 @@ class UnifiedMemory:
             print(f"⚠️ World State unavailable: {e}")
             self.world_state = None
             
-        # Enhanced Memory (Vector DB)
+        # Enhanced Memory (Vector DB) - DEPRECATED, using unified memory instead
+        # The enhanced_memory module has been deprecated in favor of unified memory
+        self.enhanced_memory = None
+        # Legacy support - if enhanced_memory exists, use it
         try:
             from src.agentic.enhanced_memory import EnhancedMemorySystem
             self.enhanced_memory = EnhancedMemorySystem()
             print("✅ Enhanced Memory connected")
+        except ImportError:
+            # Module doesn't exist - this is expected, using unified memory instead
+            pass
         except Exception as e:
             print(f"⚠️ Enhanced Memory unavailable: {e}")
-            self.enhanced_memory = None
             
         # Phase 12 Learning
         try:

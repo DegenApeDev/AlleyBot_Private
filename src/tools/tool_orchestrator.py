@@ -75,6 +75,13 @@ class ToolOrchestrator:
     def _discover_mcp_tools(self):
         """Discover tools from MCP servers"""
         try:
+            # Check if core and plugin_manager exist
+            if not self.core or not hasattr(self.core, 'plugin_manager'):
+                return
+            
+            if not self.core.plugin_manager:
+                return
+            
             mcp_plugin = self.core.plugin_manager.plugins.get('mcp')
             if mcp_plugin and hasattr(mcp_plugin, 'server_manager'):
                 for server_name, capabilities in mcp_plugin.server_manager.dynamic_capabilities.items():
