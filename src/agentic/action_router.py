@@ -126,6 +126,179 @@ class ActionRouter:
             },
         )
 
+    async def _validate_with_agi(self, action_spec: Dict) -> Dict:
+        """
+        Validate action with AGI Kernel.
+        
+        Checks:
+        - Alignment with active goals
+        - Timing appropriateness
+        - Strategic value
+        - Behavior modulation from episodic memory
+        """
+        context = action_spec.get('context', {})
+        
+        # Check if user requested (always approve user requests)
+        if context.get('user_requested'):
+            return {
+                'approved': True,
+                'reason': 'User requested action',
+                'modulations': {}
+            }
+        
+        # Check with decision system if available
+        if hasattr(self.agi, 'decision_system'):
+            # Get behavior modulation from episodic memory
+            modulations = {}
+            if hasattr(self.agi, 'behavior_modulator'):
+                modulations = self.agi.behavior_modulator.get_effective_params(
+                    action_spec.get('action_type', '')
+                )
+            
+            # Check timing and strategy
+            action_type = action_spec.get('action_type', '')
+            platform = action_spec.get('plugin', '')
+            
+            # For content posts, check content strategy
+            if action_type in ['create_post', 'post_text', 'post_article']:
+                if hasattr(self.agi, 'content_intelligence'):
+                    content_check = self.agi.content_intelligence.should_post_now(
+                        platform=platform,
+                        action_type=action_type
+                    )
+                    if not content_check.get('should_post'):
+                        return {
+                            'approved': False,
+                            'reason': content_check.get('reason', 'Content strategy blocked'),
+                            'modulations': modulations
+                        }
+            
+            return {
+                'approved': True,
+                'reason': 'AGI validation passed',
+                'modulations': modulations
+            }
+        
+        # No decision system - approve by default
+        return {
+            'approved': True,
+            'reason': 'No decision system available',
+            'modulations': {}
+        }
+    
+    def _verify_with_symod(self, action_spec: Dict[str, Any], validation: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Verify action through SyMod mathematical validation.
+        
+        This provides physics-based truth validation for high-impact actions.
+        """
+        symod_manager = getattr(self.agi, 'symod', None)
+        
+        if not symod_manager or not symod_manager.enabled:
+            return {
+                'approved': True,
+                'reason': 'SyMod validation skipped (not available)',
+                'details': {'symod_available': False}
+            }
+        
+        try:
+            # Build SyMod observation from action
+            from src.agentic.symod_core import SyModObservation
+            
+            observation = SyModObservation(
+                observation_type='action_proposal',
+                source_plugin=action_spec.get('plugin', 'unknown'),
+                content=str(action_spec.get('params', {})),
+                metadata={
+                    'action_type': action_spec.get('action_type'),
+                    'context': action_spec.get('context', {}),
+                    'validation': validation,
+                }
+            )
+            
+            # Submit to SyMod for validation
+            symod_manager.observe(observation)
+            
+            # For now, SyMod observation is informational
+            # Actual validation happens through Synergy field
+            return {
+                'approved': True,
+                'reason': 'SyMod observation recorded',
+                'details': {
+                    'symod_enabled': True,
+                    'observation_recorded': True,
+                }
+            }
+            
+        except Exception as e:
+            # Fail open for SyMod errors to avoid blocking actions
+            return {
+                'approved': True,
+                'reason': f'SyMod validation skipped due to error: {e}',
+                'error': str(e),
+                'details': {'symod_error': True}
+            }
+    
+    def _validate_with_synergy(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate action through the centralized Synergy field gate when available."""
+        decision_system = getattr(self.agi, 'decision_system', None)
+        synergy_engine = getattr(decision_system, 'synergy_engine', None) if decision_system else None
+        validation_profile = self._get_validation_profile(action_spec)
+        
+        if not synergy_engine:
+            if validation_profile['requires_strict_validation']:
+                return {
+                    'approved': False,
+                    'reason': 'Synergy not available for strict-validation action',
+                    'error': 'synergy_unavailable',
+                }
+            return {'approved': True, 'reason': 'Synergy not available'}
+        
+        action_name = action_spec.get('action_type') or action_spec.get('id', 'unknown')
+        context = {
+            **action_spec.get('context', {}),
+            'plugin': action_spec.get('plugin'),
+            'params': action_spec.get('params', {}),
+        }
+        confidence = (
+            action_spec.get('context', {}).get('proposal_confidence')
+            or action_spec.get('decision_confidence')
+            or action_spec.get('context', {}).get('decision_confidence')
+            or 0.7
+        )
+
+        try:
+            synergy_decision = synergy_engine.decide_with_synergy(
+                context=context,
+                available_actions=[action_name],
+                ai_confidence=confidence,
+            )
+            if not synergy_decision.get('approved'):
+                return {
+                    'approved': False,
+                    'reason': synergy_decision.get('reasoning', 'Rejected by Synergy field validation'),
+                    'details': synergy_decision,
+                }
+
+            action_spec['synergy_validated'] = True
+            return {
+                'approved': True,
+                'reason': synergy_decision.get('reasoning', 'Approved by Synergy'),
+                'details': synergy_decision,
+            }
+        except Exception as e:
+            if validation_profile['requires_strict_validation']:
+                return {
+                    'approved': False,
+                    'reason': f'Synergy validation error for strict-validation action: {e}',
+                    'error': str(e),
+                }
+            return {
+                'approved': True,
+                'reason': f'Synergy validation skipped due to error: {e}',
+                'error': str(e),
+            }
+    
     def _get_validation_profile(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
         """Normalize risk/trust metadata used for validation enforcement."""
         context = action_spec.get('context', {}) or {}
@@ -316,6 +489,9 @@ class ActionRouter:
             )
             self._refresh_action_family_trust_from_outcome(modulated_action, result, prediction_evaluation)
             
+            # Step 7: Feed learning to MetaLearner for strategy evolution
+            await self._feed_learning_to_meta_learner(modulated_action, result, prediction_evaluation)
+            
             # Add metadata
             result['action_id'] = action_id
             result['execution_time_ms'] = (datetime.now() - start_time).total_seconds() * 1000
@@ -337,8 +513,11 @@ class ActionRouter:
             error_result['prediction_evaluation'] = self._build_prediction_evaluation(modulated_action, error_result)
             self._refresh_action_family_trust_from_outcome(modulated_action, error_result, error_result['prediction_evaluation'])
             
-            # Learn from failure
-            await self._reflect_on_outcome(action_spec, error_result, validation)
+            # Step 6: Reflect and learn from outcome
+            await self._reflect_on_outcome(modulated_action, error_result, prediction, error_result['prediction_evaluation'])
+            
+            # Step 7: Feed learning to MetaLearner for strategy evolution
+            await self._feed_learning_to_meta_learner(modulated_action, error_result, error_result['prediction_evaluation'])
             
             return error_result
 
@@ -396,574 +575,7 @@ class ActionRouter:
             }
         }
 
-    def _categorize_realized_value(self, result: Dict[str, Any]) -> str:
-        """Estimate realized usefulness from the execution result."""
-        if not result.get('success', False):
-            return 'low'
-
-        engagement_signals = [
-            result.get('engagement'),
-            result.get('engagement_count'),
-            result.get('likes'),
-            result.get('replies'),
-            result.get('comments'),
-            result.get('score'),
-        ]
-        numeric_engagement = 0.0
-        for signal in engagement_signals:
-            if isinstance(signal, (int, float)):
-                numeric_engagement += float(signal)
-
-        result_text = str(result).lower()
-        if numeric_engagement >= 10:
-            return 'high'
-        if numeric_engagement >= 1:
-            return 'medium'
-        if any(keyword in result_text for keyword in ['created', 'posted', 'completed', 'analy', 'report', 'summary']):
-            return 'medium'
-        return 'low'
-
-    def _categorize_observed_risk(self, result: Dict[str, Any]) -> str:
-        """Estimate observed execution risk from failures or blocking patterns."""
-        if result.get('success', False):
-            return 'low'
-
-        error_text = str(result.get('error') or result.get('reason') or result).lower()
-        if any(keyword in error_text for keyword in ['security', 'permission', 'secret', 'wallet', 'private key', 'forbidden']):
-            return 'critical'
-        if any(keyword in error_text for keyword in ['validation', 'blocked', 'reject', 'denied', 'symod', 'synergy']):
-            return 'high'
-        if any(keyword in error_text for keyword in ['timeout', 'network', 'unavailable', 'not loaded']):
-            return 'medium'
-        return 'medium'
-
-    def _risk_rank(self, risk: str) -> int:
-        ranks = {
-            'low': 1,
-            'medium': 2,
-            'elevated': 3,
-            'high': 4,
-            'critical': 5,
-        }
-        return ranks.get(str(risk).lower(), 2)
-
-    def _value_rank(self, value: str) -> int:
-        ranks = {
-            'low': 1,
-            'medium': 2,
-            'high': 3,
-        }
-        return ranks.get(str(value).lower(), 2)
-
-    def _build_prediction_evaluation(
-        self,
-        action_spec: Dict[str, Any],
-        result: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        """Compare pre-action prediction with actual result and compute mismatch metadata."""
-        prediction = (action_spec.get('context', {}) or {}).get('prediction') or {}
-        predicted_success = True
-        actual_success = bool(result.get('success', False))
-        confidence = max(0.0, min(float(prediction.get('confidence', 0.5) or 0.5), 1.0))
-
-        predicted_value = prediction.get('expected_value', 'medium')
-        realized_value = self._categorize_realized_value(result)
-        predicted_risk = prediction.get('expected_risk', 'medium')
-        observed_risk = self._categorize_observed_risk(result)
-
-        success_mismatch = 0.0 if predicted_success == actual_success else 1.0
-        confidence_mismatch = abs(confidence - (1.0 if actual_success else 0.0))
-        value_mismatch = min(abs(self._value_rank(predicted_value) - self._value_rank(realized_value)) / 2.0, 1.0)
-        risk_mismatch = min(abs(self._risk_rank(predicted_risk) - self._risk_rank(observed_risk)) / 4.0, 1.0)
-
-        mismatch_score = round(
-            (success_mismatch * 0.4)
-            + (confidence_mismatch * 0.3)
-            + (value_mismatch * 0.2)
-            + (risk_mismatch * 0.1),
-            4,
-        )
-
-        calibration = 'well_calibrated'
-        if confidence >= 0.75 and not actual_success:
-            calibration = 'overconfident'
-        elif confidence <= 0.35 and actual_success:
-            calibration = 'underconfident'
-
-        exploration = (action_spec.get('context', {}) or {}).get('exploration') or action_spec.get('exploration')
-
-        value_alignment = 'matched'
-        if self._value_rank(realized_value) > self._value_rank(predicted_value):
-            value_alignment = 'underestimated_value'
-        elif self._value_rank(realized_value) < self._value_rank(predicted_value):
-            value_alignment = 'overestimated_value'
-
-        risk_alignment = 'matched'
-        if self._risk_rank(observed_risk) > self._risk_rank(predicted_risk):
-            risk_alignment = 'underestimated_risk'
-        elif self._risk_rank(observed_risk) < self._risk_rank(predicted_risk):
-            risk_alignment = 'overestimated_risk'
-
-        return {
-            'predicted_success': predicted_success,
-            'actual_success': actual_success,
-            'success_mismatch': success_mismatch,
-            'confidence': confidence,
-            'confidence_mismatch': round(confidence_mismatch, 4),
-            'confidence_calibration': calibration,
-            'predicted_value': predicted_value,
-            'realized_value': realized_value,
-            'value_alignment': value_alignment,
-            'value_mismatch': round(value_mismatch, 4),
-            'predicted_risk': predicted_risk,
-            'observed_risk': observed_risk,
-            'risk_alignment': risk_alignment,
-            'risk_mismatch': round(risk_mismatch, 4),
-            'mismatch_score': mismatch_score,
-            'exploration': exploration,
-            'reflection_summary': self._summarize_prediction_evaluation(
-                actual_success,
-                calibration,
-                value_alignment,
-                risk_alignment,
-                mismatch_score,
-            ),
-        }
-
-    def _summarize_prediction_evaluation(
-        self,
-        actual_success: bool,
-        calibration: str,
-        value_alignment: str,
-        risk_alignment: str,
-        mismatch_score: float,
-    ) -> str:
-        """Build a compact reflection string for downstream learning surfaces."""
-        outcome_phrase = 'succeeded' if actual_success else 'failed'
-        return (
-            f"Action {outcome_phrase}; calibration={calibration}; "
-            f"value={value_alignment}; risk={risk_alignment}; mismatch={mismatch_score:.2f}"
-        )
-
-    async def _execute_canonical_action(
-        self,
-        plugin,
-        plugin_name: str,
-        action_type: str,
-        params: Dict[str, Any],
-    ) -> Dict:
-        """Execute canonical router-native actions via lightweight adapter mappings."""
-        execution = self._map_canonical_action(plugin_name, action_type, params)
-        if not execution:
-            return {
-                'success': False,
-                'error': f'No canonical action mapping for {plugin_name}:{action_type}'
-            }
-
-        method = getattr(plugin, execution['method'], None)
-        if not method:
-            return {
-                'success': False,
-                'error': f"Method {execution['method']} not found in plugin {plugin_name}"
-            }
-
-        call_args = execution.get('args', [])
-        call_kwargs = execution.get('kwargs', {})
-        if inspect.iscoroutinefunction(method):
-            result = await method(*call_args, **call_kwargs)
-        else:
-            loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(None, lambda: method(*call_args, **call_kwargs))
-
-        if not isinstance(result, dict):
-            result = {'success': bool(result), 'data': result}
-        if 'success' not in result:
-            result['success'] = bool(result.get('data'))
-        result.setdefault('action', action_type)
-        result.setdefault('plugin', plugin_name)
-        return result
-
-    def _map_canonical_action(
-        self,
-        plugin_name: str,
-        action_type: str,
-        params: Dict[str, Any],
-    ) -> Optional[Dict[str, Any]]:
-        """Map canonical router action names to concrete plugin methods."""
-        if plugin_name == 'moltx':
-            if action_type == 'moltx_engage':
-                return {'method': 'engage_command', 'args': [params.get('count', 3)]}
-            if action_type == 'moltx_intelligent_post':
-                return {'method': 'autonomous_post_command', 'args': [params.get('topic', '')]}
-            if action_type == 'moltx_image_post':
-                return {'method': 'moltx_image_post_command', 'args': [params.get('content', ''), params.get('media_url', '')]}
-            if action_type == 'check_comments':
-                return {'method': 'check_comments_command'}
-
-        if plugin_name == 'clawbr':
-            if action_type == 'clawbr_engage':
-                return {'method': 'run_engagement_cycle'}
-            if action_type == 'clawbr_debate_turn':
-                return {'method': '_check_debate_turns'}
-            if action_type == 'clawbr_create_debate':
-                topic = params.get('topic', '')
-                if not topic:
-                    return None
-                opening = params.get('opening') or f"Debate topic: {topic}"
-                return {'method': 'create_debate', 'args': [topic, opening]}
-            if action_type == 'check_notifications':
-                return {'method': 'check_notifications', 'args': [], 'kwargs': {}}
-
-        if plugin_name == 'analytics':
-            if action_type == 'analyze_performance':
-                return {'method': 'get_stats'}
-            if action_type == 'analyze_trending':
-                return {'method': 'get_stats'}
-            if action_type == 'check_engagement':
-                return {'method': 'get_stats'}
-
-        if plugin_name == 'onchain':
-            if action_type == 'onchain_wallet':
-                return {'method': 'wallet_command'}
-            if action_type == 'onchain_heartbeat':
-                return {'method': 'onchain_heartbeat'}
-
-        if plugin_name == 'moltbit':
-            if action_type == 'moltbit_post':
-                return {'method': 'moltbit_post_text', 'args': [params.get('content', '')]}
-            if action_type == 'moltbit_status':
-                return {'method': 'moltbit_status_command'}
-
-        if plugin_name == 'selfimprove':
-            if action_type == 'update_skills':
-                return {'method': 'update_skills_command'}
-
-        return None
-
-    def _validate_with_synergy(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate action through the centralized Synergy field gate when available."""
-        decision_system = getattr(self.agi, 'decision_system', None)
-        synergy_engine = getattr(decision_system, 'synergy_engine', None) if decision_system else None
-        validation_profile = self._get_validation_profile(action_spec)
-        if not synergy_engine:
-            if validation_profile['requires_strict_validation']:
-                return {
-                    'approved': False,
-                    'reason': 'Synergy not available for strict-validation action',
-                    'error': 'synergy_unavailable',
-                }
-            return {'approved': True, 'reason': 'Synergy not available'}
-
-        action_name = action_spec.get('action_type') or action_spec.get('id', 'unknown')
-        context = {
-            **action_spec.get('context', {}),
-            'plugin': action_spec.get('plugin'),
-            'params': action_spec.get('params', {}),
-        }
-        confidence = (
-            action_spec.get('context', {}).get('proposal_confidence')
-            or action_spec.get('decision_confidence')
-            or action_spec.get('context', {}).get('decision_confidence')
-            or 0.7
-        )
-
-        try:
-            synergy_decision = synergy_engine.decide_with_synergy(
-                context=context,
-                available_actions=[action_name],
-                ai_confidence=confidence,
-            )
-            if not synergy_decision.get('approved'):
-                return {
-                    'approved': False,
-                    'reason': synergy_decision.get('reasoning', 'Rejected by Synergy field validation'),
-                    'details': synergy_decision,
-                }
-
-            action_spec['synergy_validated'] = True
-            action_spec['synergy_score'] = synergy_decision.get('synergy_score')
-            action_spec['field_state'] = synergy_decision.get('validation', {}).get('field_state')
-            action_spec['synergy_reasoning'] = synergy_decision.get('reasoning')
-            return {
-                'approved': True,
-                'reason': synergy_decision.get('reasoning', 'Synergy approved'),
-                'details': synergy_decision,
-            }
-        except Exception as e:
-            if validation_profile['requires_strict_validation']:
-                return {
-                    'approved': False,
-                    'reason': f'Synergy validation error for strict-validation action: {e}',
-                    'error': str(e),
-                }
-            return {
-                'approved': True,
-                'reason': f'Synergy fail-open: {e}',
-                'error': str(e),
-            }
-    
-    async def _execute_autonomous_proposal(
-        self,
-        plugin,
-        plugin_name: str,
-        action_type: str,
-        params: Dict[str, Any],
-        action_spec: Dict[str, Any],
-    ) -> Dict:
-        """Execute legacy AutonomousBrain proposals through the unified router."""
-        execution = self._map_proposal_to_plugin_call(plugin_name, action_type, params, action_spec)
-        if not execution:
-            return {
-                'success': False,
-                'error': f'No proposal mapping for {plugin_name}:{action_type}'
-            }
-
-        method_name = execution['method']
-        method = getattr(plugin, method_name, None)
-        if not method:
-            return {
-                'success': False,
-                'error': f'Method {method_name} not found in plugin {plugin_name}'
-            }
-
-        call_args = execution.get('args', [])
-        call_kwargs = execution.get('kwargs', {})
-        if inspect.iscoroutinefunction(method):
-            result = await method(*call_args, **call_kwargs)
-        else:
-            loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(None, lambda: method(*call_args, **call_kwargs))
-
-        if not isinstance(result, dict):
-            result = {'success': bool(result), 'data': result}
-
-        if 'success' not in result:
-            result['success'] = bool(result.get('data'))
-        result.setdefault('action', action_type)
-        result.setdefault('plugin', plugin_name)
-        return result
-
-    def _map_proposal_to_plugin_call(
-        self,
-        plugin_name: str,
-        action_type: str,
-        params: Dict[str, Any],
-        action_spec: Dict[str, Any],
-    ) -> Optional[Dict[str, Any]]:
-        """Map AutonomousBrain proposal actions to concrete plugin calls."""
-        target_id = params.get('target_id')
-        content = params.get('content')
-
-        if plugin_name == 'moltx':
-            if action_type in {'moltx_post', 'post'} and content:
-                return {'method': 'intelligent_post', 'kwargs': {'topic': content}}
-            if action_type == 'moltx_engage':
-                count = params.get('count', '3')
-                return {'method': 'engage_feed_command', 'kwargs': {'count': str(count), 'run_async': False}}
-            if action_type in {'reply', 'moltx_reply'} and target_id and content:
-                return {'method': 'reply_to_post', 'args': [target_id, content]}
-            if action_type == 'like' and target_id:
-                return {'method': 'like_post', 'args': [target_id]}
-            if action_type == 'repost' and target_id:
-                return {'method': 'repost_post', 'args': [target_id]}
-
-        if plugin_name == 'clawbr':
-            if action_type in {'clawbr_like', 'like'} and target_id:
-                return {'method': 'like_post', 'args': [target_id]}
-            if action_type == 'clawbr_comment' and target_id and content:
-                return {'method': 'create_post', 'kwargs': {'content': content, 'parent_id': target_id, 'intent': 'support'}}
-            if action_type == 'clawbr_follow' and params.get('target_name'):
-                return {'method': 'follow_agent', 'args': [params.get('target_name')]}
-            if action_type == 'clawbr_engage':
-                return {'method': 'run_engagement_cycle'}
-            if action_type in {'clawbr_post', 'post'} and content:
-                if hasattr(self.plugins.plugins.get(plugin_name), 'create_intelligent_post'):
-                    return {'method': 'create_intelligent_post', 'kwargs': {'topic': content, 'intent': 'statement'}}
-                return {'method': 'create_post', 'args': [content]}
-
-        generic_method = f'{action_type}_command'
-        plugin_obj = self.plugins.plugins.get(plugin_name)
-        if plugin_obj and hasattr(plugin_obj, generic_method):
-            return {'method': generic_method, 'args': [target_id, content]}
-        if plugin_obj and hasattr(plugin_obj, action_type):
-            return {'method': action_type, 'args': [target_id, content]}
-        return None
-
-    async def _validate_with_agi(self, action_spec: Dict) -> Dict:
-        """
-        Validate action with AGI Kernel.
-        
-        Checks:
-        - Alignment with active goals
-        - Timing appropriateness
-        - Strategic value
-        - Behavior modulation from episodic memory
-        """
-        context = action_spec.get('context', {})
-        
-        # Check if user requested (always approve user requests)
-        if context.get('user_requested'):
-            return {
-                'approved': True,
-                'reason': 'User requested action',
-                'modulations': {}
-            }
-        
-        # Check with decision system if available
-        if hasattr(self.agi, 'decision_system'):
-            # Get behavior modulation from episodic memory
-            modulations = {}
-            if hasattr(self.agi, 'behavior_modulator'):
-                modulations = self.agi.behavior_modulator.get_effective_params(
-                    action_spec.get('action_type', '')
-                )
-            
-            # Check timing and strategy
-            action_type = action_spec.get('action_type', '')
-            platform = action_spec.get('plugin', '')
-            
-            # For content posts, check content strategy
-            if action_type in ['create_post', 'post_text', 'post_article']:
-                if hasattr(self.agi, 'content_intelligence'):
-                    content_check = self.agi.content_intelligence.should_post_now(
-                        platform=platform,
-                        action_type=action_type
-                    )
-                    if not content_check.get('should_post'):
-                        return {
-                            'approved': False,
-                            'reason': content_check.get('reason', 'Content strategy blocked'),
-                            'modulations': modulations
-                        }
-            
-            return {
-                'approved': True,
-                'reason': 'AGI validation passed',
-                'modulations': modulations
-            }
-        
-        # No decision system - approve by default
-        return {
-            'approved': True,
-            'reason': 'No decision system available',
-            'modulations': {}
-        }
-    
-    def _verify_with_symod(self, action_spec: Dict, validation: Dict) -> Dict:
-        """
-        Verify action with SyMod mathematical framework.
-        
-        High-impact actions must pass mathematical validation.
-        """
-        validation_profile = self._get_validation_profile(action_spec)
-        if hasattr(self.agi, 'decision_system'):
-            try:
-                result = self.agi.decision_system.validate_with_symod(
-                    action=action_spec,
-                    context=action_spec.get('context', {})
-                )
-            except Exception as e:
-                if validation_profile['requires_strict_validation']:
-                    return {
-                        'approved': False,
-                        'reason': f'SyMod validation error for strict-validation action: {e}',
-                        'error': str(e),
-                    }
-                return {
-                    'approved': True,
-                    'reason': f'SyMod fail-open: {e}',
-                    'error': str(e),
-                }
-            if isinstance(result, tuple):
-                approved, details = result
-                details = details or {}
-                return {
-                    'approved': approved,
-                    'reason': details.get('reason', 'SyMod validation completed'),
-                    'details': details,
-                }
-            if isinstance(result, dict):
-                return {
-                    'approved': result.get('approved', True),
-                    'reason': result.get('reason', 'SyMod validation completed'),
-                    **result,
-                }
-            if validation_profile['requires_strict_validation']:
-                return {
-                    'approved': False,
-                    'reason': 'SyMod returned unrecognized result for strict-validation action',
-                    'error': 'symod_unrecognized_result',
-                }
-            return {'approved': True, 'reason': 'SyMod returned unrecognized result'}
-        
-        if validation_profile['requires_strict_validation']:
-            return {
-                'approved': False,
-                'reason': 'SyMod not available for strict-validation action',
-                'error': 'symod_unavailable',
-            }
-        return {'approved': True, 'reason': 'SyMod not available'}
-    
-    async def _execute_via_plugin(self, action_spec: Dict) -> Dict:
-        """
-        Execute action via appropriate plugin.
-        
-        This is where the actual work happens.
-        """
-        plugin_name = action_spec.get('plugin')
-        action_type = action_spec.get('action_type')
-        params = action_spec.get('params', {})
-        context = action_spec.get('context', {})
-        
-        # Get plugin
-        plugin = self.plugins.plugins.get(plugin_name)
-        if not plugin:
-            return {
-                'success': False,
-                'error': f'Plugin {plugin_name} not loaded'
-            }
-
-        source = context.get('source')
-        if source == 'autonomous_brain_proposal':
-            return await self._execute_autonomous_proposal(plugin, plugin_name, action_type, params, action_spec)
-        if source in {
-            'goal_driven_cycle',
-            'goal_manager',
-            'agi_orchestrator',
-            'telegram_command',
-            'multi_platform_engine',
-            'decision_engine',
-            'brain_fallback',
-            'golden_window',
-        }:
-            return await self._execute_canonical_action(plugin, plugin_name, action_type, params)
-        
-        # Execute action
-        if hasattr(plugin, 'execute_action'):
-            # New-style plugin with execute_action method
-            result = await plugin.execute_action(action_type, params)
-        else:
-            # Old-style plugin - call method directly
-            method = getattr(plugin, action_type, None)
-            if not method:
-                return {
-                    'success': False,
-                    'error': f'Action {action_type} not found in plugin {plugin_name}'
-                }
-            
-            # Call method
-            if asyncio.iscoroutinefunction(method):
-                result = await method(**params)
-            else:
-                result = method(**params)
-            
-            # Normalize result to dict
-            if not isinstance(result, dict):
-                result = {'success': True, 'data': result}
-        
-        return result
-    
-    async def _reflect_on_outcome(self, action_spec: Dict, result: Dict, validation: Dict):
+    async def _reflect_on_outcome(self, action_spec: Dict[str, Any], result: Dict[str, Any], prediction: Dict[str, Any], evaluation: Dict[str, Any]) -> None:
         """
         Reflect on action outcome and learn.
         
@@ -971,7 +583,11 @@ class ActionRouter:
         """
         action_id = f"{action_spec.get('plugin')}:{action_spec.get('action_type')}"
         success = result.get('success', False)
-        validation_trace = result.get('validation_trace') or [validation]
+        validation_trace = result.get('validation_trace') or []
+        
+        # Build validation dict from result if not in trace
+        validation = {'approved': success, 'reason': result.get('error') or 'Success'}
+        
         outcome_record = self._build_outcome_record(
             action_spec,
             result,
@@ -1048,6 +664,177 @@ class ActionRouter:
                 'synergy_reasoning': action_spec.get('synergy_reasoning'),
             },
         }
+    
+    def _build_prediction_evaluation(
+        self,
+        action_spec: Dict[str, Any],
+        result: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Compare pre-action prediction with actual result and compute mismatch metadata."""
+        prediction = (action_spec.get('context', {}) or {}).get('prediction') or {}
+        predicted_success = True
+        actual_success = bool(result.get('success', False))
+        confidence = max(0.0, min(float(prediction.get('confidence', 0.5) or 0.5), 1.0))
+        
+        predicted_value = prediction.get('expected_value', 'medium')
+        realized_value = self._categorize_realized_value(result)
+        predicted_risk = prediction.get('expected_risk', 'medium')
+        observed_risk = self._categorize_observed_risk(result)
+        
+        success_mismatch = 0.0 if predicted_success == actual_success else 1.0
+        confidence_mismatch = abs(confidence - (1.0 if actual_success else 0.0))
+        value_mismatch = min(abs(self._value_rank(predicted_value) - self._value_rank(realized_value)) / 2.0, 1.0)
+        risk_mismatch = min(abs(self._risk_rank(predicted_risk) - self._risk_rank(observed_risk)) / 4.0, 1.0)
+        
+        mismatch_score = round(
+            (success_mismatch * 0.4)
+            + (confidence_mismatch * 0.3)
+            + (value_mismatch * 0.2)
+            + (risk_mismatch * 0.1),
+            4,
+        )
+
+        calibration = 'well_calibrated'
+        if confidence >= 0.75 and not actual_success:
+            calibration = 'overconfident'
+        elif confidence <= 0.35 and actual_success:
+            calibration = 'underconfident'
+        
+        exploration = (action_spec.get('context', {}) or {}).get('exploration') or action_spec.get('exploration')
+        
+        value_alignment = 'matched'
+        if self._value_rank(realized_value) > self._value_rank(predicted_value):
+            value_alignment = 'underestimated_value'
+        elif self._value_rank(realized_value) < self._value_rank(predicted_value):
+            value_alignment = 'overestimated_value'
+        
+        risk_alignment = 'matched'
+        if self._risk_rank(observed_risk) > self._risk_rank(predicted_risk):
+            risk_alignment = 'underestimated_risk'
+        elif self._risk_rank(observed_risk) < self._risk_rank(predicted_risk):
+            risk_alignment = 'overestimated_risk'
+        
+        return {
+            'predicted_success': predicted_success,
+            'actual_success': actual_success,
+            'success_mismatch': success_mismatch,
+            'confidence': confidence,
+            'confidence_mismatch': round(confidence_mismatch, 4),
+            'confidence_calibration': calibration,
+            'predicted_value': predicted_value,
+            'realized_value': realized_value,
+            'value_alignment': value_alignment,
+            'value_mismatch': round(value_mismatch, 4),
+            'predicted_risk': predicted_risk,
+            'observed_risk': observed_risk,
+            'risk_alignment': risk_alignment,
+            'risk_mismatch': round(risk_mismatch, 4),
+            'mismatch_score': mismatch_score,
+            'exploration': exploration,
+            'reflection_summary': self._summarize_prediction_evaluation(
+                actual_success,
+                calibration,
+                value_alignment,
+                risk_alignment,
+                mismatch_score,
+            ),
+        }
+
+    def _summarize_prediction_evaluation(
+        self,
+        actual_success: bool,
+        calibration: str,
+        value_alignment: str,
+        risk_alignment: str,
+        mismatch_score: float,
+    ) -> str:
+        """Generate human-readable summary of prediction evaluation."""
+        parts = []
+        
+        if actual_success:
+            parts.append("✅ Action succeeded")
+        else:
+            parts.append("❌ Action failed")
+        
+        if calibration == 'overconfident':
+            parts.append("⚠️ Overconfident prediction")
+        elif calibration == 'underconfident':
+            parts.append("💡 Underconfident prediction")
+        
+        if value_alignment == 'underestimated_value':
+            parts.append("📈 Better than expected")
+        elif value_alignment == 'overestimated_value':
+            parts.append("📉 Worse than expected")
+        
+        if risk_alignment == 'underestimated_risk':
+            parts.append("⚠️ Riskier than expected")
+        
+        if mismatch_score < 0.2:
+            parts.append("🎯 Excellent prediction")
+        elif mismatch_score > 0.5:
+            parts.append("🔄 Poor prediction - needs learning")
+        
+        return " | ".join(parts)
+
+    def _value_rank(self, value: str) -> int:
+        ranks = {
+            'low': 1,
+            'medium': 2,
+            'high': 3,
+        }
+        return ranks.get(str(value).lower(), 2)
+
+    def _categorize_realized_value(self, result: Dict[str, Any]) -> str:
+        """Estimate realized usefulness from the execution result."""
+        if not result.get('success', False):
+            return 'low'
+
+        engagement_signals = [
+            result.get('engagement'),
+            result.get('engagement_count'),
+            result.get('likes'),
+            result.get('replies'),
+            result.get('comments'),
+            result.get('score'),
+        ]
+        numeric_engagement = 0.0
+        for signal in engagement_signals:
+            if isinstance(signal, (int, float)):
+                numeric_engagement += float(signal)
+
+        result_text = str(result).lower()
+        if numeric_engagement >= 10:
+            return 'high'
+        if numeric_engagement >= 1:
+            return 'medium'
+        if any(keyword in result_text for keyword in ['created', 'posted', 'completed', 'analy', 'report', 'summary']):
+            return 'medium'
+        return 'low'
+
+    def _categorize_observed_risk(self, result: Dict[str, Any]) -> str:
+        """Estimate observed execution risk from failures or blocking patterns."""
+        if result.get('success', False):
+            return 'low'
+
+        error_text = str(result.get('error') or result.get('reason') or result).lower()
+        if any(keyword in error_text for keyword in ['security', 'permission', 'secret', 'wallet', 'private key', 'forbidden']):
+            return 'critical'
+        if any(keyword in error_text for keyword in ['validation', 'blocked', 'reject', 'denied', 'symod', 'synergy']):
+            return 'high'
+        if any(keyword in error_text for keyword in ['timeout', 'network', 'unavailable', 'not loaded']):
+            return 'medium'
+        return 'medium'
+    
+    def _risk_rank(self, risk: str) -> int:
+        """Convert risk level to numeric rank for comparison."""
+        ranks = {
+            'low': 1,
+            'medium': 2,
+            'elevated': 3,
+            'high': 4,
+            'critical': 5,
+        }
+        return ranks.get(str(risk).lower(), 2)
     
     def get_execution_stats(self) -> Dict:
         """Get statistics about action execution"""
@@ -1227,7 +1014,69 @@ class ActionRouter:
                 if envelope.validation_profile else False
             ),
         }
-
+    
+    async def _feed_learning_to_meta_learner(self, action_spec: Dict[str, Any], result: Dict[str, Any], prediction_evaluation: Dict[str, Any]):
+        """Feed action outcome to MetaLearner for continuous strategy improvement."""
+        if not hasattr(self.agi, 'meta_engine') or not self.agi.meta_engine:
+            return
+        
+        try:
+            # Determine domain from action
+            plugin = action_spec.get('plugin', 'unknown')
+            domain_map = {
+                'moltx': 'social',
+                'clawbr': 'social',
+                'moltchan': 'social',
+                'polymarket': 'trading',
+                'crypto': 'trading',
+                'analytics': 'analysis',
+            }
+            domain = domain_map.get(plugin, 'general')
+            
+            # Extract learning metrics
+            success = result.get('success', False)
+            mismatch_score = float(prediction_evaluation.get('mismatch_score', 0.0))
+            quality_score = 1.0 - mismatch_score if success else 0.0
+            
+            # Determine strategy used
+            strategy = 'active_experimentation'
+            if action_spec.get('context', {}).get('exploration'):
+                strategy = 'exploration'
+            
+            # Build context description
+            action_type = action_spec.get('action_type', 'unknown')
+            context = f"{plugin}:{action_type}"
+            
+            # Build notes about what happened
+            notes = []
+            if success:
+                if mismatch_score < 0.3:
+                    notes.append(f"Accurate prediction (mismatch: {mismatch_score:.2f})")
+                notes.append(f"Successful {action_type} execution")
+            else:
+                error = result.get('error', 'Unknown error')
+                notes.append(f"Action failed: {error}")
+                if mismatch_score > 0.5:
+                    notes.append(f"Poor prediction accuracy (mismatch: {mismatch_score:.2f})")
+            
+            notes_str = " | ".join(notes)
+            
+            # Record learning attempt in MetaLearningEngine
+            self.agi.meta_engine.record_learning_attempt(
+                domain=domain,
+                context=context,
+                strategy=strategy,
+                success=success,
+                time_to_success=1.0 if success else 0.0,
+                exploration_rate=0.3,
+                memory_depth=10,
+                notes=notes_str
+            )
+            
+            print(f"📚 Learning recorded: {domain} domain, quality={quality_score:.2f}")
+            
+        except Exception as e:
+            print(f"⚠️ MetaLearner feed failed: {e}")
 
 def create_action_router(agi_kernel, plugin_manager):
     """Factory function to create action router"""

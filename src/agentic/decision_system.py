@@ -1039,10 +1039,49 @@ class DecisionSystem:
     
     def _ai_decide(self, available: List[Dict], context: Dict) -> Optional[Dict]:
         """
-        Use Grok/DeepSeek to reason about the best action.
+        Use UnifiedReasoner with memory-first approach, LLM as fallback.
         
-        This is where AlleyBot "thinks" about what to do.
+        This is where AlleyBot "thinks" about what to do using AGI reasoning.
         """
+        # PHASE 1: Memory-first reasoning using UnifiedReasoner
+        if hasattr(self.agi, 'unified_reasoner') and self.agi.unified_reasoner:
+            try:
+                from src.agentic.unified_reasoner import ReasoningContext, ReasoningType
+                
+                # Build reasoning context from decision context
+                reasoning_ctx = ReasoningContext(
+                    problem=f"Choose best action from {len(available)} options to maximize value and align with goals",
+                    domain='autonomous_decision',
+                    reasoning_type=ReasoningType.STRATEGIC,
+                    related_domains=['social', 'trading', 'content'],
+                    constraints={
+                        'available_actions': [a['id'] for a in available[:10]],
+                        'recent_failures': context.get('recent_failures', []),
+                        'recent_successes': context.get('recent_successes', []),
+                        'active_goals': context.get('top_goal_descriptions', []),
+                    },
+                    goal='Select optimal action based on context, goals, and learned strategies',
+                    confidence_threshold=0.7
+                )
+                
+                # Use UnifiedReasoner for strategic decision
+                result = self.agi.unified_reasoner.reason(reasoning_ctx)
+                
+                if result and result.confidence >= 0.7:
+                    # Extract action ID from reasoning result
+                    action_id = self._extract_action_from_reasoning(result, available)
+                    if action_id:
+                        for action in available:
+                            if action['id'] == action_id:
+                                print(f"🧠 UnifiedReasoner selected: {action_id} (confidence: {result.confidence:.2f})")
+                                return action
+                
+                print(f"⚠️ UnifiedReasoner confidence too low ({result.confidence:.2f}), falling back to LLM")
+                
+            except Exception as e:
+                print(f"⚠️ UnifiedReasoner failed: {e}, falling back to LLM")
+        
+        # PHASE 2: LLM fallback (only if memory-first reasoning insufficient)
         try:
             from grok_ai import grok_ai
             if not grok_ai.enabled:
@@ -1149,6 +1188,30 @@ If no action is appropriate right now, respond with "none".
             
         except Exception as e:
             print(f"⚠️ AI decision failed: {e}")
+        
+        return None
+    
+    def _extract_action_from_reasoning(self, reasoning_result, available: List[Dict]) -> Optional[str]:
+        """Extract action ID from UnifiedReasoner result."""
+        if not reasoning_result or not reasoning_result.decision:
+            return None
+        
+        decision_text = str(reasoning_result.decision).lower()
+        
+        # Try to find action ID in decision text
+        for action in available:
+            action_id = action['id'].lower()
+            if action_id in decision_text:
+                return action['id']
+        
+        # Try to match by description or platform
+        for action in available:
+            desc = action.get('description', '').lower()
+            platform = action.get('platform', '').lower()
+            if desc and desc in decision_text:
+                return action['id']
+            if platform and platform in decision_text:
+                return action['id']
         
         return None
 

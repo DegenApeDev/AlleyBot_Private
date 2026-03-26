@@ -56,7 +56,13 @@ class AGIKernel:
             'content': {'enabled': True, 'trust_tier': 'medium', 'risk_level': 'medium'},
             'analysis': {'enabled': True, 'trust_tier': 'high', 'risk_level': 'low'},
             'market': {'enabled': False, 'trust_tier': 'low', 'risk_level': 'high'},
-            'self_improvement': {'enabled': False, 'trust_tier': 'low', 'risk_level': 'high'},
+            # BOUNDED SELF-IMPROVEMENT: Enabled with conservative constraints
+            # Only allows skill building when:
+            # 1. Repeated evidence (2+ failures) shows capability gap
+            # 2. Trust state is healthy (not degraded)
+            # 3. Upgrade objective is bounded and specific
+            # 4. Predicted value outweighs risk
+            'self_improvement': {'enabled': True, 'trust_tier': 'medium', 'risk_level': 'medium'},
         }
         
         # Initialize all AGI subsystems
@@ -82,6 +88,15 @@ class AGIKernel:
             episodic_store=self.episodic_memory,
             unified_memory=self.unified_memory
         )
+        
+        # Unified Reasoner (AGI reasoning engine)
+        from src.agentic.unified_reasoner import UnifiedReasoner
+        self.unified_reasoner = UnifiedReasoner(
+            knowledge_graph=getattr(self.unified_memory, 'knowledge_graph', None),
+            symbolic_engine=None,  # TODO: Add symbolic engine
+            plugin_manager=None  # Will be set later
+        )
+        print("🧠 Unified Reasoner initialized - memory-first AGI reasoning enabled")
         
         # Self-reflection
         self.reflection_engine = create_reflection_engine(self)
@@ -436,6 +451,35 @@ class AGIKernel:
 
         enriched_context = dict(context or {})
         enriched_context['active_work_items'] = self.get_active_work_items(limit=5)
+        
+        # Add active goals from all goal systems to enable goal-driven decisions
+        active_goals = []
+        
+        # Get goals from AutonomousGoalManager (old system)
+        if self.goal_manager and hasattr(self.goal_manager, 'get_active_goals'):
+            try:
+                autonomous_goals = self.goal_manager.get_active_goals()
+                active_goals.extend(autonomous_goals)
+            except Exception as e:
+                print(f"⚠️ Could not get autonomous goals: {e}")
+        
+        # Get goals from GoalHierarchy (85% AGI system)
+        if hasattr(self, 'goal_hierarchy') and self.goal_hierarchy:
+            try:
+                if hasattr(self.goal_hierarchy, 'get_actionable_goals'):
+                    hierarchical_goals = self.goal_hierarchy.get_actionable_goals()
+                    # Convert to dict format if needed
+                    for goal in hierarchical_goals:
+                        if hasattr(goal, 'to_dict'):
+                            active_goals.append(goal.to_dict())
+                        elif isinstance(goal, dict):
+                            active_goals.append(goal)
+            except Exception as e:
+                print(f"⚠️ Could not get hierarchical goals: {e}")
+        
+        enriched_context['active_goals'] = active_goals
+        if active_goals:
+            print(f"🎯 Decision context enriched with {len(active_goals)} active goals")
         
         # Use decision system for autonomous thinking
         action = self.decision_system.decide_next_action(enriched_context)

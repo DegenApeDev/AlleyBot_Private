@@ -247,31 +247,26 @@ class DefaultGoalSeeder:
     
     def seed_goals_if_needed(self) -> int:
         """
-        Seed default goals if work queue is empty.
+        Seed default goals if goal_manager is empty.
         
         Returns:
             Number of goals seeded
         """
-        # Check if we have active work items
-        active_work = self.agi_kernel.get_active_work_items(limit=5)
-        
-        if len(active_work) >= 3:
-            # Already have enough work, don't seed
+        # Check if goal_manager exists and has goals
+        if not hasattr(self.agi_kernel, 'goal_manager'):
+            logger.warning("AGI Kernel has no goal_manager, cannot seed goals")
             return 0
         
-        # Check if default goals already exist
-        if hasattr(self.agi_kernel, 'goal_manager'):
-            existing_goals = []
-            try:
-                # Try to get existing goals to avoid duplicates
-                if hasattr(self.agi_kernel.goal_manager, 'get_active_goals'):
-                    existing_goals = self.agi_kernel.goal_manager.get_active_goals()
-            except:
-                pass
-            
-            # If we already have active goals, don't seed
-            if len(existing_goals) >= 3:
-                return 0
+        # Check existing goals in the manager's goals list
+        existing_goals = self.agi_kernel.goal_manager.goals if hasattr(self.agi_kernel.goal_manager, 'goals') else []
+        
+        # Count active goals (not all goals, just active ones)
+        active_goal_count = sum(1 for g in existing_goals if getattr(g, 'status', None) == 'active')
+        
+        # If we already have 3+ active goals, don't seed more
+        if active_goal_count >= 3:
+            logger.debug(f"Already have {active_goal_count} active goals, skipping seed")
+            return 0
         
         # Seed default goals using AutonomousGoalManager's AutonomousGoal class
         from src.agentic.autonomous_goals import AutonomousGoal, GoalOrigin
@@ -283,18 +278,37 @@ class DefaultGoalSeeder:
         
         for goal_spec in goals:
             try:
+                # Build actionable plan from metadata
+                action_plan = []
+                platforms = goal_spec.get('metadata', {}).get('platforms', [])
+                action_types = goal_spec.get('metadata', {}).get('action_types', [])
+                
+                # Create concrete actions from platforms and action types
+                if platforms and action_types:
+                    for platform in platforms[:2]:  # Limit to 2 platforms per goal
+                        for action_type in action_types[:2]:  # Limit to 2 action types
+                            action_plan.append(f"{platform}:{action_type}")
+                
+                # Fallback if no concrete actions
+                if not action_plan:
+                    action_plan = [
+                        f"Monitor {goal_spec.get('domain', 'social')} platforms",
+                        f"Identify opportunities related to: {goal_spec['title']}",
+                    ]
+                
                 # Create AutonomousGoal object with all required fields
                 goal = AutonomousGoal(
                     id=f"default_{uuid.uuid4().hex[:8]}",
                     description=goal_spec['description'],
                     origin=GoalOrigin.SYSTEM,  # Use SYSTEM origin for default goals
                     detected_opportunity=f"Default goal seeding for autonomous operation: {goal_spec['title']}",
-                    evidence={'source': 'default_goal_seeder', 'auto_seeded': True},
-                    action_plan=[
-                        f"Monitor {goal_spec.get('domain', 'social')} platforms",
-                        f"Identify opportunities related to: {goal_spec['title']}",
-                        "Execute relevant actions when opportunities arise"
-                    ],
+                    evidence={
+                        'source': 'default_goal_seeder',
+                        'auto_seeded': True,
+                        'platforms': platforms,
+                        'action_types': action_types,
+                    },
+                    action_plan=action_plan,
                     expected_outcome=f"Maintain active presence and engagement in {goal_spec.get('domain', 'social')} domain",
                     success_criteria=[
                         "Regular platform activity",
@@ -319,6 +333,13 @@ class DefaultGoalSeeder:
         
         if seeded_count > 0:
             logger.info(f"🌱 Seeded {seeded_count} default goals for autonomous operation")
+            # Save goals to persistent storage
+            try:
+                if hasattr(self.agi_kernel.goal_manager, '_save'):
+                    self.agi_kernel.goal_manager._save()
+                    logger.info("💾 Saved seeded goals to persistent storage")
+            except Exception as e:
+                logger.warning(f"Could not save seeded goals: {e}")
         
         return seeded_count
     

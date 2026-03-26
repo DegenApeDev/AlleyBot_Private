@@ -176,7 +176,7 @@ class MemoryService:
         (
             id_, timestamp, mem_type, content, source_action,
             source_work_item, source_plugin, tags, importance,
-            embedding, metadata
+            embedding, metadata, relevance_score
         ) = row
         
         return MemoryRecord(
@@ -188,7 +188,7 @@ class MemoryService:
             source_work_item=source_work_item,
             source_plugin=source_plugin,
             tags=json.loads(tags) if tags else [],
-            importance=importance or 1.0,
+            importance=importance or relevance_score or 1.0,
             embedding=json.loads(embedding) if embedding else None,
             metadata=json.loads(metadata) if metadata else {},
         )
@@ -207,6 +207,7 @@ class MemoryService:
             record.importance,
             json.dumps(record.embedding) if record.embedding else None,
             json.dumps(record.metadata) if record.metadata else None,
+            record.importance,  # relevance_score (same as importance for now)
         )
     
     # ------------------------------------------------------------------
@@ -258,7 +259,7 @@ class MemoryService:
         # Persist
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                """INSERT INTO memories VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                """INSERT INTO memories VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                 self._record_to_row(record)
             )
             conn.commit()

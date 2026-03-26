@@ -109,7 +109,7 @@ class GoalCommands:
             for status in ['PROPOSED', 'APPROVED', 'ACTIVE', 'COMPLETED']:
                 if status in by_status:
                     count = len(by_status[status])
-                    msg += f"**{status}** ({count} goals)\n"
+                    msg += f"━━━ {status} ({count} goals) ━━━\n"
                     for goal in by_status[status][:3]:  # Show top 3 per status
                         try:
                             priority_emoji = "🔴" if goal.effective_priority >= 8 else "🟡" if goal.effective_priority >= 5 else "🟢"
@@ -121,7 +121,7 @@ class GoalCommands:
                             msg += f"  ⚠️ Error displaying goal\n"
                     msg += "\n"
             
-            msg += "\n📊 Use /goals_stats for detailed statistics"
+            msg += "📊 Use /goals_stats for detailed statistics"
             
             await update.message.reply_text(msg[:4000])
             
@@ -153,25 +153,25 @@ class GoalCommands:
             gaps = detector.scan_for_gaps(hours)
             
             if not gaps:
-                await update.message.reply_text("✅ No gaps detected - everything looks good!")
+                await update.message.reply_text(" No gaps detected - everything looks good!")
                 return
             
-            msg = f"🔍 Found {len(gaps)} gaps/opportunities:\n\n"
+            msg = f" Found {len(gaps)} gaps/opportunities:\n\n"
             
             for i, gap in enumerate(gaps[:5], 1):
                 msg += (
-                    f"{i}. **{gap.gap_type.replace('_', ' ').title()}**\n"
+                    f"{i}. {gap.gap_type.replace('_', ' ').title()}\n"
                     f"   Impact: {gap.impact_estimate}/10 | Frequency: {gap.frequency}x\n"
                     f"   {gap.description[:60]}...\n\n"
                 )
             
-            msg += "\n💡 Run `/goals_propose` to generate goals from these gaps"
+            msg += "\n Run `/goals_propose` to generate goals from these gaps"
             
             await update.message.reply_text(msg[:4000])
             
         except Exception as e:
             logger.error(f"Goals scan error: {e}")
-            await update.message.reply_text(f"❌ Error: {e}")
+            await update.message.reply_text(f" Error: {e}")
     
     async def goals_propose(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -180,7 +180,7 @@ class GoalCommands:
         Usage: /goals_propose [hours]
         """
         if not self._is_owner(update):
-            await update.message.reply_text("⛔ Owner only")
+            await update.message.reply_text(" Owner only")
             return
         
         hours = 24
@@ -190,37 +190,37 @@ class GoalCommands:
             except ValueError:
                 pass
         
-        await update.message.reply_text(f"🤔 Analyzing activity and proposing goals...")
+        await update.message.reply_text(f" Analyzing activity and proposing goals...")
         
         try:
             detector = self._get_goal_detector()
             proposed = detector.auto_detect_and_propose(hours)
             
             if not proposed:
-                await update.message.reply_text("📭 No new goals to propose")
+                await update.message.reply_text(" No new goals to propose")
                 return
             
-            msg = f"🎯 Proposed {len(proposed)} new goals:\n\n"
+            msg = f" Proposed {len(proposed)} new goals:\n\n"
             
             for goal in proposed:
-                priority_emoji = "🔴" if goal.effective_priority >= 8 else "🟡" if goal.effective_priority >= 5 else "🟢"
-                effort_emoji = "⚡" if goal.effort_estimate == 'hours' else "⏱️" if goal.effort_estimate == 'days' else "📅"
+                priority_emoji = "" if goal.effective_priority >= 8 else "" if goal.effective_priority >= 5 else ""
+                effort_emoji = "" if goal.effort_estimate == 'hours' else "" if goal.effort_estimate == 'days' else ""
                 
                 msg += (
-                    f"{priority_emoji} **{goal.title}**\n"
-                    f"   ID: `{goal.id}`\n"
+                    f"{priority_emoji} {goal.title}\n"
+                    f"   ID: {goal.id}\n"
                     f"   Priority: {goal.priority.name} | Effort: {effort_emoji} {goal.effort_estimate}\n"
                     f"   Impact: {goal.impact_score}/10 | Confidence: {goal.confidence:.0%}\n"
                     f"   {goal.description[:80]}...\n\n"
                 )
             
-            msg += "\n✅ Approve with `/goals_approve <id>`\n❌ Reject with `/goals_reject <id>`"
+            msg += "\n Approve with `/goals_approve <id>`\n Reject with `/goals_reject <id>`"
             
             await update.message.reply_text(msg[:4000])
             
         except Exception as e:
             logger.error(f"Goals propose error: {e}")
-            await update.message.reply_text(f"❌ Error: {e}")
+            await update.message.reply_text(f" Error: {e}")
     
     async def goals_approve(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -229,7 +229,7 @@ class GoalCommands:
         Usage: /goals_approve <goal_id> [notes]
         """
         if not self._is_owner(update):
-            await update.message.reply_text("⛔ Owner only")
+            await update.message.reply_text(" Owner only")
             return
         
         if not context.args:
@@ -246,19 +246,19 @@ class GoalCommands:
             if success:
                 goal = manager.get_goal(goal_id)
                 msg = (
-                    f"✅ **Goal Approved**\n\n"
+                    f" Goal Approved\n\n"
                     f"{goal.title}\n"
-                    f"ID: `{goal_id}`\n"
+                    f"ID: {goal_id}\n"
                     f"Priority: {goal.priority.name}\n\n"
-                    f"🚀 Ready to start with `/goals_start {goal_id}`"
+                    f" Ready to start with /goals_start {goal_id}"
                 )
                 await update.message.reply_text(msg)
             else:
-                await update.message.reply_text(f"❌ Could not approve goal `{goal_id}`")
+                await update.message.reply_text(f" Could not approve goal `{goal_id}`")
             
         except Exception as e:
             logger.error(f"Goals approve error: {e}")
-            await update.message.reply_text(f"❌ Error: {e}")
+            await update.message.reply_text(f" Error: {e}")
     
     async def goals_reject(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -267,7 +267,7 @@ class GoalCommands:
         Usage: /goals_reject <goal_id> [reason]
         """
         if not self._is_owner(update):
-            await update.message.reply_text("⛔ Owner only")
+            await update.message.reply_text(" Owner only")
             return
         
         if not context.args:
@@ -282,13 +282,13 @@ class GoalCommands:
             success = manager.reject_goal(goal_id, reason)
             
             if success:
-                await update.message.reply_text(f"❌ Goal `{goal_id}` rejected" + (f"\nReason: {reason}" if reason else ""))
+                await update.message.reply_text(f" Goal `{goal_id}` rejected" + (f"\nReason: {reason}" if reason else ""))
             else:
-                await update.message.reply_text(f"❌ Could not reject goal `{goal_id}`")
+                await update.message.reply_text(f" Could not reject goal `{goal_id}`")
             
         except Exception as e:
             logger.error(f"Goals reject error: {e}")
-            await update.message.reply_text(f"❌ Error: {e}")
+            await update.message.reply_text(f" Error: {e}")
     
     async def goals_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -297,7 +297,7 @@ class GoalCommands:
         Usage: /goals_start <goal_id>
         """
         if not self._is_owner(update):
-            await update.message.reply_text("⛔ Owner only")
+            await update.message.reply_text(" Owner only")
             return
         
         if not context.args:
@@ -313,16 +313,16 @@ class GoalCommands:
             if success:
                 goal = manager.get_goal(goal_id)
                 await update.message.reply_text(
-                    f"🚀 **Goal Started**\n\n{goal.title}\n\n"
+                    f" Goal Started\n\n{goal.title}\n\n"
                     f"Alley is now working on this goal.\n"
-                    f"Track progress with `/goals_status {goal_id}`"
+                    f"Track progress with /goals_status {goal_id}"
                 )
             else:
-                await update.message.reply_text(f"❌ Could not start goal `{goal_id}` - must be approved first")
+                await update.message.reply_text(f" Could not start goal `{goal_id}` - must be approved first")
             
         except Exception as e:
             logger.error(f"Goals start error: {e}")
-            await update.message.reply_text(f"❌ Error: {e}")
+            await update.message.reply_text(f" Error: {e}")
     
     async def goals_complete(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -331,7 +331,7 @@ class GoalCommands:
         Usage: /goals_complete <goal_id> [outcome]
         """
         if not self._is_owner(update):
-            await update.message.reply_text("⛔ Owner only")
+            await update.message.reply_text(" Owner only")
             return
         
         if not context.args:
@@ -346,13 +346,13 @@ class GoalCommands:
             success = manager.complete_goal(goal_id, outcome)
             
             if success:
-                await update.message.reply_text(f"✅ Goal `{goal_id}` completed!\n\nOutcome: {outcome}")
+                await update.message.reply_text(f" Goal `{goal_id}` completed!\n\nOutcome: {outcome}")
             else:
-                await update.message.reply_text(f"❌ Could not complete goal `{goal_id}`")
+                await update.message.reply_text(f" Could not complete goal `{goal_id}`")
             
         except Exception as e:
             logger.error(f"Goals complete error: {e}")
-            await update.message.reply_text(f"❌ Error: {e}")
+            await update.message.reply_text(f" Error: {e}")
     
     async def goals_detail(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -361,7 +361,7 @@ class GoalCommands:
         Usage: /goals_detail <goal_id>
         """
         if not self._is_owner(update):
-            await update.message.reply_text("⛔ Owner only")
+            await update.message.reply_text(" Owner only")
             return
         
         if not context.args:
@@ -375,28 +375,28 @@ class GoalCommands:
             goal = manager.get_goal(goal_id)
             
             if not goal:
-                await update.message.reply_text(f"❌ Goal `{goal_id}` not found")
+                await update.message.reply_text(f" Goal `{goal_id}` not found")
                 return
             
-            priority_emoji = "🔴" if goal.effective_priority >= 8 else "🟡" if goal.effective_priority >= 5 else "🟢"
+            priority_emoji = "" if goal.effective_priority >= 8 else "" if goal.effective_priority >= 5 else ""
             
             msg = (
-                f"🎯 **{goal.title}**\n\n"
-                f"ID: `{goal.id}`\n"
+                f" {goal.title}\n\n"
+                f"ID: {goal.id}\n"
                 f"Status: {goal.status.name}\n"
                 f"Category: {goal.category}\n"
                 f"{priority_emoji} Priority: {goal.priority.name} (score: {goal.effective_priority})\n\n"
-                f"**Description:**\n{goal.description}\n\n"
-                f"**Impact:** {goal.impact_score}/10\n"
-                f"**Confidence:** {goal.confidence:.0%}\n"
-                f"**Estimated Effort:** {goal.effort_estimate}\n\n"
+                f" Description\n{goal.description}\n\n"
+                f"Impact: {goal.impact_score}/10\n"
+                f"Confidence: {goal.confidence:.0%}\n"
+                f"Estimated Effort: {goal.effort_estimate}\n\n"
             )
             
             if goal.proposed_solution:
-                msg += f"**Proposed Solution:**\n{goal.proposed_solution}\n\n"
+                msg += f" Proposed Solution\n{goal.proposed_solution}\n\n"
             
             if goal.evidence:
-                msg += f"**Evidence ({len(goal.evidence)} items):**\n"
+                msg += f" Evidence ({len(goal.evidence)} items)\n"
                 for ev in goal.evidence[:3]:
                     msg += f"• {ev[:60]}...\n"
                 msg += "\n"
@@ -411,12 +411,12 @@ class GoalCommands:
             
         except Exception as e:
             logger.error(f"Goals detail error: {e}")
-            await update.message.reply_text(f"❌ Error: {e}")
+            await update.message.reply_text(f" Error: {e}")
     
     async def goals_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show goal system statistics"""
         if not self._is_owner(update):
-            await update.message.reply_text("⛔ Owner only")
+            await update.message.reply_text(" Owner only")
             return
         
         try:
@@ -424,23 +424,23 @@ class GoalCommands:
             stats = manager.get_statistics()
             
             msg = (
-                "📊 **Goal System Statistics**\n\n"
-                f"**By Status:**\n"
+                " Goal System Statistics\n\n"
+                f" By Status\n"
             )
             
             for status, count in stats['by_status'].items():
-                emoji = "🟢" if status == 'COMPLETED' else "🟡" if status == 'ACTIVE' else "🔵"
+                emoji = "" if status == 'COMPLETED' else "" if status == 'ACTIVE' else ""
                 msg += f"  {emoji} {status}: {count}\n"
             
             msg += (
-                f"\n**By Category:**\n"
+                f"\n By Category\n"
             )
             
             for category, count in stats['by_category'].items():
                 msg += f"  • {category}: {count}\n"
             
             msg += (
-                f"\n**Performance:**\n"
+                f"\n Performance\n"
                 f"  Completion Rate: {stats['completion_rate']:.1%}\n"
                 f"  Pending Approval: {stats['pending_approval']}\n"
                 f"  Recent (7 days): {stats['recent_7_days']}\n"

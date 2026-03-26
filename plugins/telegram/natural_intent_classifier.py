@@ -30,12 +30,8 @@ class NaturalIntentClassifier:
         
     def _get_sentence_model(self):
         """Get shared sentence transformer model"""
-        try:
-            from src.utils.embedding_model import get_sentence_transformer
-            return get_sentence_transformer('all-MiniLM-L6-v2')
-        except:
-            # Fallback to direct import
-            return SentenceTransformer('all-MiniLM-L6-v2')
+        from src.utils.embedding_model import get_sentence_transformer
+        return get_sentence_transformer('all-MiniLM-L6-v2')
     
     def register_command(self, command_name: str, docstring: str = None):
         """

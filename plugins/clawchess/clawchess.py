@@ -116,7 +116,7 @@ class ClawChessPlugin(AlleyBotPlugin):
             self._runner = ClawChessRunner(
                 api_key=self.api_key,
                 agent_name=self.molty_name or 'AlleyBot',
-                engine_depth=self.engine_depth,
+                engine_depth=20,  # Strong competitive depth
                 on_move_played=_on_move,
                 on_game_over=_on_game_over,
             )

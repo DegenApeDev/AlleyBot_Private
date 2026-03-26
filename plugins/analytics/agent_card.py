@@ -144,6 +144,8 @@ class AgentCardGenerator:
 
     def __init__(self, core=None):
         self.core = core
+        self._skill_scanner = None
+        self._cached_skills = None
 
     def generate(self) -> Dict[str, Any]:
         """Generate the full agent card JSON"""
@@ -223,9 +225,7 @@ class AgentCardGenerator:
 
         # 2. NEW: Scan skills/ directory for actual skill files
         try:
-            from plugins.analytics.skill_scanner import SkillScanner
-            scanner = SkillScanner()
-            discovered_skills = scanner.scan_skills_directory()
+            discovered_skills = self._get_discovered_skills()
             
             # 3. NEW: Let AGI Kernel decide which skills to include (if available)
             if self.core and hasattr(self.core, 'agi_kernel') and hasattr(self.core.agi_kernel, 'skill_manager'):
@@ -240,8 +240,6 @@ class AgentCardGenerator:
                 # Fallback: include all discovered skills
                 for skill in discovered_skills:
                     skills.extend(skill.get('oasf_skills', []))
-            
-            print(f"📊 Agent Card: {len(discovered_skills)} skills discovered from skills/ directory")
         except Exception as e:
             print(f"⚠️ Skill scanner failed, using hardcoded skills only: {e}")
 
@@ -284,9 +282,7 @@ class AgentCardGenerator:
 
         # NEW: Add capabilities from discovered skills
         try:
-            from plugins.analytics.skill_scanner import SkillScanner
-            scanner = SkillScanner()
-            discovered_skills = scanner.scan_skills_directory()
+            discovered_skills = self._get_discovered_skills()
             
             for skill in discovered_skills:
                 # Add skill name as capability
@@ -473,9 +469,7 @@ class AgentCardGenerator:
         
         # 2. NEW: Add discovered skills from skills/ directory
         try:
-            from plugins.analytics.skill_scanner import SkillScanner
-            scanner = SkillScanner()
-            discovered_skills = scanner.get_monetizable_skills()
+            discovered_skills = self._get_monetizable_skills()
             
             for skill in discovered_skills:
                 # Convert skill to A2A format
@@ -501,13 +495,39 @@ class AgentCardGenerator:
                     a2a_skill["tags"].append("free")
                 
                 a2a_skills.append(a2a_skill)
-            
-            print(f"📊 A2A Skills: Added {len(discovered_skills)} discovered skills")
         except Exception as e:
             print(f"⚠️ Could not add discovered skills to A2A: {e}")
         
         return a2a_skills
 
+    def _get_skill_scanner(self):
+        """Get or create cached skill scanner instance"""
+        if self._skill_scanner is None:
+            from plugins.analytics.skill_scanner import SkillScanner
+            self._skill_scanner = SkillScanner()
+        return self._skill_scanner
+    
+    def _get_discovered_skills(self) -> List[Dict]:
+        """Get cached discovered skills (scans only once)"""
+        if self._cached_skills is None:
+            scanner = self._get_skill_scanner()
+            self._cached_skills = scanner.scan_skills_directory()
+            print(f"📊 Agent Card: {len(self._cached_skills)} skills discovered from skills/ directory")
+        return self._cached_skills
+    
+    def _get_monetizable_skills(self) -> List[Dict]:
+        """Get monetizable skills from cached scan results"""
+        discovered = self._get_discovered_skills()
+        # Filter out test skills and internal tools
+        monetizable = []
+        for skill in discovered:
+            if skill.get('auto_generated'):
+                continue
+            if 'test' in skill['id'].lower() or 'internal' in skill['id'].lower():
+                continue
+            monetizable.append(skill)
+        return monetizable
+    
     def _get_loaded_plugins(self) -> set:
         """Get set of currently loaded plugin names"""
         if self.core and hasattr(self.core, 'plugin_manager'):

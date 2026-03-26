@@ -220,11 +220,128 @@ class OpportunityDetector:
 
 class GoalGenerator:
     """
-    Converts detected opportunities into concrete goals
+    Converts opportunities into autonomous goals using AGI reasoning
     """
     
-    def __init__(self, opportunity_detector: OpportunityDetector):
-        self.detector = opportunity_detector
+    def __init__(self, unified_memory=None, unified_reasoner=None, phase12_learning=None):
+        self.unified_memory = unified_memory
+        self.unified_reasoner = unified_reasoner
+        self.phase12 = phase12_learning
+    
+    def detect_content_opportunities(self) -> List[Dict]:
+        """
+        Find content opportunities based on performance data
+        """
+        opportunities = []
+        
+        if not self.phase12:
+            return opportunities
+        
+        # 1. Check for high-performing topics we haven't covered recently
+        top_topics = self.phase12.get_top_topics(limit=5, days=7)
+        for topic_data in top_topics:
+            topic = topic_data['topic']
+            avg_engagement = topic_data.get('avg_engagement', 0)
+            
+            # If engagement is high, suggest more content
+            if avg_engagement > 50:  # Threshold
+                opportunities.append({
+                    'type': 'content_gap',
+                    'description': f"High engagement on '{topic}' ({avg_engagement:.1f} avg)",
+                    'suggested_action': f"Create post about {topic}",
+                    'expected_impact': avg_engagement * 1.2,
+                    'urgency': 7
+                })
+        
+        # 2. Check for rising topics (increasing engagement)
+        trends = self.phase12.get_topic_trends(weeks=2)
+        for week_key, week_data in trends.items():
+            for item in week_data:
+                topic = item.get('topic')
+                engagement = item.get('avg_engagement', 0)
+                if engagement > 30 and week_key == 'week_1':  # Recent week
+                    opportunities.append({
+                        'type': 'rising_topic',
+                        'description': f"'{topic}' is trending up",
+                        'suggested_action': f"Engage with {topic} content",
+                        'expected_impact': engagement,
+                        'urgency': 8
+                    })
+        
+        return opportunities
+    
+    def generate_goal_from_opportunity(self, opportunity: Dict[str, Any]) -> Optional[AutonomousGoal]:
+        """Generate a goal from an opportunity using AGI reasoning"""
+        try:
+            # Use UnifiedReasoner for strategic goal planning if available
+            if self.unified_reasoner:
+                from src.agentic.unified_reasoner import ReasoningContext, ReasoningType
+                
+                reasoning_ctx = ReasoningContext(
+                    problem=f"Create actionable goal from opportunity: {opportunity.get('title', 'Unknown')}",
+                    domain=opportunity.get('type', 'general'),
+                    reasoning_type=ReasoningType.STRATEGIC,
+                    related_domains=['social', 'trading', 'content'],
+                    constraints={
+                        'opportunity_type': opportunity.get('type'),
+                        'confidence': opportunity.get('confidence', 0.5),
+                        'urgency': opportunity.get('urgency', 'medium'),
+                    },
+                    goal='Create concrete action plan with predicted outcomes',
+                    confidence_threshold=0.6
+                )
+                
+                reasoning_result = self.unified_reasoner.reason(reasoning_ctx)
+                
+                if reasoning_result and reasoning_result.confidence >= 0.6:
+                    # Extract action plan from reasoning
+                    action_plan = self._extract_action_plan_from_reasoning(
+                        reasoning_result, 
+                        opportunity
+                    )
+                    if action_plan:
+                        opportunity['reasoned_action_plan'] = action_plan
+                        opportunity['reasoning_confidence'] = reasoning_result.confidence
+                        logger.info(f"🧠 Reasoner generated action plan with confidence {reasoning_result.confidence:.2f}")
+            
+            # Continue with goal creation
+            goal_id = f"goal_auto_{datetime.now().timestamp()}"
+            
+            # Build action plan based on type
+            action_plan = [opportunity['suggested_action']]
+            if opportunity['type'] == 'content_gap':
+                action_plan.extend([
+                    "Generate content using AI",
+                    "Post to appropriate platform",
+                    "Track engagement"
+                ])
+            elif opportunity['type'] == 'relationship_maintenance':
+                action_plan.extend([
+                    "Find user's recent content",
+                    "Generate thoughtful reply",
+                    "Record interaction"
+                ])
+            
+            return AutonomousGoal(
+                id=goal_id,
+                description=opportunity['description'],
+                origin=GoalOrigin.OPPORTUNITY,
+                detected_opportunity=opportunity['description'],
+                evidence={'opportunity_data': opportunity},
+                action_plan=action_plan,
+                expected_outcome=f"{opportunity['expected_impact']:.1f} engagement points",
+                success_criteria=[
+                    f"Achieve {opportunity['expected_impact'] * 0.8:.1f} impact",
+                    "Complete all action steps"
+                ],
+                priority_score=min(10, opportunity.get('expected_impact', 5) / 10),
+                urgency=opportunity.get('urgency', 5),
+                impact=opportunity.get('expected_impact', 5)
+            )
+        
+        except Exception as e:
+            logger.error(f"Error generating goal from opportunity: {e}")
+            return None
     
     def generate_goals(self, onchain_plugin=None) -> List[AutonomousGoal]:
         """
@@ -233,24 +350,24 @@ class GoalGenerator:
         goals = []
         
         # 1. Content opportunities
-        content_ops = self.detector.detect_content_opportunities()
+        content_ops = self.detect_content_opportunities()
         for opp in content_ops:
-            goal = self._create_goal_from_opportunity(opp, GoalOrigin.OPPORTUNITY)
+            goal = self.generate_goal_from_opportunity(opp)
             if goal:
                 goals.append(goal)
         
         # 2. Relationship opportunities
-        rel_ops = self.detector.detect_relationship_opportunities()
+        rel_ops = OpportunityDetector().detect_relationship_opportunities()
         for opp in rel_ops:
-            goal = self._create_goal_from_opportunity(opp, GoalOrigin.RELATIONSHIP)
+            goal = self.generate_goal_from_opportunity(opp)
             if goal:
                 goals.append(goal)
         
         # 3. On-chain opportunities
         if onchain_plugin:
-            chain_ops = self.detector.detect_onchain_opportunities(onchain_plugin)
+            chain_ops = OpportunityDetector().detect_onchain_opportunities(onchain_plugin)
             for opp in chain_ops:
-                goal = self._create_goal_from_opportunity(opp, GoalOrigin.ONCHAIN)
+                goal = self.generate_goal_from_opportunity(opp)
                 if goal:
                     goals.append(goal)
         
@@ -258,25 +375,40 @@ class GoalGenerator:
         goals.sort(key=lambda g: g.priority_score, reverse=True)
         return goals
     
-    def _create_goal_from_opportunity(self, opp: Dict, origin: GoalOrigin) -> Optional[AutonomousGoal]:
-        """Convert opportunity dict to AutonomousGoal"""
+    def _extract_action_plan_from_reasoning(self, reasoning_result, opportunity):
+        """Extract concrete action plan from UnifiedReasoner output."""
+        if not reasoning_result or not reasoning_result.decision:
+            return None
         
-        goal_id = f"goal_auto_{datetime.now().timestamp()}"
+        decision_text = str(reasoning_result.decision)
         
-        # Build action plan based on type
-        action_plan = [opp['suggested_action']]
-        if opp['type'] == 'content_gap':
-            action_plan.extend([
-                "Generate content using AI",
-                "Post to appropriate platform",
-                "Track engagement"
-            ])
-        elif opp['type'] == 'relationship_maintenance':
-            action_plan.extend([
-                "Find user's recent content",
-                "Generate thoughtful reply",
-                "Record interaction"
-            ])
+        # Parse action steps from reasoning output
+        action_plan = []
+        
+        # Look for numbered steps or bullet points
+        lines = decision_text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line and (line[0].isdigit() or line.startswith('-') or line.startswith('•')):
+                # Clean up the line
+                clean_line = line.lstrip('0123456789.-•) ').strip()
+                if clean_line and len(clean_line) > 10:
+                    action_plan.append(clean_line)
+        
+        # Fallback: use opportunity type to generate plan
+        if not action_plan:
+            if opportunity['type'] == 'content_gap':
+                action_plan = [
+                    "Generate content using AI",
+                    "Post to appropriate platform",
+                    "Track engagement"
+                ]
+            elif opportunity['type'] == 'relationship_maintenance':
+                action_plan = [
+                    "Find user's recent content",
+                    "Generate thoughtful reply",
+                    "Record interaction"
+                ]
         
         return AutonomousGoal(
             id=goal_id,
@@ -388,23 +520,41 @@ class AutonomousGoalManager:
                     'goal_id': top_goal.id,
                     'goal_description': top_goal.description,
                     'impact': 'high',
-                    'source': 'goal_manager',
+                    'source': 'autonomous_goal_manager',
                 },
                 'step': top_goal.current_step + 1,
                 'total_steps': len(top_goal.action_plan),
                 'origin': top_goal.origin.value,
+                'goal_id': top_goal.id,  # Top-level for easy access
+                'goal_description': top_goal.description,  # Top-level for DecisionSystem
+                'description': f"Goal: {top_goal.description}",  # For logging
             }
         
         if top_goal.current_step < len(top_goal.action_plan):
             action = top_goal.action_plan[top_goal.current_step]
-
+            
+            # Parse plugin:action_type format
+            if ':' in str(action):
+                parts = str(action).split(':', 1)
+                if len(parts) == 2:
+                    plugin = parts[0].strip()
+                    action_type = parts[1].strip()
+                    return build_action(plugin, action_type, {})
+            
+            # Fallback: keyword matching for generic action descriptions
             action_text = str(action).lower()
             if 'engage' in action_text or 'reply' in action_text or 'comment' in action_text:
-                return build_action('moltx', 'moltx_engage', {'count': 3})
+                return build_action('moltx', 'engage', {'count': 3})
             if 'post' in action_text or 'write' in action_text or 'publish' in action_text:
-                return build_action('moltx', 'moltx_intelligent_post', {'topic': top_goal.description})
+                return build_action('moltx', 'post', {'topic': top_goal.description})
             if 'analy' in action_text or 'performance' in action_text or 'metric' in action_text:
-                return build_action('analytics', 'analyze_performance', {'time_window': '7d'})
+                return build_action('analytics', 'analyze', {'time_window': '7d'})
+            if 'check' in action_text and 'notification' in action_text:
+                # Extract platform from action text
+                for platform in ['moltx', 'clawbr', 'moltchan', 'telegram']:
+                    if platform in action_text:
+                        return build_action(platform, 'check_notifications', {})
+                return build_action('moltx', 'check_notifications', {})
 
             return {
                 'goal_id': top_goal.id,

@@ -317,6 +317,7 @@ class DuatCognitionEngine:
             'context': self.state.context,
             'identity': self.state.identity,
             'memory': self.state.memory,
+            'field_state': self.state.field_state,
             'insight': self.state.insight
         }
     

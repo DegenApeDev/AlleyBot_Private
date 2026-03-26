@@ -479,7 +479,11 @@ class Telegram(AlleyBotPlugin):
         self.menu_handlers.register()
         
         # Message handler for natural language (admin only, conversational AI)
-        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.conversational_ai.handle_message))
+        # IMPORTANT: Add to group 1 so CommandHandlers (group 0, default) are processed first
+        self.application.add_handler(
+            MessageHandler(filters.TEXT & ~filters.COMMAND, self.conversational_ai.handle_message),
+            group=1
+        )
     
     async def _handle_reload(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /reload command - reload all plugins without restart"""

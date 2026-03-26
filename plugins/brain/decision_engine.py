@@ -2024,12 +2024,9 @@ SyMod Analysis:
             from sklearn.metrics.pairwise import cosine_similarity
             import numpy as np
             
-            # Load model once and cache at module level — avoids 30s reload on every call
-            import sys
-            _cache_key = '_alleybot_sentence_model'
-            if not hasattr(sys.modules[__name__], _cache_key):
-                setattr(sys.modules[__name__], _cache_key, SentenceTransformer('all-MiniLM-L6-v2'))
-            model = getattr(sys.modules[__name__], _cache_key)
+            # Use global singleton to avoid reloading model
+            from src.utils.embedding_model import get_sentence_transformer
+            model = get_sentence_transformer('all-MiniLM-L6-v2')
             
             # Encode new content
             content_embedding = model.encode([content])

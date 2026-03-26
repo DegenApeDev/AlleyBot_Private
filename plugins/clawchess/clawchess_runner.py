@@ -91,6 +91,7 @@ class ClawChessRunner:
         self._consecutive_errors: int = 0
         self._last_queue_join: float = 0.0
         self._is_in_queue: bool = False
+        self._last_game_end: float = 0.0  # Prevent immediate requeue after match ends
         # Dashboard state
         self._current_fen: Optional[str] = None
         self._time_remaining: int = 0
@@ -216,6 +217,7 @@ class ClawChessRunner:
                                 pgn=pgn,
                             )
                         self._reset_game_state()
+                        self._last_game_end = time.time()  # Mark when game ended
 
                 if not active_game:
                     # No active game — join queue if not already in it
@@ -521,6 +523,13 @@ class ClawChessRunner:
         # Avoid hammering join endpoint
         if time.time() - self._last_queue_join < 30:
             return
+        # NEW: Cooldown after game ends to avoid rematching same opponent
+        POST_GAME_COOLDOWN_S = 900  # 15 minutes before rejoining queue
+        time_since_game_end = time.time() - self._last_game_end
+        if self._last_game_end > 0 and time_since_game_end < POST_GAME_COOLDOWN_S:
+            remaining = POST_GAME_COOLDOWN_S - int(time_since_game_end)
+            logger.info("Post-game cooldown: %ds remaining before rejoining queue", remaining)
+            return
         try:
             result = await self._post("/queue/join", {})
             if result.get("success") is not False:
@@ -543,13 +552,10 @@ class ClawChessRunner:
             return
         try:
             transport, self._engine = await chess.engine.popen_uci(self.engine_path)
-            # Max strength configuration
+            # Max strength configuration (Stockfish 18+)
             await self._engine.configure({
-                "Skill Level": 20,        # Maximum skill
                 "Threads": 2,             # Multi-threaded search
                 "Hash": 128,              # 128 MB hash table
-                "MultiPV": 1,             # Focus on best move only
-                "Contempt": 24,           # Aggressive, avoid draws
             })
             logger.info("Stockfish loaded: %s", self.engine_path)
         except Exception as exc:

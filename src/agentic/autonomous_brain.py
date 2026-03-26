@@ -554,6 +554,30 @@ class AutonomousBrain(AGISocialMixin):
             if next_action:
                 logger.info(f"⚡ Next planned action: {next_action.description}")
         
+        # === AUTONOMOUS GOAL GENERATION: Scan observations for opportunities ===
+        # This is the core AGI behavior - AlleyBot detects opportunities and creates goals
+        if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
+            try:
+                # Scan for opportunities using autonomous goal system
+                goal_manager = agi_kernel.goal_manager
+                if goal_manager and hasattr(goal_manager, 'scan_and_generate'):
+                    # Get onchain plugin for opportunity detection
+                    onchain_plugin = self.plugin_manager.get_plugin('onchain') if self.plugin_manager else None
+                    
+                    # Generate goals from observations and opportunities
+                    new_autonomous_goals = goal_manager.scan_and_generate(onchain_plugin=onchain_plugin)
+                    
+                    if new_autonomous_goals:
+                        logger.info(f"🎯 Generated {len(new_autonomous_goals)} autonomous goals from observations")
+                        
+                        # Auto-activate high-priority goals (priority >= 8.0)
+                        for goal in new_autonomous_goals:
+                            if goal.priority_score >= 8.0:
+                                goal_manager.approve_goal(goal.id)
+                                logger.info(f"✅ Auto-activated high-priority goal: {goal.description}")
+            except Exception as e:
+                logger.debug(f"Autonomous goal generation error: {e}")
+        
         # === SELF-DIRECTED GOALS: Propose new goals based on observations ===
         if hasattr(self, 'goal_stack') and self.goal_stack and self.cross_platform_intel:
             new_goals = self.goal_stack.auto_add_proposed_goals(
@@ -564,20 +588,31 @@ class AutonomousBrain(AGISocialMixin):
             if new_goals > 0:
                 logger.info(f"🎯 Self-proposed {new_goals} new goals")
 
-        # === SAFE GOAL PICKUP: Start the next low-risk approved goal if idle ===
-        if self.goal_manager_v2 and hasattr(self.goal_manager_v2, 'start_next_safe_goal'):
+        # === GOAL MANAGER V2: Auto-approve and activate safe goals ===
+        if self.goal_manager_v2:
             try:
-                started_goal = self.goal_manager_v2.start_next_safe_goal()
-                if started_goal:
-                    logger.info(f"🚀 Runtime picked up safe goal: {started_goal.id} - {started_goal.title}")
-                    telegram = self.plugin_manager.get_plugin('telegram') if self.plugin_manager else None
-                    if telegram and hasattr(telegram, 'notify_autonomous_activity'):
-                        telegram.notify_autonomous_activity(
-                            'runtime_goal_pickup',
-                            f"Picked up safe approved goal `{started_goal.id}`: {started_goal.title[:120]}"
-                        )
+                # Auto-approve safe goals that meet criteria
+                from src.agentic.goal_manager import GoalStatus
+                proposed_goals = self.goal_manager_v2.get_goals(status=GoalStatus.PROPOSED, limit=5)
+                
+                for goal in proposed_goals:
+                    if self.goal_manager_v2.should_auto_approve_goal(goal):
+                        self.goal_manager_v2.approve_goal(goal.id)
+                        logger.info(f"✅ Auto-approved safe goal: {goal.title}")
+                
+                # Start the next approved goal if idle
+                if hasattr(self.goal_manager_v2, 'start_next_safe_goal'):
+                    started_goal = self.goal_manager_v2.start_next_safe_goal()
+                    if started_goal:
+                        logger.info(f"🚀 Runtime picked up safe goal: {started_goal.id} - {started_goal.title}")
+                        telegram = self.plugin_manager.get_plugin('telegram') if self.plugin_manager else None
+                        if telegram and hasattr(telegram, 'notify_autonomous_activity'):
+                            telegram.notify_autonomous_activity(
+                                'runtime_goal_pickup',
+                                f"Picked up safe approved goal `{started_goal.id}`: {started_goal.title[:120]}"
+                            )
             except Exception as e:
-                logger.debug(f"Could not pick up next safe goal during cycle: {e}")
+                logger.debug(f"Goal manager v2 activation error: {e}")
 
         # === AGI ORCHESTRATION: Run full AGI cycle analysis ===
         agi_actions = await self._run_agi_orchestration_cycle()
@@ -601,13 +636,50 @@ class AutonomousBrain(AGISocialMixin):
             if reasoning_result.confidence > 0.7:
                 logger.info(f"🧠 Unified Reasoning: {reasoning_result.explanation[:100]}...")
         
+        # === GOAL-DRIVEN ACTIONS: Get next action from active autonomous goals ===
+        goal_driven_action = None
+        if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
+            try:
+                goal_manager = agi_kernel.goal_manager
+                if goal_manager and hasattr(goal_manager, 'get_next_action'):
+                    goal_driven_action = goal_manager.get_next_action()
+                    if goal_driven_action:
+                        logger.info(f"🎯 Goal-driven action ready: {goal_driven_action.get('action_type', 'unknown')}")
+            except Exception as e:
+                logger.debug(f"Goal-driven action retrieval error: {e}")
+        
         # === THINK: Get action proposals from both SyMod and AGI ===
         proposals = await self._get_proposals()
         proposals.extend(agi_actions)  # Add AGI-generated actions
+        
+        # Add goal-driven action as high-priority proposal if available
+        if goal_driven_action:
+            from src.agentic.symod_core import SyModActionProposal
+            goal_proposal = SyModActionProposal(
+                action_type=goal_driven_action.get('action_type', 'unknown'),
+                target_id=goal_driven_action.get('params', {}).get('target_id'),
+                target_name=goal_driven_action.get('goal_description', 'Goal-driven action'),
+                confidence=0.85,  # High confidence for goal-driven actions
+                justification=f"Pursuing active goal: {goal_driven_action.get('goal_description', 'N/A')}",
+                metadata={
+                    'plugin': goal_driven_action.get('plugin', 'unknown'),
+                    'goal_driven': True,
+                    'goal_id': goal_driven_action.get('goal_id'),
+                    'step': goal_driven_action.get('step'),
+                    'total_steps': goal_driven_action.get('total_steps'),
+                    'origin': goal_driven_action.get('origin', 'autonomous'),
+                }
+            )
+            proposals.insert(0, goal_proposal)  # Add at front for priority
+            logger.info("🎯 Goal-driven action added to proposals with high priority")
+        
+        # Apply AGI learning systems to proposal ranking
+        self._apply_meta_learning_bias(proposals)  # Use learned strategies
+        self._apply_transfer_learning_bias(proposals)  # Apply cross-domain patterns
         self._apply_active_work_item_bias(proposals, active_work_items)
         self._apply_runtime_spine_bias(proposals, spine_context)
         proposals = self._prioritize_runtime_spine_proposals(proposals, spine_context)
-        logger.info(f"🧠 Generated {len(proposals)} total proposals")
+        logger.info(f"🧠 Generated {len(proposals)} total proposals (AGI learning applied)")
         
         # === EXECUTE MOLTX SUGGESTED ACTIONS ===
         # Execute actions suggested by MoltX service messages (quote posts, trending checks, etc.)
@@ -656,12 +728,25 @@ class AutonomousBrain(AGISocialMixin):
                 self._actions_this_hour += 1
                 self.stats['actions_taken'] += 1
 
+                # Update goal progress for both goal systems
                 goal_id = (proposal.metadata or {}).get('goal_id') if getattr(proposal, 'metadata', None) else None
-                if goal_id and self.goal_manager_v2 and hasattr(self.goal_manager_v2, 'record_goal_action_success'):
-                    self.goal_manager_v2.record_goal_action_success(
-                        goal_id,
-                        note=f"{proposal.action_type} via {(proposal.metadata or {}).get('plugin', 'unknown')} succeeded"
-                    )
+                if goal_id:
+                    # Update GoalManager v2 if applicable
+                    if self.goal_manager_v2 and hasattr(self.goal_manager_v2, 'record_goal_action_success'):
+                        self.goal_manager_v2.record_goal_action_success(
+                            goal_id,
+                            note=f"{proposal.action_type} via {(proposal.metadata or {}).get('plugin', 'unknown')} succeeded"
+                        )
+                    
+                    # Update AutonomousGoalManager if applicable
+                    if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
+                        goal_manager = agi_kernel.goal_manager
+                        if goal_manager and hasattr(goal_manager, 'complete_action'):
+                            goal_manager.complete_action(
+                                goal_id,
+                                success=True,
+                                outcome=f"Successfully executed {proposal.action_type}"
+                            )
                 
                 # === META-LEARNING: Record learning outcome ===
                 if self.meta_learner and proposal.action_type:
@@ -722,12 +807,25 @@ class AutonomousBrain(AGISocialMixin):
                 if self.planner and next_action:
                     self.planner.complete_action(next_action.id)
             else:
+                # Record failure for both goal systems
                 goal_id = (proposal.metadata or {}).get('goal_id') if getattr(proposal, 'metadata', None) else None
-                if goal_id and self.goal_manager_v2 and hasattr(self.goal_manager_v2, 'record_goal_action_failure'):
-                    self.goal_manager_v2.record_goal_action_failure(
-                        goal_id,
-                        note=f"{proposal.action_type} via {(proposal.metadata or {}).get('plugin', 'unknown')} failed"
-                    )
+                if goal_id:
+                    # Update GoalManager v2 if applicable
+                    if self.goal_manager_v2 and hasattr(self.goal_manager_v2, 'record_goal_action_failure'):
+                        self.goal_manager_v2.record_goal_action_failure(
+                            goal_id,
+                            note=f"{proposal.action_type} via {(proposal.metadata or {}).get('plugin', 'unknown')} failed"
+                        )
+                    
+                    # Update AutonomousGoalManager if applicable
+                    if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
+                        goal_manager = agi_kernel.goal_manager
+                        if goal_manager and hasattr(goal_manager, 'complete_action'):
+                            goal_manager.complete_action(
+                                goal_id,
+                                success=False,
+                                outcome="Action execution failed"
+                            )
 
                 # === OUTCOME LEARNING: Record failure ===
                 if self.outcome_learner:
@@ -1328,6 +1426,64 @@ class AutonomousBrain(AGISocialMixin):
                 proposal.metadata['recent_mismatch_score'] = round(average_mismatch, 3)
             proposal.metadata['memory_shaped_adjustment'] = round(adjustment, 3)
 
+    def _apply_meta_learning_bias(self, proposals: List[Any]) -> None:
+        """Apply meta-learning: bias proposals based on which learning strategies have worked best."""
+        if not proposals or not self.meta_learner:
+            return
+        
+        try:
+            # Get best performing strategies from meta-learner
+            if hasattr(self.meta_learner, 'get_best_strategies'):
+                best_strategies = self.meta_learner.get_best_strategies(limit=3)
+                
+                for proposal in proposals:
+                    action_type = str(getattr(proposal, 'action_type', '') or '')
+                    domain = str((getattr(proposal, 'metadata', {}) or {}).get('plugin', 'unknown'))
+                    
+                    # Check if this action aligns with successful strategies
+                    for strategy in best_strategies:
+                        if strategy.domain == domain or strategy.domain == 'general':
+                            # Boost confidence for actions in domains with successful strategies
+                            adjustment = 0.03 * strategy.success_rate
+                            proposal.confidence = min(float(getattr(proposal, 'confidence', 0.0) or 0.0) + adjustment, 0.95)
+                            
+                            if not getattr(proposal, 'metadata', None):
+                                proposal.metadata = {}
+                            proposal.metadata['meta_learning_boost'] = round(adjustment, 3)
+                            proposal.metadata['strategy_id'] = strategy.id
+                            break
+        except Exception as e:
+            logger.debug(f"Meta-learning bias error: {e}")
+    
+    def _apply_transfer_learning_bias(self, proposals: List[Any]) -> None:
+        """Apply transfer learning: use patterns from successful actions in other domains."""
+        if not proposals or not self.transfer_learner:
+            return
+        
+        try:
+            for proposal in proposals:
+                action_type = str(getattr(proposal, 'action_type', '') or '')
+                domain = str((getattr(proposal, 'metadata', {}) or {}).get('plugin', 'unknown'))
+                
+                # Find applicable patterns from other domains
+                if hasattr(self.transfer_learner, 'find_applicable_patterns'):
+                    patterns = self.transfer_learner.find_applicable_patterns(
+                        domain=domain,
+                        problem=action_type
+                    )
+                    
+                    if patterns:
+                        # Boost confidence based on transferable patterns
+                        pattern_boost = min(0.05, len(patterns) * 0.015)
+                        proposal.confidence = min(float(getattr(proposal, 'confidence', 0.0) or 0.0) + pattern_boost, 0.95)
+                        
+                        if not getattr(proposal, 'metadata', None):
+                            proposal.metadata = {}
+                        proposal.metadata['transfer_patterns_found'] = len(patterns)
+                        proposal.metadata['transfer_boost'] = round(pattern_boost, 3)
+        except Exception as e:
+            logger.debug(f"Transfer learning bias error: {e}")
+    
     def _apply_active_goal_bias(self, proposals: List[Any]) -> None:
         """Lightly bias proposal confidence toward the current safe active goal."""
         if not proposals or not self.goal_manager_v2 or not hasattr(self.goal_manager_v2, 'get_goals'):

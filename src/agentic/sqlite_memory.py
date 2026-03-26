@@ -112,8 +112,8 @@ class SQLiteMemorySystem:
         # Initialize embedding model if available
         if EMBEDDINGS_AVAILABLE:
             try:
-                self._embedding_model = SentenceTransformer(embedding_model)
-                print(f"🔤 Embedding model loaded: {embedding_model}")
+                from src.utils.embedding_model import get_sentence_transformer
+                self._embedding_model = get_sentence_transformer(embedding_model)
             except Exception as e:
                 print(f"⚠️ Failed to load embedding model: {e}")
         

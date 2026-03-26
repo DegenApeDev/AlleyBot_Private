@@ -58,14 +58,27 @@ class BrainCommands:
         Usage: /brain_start [mode]
         Modes: conservative, normal (default), aggressive
         """
+        logger.info(f"🧠 brain_start command called by user {update.effective_user.id}")
+        
         # Check owner
-        if not self._is_owner(update):
-            await update.message.reply_text("⛔ Owner only")
+        try:
+            is_owner = self._is_owner(update)
+            logger.info(f"🔐 Owner check result: {is_owner}")
+            if not is_owner:
+                logger.warning(f"⛔ Non-owner attempted brain_start: {update.effective_user.id}")
+                await update.message.reply_text("⛔ Owner only")
+                return
+        except Exception as e:
+            logger.error(f"❌ Owner check failed: {e}")
+            await update.message.reply_text(f"❌ Owner check error: {e}")
             return
         
         try:
+            logger.info("🔍 Attempting to get brain instance...")
             brain = await self._get_brain()
+            logger.info(f"🧠 Brain instance retrieved: {brain is not None}")
             if not brain:
+                logger.error("❌ Brain instance is None")
                 await update.message.reply_text("❌ Brain not available")
                 return
             
@@ -96,7 +109,7 @@ class BrainCommands:
                         logger.warning(f"⚠️ Failed to start Polymarket: {e}")
             
             response = (
-                f"🧠 **Brain Started**\n\n"
+                f"🧠 *Brain Started*\n\n"
                 f"Mode: {mode.title()}\n"
                 f"Status: 🟢 Running\n\n"
                 f"The autonomous brain is now active and will:\n"
@@ -107,14 +120,16 @@ class BrainCommands:
             )
             
             if polymarket_started:
-                response += f"\n🎲 **Polymarket Trading:** Started (scanning every 15 min)\n"
+                response += f"\n🎲 *Polymarket Trading:* Started (scanning every 15 min)\n"
             
-            response += f"\nUse /brain_stop to pause or /brain_status to check progress."
+            response += "\nUse /brain_stop to pause or /brain_status to check progress."
             
-            await update.message.reply_text(response)
+            await update.message.reply_text(response, parse_mode='Markdown')
             
         except Exception as e:
-            logger.error(f"Error starting brain: {e}")
+            logger.error(f"❌ Error starting brain: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             await update.message.reply_text(f"❌ Error starting brain: {e}")
     
     async def brain_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -6,13 +6,6 @@
       "learning_rate": 0.1
     }
   },
-  "engagement": {
-    "enabled": true,
-    "config": {
-      "comment_support": true,
-      "own_post_upvoting": true
-    }
-  },
   "content": {
     "enabled": false,
     "config": {
@@ -199,7 +192,7 @@
     }
   },
   "clawchess": {
-    "enabled": true,
+    "enabled": false,
     "config": {
       "auto_play": true,
       "max_games_per_hour": 4

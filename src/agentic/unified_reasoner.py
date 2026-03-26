@@ -491,6 +491,56 @@ Decision:"""
         return analogies
     
     def _find_cross_domain_analogies(self, context: ReasoningContext) -> List[Dict]:
+        """Find analogous patterns from other domains using knowledge graph."""
+        analogies = []
+        
+        if not self.knowledge_graph:
+            return analogies
+        
+        # Search for similar patterns in related domains
+        related_domains = context.related_domains or []
+        
+        for domain in related_domains:
+            # Query knowledge graph for successful patterns in this domain
+            try:
+                domain_patterns = self.knowledge_graph.query_patterns(
+                    domain=domain,
+                    pattern_type='successful_strategy',
+                    limit=3
+                )
+                
+                for pattern in domain_patterns:
+                    analogies.append({
+                        'source_domain': domain,
+                        'pattern': pattern.get('description'),
+                        'success_rate': pattern.get('success_rate', 0.0),
+                        'transferability': self._estimate_transferability(
+                            pattern, context.domain
+                        )
+                    })
+            except:
+                pass
+        
+        # Sort by transferability
+        analogies.sort(key=lambda x: x.get('transferability', 0), reverse=True)
+        return analogies[:5]
+    
+    def _estimate_transferability(self, pattern: Dict, target_domain: str) -> float:
+        """Estimate how well a pattern transfers to target domain."""
+        # Simple heuristic: domains with similar characteristics transfer better
+        domain_similarity = {
+            ('social', 'content'): 0.8,
+            ('trading', 'analysis'): 0.7,
+            ('chess', 'trading'): 0.6,  # Strategic thinking transfers
+            ('social', 'trading'): 0.5,  # Sentiment analysis transfers
+        }
+        
+        source = pattern.get('domain', 'unknown')
+        key = tuple(sorted([source, target_domain]))
+        
+        return domain_similarity.get(key, 0.3)
+    
+    def _find_cross_domain_analogies_fallback(self, context: ReasoningContext) -> List[Dict]:
         """Find analogies across different domains"""
         analogies = []
         
