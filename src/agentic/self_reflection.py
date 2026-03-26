@@ -79,6 +79,15 @@ class SelfReflectionEngine:
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         self.reflections: List[Reflection] = []
         self._load()
+        
+        # FairMind DNA Integration
+        try:
+            from src.cognition.fairmind_integration import get_fairmind_integration
+            self.fairmind = get_fairmind_integration()
+            print("✅ FairMind DNA integrated into self-reflection")
+        except Exception as e:
+            print(f"⚠️  FairMind integration unavailable: {e}")
+            self.fairmind = None
     
     def reflect(self, hours_back: int = 1, depth: int = 2) -> Reflection:
         """
@@ -111,6 +120,30 @@ class SelfReflectionEngine:
         
         # 6. Assess emotional state from recent experiences
         emotional_state = self._assess_emotional_state()
+        
+        # 7. FairMind DNA: Sovereign health check
+        if self.fairmind:
+            try:
+                sovereign_health = self.fairmind.get_sovereign_health()
+                cognitive_health = self.fairmind.get_cognitive_health()
+                
+                # Add FairMind insights to observations
+                observations.append(f"Sovereign Score: {sovereign_health['sovereign_score']:.1f}/100 ({sovereign_health['grade']})")
+                observations.append(f"Cognitive Coherence: {cognitive_health['coherence']:.2f} ({cognitive_health['grade']})")
+                
+                # Add FairMind concerns
+                if cognitive_health['is_critical']:
+                    concerns.append("CRITICAL: Cognitive coherence collapse detected - immediate restoration needed")
+                
+                if sovereign_health['sovereign_score'] < 70:
+                    concerns.append(f"Sovereign status compromised: {sovereign_health['status']}")
+                
+                # Add FairMind recommendations to insights
+                for rec in sovereign_health['recommendations']:
+                    insights.append(f"FairMind: {rec}")
+                
+            except Exception as e:
+                print(f"⚠️  FairMind health check failed: {e}")
         
         reflection = Reflection(
             id=reflection_id,
