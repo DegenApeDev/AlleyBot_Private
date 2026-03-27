@@ -337,13 +337,16 @@ class AGIKernel:
         
         # === Progress Reporter (Truthful Progress Tracking) ===
         if not hasattr(self, 'progress_reporter') or not self.progress_reporter:
-            from src.agentic.progress_reporter import create_progress_reporter
-            from src.agentic.action_logger import get_action_logger
-            self.progress_reporter = create_progress_reporter(
+            from src.agentic.progress_reporter import ProgressReporter
+            self.progress_reporter = ProgressReporter(
                 goal_manager=self.goal_manager,
                 action_logger=get_action_logger()
             )
-            print("✅ Progress Reporter integrated into AGI Kernel (truth-verified reporting active)")
+        
+        # Hermes tools will be initialized in initialize_async
+        self._hermes_tools_task = None
+        
+        print("✅ AGI Kernel initialized with all components")
         
         # === JARVIS Phase 2: Proactive Intelligence ===
         if not self.predictive_suggestions:
@@ -1570,6 +1573,19 @@ class AGIKernel:
     def get_reflection_summary(self, n: int = 3) -> str:
         """Get summary of recent reflections"""
         return self.reflection_engine.get_reflection_summary(n)
+    
+    async def initialize_async(self):
+        """Initialize async components"""
+        # Initialize Hermes tools
+        try:
+            from src.tools.action_router_integration import setup_hermes_tools_integration
+            tools_result = await setup_hermes_tools_integration(self)
+            if tools_result['success']:
+                print(f"✅ Hermes tools integrated: {tools_result['tools_registered']} tools")
+            else:
+                print(f"⚠️ Hermes tools integration failed: {tools_result['error']}")
+        except Exception as e:
+            print(f"⚠️ Could not integrate Hermes tools: {e}")
 
 
 # Singleton factory

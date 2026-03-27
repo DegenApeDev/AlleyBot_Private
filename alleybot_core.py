@@ -152,6 +152,11 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
             try:
                 self.agi_kernel.initialize_decision_systems(self.plugin_manager)
                 print("✅ AGI Kernel decision systems initialized")
+                
+                # Initialize async components (Hermes tools)
+                import asyncio
+                asyncio.create_task(self.agi_kernel.initialize_async())
+                
             except Exception as e:
                 print(f"⚠️ AGI Kernel decision systems initialization failed: {e}")
         
