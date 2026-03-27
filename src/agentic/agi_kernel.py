@@ -335,6 +335,16 @@ class AGIKernel:
                 self.goal_manager.tool_registry = self.tool_registry
                 print("   🔗 Goal Manager connected to Tool Registry")
         
+        # === Progress Reporter (Truthful Progress Tracking) ===
+        if not hasattr(self, 'progress_reporter') or not self.progress_reporter:
+            from src.agentic.progress_reporter import create_progress_reporter
+            from src.agentic.action_logger import get_action_logger
+            self.progress_reporter = create_progress_reporter(
+                goal_manager=self.goal_manager,
+                action_logger=get_action_logger()
+            )
+            print("✅ Progress Reporter integrated into AGI Kernel (truth-verified reporting active)")
+        
         # === JARVIS Phase 2: Proactive Intelligence ===
         if not self.predictive_suggestions:
             from src.agentic.predictive_suggestions import create_predictive_suggestions

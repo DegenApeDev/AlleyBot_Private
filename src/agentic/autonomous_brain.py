@@ -455,6 +455,9 @@ class AutonomousBrain(AGISocialMixin):
         observations = await self._gather_observations()
         logger.info(f"👁️ Gathered {len(observations)} observations")
         
+        # Get AGI Kernel reference early for all AGI features
+        agi_kernel = getattr(self.core, 'agi_kernel', None) if self.core else None
+        
         # === CROSS-PLATFORM SYNTHESIS: Connect dots across platforms ===
         if self.cross_platform_intel:
             synthesis = self.cross_platform_intel.synthesize_observations(observations)
