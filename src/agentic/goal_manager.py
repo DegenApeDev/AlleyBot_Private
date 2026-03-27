@@ -942,8 +942,13 @@ class GoalManager:
                             }
                         }
                     else:
-                        # Plugin execution
-                        action_type = best_tool.get('action', 'execute')
+                        # Check if this is a Hermes tool
+                        if tool_metadata.get('hermes_tool', False):
+                            # Use tool_ prefix for Hermes tools
+                            action_type = f"tool_{tool_metadata['name']}"
+                        else:
+                            # Plugin execution
+                            action_type = best_tool.get('action', 'execute')
                         
                         # Extract suggested params or build from context
                         params = best_tool.get('suggested_params', {})
@@ -1015,16 +1020,9 @@ class GoalManager:
             'plugin': plugin,
             'params': params,
             'goal_id': goal.id,
-            'goal_description': goal.title,
-            'confidence': 0.75,
-            'justification': f"Executing step {step_number + 1}/{total_steps} of goal: {goal.title}",
-            'metadata': {
-                'source': 'fallback_mapping',
-                'goal_id': goal.id,
-                'step_number': step_number + 1,
-                'total_steps': total_steps,
-                'step_description': description
-            }
+            'step_number': step_number + 1,
+            'total_steps': total_steps,
+            'step_description': description
         }
     
     def _row_to_goal(self, row: sqlite3.Row) -> Goal:

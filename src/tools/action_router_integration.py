@@ -259,6 +259,7 @@ async def setup_hermes_tools_integration(alleybot_core):
             
             # Replace router
             alleybot_core.agi_kernel.action_router = enhanced_router
+            print(f"   📊 Registered {len(enhanced_router.actions)} total actions")
         
         # Setup execution monitor
         monitor = ToolExecutionMonitor()
