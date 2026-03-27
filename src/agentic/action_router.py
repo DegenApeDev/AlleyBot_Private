@@ -72,6 +72,8 @@ class ActionRouter:
             return 'analyze'
         if 'fix' in action_type or 'repair' in action_type or 'retry' in action_type:
             return 'fix'
+        if action_type in ['terminal', 'execute_code', 'write_file', 'patch', 'browser_click', 'execute_tool']:
+            return 'assistant_tool'
         return action_type or 'unknown'
 
     def _refresh_action_family_trust_from_outcome(
@@ -172,6 +174,10 @@ class ActionRouter:
                             'reason': content_check.get('reason', 'Content strategy blocked'),
                             'modulations': modulations
                         }
+            
+            # For assistant tools, inherently approve if risk level is acceptable
+            if action_type in ['execute_tool', 'terminal', 'execute_code', 'write_file']:
+                modulations['assistant_mode'] = True
             
             return {
                 'approved': True,
@@ -427,6 +433,17 @@ class ActionRouter:
         action_type = action_spec.get('action_type')
         params = action_spec.get('params', {})
         
+        # Check if this is a tool execution request (Hermes / Assistant tools)
+        if action_type == 'execute_tool' or plugin_name == 'tool_registry' or action_type in ['terminal', 'execute_code', 'web_search', 'read_file', 'write_file', 'browser_navigate']:
+            try:
+                from src.tools.tool_registry import execute_tool_action
+                # Provide the tool name directly if the action type IS the tool name
+                target_tool = action_spec.get('tool_name', action_type)
+                result = await execute_tool_action(target_tool, **params)
+                return result
+            except ImportError:
+                print("⚠️ Tool registry not available for assistant execution")
+
         # Check if this is a skill execution request
         if action_type == 'execute_skill':
             return await self._execute_skill(params)
@@ -675,6 +692,47 @@ class ActionRouter:
         prediction = self._build_prediction_record(modulated_action, validation, validation_profile)
         modulated_action.setdefault('context', {})['prediction'] = prediction
         
+        # Step 4.75: FairMind & Human-in-the-Loop Gating for High-Risk Actions
+        action_type = modulated_action.get('action_type', '')
+        params_str = str(modulated_action.get('params', {})).lower()
+        
+        is_high_risk = (
+            validation_profile.get('risk_level') in ['high', 'critical'] or
+            action_type in ['terminal', 'execute_code', 'wallet_send', 'dex_swap'] or
+            'rm ' in params_str or 'sudo ' in params_str
+        )
+        
+        if is_high_risk and self.plugins:
+            telegram_plugin = self.plugins.get_plugin('telegram')
+            if telegram_plugin:
+                try:
+                    from src.agentic.approval_dashboard import ApprovalDashboard
+                    if not hasattr(self.agi, 'approval_dashboard'):
+                        self.agi.approval_dashboard = ApprovalDashboard(telegram_bot=telegram_plugin)
+                    
+                    security_context = {
+                        'risk_level': 'CRITICAL' if 'rm ' in params_str else 'HIGH',
+                        'issues': [{'type': 'FairMind Risk Matrix Match', 'risk_level': 'HIGH'}]
+                    }
+                    
+                    print(f"⚠️ Action {action_id} flagged as HIGH_RISK by FairMind matrix. Requesting Telegram approval...")
+                    
+                    is_approved = await self.agi.approval_dashboard.request_approval(
+                        action=action_id,
+                        params=modulated_action.get('params', {}),
+                        security_check=security_context
+                    )
+                    
+                    if not is_approved:
+                        return {
+                            'success': False,
+                            'reason': 'Human-in-the-loop approval denied or timed out.',
+                            'stage': 'approval_gating',
+                            'action_id': action_id,
+                        }
+                except Exception as e:
+                    print(f"⚠️ Could not load ApprovalDashboard: {e}")
+
         # Step 5: Execute via plugin
         try:
             result = await self._execute_via_plugin(modulated_action)

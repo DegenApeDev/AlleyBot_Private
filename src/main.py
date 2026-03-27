@@ -33,6 +33,53 @@ from src.config.models import ModelRouter
 from src.skills.skill_loader import SkillLoader
 
 
+async def _run_heartbeat_loop(core):
+    """
+    Autonomous Heartbeat.
+    Reads HEARTBEAT.md every 15 minutes, checks data/work_items.db,
+    triggers ActionRouter, or uses Hermes Curiosity Drive.
+    """
+    logger = logging.getLogger("HeartbeatLoop")
+    logger.warning("💓 Heartbeat Loop initialized.")
+    interval = 15 * 60  # 15 minutes by default
+    
+    while True:
+        try:
+            logger.warning("💓 [HEARTBEAT] Waking up to check tasks...")
+            
+            has_items = False
+            try:
+                from src.agentic.work_item_manager import get_work_item_service
+                work_items = get_work_item_service().get_pending_items()
+                has_items = len(work_items) > 0
+            except Exception as w_e:
+                pass # fallback if service not initialized
+
+            if has_items:
+                logger.warning(f"💓 Found pending work items. Allowing brain to process.")
+            else:
+                logger.warning("💓 0 active work items. Engaging Hermes Curiosity Drive (MoltX scan)...")
+                # Trigger action router to do moltx discovery for trends
+                if hasattr(core, 'agi_kernel') and hasattr(core.agi_kernel, 'action_router'):
+                    action_spec = {
+                        'plugin': 'moltx',
+                        'action_type': 'discover',
+                        'params': {'query': 'crypto trends', 'limit': 10},
+                        'context': {
+                            'source': 'heartbeat_curiosity',
+                            'impact': 'low',
+                            'risk_level': 'low'
+                        }
+                    }
+                    asyncio.create_task(core.agi_kernel.action_router.route_action(action_spec))
+            
+            await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Heartbeat Loop Error: {e}")
+            await asyncio.sleep(60)
+
 async def _run_production(core):
     """Async main — all startup happens inside a running event loop."""
 
@@ -69,6 +116,10 @@ async def _run_production(core):
     # Event runner
     event_runner_task = asyncio.create_task(event_runner.start(), name="event_runner")
     print("✅ Event Runner started")
+
+    # Heartbeat loop
+    heartbeat_task = asyncio.create_task(_run_heartbeat_loop(core), name="heartbeat_loop")
+    print("✅ Heartbeat Loop started")
 
     # Autonomous brain
     try:
@@ -120,6 +171,7 @@ async def _run_production(core):
         print("🧹 Shutting down...")
         telegram_plugin.is_running = False
         telegram_task.cancel()
+        heartbeat_task.cancel()
         event_runner.stop()
         try:
             await telegram_task

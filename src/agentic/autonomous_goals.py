@@ -521,6 +521,7 @@ class AutonomousGoalManager:
                     'goal_description': top_goal.description,
                     'impact': 'high',
                     'source': 'autonomous_goal_manager',
+                    'evidence': top_goal.evidence,
                 },
                 'step': top_goal.current_step + 1,
                 'total_steps': len(top_goal.action_plan),

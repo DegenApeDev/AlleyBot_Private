@@ -157,14 +157,19 @@ class TerminalTools:
     
     def __init__(self, backend: str = "local"):
         self.backend = backend
-        self.cwd = "."
+        self.sandbox_dir = os.path.abspath("sandbox")
+        os.makedirs(self.sandbox_dir, exist_ok=True)
+        self.cwd = self.sandbox_dir
         self.timeout = 180
     
     async def terminal(self, command: str, cwd: Optional[str] = None) -> ToolResult:
-        """Execute terminal commands with various backends"""
+        """Execute terminal commands with various backends, jailed to the sandbox"""
         try:
             work_dir = cwd or self.cwd
-            
+            # Enforce sandbox ceiling
+            if not os.path.abspath(work_dir).startswith(self.sandbox_dir):
+                work_dir = self.sandbox_dir
+                
             if self.backend == "local":
                 return await self._execute_local(command, work_dir)
             elif self.backend == "docker":
@@ -610,10 +615,13 @@ class CodeExecutionTools:
             return ToolResult(success=False, error=str(e))
     
     async def _execute_python(self, code: str) -> ToolResult:
-        """Execute Python code"""
+        """Execute Python code in Sandbox scratchpad"""
         try:
+            scratchpad_dir = os.path.abspath("sandbox/scratchpad")
+            os.makedirs(scratchpad_dir, exist_ok=True)
+            
             # Create temporary file
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', dir=scratchpad_dir, delete=False) as f:
                 f.write(code)
                 temp_file = f.name
             

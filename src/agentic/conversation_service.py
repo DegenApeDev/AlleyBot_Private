@@ -403,64 +403,78 @@ class ConversationService:
                     identity_validated=True,
                 )
             
-            # Create goal from parsed task
+            # Create and inject goal into AutonomousGoalManager
             if self.core and hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
-                goal_manager = self.core.agi_kernel.goal_manager
-                
-                if goal_manager:
-                    # Create goal
-                    from src.agentic.goal_manager import Goal, GoalStatus, GoalPriority
-                    import json
-                    
-                    # Map priority string to enum
-                    priority_map = {
-                        'CRITICAL': GoalPriority.CRITICAL,
-                        'HIGH': GoalPriority.HIGH,
-                        'MEDIUM': GoalPriority.MEDIUM,
-                        'LOW': GoalPriority.LOW,
-                    }
-                    
-                    goal = Goal(
+                goal_manager = getattr(self.core.agi_kernel, 'goal_manager', None)
+
+                if goal_manager is not None:
+                    from src.agentic.autonomous_goals import AutonomousGoal, GoalOrigin
+
+                    # Build action_plan as plain strings (what AutonomousGoalManager expects)
+                    action_plan_steps = [
+                        s['description'] if isinstance(s, dict) else str(s)
+                        for s in (parsed_task.implementation_plan or [])
+                    ]
+                    if not action_plan_steps:
+                        action_plan_steps = [f"Execute {parsed_task.action_type} via {parsed_task.plugin}"]
+
+                    # Add a concrete plugin dispatch step so get_next_action can route it
+                    action_plan_steps.insert(0, f"{parsed_task.plugin}:{parsed_task.action_type}")
+
+                    goal = AutonomousGoal(
                         id=f"user_request_{int(datetime.now().timestamp())}",
-                        title=parsed_task.title,
-                        description=parsed_task.description,
-                        status=GoalStatus.APPROVED,  # User requests are pre-approved
-                        priority=priority_map.get(parsed_task.priority, GoalPriority.MEDIUM),
-                        confidence=parsed_task.confidence,
-                        impact_score=8.0,  # User requests are high impact
-                        implementation_plan=json.dumps(parsed_task.implementation_plan),
-                        evidence=parsed_task.evidence,
-                        trigger_data=json.dumps({
-                            'source': 'user_request',
+                        description=parsed_task.description or parsed_task.title,
+                        origin=GoalOrigin.USER_COMMAND,
+                        detected_opportunity=f"Owner requested: {request.message_text[:120]}",
+                        evidence={
+                            'source': 'telegram_owner',
                             'sender': request.sender_name,
+                            'chat_id': request.chat_id,
+                            'session_id': request.session_id,
                             'original_message': request.message_text,
                             'parsed_action': parsed_task.action_type,
                             'plugin': parsed_task.plugin,
-                        }),
-                        created_at=datetime.now(),
-                        approved_at=datetime.now(),
+                        },
+                        action_plan=action_plan_steps,
+                        expected_outcome=f"Successfully executed {parsed_task.action_type}",
+                        success_criteria=[f"Plugin {parsed_task.plugin} returns success"],
+                        priority_score=9.0,   # Owner requests are top priority
+                        urgency=9.0,
+                        impact=8.0,
+                        status='active',      # Skip proposal — owner already approved by asking
+                        activated_at=datetime.now(),
                     )
-                    
-                    # Add goal to manager
-                    goal_manager.add_goal(goal)
-                    
-                    # Activate immediately for user requests
-                    goal_manager.activate_goal(goal.id)
-                    
-                    print(f"✅ Created and activated goal: {goal.id} - {goal.title}")
-                    
+
+                    # Inject directly into goal manager's live list
+                    goal_manager.goals.append(goal)
+                    goal_manager._save()
+
+                    print(f"✅ Injected owner goal as active: {goal.id} — {parsed_task.title}")
+
                     return ConversationResponse(
-                        response_text=f"✅ Got it! I'll work on: {parsed_task.title}\n\nI've created a goal and will start executing the plan:\n" + 
-                                    "\n".join([f"{i+1}. {step['description']}" for i, step in enumerate(parsed_task.implementation_plan[:3])]) +
-                                    f"\n\nYou can check progress anytime. I'll update you when complete!",
+                        response_text=(
+                            f"⚡ On it — *{parsed_task.title}*\n\n"
+                            + "\n".join(
+                                f"{i+1}. {s['description'] if isinstance(s, dict) else s}"
+                                for i, s in enumerate(
+                                    parsed_task.implementation_plan[:3]
+                                    if parsed_task.implementation_plan
+                                    else action_plan_steps[1:4]
+                                )
+                            )
+                            + "\n\nI'll update you when complete!"
+                        ),
                         response_type="goal_created",
                         executed_action=parsed_task.action_type,
                         identity_validated=True,
                     )
-            
-            # Fallback if goal manager not available
+
+            # Goal manager unavailable — fall back to a clear message
             return ConversationResponse(
-                response_text=f"I understand you want: {parsed_task.title}\n\nHowever, I can't create goals right now. Please try again in a moment.",
+                response_text=(
+                    f"I understand you want: *{parsed_task.title}*\n\n"
+                    "However, the goal engine isn't available right now. Try again in a moment."
+                ),
                 response_type="error",
                 identity_validated=True,
             )

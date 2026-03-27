@@ -76,7 +76,7 @@ class AutonomousCoder:
         coder.deploy_skill(skill)
     """
     
-    SKILLS_DIR = Path('skills/dynamic')
+    SKILLS_DIR = Path('sandbox/draft_skills')
     
     def __init__(self):
         self.SKILLS_DIR.mkdir(parents=True, exist_ok=True)

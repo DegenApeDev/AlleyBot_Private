@@ -2067,12 +2067,82 @@ class AutonomousBrain(AGISocialMixin):
                         
                 except Exception as e:
                     logger.debug(f"Notification error (non-critical): {e}")
+
+            # === USER FEEDBACK: Tell the owner what happened if they requested this goal ===
+            if result and proposal.metadata.get('goal_driven'):
+                await self._notify_user_of_goal_result(proposal, result)
             
             return result
             
         except Exception as e:
             logger.error(f"❌ Execution error: {e}")
             return {'success': False, 'error': str(e)}
+
+    async def _notify_user_of_goal_result(self, proposal: Any, result: Dict[str, Any]) -> None:
+        """Send a specialized response back to a user if they originated the goal.
+        
+        This bridges the gap between 'On it' and the actual task completion.
+        """
+        try:
+            metadata = proposal.metadata or {}
+            origin = metadata.get('origin')
+            evidence = metadata.get('evidence', {})
+            
+            # We only care about user-originated goals for this channel
+            if origin != 'user':
+                return
+            
+            chat_id = evidence.get('chat_id')
+            if not chat_id:
+                logger.debug("No chat_id in goal evidence, cannot notify user")
+                return
+
+            # Get telegram plugin
+            telegram = self.plugin_manager.get_plugin('telegram') if self.plugin_manager else None
+            if not telegram:
+                return
+
+            success = result.get('success', False)
+            action_type = proposal.action_type
+            
+            # Extract actual data if possible
+            # Result usually contains {'success': True, 'data': ...} or {'success': True, 'output': ...}
+            data = result.get('data') or result.get('output') or result.get('details', {})
+            
+            # Formulate message
+            if success:
+                # Clean up data for display
+                if isinstance(data, dict):
+                    # Special handling for wallet balances
+                    if action_type == 'check_wallet' or 'balance' in str(data).lower():
+                        display_data = ""
+                        for token, bal in data.items():
+                            if isinstance(bal, (int, float)):
+                                display_data += f"• {token}: {bal:.4f}\n"
+                            else:
+                                display_data += f"• {token}: {bal}\n"
+                    else:
+                        display_data = json.dumps(data, indent=2)
+                else:
+                    display_data = str(data)
+
+                msg = f"🏁 **Task Complete: {proposal.target_name or action_type}**\n\n"
+                msg += f"Result:\n{display_data if display_data else 'Success (no details returned)'}"
+            else:
+                error = result.get('error') or "Unknown error"
+                msg = f"❌ **Task Failed: {proposal.target_name or action_type}**\n\n"
+                msg += f"Reason: {error}"
+
+            # Send via telegram
+            # Use the loop to call the sync method to avoid blocking
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, telegram.send_message_to_owner_sync, msg)
+            logger.info(f"📤 Sent goal result feedback to user on Telegram (chat: {chat_id})")
+
+        except Exception as e:
+            logger.error(f"Error in _notify_user_of_goal_result: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
 
     def _build_runtime_spine_context(
         self,

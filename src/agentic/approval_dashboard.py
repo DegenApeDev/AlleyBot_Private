@@ -5,6 +5,7 @@ Telegram integration for human-in-the-loop approval
 import os
 import json
 import time
+import asyncio
 from typing import Dict, List, Any, Optional, Callable
 from datetime import datetime
 from dataclasses import dataclass, asdict
@@ -64,7 +65,7 @@ class ApprovalDashboard:
         self.auto_approve_patterns = []
         self.auto_deny_patterns = []
         
-    def request_approval(self, action: str, params: Dict[str, Any],
+    async def request_approval(self, action: str, params: Dict[str, Any],
                         security_check: Dict[str, Any]) -> bool:
         """
         Request approval for an action
@@ -115,7 +116,7 @@ class ApprovalDashboard:
             print("⚠️  No Telegram bot configured - approval request logged only")
         
         # Wait for approval with timeout
-        approved = self._wait_for_approval(request_id)
+        approved = await self._wait_for_approval(request_id)
         
         # Move to history
         request = self.pending_requests.pop(request_id)
@@ -189,7 +190,7 @@ class ApprovalDashboard:
         
         return '\n'.join(formatted)
     
-    def _wait_for_approval(self, request_id: str) -> bool:
+    async def _wait_for_approval(self, request_id: str) -> bool:
         """Wait for approval with timeout"""
         start_time = time.time()
         
@@ -204,7 +205,7 @@ class ApprovalDashboard:
             elif request.status == ApprovalStatus.DENIED:
                 return False
             
-            time.sleep(1)
+            await asyncio.sleep(1)
         
         # Timeout
         request = self.pending_requests.get(request_id)

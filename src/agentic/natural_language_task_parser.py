@@ -44,7 +44,7 @@ class NaturalLanguageTaskParser:
     
     # Action patterns and their mappings
     ACTION_PATTERNS = {
-        # Token/DeFi actions
+        # ── Token/DeFi ────────────────────────────────────────────────────────────
         r'launch.*token|create.*token|deploy.*token': {
             'action_type': 'launch_token',
             'plugin': 'bankr',
@@ -56,7 +56,7 @@ class NaturalLanguageTaskParser:
                 {'description': 'Announce token launch on social media', 'status': 'pending'},
             ]
         },
-        r'trade|buy|sell|swap': {
+        r'\b(trade|buy|sell|swap)\b.*\b(sol|eth|btc|usdc|token)\b': {
             'action_type': 'execute_trade',
             'plugin': 'onchain',
             'priority': 'HIGH',
@@ -67,27 +67,65 @@ class NaturalLanguageTaskParser:
                 {'description': 'Verify trade completion', 'status': 'pending'},
             ]
         },
-        
-        # Social media actions
-        r'post.*about|create.*post|share.*on': {
+
+        # ── Wallet / On-chain ─────────────────────────────────────────────────────
+        r'wallet|balance|portfolio|holdings|my funds|my tokens|my sol|my eth': {
+            'action_type': 'check_wallet',
+            'plugin': 'onchain',
+            'priority': 'MEDIUM',
+            'plan_template': [
+                {'description': 'Fetch wallet balances from chain', 'status': 'pending'},
+                {'description': 'Summarize portfolio snapshot', 'status': 'pending'},
+            ]
+        },
+        r'transaction|tx history|recent txs|on.?chain activity': {
+            'action_type': 'wallet_activity',
+            'plugin': 'onchain',
+            'priority': 'MEDIUM',
+            'plan_template': [
+                {'description': 'Fetch recent on-chain transactions', 'status': 'pending'},
+                {'description': 'Summarize activity', 'status': 'pending'},
+            ]
+        },
+
+        # ── Crypto price / market ─────────────────────────────────────────────────
+        r"price of|how much is|what'?s?\s+(sol|eth|btc|bnb|ada|dot|avax|matic|link|uni)\b|crypto price": {
+            'action_type': 'crypto_price',
+            'plugin': 'crypto',
+            'priority': 'LOW',
+            'plan_template': [
+                {'description': 'Look up current market price', 'status': 'pending'},
+            ]
+        },
+
+        # ── Social — Moltx ────────────────────────────────────────────────────────
+        r'post.*about|create.*post|share.*on\s+moltx|moltx.*post': {
             'action_type': 'create_post',
             'plugin': 'moltx',
             'priority': 'MEDIUM',
             'plan_template': [
                 {'description': 'Research topic and gather information', 'status': 'pending'},
                 {'description': 'Generate engaging content', 'status': 'pending'},
-                {'description': 'Post to platform', 'status': 'pending'},
+                {'description': 'Post to Moltx', 'status': 'pending'},
                 {'description': 'Monitor engagement', 'status': 'pending'},
             ]
         },
-        r'engage.*with|reply.*to|respond.*to': {
+        r'engage.*with|reply.*to|moltx.*engage|engage.*moltx|engage.*feed': {
             'action_type': 'engage',
             'plugin': 'moltx',
             'priority': 'MEDIUM',
             'plan_template': [
-                {'description': 'Analyze target user/post', 'status': 'pending'},
-                {'description': 'Generate thoughtful response', 'status': 'pending'},
-                {'description': 'Post reply', 'status': 'pending'},
+                {'description': 'Analyze feed for engagement opportunities', 'status': 'pending'},
+                {'description': 'Generate thoughtful responses', 'status': 'pending'},
+                {'description': 'Post replies', 'status': 'pending'},
+            ]
+        },
+        r'moltx.*feed|show.*feed|get.*feed': {
+            'action_type': 'get_feed',
+            'plugin': 'moltx',
+            'priority': 'LOW',
+            'plan_template': [
+                {'description': 'Fetch current Moltx feed', 'status': 'pending'},
             ]
         },
         r'gain.*followers|increase.*engagement|grow.*audience': {
@@ -101,9 +139,32 @@ class NaturalLanguageTaskParser:
                 {'description': 'Monitor and adjust', 'status': 'pending'},
             ]
         },
-        
-        # Analysis actions
-        r'analyze|research|investigate|study': {
+
+        # ── Social — Clawbr / Debates ─────────────────────────────────────────────
+        r'clawbr|debate|debates|start.*debate|create.*debate': {
+            'action_type': 'clawbr_debates',
+            'plugin': 'clawbr',
+            'priority': 'MEDIUM',
+            'plan_template': [
+                {'description': 'Check active debates on Clawbr', 'status': 'pending'},
+                {'description': 'Engage with relevant discussions', 'status': 'pending'},
+            ]
+        },
+
+        # ── Social — Moltchan / board posts ───────────────────────────────────────
+        r'post.*moltchan|moltchan.*post|thread.*on\s+(biz|g|pol|x|tech|ai|crypto)': {
+            'action_type': 'moltchan_post',
+            'plugin': 'moltchan',
+            'priority': 'MEDIUM',
+            'plan_template': [
+                {'description': 'Pick relevant board based on topic', 'status': 'pending'},
+                {'description': 'Generate thread content', 'status': 'pending'},
+                {'description': 'Post to Moltchan board', 'status': 'pending'},
+            ]
+        },
+
+        # ── Analysis ──────────────────────────────────────────────────────────────
+        r'analyze|research|investigate|study|report on|breakdown': {
             'action_type': 'analyze',
             'plugin': 'analytics',
             'priority': 'MEDIUM',
@@ -114,9 +175,9 @@ class NaturalLanguageTaskParser:
                 {'description': 'Share findings', 'status': 'pending'},
             ]
         },
-        
-        # Monitoring actions
-        r'monitor|watch|track|observe': {
+
+        # ── Monitoring ────────────────────────────────────────────────────────────
+        r'\b(monitor|watch|track|observe)\b': {
             'action_type': 'monitor',
             'plugin': 'analytics',
             'priority': 'LOW',
@@ -124,6 +185,39 @@ class NaturalLanguageTaskParser:
                 {'description': 'Set up monitoring parameters', 'status': 'pending'},
                 {'description': 'Collect data continuously', 'status': 'pending'},
                 {'description': 'Alert on significant changes', 'status': 'pending'},
+            ]
+        },
+
+        # ── Self-improvement / skills ─────────────────────────────────────────────
+        r'build.*skill|create.*skill|new.*skill|add.*capability|improve yourself|upgrade yourself': {
+            'action_type': 'build_skill',
+            'plugin': 'selfimprove',
+            'priority': 'HIGH',
+            'plan_template': [
+                {'description': 'Design skill architecture', 'status': 'pending'},
+                {'description': 'Generate skill code in sandbox', 'status': 'pending'},
+                {'description': 'Test and validate skill', 'status': 'pending'},
+                {'description': 'Graduate skill to dynamic skills if proven', 'status': 'pending'},
+            ]
+        },
+
+        # ── DM/notifications ──────────────────────────────────────────────────────
+        r'check.*dms|dm.*check|messages|notifications': {
+            'action_type': 'check_dms',
+            'plugin': 'moltx',
+            'priority': 'LOW',
+            'plan_template': [
+                {'description': 'Check and reply to pending DMs', 'status': 'pending'},
+            ]
+        },
+
+        # ── Status / system ───────────────────────────────────────────────────────
+        r'system status|bot status|how are you running|all systems|health check': {
+            'action_type': 'system_status',
+            'plugin': 'telegram',
+            'priority': 'LOW',
+            'plan_template': [
+                {'description': 'Collect status from all active plugins', 'status': 'pending'},
             ]
         },
     }

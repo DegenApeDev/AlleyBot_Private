@@ -965,34 +965,112 @@ Just send any message and I'll respond!
             await update.message.reply_text(f"❌ Error toggling autonomous mode: {str(e)}")
     
     async def _handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle regular messages from owner"""
+        """Handle regular messages from owner via 3-tier AGI pipeline.
+
+        Tier 1: NaturalLanguageTaskParser — detects actionable intents (analyze, post, trade, etc.)
+                 and dispatches them directly to the ActionRouter as APPROVED goals.
+        Tier 2: ConversationalAI — tool-aware LLM with RAG context, SOUL.md identity,
+                 and [EXECUTE:command] dispatch for any registered plugin command.
+        Tier 3: LLM Router direct — personality-driven fallback with no external plugin dependency.
+
+        Moltx is NOT the brain. It is one plugin among many, only touched when an action explicitly targets it.
+        """
         if not await self._verify_owner(update):
             return
-        
+
         try:
             user_message = update.message.text
-            
-            # Use Grok AI to generate intelligent response
-            if self.core and hasattr(self.core, 'plugins') and 'moltx' in self.core.plugins:
-                moltx_plugin = self.core.plugins['moltx']
-                
-                # Generate intelligent reply using Grok
-                reply = moltx_plugin.generate_dm_reply(user_message, self.owner_name)
-                
-                if reply:
-                    await update.message.reply_text(reply)
-                    self._log_activity("chat", {
-                        "user_message": user_message[:100] + '...' if len(user_message) > 100 else user_message,
-                        "bot_reply": reply[:100] + '...' if len(reply) > 100 else reply,
-                        "user": "DegenApeDev"
+
+            # ── Tier 1: Try NaturalLanguageTaskParser ────────────────────────────────
+            # Map intent to a concrete task and dispatch it immediately if matched.
+            try:
+                from src.agentic.natural_language_task_parser import get_task_parser
+                task_parser = get_task_parser()
+                parsed = task_parser.parse(user_message, sender_name=self.owner_name)
+
+                if parsed:
+                    # Acknowledge immediately so the user knows something is happening
+                    await update.message.reply_text(
+                        f"⚡ On it — *{parsed.title}*\n\n"
+                        f"📋 Plan: {', '.join(s['description'] for s in parsed.implementation_plan[:2])}…",
+                        parse_mode='Markdown'
+                    )
+
+                    # Dispatch to ActionRouter with user_requested=True (bypasses approval gating)
+                    if hasattr(self.core, 'agi_kernel') and hasattr(self.core.agi_kernel, 'action_router'):
+                        action_spec = {
+                            'plugin': parsed.plugin,
+                            'action_type': parsed.action_type,
+                            'params': parsed.params,
+                            'context': {
+                                'source': 'telegram_nlp',
+                                'user_requested': True,
+                                'impact': 'medium',
+                                'risk_level': 'medium',
+                                'original_message': user_message,
+                            }
+                        }
+                        asyncio.create_task(
+                            self.core.agi_kernel.action_router.route_action(action_spec)
+                        )
+
+                    self._log_activity("task_dispatch", {
+                        "user_message": user_message[:100],
+                        "task": parsed.title,
+                        "plugin": parsed.plugin,
+                        "action_type": parsed.action_type,
                     })
-                else:
-                    await update.message.reply_text("🤔 I'm thinking... but couldn't generate a response right now.")
-            else:
-                # Fallback response
-                await update.message.reply_text("🦞 Hey DegenApeDev! I'm here and ready to help. Use /help to see what I can do!")
-                
+                    return
+
+            except Exception as nlp_exc:
+                # NLP tier failed — fall through to ConversationalAI
+                print(f"⚠️ NLP task parser skipped: {nlp_exc}")
+
+            # ── Tier 2: ConversationalAI ──────────────────────────────────────────────
+            # Tool-aware LLM with SOUL.md identity, RAG context, and plugin dispatch.
+            if hasattr(self, 'conversational_ai') and self.conversational_ai:
+                try:
+                    await self.conversational_ai.handle_message(update, context)
+                    self._log_activity("chat", {
+                        "user_message": user_message[:100],
+                        "tier": "conversational_ai",
+                    })
+                    return
+                except Exception as conv_exc:
+                    print(f"⚠️ ConversationalAI failed: {conv_exc}, falling back to Tier 3")
+
+            # ── Tier 3: LLM Router direct fallback ───────────────────────────────────
+            # Personality-driven response with no Moltx dependency.
+            try:
+                await update.message.chat.send_action(action="typing")
+                from src.core.llm_router import get_llm_router
+                from src.utils.soul_loader import get_soul_cached
+                llm = get_llm_router()
+                soul = get_soul_cached()
+                reply = llm.chat(
+                    user_message,
+                    system_prompt=soul,
+                    max_tokens=800,
+                    model='auto'
+                )
+                if not reply:
+                    reply = "🦞 I'm here. Something's off with my reasoning pipeline — try /status to check systems."
+                await update.message.reply_text(reply)
+                self._log_activity("chat", {
+                    "user_message": user_message[:100],
+                    "tier": "llm_direct",
+                })
+            except Exception as llm_exc:
+                print(f"⚠️ LLM fallback also failed: {llm_exc}")
+                await update.message.reply_text(
+                    "🦞 I received your message but all reasoning paths are warming up. "
+                    "Try /status or resend in a moment."
+                )
+
         except Exception as e:
+            print(f"❌ _handle_message error: {e}")
+            import traceback
+            traceback.print_exc()
             await update.message.reply_text(f"❌ Error processing message: {str(e)}")
     
     def _log_activity(self, activity_type, data):

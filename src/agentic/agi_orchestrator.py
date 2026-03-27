@@ -206,7 +206,7 @@ class AGIOrchestrator:
         # === World State Sync: Sync platform data into world state ===
         # This runs every hour to keep world state fresh with recent platform data
         try:
-            if hasattr(self.core, 'agi_kernel') and hasattr(self.core.agi_kernel, 'world_state'):
+            if hasattr(self.core, 'agi_kernel') and self.core.agi_kernel and getattr(self.core.agi_kernel, 'world_state', None):
                 sync_stats = self.core.agi_kernel.world_state.sync_platform_data(limit=50)
                 if sync_stats['interactions_added'] > 0 or sync_stats['entities_added'] > 0:
                     logger.info(f"🌍 World state synced: {sync_stats['interactions_added']} interactions, {sync_stats['entities_added']} entities, {sync_stats['relationships_added']} relationships")

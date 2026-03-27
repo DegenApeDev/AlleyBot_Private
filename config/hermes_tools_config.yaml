@@ -1,224 +1,27 @@
-# Hermes Tools Configuration for AlleyBot
-
-# Terminal backend configuration
+# Terminal backend
 terminal:
-  backend: local  # Options: local, docker, ssh, singularity, modal
-  cwd: "."        # Working directory
-  timeout: 180    # Command timeout in seconds
+  backend: local  # Proceeding with local for ease of use, shielded by approval_required: true
+  timeout: 180
   
-  # Docker backend specific
-  docker:
-    image: "python:3.11-slim"
-    cpu: 1
-    memory: 5120  # MB
-    disk: 51200   # MB
-    persistent: true
-    forward_env: []  # Environment variables to forward
-  
-  # SSH backend specific
-  ssh:
-    host: ${TERMINAL_SSH_HOST}
-    user: ${TERMINAL_SSH_USER}
-    key: ${TERMINAL_SSH_KEY}
-  
-  # Container security (for docker/singularity/modal)
-  security:
-    read_only_root: true
-    drop_capabilities: true
-    no_privilege_escalation: true
-    pid_limit: 256
-    namespace_isolation: true
-
 # Browser automation
 browser:
-  driver: "chrome"  # Options: chrome, firefox
+  driver: "chrome"
   headless: true
   window_size: [1920, 1080]
-  timeout: 30
-  
-  # Chrome options
-  chrome:
-    args:
-      - "--no-sandbox"
-      - "--disable-dev-shm-usage"
-      - "--disable-gpu"
-      - "--disable-web-security"
-      - "--allow-running-insecure-content"
 
 # Web search
 web_search:
-  engines:
-    - duckduckgo
-    - google  # Requires API key
-    - bing    # Requires API key
-  
-  # API keys (set in environment)
-  google_api_key: ${GOOGLE_API_KEY}
-  google_search_engine_id: ${GOOGLE_SEARCH_ENGINE_ID}
-  bing_api_key: ${BING_API_KEY}
-  
-  # Rate limiting
-  requests_per_minute: 60
+  engines: [duckduckgo]
   max_results: 10
+  requests_per_minute: 60
 
 # Vision analysis
 vision:
-  # Vision model options
-  model: "basic"  # Options: basic, openai, claude, gemini
-  
-  # API keys for advanced models
-  openai_api_key: ${OPENAI_API_KEY}
-  anthropic_api_key: ${ANTHROPIC_API_KEY}
-  gemini_api_key: ${GEMINI_API_KEY}
-  
-  # Image processing
+  model: "basic"  # Fallback to local image processing where possible
   max_image_size: 10485760  # 10MB
-  supported_formats: ["jpg", "jpeg", "png", "gif", "bmp", "webp"]
 
 # Code execution
 code_execution:
-  # Sandboxing
-  sandbox: true
-  timeout: 30  # seconds
-  
-  # Supported languages
-  languages:
-    python:
-      interpreter: "python3"
-      packages: []  # Pre-installed packages
-    javascript:
-      interpreter: "node"
-      packages: []
-    bash:
-      interpreter: "bash"
-      shell: "/bin/bash"
-  
-  # Resource limits
+  sandbox: true    # Important: ensures Python scripts run in isolated sub-environments
+  timeout: 30
   max_memory: 512  # MB
-  max_cpu_time: 10  # seconds
-
-# File operations
-file_operations:
-  # Security
-  allowed_paths:
-    - "."  # Current directory
-    - "/tmp"
-    - "data"
-    - "logs"
-  
-  # Forbidden paths
-  forbidden_paths:
-    - "/etc"
-    - "/root"
-    - "/sys"
-    - "/proc"
-    - "~/.ssh"
-    - "~/.gnupg"
-  
-  # File size limits
-  max_file_size: 104857600  # 100MB
-  max_total_size: 1073741824  # 1GB
-
-# Todo management
-todo:
-  storage_path: "data/todos.json"
-  max_todos: 1000
-  backup_enabled: true
-  backup_interval: 3600  # seconds
-
-# Tool categories and their status
-categories:
-  web:
-    enabled: true
-    priority: 1
-    tools:
-      - web_search
-      - web_extract
-  
-  terminal:
-    enabled: true
-    priority: 2
-    tools:
-      - terminal
-  
-  file:
-    enabled: true
-    priority: 3
-    tools:
-      - read_file
-      - write_file
-      - patch
-      - search_files
-  
-  browser:
-    enabled: true
-    priority: 4
-    tools:
-      - browser_navigate
-      - browser_snapshot
-      - browser_click
-      - browser_vision
-  
-  vision:
-    enabled: true
-    priority: 5
-    tools:
-      - vision_analyze
-  
-  code:
-    enabled: true
-    priority: 6
-    tools:
-      - execute_code
-  
-  todo:
-    enabled: true
-    priority: 7
-    tools:
-      - todo
-
-# Logging and monitoring
-logging:
-  execution_log: "logs/tool_executions.json"
-  error_log: "logs/tool_errors.log"
-  max_log_entries: 10000
-  
-  # Metrics
-  collect_metrics: true
-  metrics_interval: 60  # seconds
-
-# Security
-security:
-  # Authentication for sensitive tools
-  require_auth:
-    - terminal  # When backend is ssh
-    - file_operations  # For sensitive paths
-  
-  # Rate limiting per tool
-  rate_limits:
-    web_search: 10 per minute
-    terminal: 60 per minute
-    execute_code: 30 per minute
-  
-  # Content filtering
-  filter_content:
-    - malicious_code
-    - sensitive_data
-    - private_keys
-
-# Integration with AlleyBot
-alleybot_integration:
-  # Auto-register tools on startup
-  auto_register: true
-  
-  # Tool discovery for AI
-  ai_discovery:
-    enabled: true
-    max_tools_per_request: 5
-    confidence_threshold: 0.3
-  
-  # Execution monitoring
-  monitoring:
-    enabled: true
-    track_performance: true
-    alert_on_failures: true

@@ -347,27 +347,74 @@ class MoltxPlugin(
         # Otherwise run synchronously
         return self._engage_feed_sync(count)
     
+    def _prime_engagement_gate(self) -> bool:
+        """Satisfy MoltX's 'engage before posting' gate.
+
+        MoltX requires that the agent reads both the global feed AND the following
+        feed and interacts with at least one post from each before it will allow
+        replies/posts.  Call this once at the start of any engagement or posting cycle.
+
+        Returns True if the gate is now satisfied (we got at least one successful like).
+        """
+        satisfied = False
+        for feed_type in ('global', 'following'):
+            try:
+                feed_result = self.get_feed(feed_type=feed_type, limit=10)
+                posts = []
+                if isinstance(feed_result, dict):
+                    posts = (
+                        feed_result.get('posts')
+                        or feed_result.get('data', {}).get('posts', [])
+                        or []
+                    )
+                elif isinstance(feed_result, list):
+                    posts = feed_result
+
+                # Like the first post we haven't already liked
+                for post in posts:
+                    pid = post.get('id') or post.get('post_id')
+                    author = (post.get('agent_name') or post.get('author_name') or '').lstrip('@')
+                    if not pid:
+                        continue
+                    if author and getattr(self, 'agent_name', None) and author.lower() == self.agent_name.lower().lstrip('@'):
+                        continue
+                    like_result = self.like_post(str(pid))
+                    if isinstance(like_result, str) and like_result.startswith('✅'):
+                        print(f"🔓 Engagement gate primed via {feed_type} feed (liked post {pid})")
+                        satisfied = True
+                        break
+            except Exception as e:
+                print(f"⚠️ Engagement gate primer failed for {feed_type} feed: {e}")
+
+        return satisfied
+
     def _engage_feed_sync(self, count='3'):
         """Synchronous version of engage_feed - actual implementation"""
         import random
-        
+
         try:
             target_count = int(count)
         except (TypeError, ValueError):
             target_count = 3
         target_count = max(2, min(target_count, 15))  # Allow more engagements
-        
+
+        # ── ENGAGEMENT GATE ───────────────────────────────────────────────────────
+        # MoltX requires feed reads + at least one interaction before replies/posts.
+        # Prime the gate now so the rest of the cycle doesn't hit 429 errors.
+        print("🔓 Priming MoltX engagement gate (reading feeds)...")
+        gate_satisfied = self._prime_engagement_gate()
+        if not gate_satisfied:
+            print("⚠️ Engagement gate could not be primed — comments may be blocked this cycle")
+        # ─────────────────────────────────────────────────────────────────────────
+
         # NOTE: Always allow replies during dynamic engage - the purpose is to BUILD the buffer
-        # The old gating logic created a deadlock: can't reply because buffer not met,
-        # but can't meet buffer without replies. The _check_engagement_quota() is for POSTING,
-        # not for engaging. Engagement is how we build up to meet the quota.
-        can_attempt_replies = True
-        
+        can_attempt_replies = gate_satisfied
+
         print(f"🤖 Dynamic Engage: Starting intelligent engagement cycle...")
-        
+
         all_posts = []
         sources = []
-        
+
         # 1. Check diverse topics (not just trending blockchain)
         print(f"🔥 Dynamic Engage: Checking diverse topics...")
         try:
@@ -380,7 +427,7 @@ class MoltxPlugin(
                     hashtags = raw_hashtags
                 elif isinstance(raw_hashtags, dict):
                     hashtags = list(raw_hashtags.values())
-            
+
             # Mix trending with diverse topics
             if hashtags and isinstance(hashtags, list):
                 # Pick 1-2 trending hashtags to explore
@@ -394,7 +441,7 @@ class MoltxPlugin(
                             p['_source'] = f'trending:#{tag_name}'
                         all_posts.extend(posts['posts'])
                         sources.append(f'trending:#{tag_name}')
-            
+
             # Add diverse topic exploration
             if hasattr(self, 'content_categories'):
                 categories = list(self.content_categories.keys())
@@ -409,11 +456,11 @@ class MoltxPlugin(
                             p['_source'] = f'category:{category}'
                         all_posts.extend(search_posts)
                         sources.append(f'category:{category}')
-                        
+
         except Exception as e:
             print(f"⚠️ Dynamic Engage: Topic exploration failed: {e}")
-        
-        # 2. Get global feed
+
+        # 2. Get global feed (already fetched by gate primer — reuse results)
         print(f"📰 Dynamic Engage: Fetching global feed...")
         feed_result = self.get_feed(feed_type='global', limit=15)
         if isinstance(feed_result, dict):
@@ -422,7 +469,7 @@ class MoltxPlugin(
                 p['_source'] = 'feed:global'
             all_posts.extend(feed_posts)
             sources.append('feed:global')
-        
+
         # 3. Search for interesting AI/crypto topics (diversified)
         interesting_topics = [
             'AI agents', 'crypto', 'DeFi', 'autonomous', 'AGI', 'web3',
@@ -441,7 +488,7 @@ class MoltxPlugin(
                 sources.append(f'search:{topic}')
         except Exception as e:
             print(f"⚠️ Dynamic Engage: Search failed: {e}")
-        
+
         # 4. Deduplicate posts by ID
         seen_ids = set()
         unique_posts = []
@@ -450,12 +497,12 @@ class MoltxPlugin(
             if pid and pid not in seen_ids:
                 seen_ids.add(pid)
                 unique_posts.append(post)
-        
+
         print(f"🔍 Dynamic Engage: Found {len(unique_posts)} unique posts from {len(sources)} sources")
-        
+
         if not unique_posts:
             return "❌ Dynamic Engage: No posts available to engage"
-        
+
         # 5. Score posts by engagement potential (interesting content)
         scored_posts = []
         for post in unique_posts:
@@ -464,17 +511,17 @@ class MoltxPlugin(
             likes = post.get('likes_count', 0)
             replies = post.get('replies_count', 0)
             source = post.get('_source', 'unknown')
-            
+
             # Prefer posts with some engagement but not viral (2-20 likes)
             if 2 <= likes <= 20:
                 score += 3
             elif likes > 20:
                 score += 1  # Viral posts are harder to get noticed on
-            
+
             # Prefer posts with replies (conversations)
             if replies >= 1:
                 score += 2
-            
+
             # Prefer diverse topic posts (not just trending)
             if 'category:' in source:
                 score += 3  # Bonus for diverse categories
@@ -482,56 +529,56 @@ class MoltxPlugin(
                 score += 2
             elif 'search' in source:
                 score += 1
-            
+
             # Prefer posts with content (not empty)
             content_len = len(content) if content else 0
             if content_len > 20:
                 score += 1
-            
+
             # Prefer AI/crypto related content but also other topics
             diverse_keywords = ['ai', 'agent', 'crypto', 'defi', 'web3', 'autonomous', 'gpt', 'llm', 'blockchain',
                               'philosophy', 'ethics', 'art', 'music', 'culture', 'quantum', 'biotech', 'robotics']
             if content and any(kw in content.lower() for kw in diverse_keywords):
                 score += 2
-            
+
             # Penalize repetitive content
             if content and 'blockchain' in content.lower():
                 score -= 1  # Reduce focus on overused topic
-            
+
             scored_posts.append((score, post))
-        
+
         # Sort by score descending
         scored_posts.sort(reverse=True, key=lambda x: x[0])
-        
+
         # 6. Engage with top posts using enhanced content generation
         liked = 0
         commented = 0
         reposted = 0
         engaged_posts = []
-        
+
         for score, post in scored_posts:
             if (liked + commented + reposted) >= target_count:
                 break
-            
+
             post_id = post.get('id') or post.get('post_id')
             author = (post.get('agent_name') or post.get('author_name') or '').lstrip('@')
             content = post.get('content', '')
             likes = post.get('likes_count', 0)
             source = post.get('_source', 'unknown')
-            
+
             if not post_id:
                 continue
             if author and getattr(self, 'agent_name', None) and author.lower() == self.agent_name.lower().lstrip('@'):
                 continue
-            
+
             print(f"🔍 Dynamic Engage: [{source}] Post by @{author} (score:{score}, likes:{likes})")
-            
+
             # Always try to like
             like_result = self.like_post(str(post_id))
             if isinstance(like_result, str) and like_result.startswith('✅'):
                 liked += 1
                 print(f"  ✅ Liked")
-                
+
                 # Comment on high-score posts using enhanced generation
                 should_comment = score >= 3 or likes >= 2 or 'category:' in source
                 if can_attempt_replies and should_comment and commented < target_count and hasattr(self, '_generate_enhanced_comment'):
@@ -547,28 +594,26 @@ class MoltxPlugin(
                                     'id': post_id, 'author': author, 'action': 'like+enhanced_comment',
                                     'comment': comment_text[:60], 'source': source
                                 })
+                            elif isinstance(reply_result, str) and '429' in reply_result:
+                                # Gate not satisfied — stop attempting replies this cycle
+                                print("  ⛔ 429 received on reply — disabling comments for rest of cycle, likes continue")
+                                can_attempt_replies = False
+                                engaged_posts.append({'id': post_id, 'author': author, 'action': 'like', 'source': source})
                             else:
-                                engaged_posts.append({
-                                    'id': post_id, 'author': author, 'action': 'like',
-                                    'source': source
-                                })
+                                engaged_posts.append({'id': post_id, 'author': author, 'action': 'like', 'source': source})
                         else:
-                            engaged_posts.append({
-                                'id': post_id, 'author': author, 'action': 'like',
-                                'source': source
-                            })
+                            engaged_posts.append({'id': post_id, 'author': author, 'action': 'like', 'source': source})
                     except Exception as e:
-                        print(f"  ⚠️ Enhanced comment failed: {e}")
-                        engaged_posts.append({
-                            'id': post_id, 'author': author, 'action': 'like',
-                            'source': source
-                        })
+                        err_str = str(e)
+                        if '429' in err_str:
+                            print("  ⛔ 429 exception on reply — disabling comments for rest of cycle")
+                            can_attempt_replies = False
+                        else:
+                            print(f"  ⚠️ Enhanced comment failed: {e}")
+                        engaged_posts.append({'id': post_id, 'author': author, 'action': 'like', 'source': source})
                 else:
-                    engaged_posts.append({
-                        'id': post_id, 'author': author, 'action': 'like',
-                        'source': source
-                    })
-                
+                    engaged_posts.append({'id': post_id, 'author': author, 'action': 'like', 'source': source})
+
                 # Occasionally repost viral content (likes >= 15)
                 if likes >= 15 and reposted < (target_count // 4):
                     print(f"  🔄 Reposting viral content...")
@@ -581,19 +626,20 @@ class MoltxPlugin(
                         pass
             else:
                 print(f"  ❌ Failed to like")
-        
+
         total = liked + commented + reposted
         print(f"\n🤖 Dynamic Engage Complete: {liked} likes, {commented} enhanced comments, {reposted} reposts")
         print(f"   Sources: {', '.join(set(sources))}")
-        
+
         # Update engagement buffer after dynamic engage
         if total > 0:
             self._build_engagement_buffer()
-        
+
         if total == 0:
             return "❌ Dynamic Engage: No successful engagements"
-        
+
         return f"✅ Dynamic Engage: {liked} likes, {commented} enhanced comments, {reposted} reposts from {len(sources)} diverse sources"
+
 
     def trending_command(self, *args):
         """Command to fetch and format trending hashtags."""
