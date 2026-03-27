@@ -399,10 +399,11 @@ class AgentCardGenerator:
                         print(f"🔄 Auto-updating ERC-8004 agent card (scheduled every {interval_hours}h)...")
                         result = self.update_onchain(dry_run=False)
                         
-                        if "✅" in result:
+                        if "✅" in str(result):
                             print(f"✅ Auto-update successful")
                         else:
-                            print(f"⚠️ Auto-update issue: {result[:200]}")
+                            result_str = str(result)
+                            print(f"⚠️ Auto-update issue: {result_str[:200] if len(result_str) > 200 else result_str}")
                             
                 except Exception as e:
                     print(f"❌ Auto-update failed: {e}")

@@ -856,6 +856,16 @@ class AutonomousBrain(AGISocialMixin):
                         if next_action:
                             goal_driven_action = next_action
                             logger.info(f"🎯 Goal-driven action: {next_action['action_type']} for goal '{goal.title}'")
+                            
+                            # Report progress if progress reporter available
+                            if agi_kernel and hasattr(agi_kernel, 'progress_reporter') and agi_kernel.progress_reporter:
+                                try:
+                                    progress = agi_kernel.progress_reporter.report_goal_progress(goal.id, verify_truth=True)
+                                    if progress.get('honest_assessment'):
+                                        logger.info(f"   {progress['honest_assessment']}")
+                                except Exception as e:
+                                    logger.debug(f"Progress reporting error: {e}")
+                            
                             break
                 
                 # If no active goals, scan for new opportunities

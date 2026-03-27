@@ -380,73 +380,90 @@ class ConversationService:
         args: dict
     ) -> ConversationResponse:
         """
-        Execute a natural language intent through the ActionRouter.
+        Execute a natural language intent by creating a goal.
         
         This is the key method that makes AlleyBot actually DO things
         instead of just chatting about them.
-        """
-        # Build action envelope
-        action = ActionEnvelope(
-            plugin="telegram",  # Route through telegram for natural language
-            action_type=f"natural_intent_{command_name}",
-            params={
-                "command": command_name,
-                "args": args,
-                "original_message": request.message_text,
-                "sender_id": request.sender_id,
-                "is_owner": request.is_owner,
-            },
-            context={
-                "conversation_id": request.conversation_id,
-                "trust_level": request.trust_level.value,
-                "source": "conversation_service_natural_intent",
-                "extracted_args": args,
-            },
-        )
         
-        # Execute through ActionRouter or AGI Kernel
+        Instead of trying to route non-existent actions, we create a goal
+        that will be executed through the goal-driven action pipeline.
+        """
         try:
-            print(f"🔄 Executing natural intent: {command_name} with action type: natural_intent_{command_name}")
-            if self.core and hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
-                result = await self.core.agi_kernel.act(action.to_dict())
-                print(f"📊 Action result: {result}")
-                
-                # Format response based on result
-                if result.get('success'):
-                    response_text = result.get('message', f"✅ Executed {command_name}")
-                    response_type = "action_confirmation"
-                else:
-                    error = result.get('error', 'Unknown error')
-                    response_text = f"❌ Failed to execute {command_name}: {error}"
-                    response_type = "action_error"
-                
+            # Parse natural language into executable task
+            from src.agentic.natural_language_task_parser import get_task_parser
+            task_parser = get_task_parser()
+            
+            parsed_task = task_parser.parse(request.message_text, request.sender_name)
+            
+            if not parsed_task:
+                # Couldn't parse into actionable task, fall back to chat
                 return ConversationResponse(
-                    response_text=response_text,
-                    response_type=response_type,
-                    executed_action=command_name,
+                    response_text=f"I understand you want me to help with: {request.message_text}\n\nLet me think about how to approach this...",
+                    response_type="chat_reply",
                     identity_validated=True,
                 )
-            else:
-                # Fallback: try to execute directly through plugin manager
-                if self.plugin_manager and command_name in self.plugin_manager.commands:
-                    func = self.plugin_manager.commands[command_name]
-                    # Call with extracted args
-                    if args:
-                        result = func(**args)
-                    else:
-                        result = func()
+            
+            # Create goal from parsed task
+            if self.core and hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
+                goal_manager = self.core.agi_kernel.goal_manager
+                
+                if goal_manager:
+                    # Create goal
+                    from src.agentic.goal_manager import Goal, GoalStatus, GoalPriority
+                    import json
+                    
+                    # Map priority string to enum
+                    priority_map = {
+                        'CRITICAL': GoalPriority.CRITICAL,
+                        'HIGH': GoalPriority.HIGH,
+                        'MEDIUM': GoalPriority.MEDIUM,
+                        'LOW': GoalPriority.LOW,
+                    }
+                    
+                    goal = Goal(
+                        id=f"user_request_{int(datetime.now().timestamp())}",
+                        title=parsed_task.title,
+                        description=parsed_task.description,
+                        status=GoalStatus.APPROVED,  # User requests are pre-approved
+                        priority=priority_map.get(parsed_task.priority, GoalPriority.MEDIUM),
+                        confidence=parsed_task.confidence,
+                        impact_score=8.0,  # User requests are high impact
+                        implementation_plan=json.dumps(parsed_task.implementation_plan),
+                        evidence=parsed_task.evidence,
+                        trigger_data=json.dumps({
+                            'source': 'user_request',
+                            'sender': request.sender_name,
+                            'original_message': request.message_text,
+                            'parsed_action': parsed_task.action_type,
+                            'plugin': parsed_task.plugin,
+                        }),
+                        created_at=datetime.now(),
+                        approved_at=datetime.now(),
+                    )
+                    
+                    # Add goal to manager
+                    goal_manager.add_goal(goal)
+                    
+                    # Activate immediately for user requests
+                    goal_manager.activate_goal(goal.id)
+                    
+                    print(f"✅ Created and activated goal: {goal.id} - {goal.title}")
                     
                     return ConversationResponse(
-                        response_text=str(result) if result else f"✅ Executed {command_name}",
-                        response_type="action_confirmation",
-                        executed_action=command_name,
+                        response_text=f"✅ Got it! I'll work on: {parsed_task.title}\n\nI've created a goal and will start executing the plan:\n" + 
+                                    "\n".join([f"{i+1}. {step['description']}" for i, step in enumerate(parsed_task.implementation_plan[:3])]) +
+                                    f"\n\nYou can check progress anytime. I'll update you when complete!",
+                        response_type="goal_created",
+                        executed_action=parsed_task.action_type,
                         identity_validated=True,
                     )
-                else:
-                    return ConversationResponse(
-                        response_text=f"⚠️ AGI Kernel unavailable and command {command_name} not found in plugins",
-                        response_type="error",
-                    )
+            
+            # Fallback if goal manager not available
+            return ConversationResponse(
+                response_text=f"I understand you want: {parsed_task.title}\n\nHowever, I can't create goals right now. Please try again in a moment.",
+                response_type="error",
+                identity_validated=True,
+            )
                     
         except Exception as e:
             print(f"❌ Natural intent execution error: {e}")
@@ -457,6 +474,7 @@ class ConversationService:
                 response_type="error",
             )
     
+# ... (rest of the code remains the same)
     def _is_identity_question(self, text: str) -> bool:
         """Check if message is asking about identity/self."""
         identity_keywords = [

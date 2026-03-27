@@ -422,26 +422,23 @@ class ActionRouter:
     
     async def _execute_via_plugin(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Execute action via the target plugin.
-        
-        Args:
-            action_spec: Action specification with plugin, action_type, params
-        
-        Returns:
-            Result dict from plugin execution
-        """
+        Execute action via plugin or skill"""
         plugin_name = action_spec.get('plugin')
         action_type = action_spec.get('action_type')
         params = action_spec.get('params', {})
         
-        if not plugin_name or not action_type:
+        # Check if this is a skill execution request
+        if action_type == 'execute_skill':
+            return await self._execute_skill(params)
+        
+        # Get plugin
+        if not self.plugins:
             return {
                 'success': False,
-                'error': 'Missing plugin or action_type',
+                'error': 'Plugin manager not available',
                 'stage': 'execution'
             }
         
-        # Get plugin
         plugin = self.plugins.get_plugin(plugin_name)
         if not plugin:
             return {
@@ -481,6 +478,54 @@ class ActionRouter:
                 'success': False,
                 'error': str(e),
                 'stage': 'execution',
+                'exception_type': type(e).__name__
+            }
+    
+    async def _execute_skill(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a skill from skills/ directory"""
+        skill_name = params.get('skill_name')
+        skill_params = params.get('skill_params', {})
+        context = params.get('context', {})
+        
+        if not skill_name:
+            return {
+                'success': False,
+                'error': 'Skill name not provided',
+                'stage': 'skill_execution'
+            }
+        
+        # Get skill executor from AGI kernel
+        if not self.agi or not hasattr(self.agi, 'skill_executor'):
+            return {
+                'success': False,
+                'error': 'Skill executor not available',
+                'stage': 'skill_execution'
+            }
+        
+        skill_executor = self.agi.skill_executor
+        if not skill_executor:
+            return {
+                'success': False,
+                'error': 'Skill executor not initialized',
+                'stage': 'skill_execution'
+            }
+        
+        try:
+            # Execute skill
+            result = await skill_executor.execute_skill(
+                skill_name=skill_name,
+                params=skill_params,
+                context=context
+            )
+            
+            return result
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f'Skill execution error: {str(e)}',
+                'stage': 'skill_execution',
+                'skill': skill_name,
                 'exception_type': type(e).__name__
             }
     
