@@ -157,6 +157,12 @@ class AGIKernel:
         # Goal generator (autonomous goal generation with security)
         self.goal_generator = None  # Initialized after plugin_manager available
         
+        # Tool registry (intelligent tool discovery and selection)
+        self.tool_registry = None  # Initialized after plugin_manager and tool_orchestrator available
+        
+        # Skill executor (execute skills from skills/ directory)
+        self.skill_executor = None  # Initialized during tool registry setup
+        
         # Content strategy (unified content strategy across platforms)
         self.content_strategy = None  # Initialized after plugin_manager available
         
@@ -308,6 +314,26 @@ class AGIKernel:
                 intent_recognizer=self.intent_recognizer
             )
             print("✅ Dialogue Manager integrated into AGI Kernel (JARVIS-style conversation active)")
+        
+        # === Tool Registry & Skill Executor (Intelligent Tool Selection) ===
+        if not self.skill_executor:
+            from src.agentic.skill_executor import create_skill_executor
+            self.skill_executor = create_skill_executor()
+            print("✅ Skill Executor integrated into AGI Kernel (skills/ directory accessible)")
+        
+        if not self.tool_registry and hasattr(self, 'tool_orchestrator'):
+            from src.agentic.tool_capability_registry import create_tool_registry
+            self.tool_registry = create_tool_registry(
+                tool_orchestrator=self.tool_orchestrator,
+                plugin_manager=plugin_manager,
+                llm_client=self.llm
+            )
+            print("✅ Tool Registry integrated into AGI Kernel (AI-driven tool selection active)")
+            
+            # Connect tool registry to goal manager for intelligent action selection
+            if self.goal_manager:
+                self.goal_manager.tool_registry = self.tool_registry
+                print("   🔗 Goal Manager connected to Tool Registry")
         
         # === JARVIS Phase 2: Proactive Intelligence ===
         if not self.predictive_suggestions:

@@ -894,29 +894,118 @@ class GoalManager:
         return plan
     
     def _step_to_action(self, step: Dict, goal: Goal, step_number: int, total_steps: int) -> Optional[Dict]:
-        """Convert a plan step to an executable action"""
+        """Convert a plan step to an executable action using intelligent tool selection"""
         
-        # Map step descriptions to action types
-        description = step.get('description', '').lower()
+        description = step.get('description', '')
+        
+        # Try intelligent tool selection first
+        if hasattr(self, 'tool_registry') and self.tool_registry:
+            try:
+                # Use AI to select best tool for this step
+                suitable_tools = self.tool_registry.find_tools_for_task(
+                    task_description=description,
+                    goal_context=goal.title,
+                    available_params=goal.trigger_data if hasattr(goal, 'trigger_data') else {},
+                    max_results=3
+                )
+                
+                if suitable_tools and len(suitable_tools) > 0:
+                    # Use highest confidence tool
+                    best_tool = suitable_tools[0]
+                    tool_name = best_tool['tool']
+                    tool_metadata = best_tool.get('metadata', {})
+                    
+                    # Determine if this is a skill or plugin
+                    if tool_metadata.get('type') == 'skill':
+                        # Skill execution
+                        return {
+                            'action_type': 'execute_skill',
+                            'plugin': 'brain',  # Skills are executed via brain plugin
+                            'params': {
+                                'skill_name': tool_metadata['name'],
+                                'skill_params': {},
+                                'context': {'goal_id': goal.id, 'step': description}
+                            },
+                            'goal_id': goal.id,
+                            'goal_description': goal.title,
+                            'confidence': best_tool.get('confidence', 0.75),
+                            'justification': f"Using skill '{tool_metadata['name']}': {best_tool.get('justification', description)}",
+                            'alternatives': [{'tool': t['tool'], 'confidence': t.get('confidence', 0)} for t in suitable_tools[1:3]],
+                            'metadata': {
+                                'source': 'ai_tool_selection',
+                                'goal_id': goal.id,
+                                'step_number': step_number + 1,
+                                'total_steps': total_steps,
+                                'step_description': description,
+                                'selected_tool': tool_name,
+                                'tool_type': 'skill'
+                            }
+                        }
+                    else:
+                        # Plugin execution
+                        action_type = best_tool.get('action', 'execute')
+                        
+                        # Extract suggested params or build from context
+                        params = best_tool.get('suggested_params', {})
+                        if not params:
+                            # Build params based on action type
+                            if 'analyze' in action_type or 'analyze' in description.lower():
+                                params = {'topic': description}
+                            elif 'post' in action_type or 'create' in description.lower():
+                                params = {'topic': goal.title, 'content': description}
+                            elif 'engage' in action_type or 'reply' in description.lower():
+                                params = {'strategy': 'build_relationship'}
+                            elif 'trade' in action_type:
+                                params = {'strategy': 'conservative'}
+                        
+                        return {
+                            'action_type': action_type,
+                            'plugin': tool_metadata['name'],
+                            'params': params,
+                            'goal_id': goal.id,
+                            'goal_description': goal.title,
+                            'confidence': best_tool.get('confidence', 0.75),
+                            'justification': f"Using {tool_metadata['name']}.{action_type}: {best_tool.get('justification', description)}",
+                            'alternatives': [{'tool': t['tool'], 'action': t.get('action'), 'confidence': t.get('confidence', 0)} for t in suitable_tools[1:3]],
+                            'metadata': {
+                                'source': 'ai_tool_selection',
+                                'goal_id': goal.id,
+                                'step_number': step_number + 1,
+                                'total_steps': total_steps,
+                                'step_description': description,
+                                'selected_tool': tool_name,
+                                'tool_type': 'plugin'
+                            }
+                        }
+                
+            except Exception as e:
+                logger.debug(f"AI tool selection failed, using fallback: {e}")
+        
+        # Fallback to hardcoded mappings if AI selection fails or not available
+        return self._fallback_action_mapping(description, goal, step_number, total_steps)
+    
+    def _fallback_action_mapping(self, description: str, goal: Goal, step_number: int, total_steps: int) -> Dict:
+        """Fallback to hardcoded action mapping when AI tool selection is unavailable"""
+        description_lower = description.lower()
         
         # Determine action type and plugin from step description
         action_type = 'analyze'  # Default
         plugin = 'brain'  # Default
         params = {}
         
-        if 'analyze' in description or 'review' in description:
+        if 'analyze' in description_lower or 'review' in description_lower:
             action_type = 'analyze'
             plugin = 'brain'
             params = {'topic': description}
-        elif 'engage' in description or 'reply' in description:
+        elif 'engage' in description_lower or 'reply' in description_lower:
             action_type = 'engage'
             plugin = 'moltx'
             params = {'strategy': 'build_relationship'}
-        elif 'post' in description or 'create' in description:
+        elif 'post' in description_lower or 'create' in description_lower:
             action_type = 'post'
             plugin = 'moltx'
             params = {'topic': goal.title}
-        elif 'trade' in description or 'execute' in description:
+        elif 'trade' in description_lower or 'execute' in description_lower:
             action_type = 'trade'
             plugin = 'onchain'
             params = {'strategy': 'conservative'}
@@ -930,11 +1019,11 @@ class GoalManager:
             'confidence': 0.75,
             'justification': f"Executing step {step_number + 1}/{total_steps} of goal: {goal.title}",
             'metadata': {
-                'source': 'goal_driven',
+                'source': 'fallback_mapping',
                 'goal_id': goal.id,
                 'step_number': step_number + 1,
                 'total_steps': total_steps,
-                'step_description': step.get('description')
+                'step_description': description
             }
         }
     
