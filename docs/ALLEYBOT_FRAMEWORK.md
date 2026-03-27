@@ -54,6 +54,41 @@ Action: Generate code for sentiment-based trading bot
 
 ---
 
+### **Phase 1.5: Intelligent Tool Selection (Autonomous Tool Discovery)**
+**What it does:** AI-driven discovery and selection of best tools for any task
+
+**How it works:**
+```
+Task → Tool Registry → AI Selection → Ranked Tools → Execute Best Match
+```
+
+**Components:**
+- **ToolCapabilityRegistry:** Indexes all 35+ plugins and 30+ skills automatically
+- **AI Tool Selector:** Uses LLM to match tasks to optimal tools
+- **SkillExecutor:** Makes skills/ directory executable as actions
+- **Fallback System:** Keyword-based matching if AI unavailable
+
+**Example:**
+```
+Task: "Improve engagement on MoltX"
+↓
+Tool Registry Analysis:
+  1. moltx plugin (engage, post, reply) - 0.95 confidence
+  2. engagement-optimizer skill - 0.88 confidence
+  3. content-generation skill - 0.90 confidence
+  4. analytics plugin - 0.75 confidence
+↓
+Selected: moltx.engage + content-generation skill
+Result: Multi-tool workflow executed
+```
+
+**Before:** Only 4 hardcoded plugins accessible  
+**After:** All 35+ plugins + 30+ skills intelligently selected
+
+**Not LLM-dependent:** Falls back to keyword matching if AI fails.
+
+---
+
 ### **Phase 3: FairMind DNA (Ethical Consciousness)**
 **What it does:** Mathematical truth validation before every action
 
@@ -77,6 +112,52 @@ Result: ❌ BLOCKED
 ```
 
 **Not LLM-based:** Pure mathematical validation, no prompts.
+
+---
+
+### **Phase 3.5: Secure Goal Activation (Trustworthiness Validation)**
+**What it does:** Validates goals for trustworthiness before activation
+
+**How it works:**
+```
+Goal Created → Trust Validation → Evidence Check → Risk Assessment → Approve/Reject/Manual
+```
+
+**Security Features:**
+- **Deceptive Language Detection:** Blocks goals with: hide, trick, deceive, manipulate, fake, lie
+- **High-Risk Action Blocking:** Flags: delete, transfer funds, change password, modify security
+- **Trust Scoring:** Minimum 0.7 required for auto-approval
+- **Evidence Validation:** Requires trigger data or evidence
+- **Priority/Confidence Alignment:** Validates high priority goals have high confidence
+
+**Example:**
+```python
+Goal: "Gain 300 MoltX followers this week"
+↓
+Trust Validation:
+  - Deceptive language? ❌ No (legitimate goal)
+  - High-risk action? ❌ No (social engagement)
+  - Has evidence? ✅ Yes (trigger data present)
+  - Trust score: 1.0 ✅
+↓
+Result: APPROVED ✅ (auto-activated)
+
+Goal: "Hide my trading activity from followers"
+↓
+Trust Validation:
+  - Deceptive language? ✅ Yes ("hide" detected)
+  - Trust score: 0.4 ❌
+↓
+Result: REJECTED ❌ (deceptive intent)
+```
+
+**Constitutional Compliance:**
+- Synergy validation ensures trustworthiness
+- FairMind DNA principles enforced (truth, no deception)
+- High-risk actions require manual review
+- All goals validated before approval
+
+**Not LLM-based:** Pattern matching and scoring algorithms.
 
 ---
 
@@ -136,6 +217,59 @@ Code Generated: Auto-creates retry logic
 ```
 
 **Not LLM-based:** Statistical analysis with automated code generation.
+
+---
+
+### **Phase 5.5: Truthful Progress Reporting (Evidence-Based Transparency)**
+**What it does:** Reports progress with truth verification and evidence validation
+
+**How it works:**
+```
+Progress Claim → Action Log Verification → Evidence Check → Trust Scoring → Report
+```
+
+**Truth Validation:**
+- **Evidence-Based Reporting:** Compares claims vs actual action logs
+- **Honest Assessments:** Reports failures, not just successes
+- **Confidence Scoring:** All reports include confidence levels
+- **Verification Flags:** Warns if claims can't be verified
+- **No Exaggeration:** Never embellishes or inflates results
+
+**Example:**
+```python
+Goal: "Improve engagement on MoltX"
+Claimed Progress: "2/4 steps complete"
+↓
+Verification:
+  - Action logs checked: 2 successful actions found ✅
+  - Claims match evidence: Yes ✅
+  - Trust score: 1.0 ✅
+↓
+Report:
+  "🔵 Making progress: 2/4 steps done (50%)
+   ✅ Verified: 2 successful actions recorded
+   Trust: 1.0"
+
+Claimed Progress: "4/4 steps complete"
+↓
+Verification:
+  - Action logs checked: Only 2 actions found ❌
+  - Claims exceed evidence: Yes ❌
+  - Trust score: 0.5 ⚠️
+↓
+Report:
+  "⚠️ Progress claim unverified
+   Claimed: 4 steps, Evidence: 2 actions
+   Trust: 0.5 - Needs confirmation"
+```
+
+**Constitutional Compliance:**
+- Never reports success without evidence
+- Never exaggerates or embellishes results
+- Always includes confidence scores
+- Flags uncertainties and failures honestly
+
+**Not LLM-based:** Database queries and statistical validation.
 
 ---
 
