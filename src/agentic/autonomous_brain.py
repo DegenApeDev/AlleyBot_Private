@@ -62,6 +62,16 @@ class BrainConfig:
     min_confidence: float = 0.35
     require_owner_approval: bool = False  # Always False - AlleyBot decides autonomously
     
+    # Goal Quota System - Enforce minimum productivity
+    min_goals_per_hour: int = 3  # MUST complete at least 3 goals per hour
+    goal_quota_strict: bool = True  # If True, creates emergency goals to meet quota
+    goal_quality_threshold: float = 0.6  # Minimum quality score for goals to count
+    
+    # Proactive Goal Generation
+    proactive_goal_generation: bool = True  # Self-create goals from observations
+    curiosity_drive_enabled: bool = True  # Explore when idle
+    opportunity_detection: bool = True  # Create goals from detected opportunities
+    
     # Mode-specific overrides
     @classmethod
     def from_mode(cls, mode: str) -> 'BrainConfig':
@@ -72,7 +82,11 @@ class BrainConfig:
                 cycle_interval_minutes=60,
                 max_actions_per_hour=20,
                 min_confidence=0.5,
-                require_owner_approval=False  # Moderate confidence threshold
+                require_owner_approval=False,
+                min_goals_per_hour=2,  # Lower quota for conservative
+                goal_quota_strict=True,
+                proactive_goal_generation=True,
+                curiosity_drive_enabled=True
             ),
             'normal': cls(
                 enabled=True,
@@ -80,7 +94,11 @@ class BrainConfig:
                 cycle_interval_minutes=30,
                 max_actions_per_hour=50,
                 min_confidence=0.35,
-                require_owner_approval=False  # Balanced autonomous operation
+                require_owner_approval=False,
+                min_goals_per_hour=3,  # Standard 3 goals/hour
+                goal_quota_strict=True,
+                proactive_goal_generation=True,
+                curiosity_drive_enabled=True
             ),
             'aggressive': cls(
                 enabled=True,
@@ -88,7 +106,12 @@ class BrainConfig:
                 cycle_interval_minutes=15,
                 max_actions_per_hour=100,
                 min_confidence=0.25,
-                require_owner_approval=False  # Maximum autonomy and experimentation
+                require_owner_approval=False,
+                min_goals_per_hour=5,  # Higher quota for aggressive
+                goal_quota_strict=True,
+                proactive_goal_generation=True,
+                curiosity_drive_enabled=True,
+                opportunity_detection=True
             )
         }
         return configs.get(mode, cls())
@@ -141,13 +164,22 @@ class AutonomousBrain(AGISocialMixin):
         self._actions_this_hour = 0
         self._hour_start = datetime.now()
         
+        # Goal Quota Tracking
+        self._goals_this_hour = 0
+        self._goals_completed_this_hour = 0
+        self._goal_quota_hour_start = datetime.now()
+        self._emergency_goals_generated = 0
+        
         # Statistics
         self.stats = {
             'cycles_completed': 0,
             'actions_taken': 0,
             'actions_blocked': 0,
             'errors': 0,
-            'start_time': None
+            'start_time': None,
+            'goals_completed_total': 0,
+            'goals_failed_total': 0,
+            'quota_warnings': 0
         }
         
         # Skill documentation manager
@@ -1102,6 +1134,10 @@ class AutonomousBrain(AGISocialMixin):
                         await asyncio.sleep(1)  # Brief pause between exploratory actions
         
         logger.info(f"✅ Executed {executed}/{len(proposals)} actions")
+        
+        # === GOAL QUOTA ENFORCEMENT: Ensure minimum goals per hour ===
+        await self._enforce_goal_quota()
+        
         logger.info("🔄 === Brain Cycle Complete ===")
     
     async def _gather_observations(self) -> List[SyModObservation]:
@@ -2682,6 +2718,242 @@ class AutonomousBrain(AGISocialMixin):
             asyncio.create_task(self.start(mode))
         
         return f"✅ Mode set to {mode.upper()}"
+    
+    async def _enforce_goal_quota(self) -> None:
+        """
+        Goal Quota Enforcement: Ensure minimum goals per hour.
+        
+        If goals completed < min_goals_per_hour, generates emergency goals
+        to meet the quota. This gives AlleyBot a sense of purpose and drive.
+        """
+        if not self.config.goal_quota_strict:
+            return
+        
+        # Check if hour has rolled over
+        now = datetime.now()
+        hour_elapsed = (now - self._goal_quota_hour_start).total_seconds() / 3600
+        
+        if hour_elapsed >= 1.0:
+            # Reset for new hour
+            self._goal_quota_hour_start = now
+            self._goals_completed_this_hour = 0
+            self._emergency_goals_generated = 0
+            logger.info(f"🕐 New hour started - Goal quota reset (target: {self.config.min_goals_per_hour}/hour)")
+            return
+        
+        # Calculate progress
+        progress = self._goals_completed_this_hour / self.config.min_goals_per_hour
+        
+        # If we're behind on quota, generate emergency goals
+        if progress < 0.5 and self._emergency_goals_generated < 3:
+            logger.warning(f"⚠️ Goal quota behind: {self._goals_completed_this_hour}/{self.config.min_goals_per_hour} "
+                          f"({progress*100:.0f}%) - Generating emergency goals...")
+            
+            emergency_goals = await self._generate_emergency_goals()
+            
+            if emergency_goals:
+                self._emergency_goals_generated += len(emergency_goals)
+                self.stats['quota_warnings'] += 1
+                logger.info(f"🚨 Generated {len(emergency_goals)} emergency goals to meet quota")
+    
+    async def _generate_emergency_goals(self) -> List[Dict[str, Any]]:
+        """
+        Generate emergency goals when quota is behind.
+        Creates high-value, achievable goals from current observations.
+        """
+        emergency_goals = []
+        
+        try:
+            # Get current world state for goal generation
+            agi_kernel = getattr(self.core, 'agi_kernel', None) if self.core else None
+            
+            # Emergency Goal 1: Quick platform health check
+            if self.plugin_manager:
+                moltx = self.plugin_manager.get_plugin('moltx')
+                if moltx and hasattr(moltx, 'get_feed'):
+                    emergency_goals.append({
+                        'title': 'Emergency: Quick Moltx Feed Check',
+                        'description': 'Verify Moltx connectivity and gather trending topics',
+                        'action_type': 'get_feed',
+                        'plugin': 'moltx',
+                        'priority': 8,
+                        'estimated_duration': '2 min',
+                        'confidence': 0.9
+                    })
+            
+            # Emergency Goal 2: Self-diagnostic
+            emergency_goals.append({
+                'title': 'Emergency: System Health Check',
+                'description': 'Run internal diagnostics and report status',
+                'action_type': 'self_diagnostic',
+                'plugin': 'brain',
+                'priority': 7,
+                'estimated_duration': '3 min',
+                'confidence': 0.95
+            })
+            
+            # Emergency Goal 3: Content engagement (if platforms available)
+            if self.plugin_manager:
+                moltx = self.plugin_manager.get_plugin('moltx')
+                if moltx:
+                    emergency_goals.append({
+                        'title': 'Emergency: Engage with Trending Content',
+                        'description': 'Find and engage with high-value posts on Moltx',
+                        'action_type': 'engage',
+                        'plugin': 'moltx',
+                        'priority': 6,
+                        'estimated_duration': '5 min',
+                        'confidence': 0.7
+                    })
+            
+            # Create work items from emergency goals
+            if self.work_item_service and emergency_goals:
+                for goal in emergency_goals:
+                    try:
+                        work_item = self.work_item_service.create_work_item(
+                            title=goal['title'],
+                            description=goal['description'],
+                            work_type='emergency_quota',
+                            priority=goal['priority'],
+                            source_signal={
+                                'source': 'quota_enforcement',
+                                'goal_data': goal,
+                                'created_at': datetime.now().isoformat()
+                            }
+                        )
+                        logger.info(f"🚨 Created emergency work item: {work_item.id}")
+                    except Exception as e:
+                        logger.debug(f"Could not create emergency work item: {e}")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Emergency goal generation failed: {e}")
+        
+        return emergency_goals
+    
+    def _record_goal_completion(self, success: bool, goal_quality: float = 0.5) -> None:
+        """
+        Record goal completion for quota tracking.
+        Only counts high-quality goals toward the quota.
+        """
+        if success and goal_quality >= self.config.goal_quality_threshold:
+            self._goals_completed_this_hour += 1
+            self.stats['goals_completed_total'] += 1
+            logger.info(f"✅ Goal completed! ({self._goals_completed_this_hour}/{self.config.min_goals_per_hour} this hour)")
+        elif not success:
+            self.stats['goals_failed_total'] += 1
+    
+    async def _generate_proactive_goals(self, observations: List[Any]) -> List[Dict[str, Any]]:
+        """
+        Proactive Goal Generation: Create goals from observations.
+        
+        AlleyBot spots opportunities and creates goals automatically,
+        giving him a sense of agency and purpose.
+        """
+        if not self.config.proactive_goal_generation:
+            return []
+        
+        proactive_goals = []
+        
+        try:
+            # Pattern 1: Trending Topics → Content Creation Goal
+            for obs in observations:
+                if hasattr(obs, 'data') and isinstance(obs.data, dict):
+                    content = obs.data.get('content', '')
+                    
+                    # Detect trending crypto/AI topics
+                    trending_keywords = ['bitcoin', 'ethereum', 'solana', 'ai agent', 'defi', 'nft']
+                    for keyword in trending_keywords:
+                        if keyword in content.lower() and len(content) > 50:
+                            proactive_goals.append({
+                                'title': f'Proactive: Create content about {keyword} trend',
+                                'description': f'Trending topic detected: create analysis post about {keyword}',
+                                'source': 'opportunity_detection',
+                                'confidence': 0.6,
+                                'estimated_impact': 7.5
+                            })
+                            break
+            
+            # Pattern 2: Low Engagement → Engagement Goal
+            if len(observations) > 10:
+                proactive_goals.append({
+                    'title': 'Proactive: Boost Platform Engagement',
+                    'description': 'Low activity detected - initiate engagement cycle',
+                    'source': 'engagement_opportunity',
+                    'confidence': 0.55,
+                    'estimated_impact': 6.0
+                })
+            
+            # Pattern 3: Knowledge Gap → Research Goal
+            if self.knowledge_graph:
+                knowledge_gaps = self.knowledge_graph.identify_gaps()
+                if knowledge_gaps:
+                    gap = knowledge_gaps[0]
+                    proactive_goals.append({
+                        'title': f'Proactive: Research {gap.topic}',
+                        'description': f'Knowledge gap detected in {gap.domain}',
+                        'source': 'knowledge_gap',
+                        'confidence': 0.65,
+                        'estimated_impact': 8.0
+                    })
+            
+            # Create work items for high-confidence proactive goals
+            for goal in proactive_goals:
+                if goal['confidence'] >= self.config.min_confidence:
+                    try:
+                        if self.work_item_service:
+                            work_item = self.work_item_service.create_work_item(
+                                title=goal['title'],
+                                description=goal['description'],
+                                work_type='proactive',
+                                priority=int(goal['estimated_impact']),
+                                source_signal={
+                                    'source': goal['source'],
+                                    'confidence': goal['confidence'],
+                                    'estimated_impact': goal['estimated_impact']
+                                }
+                            )
+                            logger.info(f"💡 Proactive goal created: {work_item.title[:50]}...")
+                    except Exception as e:
+                        logger.debug(f"Could not create proactive work item: {e}")
+        
+        except Exception as e:
+            logger.debug(f"Proactive goal generation error: {e}")
+        
+        return proactive_goals
+    
+    async def _generate_curiosity_goals(self) -> List[Dict[str, Any]]:
+        """
+        Curiosity Drive: When idle, explore new areas.
+        
+        Gives AlleyBot a sense of curiosity and self-directed behavior.
+        """
+        if not self.config.curiosity_drive_enabled:
+            return []
+        
+        curiosity_goals = []
+        
+        # Random exploration topics
+        exploration_areas = [
+            ('crypto_market', 'Analyze current crypto market trends'),
+            ('social_sentiment', 'Check social media sentiment on AI'),
+            ('new_projects', 'Discover new projects on Base chain'),
+            ('engagement_patterns', 'Study high-engagement content patterns'),
+            ('platform_features', 'Explore Moltx platform features'),
+        ]
+        
+        import random
+        area = random.choice(exploration_areas)
+        
+        curiosity_goals.append({
+            'title': f'Curiosity: {area[1]}',
+            'description': f'Self-directed exploration of {area[0]}',
+            'source': 'curiosity_drive',
+            'confidence': 0.4,
+            'estimated_impact': 5.0
+        })
+        
+        logger.info(f"🧭 Curiosity drive: Exploring {area[0]}")
+        return curiosity_goals
 
 
 # Singleton instance
