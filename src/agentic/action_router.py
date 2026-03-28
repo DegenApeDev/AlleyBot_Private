@@ -59,7 +59,14 @@ class ActionRouter:
         self.execution_history = []
         self.plan_manager = get_plan_manager()
         
+        # Moltx Rate Limiting: Engage-First Gate State
+        # Tracks engagement actions per session to prevent 429 errors
+        self._moltx_engagement_tracker = {}  # session_id -> {'reads': int, 'last_post_time': float}
+        self._moltx_engagement_required = 2  # Minimum read/discover actions before posting
+        self._moltx_post_cooldown = 300      # 5 minutes between posts (seconds)
+        
         print("✅ Action Router initialized - all actions will flow through AGI Kernel")
+        print("   🛡️ Moltx Engage-First Gate: Enabled (requires 2 reads before post)")
 
     def _normalize_action_family(self, action_spec: Dict[str, Any]) -> str:
         """Collapse concrete action types into broader action-family labels for trust persistence."""
@@ -127,6 +134,107 @@ class ActionRouter:
                 },
             },
         )
+
+    def _check_moltx_engage_first_gate(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Moltx Rate Limiting: Engage-First Gate
+        
+        Prevents 429 errors by requiring 'read/discover' actions before 'post' actions.
+        Mimics human browsing behavior to avoid bot detection.
+        
+        Rules:
+        1. Must perform at least 2 read/discover actions before posting
+        2. 5-minute cooldown between posts
+        3. Tracking is per-session (resets on restart for now - goal persistence will fix this)
+        
+        Returns:
+            {'approved': bool, 'reason': str, 'reads_remaining': int}
+        """
+        plugin = action_spec.get('plugin', '').lower()
+        action_type = action_spec.get('action_type', '').lower()
+        context = action_spec.get('context', {})
+        
+        # Only apply to Moltx post actions
+        if plugin != 'moltx' or not ('post' in action_type or 'create_post' in action_type):
+            return {'approved': True, 'reason': 'Not a Moltx post action'}
+        
+        # Get session identifier
+        session_id = context.get('session_id', context.get('user_id', 'default'))
+        
+        # Initialize tracker for this session
+        if session_id not in self._moltx_engagement_tracker:
+            self._moltx_engagement_tracker[session_id] = {
+                'reads': 0,
+                'last_post_time': 0,
+                'read_actions': []  # Track which read actions were performed
+            }
+        
+        tracker = self._moltx_engagement_tracker[session_id]
+        current_time = datetime.now().timestamp()
+        
+        # Check cooldown period
+        time_since_last_post = current_time - tracker['last_post_time']
+        if tracker['last_post_time'] > 0 and time_since_last_post < self._moltx_post_cooldown:
+            cooldown_remaining = int(self._moltx_post_cooldown - time_since_last_post)
+            return {
+                'approved': False,
+                'reason': f'Moltx post cooldown active. Wait {cooldown_remaining}s before next post.',
+                'reads_remaining': 0,
+                'cooldown_remaining': cooldown_remaining
+            }
+        
+        # Check engagement requirement
+        if tracker['reads'] < self._moltx_engagement_required:
+            reads_remaining = self._moltx_engagement_required - tracker['reads']
+            return {
+                'approved': False,
+                'reason': f'Moltx Engage-First Gate: Must perform {reads_remaining} more read/discover actions before posting (to prevent 429 errors)',
+                'reads_remaining': reads_remaining
+            }
+        
+        # All checks passed - allow post
+        return {
+            'approved': True,
+            'reason': f'Engage-First gate passed ({tracker["reads"]} reads performed, cooldown clear)',
+            'reads_remaining': 0
+        }
+    
+    def _record_moltx_engagement(self, action_spec: Dict[str, Any], result: Dict[str, Any]) -> None:
+        """
+        Record Moltx engagement actions and posts for tracking.
+        Call this after action execution to update engagement state.
+        """
+        plugin = action_spec.get('plugin', '').lower()
+        action_type = action_spec.get('action_type', '').lower()
+        context = action_spec.get('context', {})
+        
+        if plugin != 'moltx':
+            return
+        
+        session_id = context.get('session_id', context.get('user_id', 'default'))
+        
+        if session_id not in self._moltx_engagement_tracker:
+            return
+        
+        tracker = self._moltx_engagement_tracker[session_id]
+        
+        # Track successful read/discover/engage actions
+        if result.get('success', False):
+            if any(keyword in action_type for keyword in ['read', 'discover', 'get_feed', 'analyze', 'check']):
+                tracker['reads'] += 1
+                tracker['read_actions'].append({
+                    'action_type': action_type,
+                    'timestamp': datetime.now().isoformat()
+                })
+                print(f"📖 Moltx engagement tracked: {tracker['reads']}/{self._moltx_engagement_required} reads")
+            
+            # Track post actions (reset counter after post)
+            elif 'post' in action_type or 'create_post' in action_type:
+                tracker['last_post_time'] = datetime.now().timestamp()
+                previous_reads = tracker['reads']
+                tracker['reads'] = 0  # Reset for next cycle
+                tracker['read_actions'] = []
+                print(f"📝 Moltx post completed. Reset engagement tracker (had {previous_reads} reads). Next post requires {self._moltx_engagement_required} reads.")
 
     async def _validate_with_agi(self, action_spec: Dict) -> Dict:
         """
@@ -588,6 +696,24 @@ class ActionRouter:
                 'validation_trace': validation_trace,
             }
         
+        # Step 1.2: Moltx Engage-First Gate (Rate Limiting)
+        moltx_gate = self._check_moltx_engage_first_gate(action_spec)
+        if not moltx_gate['approved']:
+            validation_trace.append({
+                'stage': 'moltx_engage_first_gate',
+                'approved': False,
+                'reason': moltx_gate['reason']
+            })
+            return {
+                'success': False,
+                'reason': moltx_gate['reason'],
+                'stage': 'moltx_engage_first_gate',
+                'action_id': action_id,
+                'validation_trace': validation_trace,
+                'reads_remaining': moltx_gate.get('reads_remaining', 0),
+                'cooldown_remaining': moltx_gate.get('cooldown_remaining', 0),
+            }
+        
         # Step 1.5: FairMind DNA validation (Ethical Consciousness)
         if self.agi and hasattr(self.agi, 'fairmind'):
             try:
@@ -736,6 +862,10 @@ class ActionRouter:
         # Step 5: Execute via plugin
         try:
             result = await self._execute_via_plugin(modulated_action)
+            
+            # Record Moltx engagement for rate limiting tracking
+            self._record_moltx_engagement(modulated_action, result)
+            
             prediction_evaluation = self._build_prediction_evaluation(modulated_action, result)
             
             # Step 6: Reflect and learn through the unified AGI pathway

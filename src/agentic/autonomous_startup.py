@@ -44,6 +44,9 @@ class AutonomousStartup:
         """Initialize autonomous systems"""
         logger.info("🤖 Initializing Autonomous Startup System...")
         
+        # === GOAL PERSISTENCE: Resume USER_COMMAND goals from previous session ===
+        await self._resume_user_command_goals()
+        
         if self.auto_start:
             logger.info(f"✅ Auto-start enabled (mode: {self.brain_mode})")
             # Wait a bit for all plugins to be ready
@@ -165,6 +168,81 @@ class AutonomousStartup:
                 telegram.send_alert("Brain Alert", message, "high")
         except Exception as e:
             logger.warning(f"⚠️  Could not send alert: {e}")
+    
+    async def _resume_user_command_goals(self):
+        """
+        Resume USER_COMMAND goals from previous session.
+        
+        Called on startup to ensure user-requested tasks are not lost
+        if the bot was restarted while processing.
+        """
+        try:
+            logger.info("🔍 Checking for pending USER_COMMAND goals from previous session...")
+            
+            # Get work item manager
+            from src.agentic.work_item_manager import get_work_item_manager
+            work_item_manager = get_work_item_manager()
+            
+            # Get all active work items
+            active_items = work_item_manager.get_active_work_items(limit=50)
+            
+            if not active_items:
+                logger.info("✅ No pending work items to resume")
+                return
+            
+            # Filter for user-originated items
+            user_items = [
+                item for item in active_items 
+                if item.get('source') == 'user' 
+                or 'user' in str(item.get('metadata', {})).lower()
+                or 'telegram' in str(item.get('metadata', {})).lower()
+            ]
+            
+            if not user_items:
+                logger.info(f"✅ Found {len(active_items)} work items, none are USER_COMMAND")
+                return
+            
+            logger.info(f"🎯 Found {len(user_items)} USER_COMMAND goals to resume")
+            
+            # Log each resumed goal
+            for item in user_items:
+                summary = item.get('summary', 'Unknown task')
+                logger.info(f"   📌 Resuming: {summary[:60]}...")
+            
+            # Notify user about resumed goals
+            await self._send_resumed_goals_notification(user_items)
+            
+        except Exception as e:
+            logger.warning(f"⚠️  Could not resume user command goals: {e}")
+    
+    async def _send_resumed_goals_notification(self, user_items):
+        """Notify user that goals were resumed after restart"""
+        try:
+            telegram = self.plugin_manager.get_plugin('telegram')
+            if not telegram or not hasattr(telegram, 'send_alert'):
+                return
+            
+            if len(user_items) == 0:
+                return
+            
+            # Build message
+            message = f"🔄 **Bot Restarted - Resuming {len(user_items)} Task(s)**\n\n"
+            message += "The following user-requested tasks were preserved:\n"
+            
+            for i, item in enumerate(user_items[:5], 1):  # Show max 5
+                summary = item.get('summary', 'Unknown task')[:50]
+                message += f"{i}. {summary}...\n"
+            
+            if len(user_items) > 5:
+                message += f"...and {len(user_items) - 5} more\n"
+            
+            message += "\nThese tasks will be completed and you'll be notified of results."
+            
+            telegram.send_alert("Tasks Resumed", message, "medium")
+            logger.info(f"📨 Sent resumed goals notification for {len(user_items)} tasks")
+            
+        except Exception as e:
+            logger.warning(f"⚠️  Could not send resumed goals notification: {e}")
     
     def get_status(self) -> dict:
         """Get autonomous system status"""
