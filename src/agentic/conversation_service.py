@@ -396,12 +396,9 @@ class ConversationService:
             parsed_task = task_parser.parse(request.message_text, request.sender_name)
             
             if not parsed_task:
-                # Couldn't parse into actionable task, fall back to chat
-                return ConversationResponse(
-                    response_text=f"I understand you want me to help with: {request.message_text}\n\nLet me think about how to approach this...",
-                    response_type="chat_reply",
-                    identity_validated=True,
-                )
+                # Couldn't parse into actionable task - execute the detected intent directly
+                print(f"⚡ Executing detected intent directly: {command_name}")
+                return await self._execute_command_directly(request, context, command_name, args)
             
             # Create and inject goal into AutonomousGoalManager
             if self.core and hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
@@ -484,11 +481,131 @@ class ConversationService:
             import traceback
             traceback.print_exc()  # Print full stack trace to console
             return ConversationResponse(
-                response_text=f"❌ Failed to execute {command_name}: {str(e)[:200]}",
+                response_text=f" Failed to execute {command_name}: {str(e)[:200]}",
                 response_type="error",
             )
     
-# ... (rest of the code remains the same)
+    async def _execute_command_directly(
+        self,
+        request: ConversationRequest,
+        context: ConversationContext,
+        command_name: str,
+        args: dict
+    ) -> ConversationResponse:
+        """
+        Execute a detected command directly through the action router or plugin manager.
+        
+        This is the fallback when task parsing fails but we still have a detected intent.
+        """
+        try:
+            # Try to get action router from AGI kernel
+            action_router = None
+            if self.core and hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
+                action_router = getattr(self.core.agi_kernel, 'action_router', None)
+            
+            if action_router:
+                # Build action envelope for the detected command
+                from src.agentic.contracts import ActionEnvelope, ImpactLevel, RiskLevel
+                
+                # Map command to plugin/action
+                plugin = self._get_plugin_for_command(command_name)
+                action_type = command_name
+                
+                action = ActionEnvelope(
+                    plugin=plugin,
+                    action_type=action_type,
+                    params={
+                        "command": command_name,
+                        "args": args,
+                        "sender_id": request.sender_id,
+                        "is_owner": request.is_owner,
+                        "original_message": request.message_text,
+                    },
+                    context={
+                        "conversation_id": request.conversation_id,
+                        "trust_level": request.trust_level.value,
+                        "source": "natural_intent",
+                        "sender_name": request.sender_name,
+                    },
+                    impact=ImpactLevel.MEDIUM,
+                    risk_level=RiskLevel.LOW,
+                )
+                
+                # Execute through action router
+                result = await action_router.route(action)
+                
+                if result and result.success:
+                    return ConversationResponse(
+                        response_text=f" Executed *{command_name}* successfully!",
+                        response_type="action_confirmation",
+                        executed_action=command_name,
+                        identity_validated=True,
+                    )
+                else:
+                    error_msg = result.error if result else "Unknown error"
+                    return ConversationResponse(
+                        response_text=f" Command executed but may have issues: {error_msg[:100]}",
+                        response_type="action_confirmation",
+                        executed_action=command_name,
+                        identity_validated=True,
+                    )
+            
+            # Fallback: Try plugin_manager directly
+            elif self.plugin_manager and command_name in self.plugin_manager.commands:
+                func = self.plugin_manager.commands[command_name]
+                
+                # Execute the command
+                if asyncio.iscoroutinefunction(func):
+                    result = await func(**args) if args else await func()
+                else:
+                    result = func(**args) if args else func()
+                
+                return ConversationResponse(
+                    response_text=f" Executed *{command_name}*!\n\nResult: {str(result)[:200]}",
+                    response_type="action_confirmation",
+                    executed_action=command_name,
+                    identity_validated=True,
+                )
+            
+            # No execution path available
+            return ConversationResponse(
+                response_text=f"I detected you want to *{command_name}*, but I don't have the execution path available right now. Try using the /{command_name} command directly.",
+                response_type="error",
+                identity_validated=True,
+            )
+            
+        except Exception as e:
+            print(f" Direct command execution error: {e}")
+            import traceback
+            traceback.print_exc()
+            return ConversationResponse(
+                response_text=f" Failed to execute {command_name}: {str(e)[:200]}",
+                response_type="error",
+            )
+
+    def _get_plugin_for_command(self, command_name: str) -> str:
+        """Map command name to plugin."""
+        # Command to plugin mapping
+        plugin_map = {
+            "moltx": "moltx",
+            "clawbr": "clawbr",
+            "moltchan": "moltchan",
+            "moltroad": "moltroad",
+            "post": "moltx",
+            "reply": "moltx",
+            "engage": "moltx",
+            "stats": "analytics",
+            "status": "core",
+        }
+        
+        # Check if command starts with any mapped prefix
+        for prefix, plugin in plugin_map.items():
+            if command_name.startswith(prefix):
+                return plugin
+        
+        # Default to core
+        return "core"
+
     def _is_identity_question(self, text: str) -> bool:
         """Check if message is asking about identity/self."""
         identity_keywords = [
