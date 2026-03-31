@@ -153,9 +153,14 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
                 self.agi_kernel.initialize_decision_systems(self.plugin_manager)
                 print("✅ AGI Kernel decision systems initialized")
                 
-                # Initialize async components (Hermes tools)
-                import asyncio
-                asyncio.create_task(self.agi_kernel.initialize_async())
+                # Initialize async components (Hermes tools) only if event loop exists
+                try:
+                    import asyncio
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(self.agi_kernel.initialize_async())
+                except RuntimeError:
+                    # No running event loop - async init will happen later
+                    pass
                 
             except Exception as e:
                 print(f"⚠️ AGI Kernel decision systems initialization failed: {e}")
