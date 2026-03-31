@@ -51,6 +51,13 @@ from .alley_kernel.autonomous_engine import (
     AutonomousCognitiveEngine,
     create_autonomous_engine,
 )
+from .event_bus import (
+    CognitiveEventBus,
+    EventBusMixin,
+    EventType,
+    EventPriority,
+    get_event_bus,
+)
 
 
 class AGIKernel:
@@ -250,15 +257,20 @@ class AGIKernel:
         # Uses reasoning models to generate dynamic options, validated by SyMod
         self.llm_decision_router = None  # Initialized in decision systems
         
-        # === AlleyKernel Integration (Cognitive Execution Harness) ===
+        # === AlleyKernel Components (Cognitive Execution Harness) ===
         self.alley_kernel = self._initialize_alley_kernel()
-        print("🧠 AlleyKernel integrated into AGI Kernel")
-        print("   ✅ CognitiveLoop - session-scoped thought processing")
-        print("   ✅ SynergyGate - fail-closed permission validation")
-        print("   ✅ PathProtection - dangerous device/file blocking")
-        print("   ✅ CostTracker - per-model cost & token tracking")
+        print("🧠 AlleyKernel cognitive harness initialized")
+        print("   ✅ CostTracker - session-scoped usage tracking")
+        print("   ✅ PathProtection - dangerous device/file protection")
+        print("   ✅ SynergyGate - multi-layered permission validation")
+        print("   ✅ ActionRegistry - intent routing")
         print("   ✅ SkillRegistry - bundled skills (stuck, verify, remember)")
         print("   ✅ HooksRegistry - lifecycle event system")
+        
+        # === Cognitive Event Bus (Horizontal Integration) ===
+        self.event_bus = get_event_bus()
+        print("🚌 Cognitive Event Bus initialized")
+        print("   ✅ Connecting vertical systems ↔ horizontal engines")
         
         # === AutonomousCognitiveEngine (Proactive Thinking) ===
         self.autonomous_engine = create_autonomous_engine(self)
@@ -654,6 +666,14 @@ class AGIKernel:
         
         if action:
             print(f"🧠 AGI decided: {action.get('id')} ({action.get('decision_method', 'unknown')})")
+            # Publish decision to event bus for horizontal engines
+            if self.event_bus:
+                self.event_bus.publish_simple(
+                    EventType.DECISION_MADE,
+                    "agi_kernel",
+                    {"action": action, "context_summary": str(enriched_context)[:200]},
+                    priority=EventPriority.NORMAL if success else EventPriority.HIGH
+                )
         
         return action
 
@@ -1123,6 +1143,21 @@ class AGIKernel:
         
         # Route through unified pipeline
         result = await self.action_router.route_action(action_spec)
+        
+        # Publish action execution to event bus
+        if self.event_bus:
+            event_type = EventType.ACTION_EXECUTED if result.get('success') else EventType.ACTION_FAILED
+            self.event_bus.publish_simple(
+                event_type,
+                "agi_kernel",
+                {
+                    "action_spec": action_spec,
+                    "result": result,
+                    "plugin": action_spec.get('plugin'),
+                    "action_type": action_spec.get('action_type'),
+                },
+                priority=EventPriority.HIGH if not result.get('success') else EventPriority.NORMAL
+            )
         
         return result
 
@@ -1668,6 +1703,10 @@ class AGIKernel:
     
     async def initialize_async(self):
         """Initialize async components"""
+        # Start event bus
+        await self.event_bus.start()
+        print("🚌 Event bus processing started")
+        
         # Start autonomous engine if pending
         if getattr(self, '_autonomous_engine_pending_start', False) and self.autonomous_engine:
             await self.autonomous_engine.start()
