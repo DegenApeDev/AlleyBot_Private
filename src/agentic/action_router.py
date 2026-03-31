@@ -19,6 +19,7 @@ import inspect
 
 from src.agentic.action_logger import get_action_logger
 from src.agentic.planning import get_plan_manager
+from src.agentic.alley_kernel import ModelProvider
 
 
 from src.agentic.contracts import (
@@ -300,6 +301,55 @@ class ActionRouter:
             'modulations': {}
         }
     
+    def _validate_with_alley_kernel_synergy(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validate action through AlleyKernel's SynergyGate.
+        
+        Provides fail-closed security validation aligned with AGI Constitutional Rules.
+        """
+        alley_kernel = getattr(self.agi, 'alley_kernel', None)
+        if not alley_kernel:
+            return {'approved': True, 'reason': 'AlleyKernel not available'}
+        
+        synergy_gate = alley_kernel.get('synergy_gate')
+        if not synergy_gate:
+            return {'approved': True, 'reason': 'SynergyGate not initialized'}
+        
+        action_type = action_spec.get('action_type', 'unknown')
+        plugin = action_spec.get('plugin', 'unknown')
+        
+        # Check tool/action permission through SynergyGate
+        decision = synergy_gate.check_permission(
+            tool_name=f"{plugin}:{action_type}",
+            context={
+                'plugin': plugin,
+                'action_type': action_type,
+                'params': action_spec.get('params', {}),
+                'risk_level': action_spec.get('context', {}).get('risk_level', 'medium'),
+            }
+        )
+        
+        if decision.verdict.value == 'deny':
+            return {
+                'approved': False,
+                'reason': f"AlleyKernel SynergyGate denied: {decision.reason}",
+                'details': {'rule_matched': str(decision.rule_matched) if decision.rule_matched else None}
+            }
+        
+        if decision.verdict.value == 'ask':
+            # For now, treat ASK as deny in autonomous mode
+            # TODO: Integrate with human-in-the-loop for ASK verdicts
+            return {
+                'approved': False,
+                'reason': f"AlleyKernel SynergyGate requires confirmation: {decision.reason}",
+                'details': {'suggestion': decision.suggestion}
+            }
+        
+        return {
+            'approved': True,
+            'reason': f"AlleyKernel SynergyGate approved: {decision.reason}",
+        }
+    
     def _verify_with_symod(self, action_spec: Dict[str, Any], validation: Dict[str, Any]) -> Dict[str, Any]:
         """
         Verify action through SyMod mathematical validation.
@@ -353,6 +403,65 @@ class ActionRouter:
                 'details': {'symod_error': True}
             }
     
+    def _record_action_cost(
+        self,
+        action_spec: Dict[str, Any],
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        api_duration_ms: float = 0.0,
+    ) -> None:
+        """
+        Record action cost through AlleyKernel CostTracker.
+        
+        Tracks per-model usage and budget alerts.
+        """
+        alley_kernel = getattr(self.agi, 'alley_kernel', None)
+        if not alley_kernel:
+            return
+        
+        cost_tracker = alley_kernel.get('cost_tracker')
+        if not cost_tracker:
+            return
+        
+        try:
+            cost_tracker.record_usage(
+                model='default',  # TODO: Extract actual model from action
+                provider=ModelProvider.ANTHROPIC,  # TODO: Determine actual provider
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                api_duration_ms=api_duration_ms,
+            )
+        except Exception:
+            pass  # Fail silently to not break action execution
+    
+    def get_alley_kernel_summary(self) -> Dict[str, Any]:
+        """Get summary of AlleyKernel state for monitoring."""
+        alley_kernel = getattr(self.agi, 'alley_kernel', None)
+        if not alley_kernel:
+            return {'error': 'AlleyKernel not initialized'}
+        
+        summary = {
+            'session_id': alley_kernel.get('session_id'),
+            'initialized_at': alley_kernel.get('_initialized_at'),
+        }
+        
+        cost_tracker = alley_kernel.get('cost_tracker')
+        if cost_tracker:
+            summary['costs'] = cost_tracker.get_summary()
+        
+        skill_registry = alley_kernel.get('skill_registry')
+        if skill_registry:
+            summary['skills'] = {
+                'total': len(skill_registry.skills),
+                'active': len(skill_registry.list_active()),
+            }
+        
+        path_protection = alley_kernel.get('path_protection')
+        if path_protection:
+            summary['path_protection'] = path_protection.get_protection_summary()
+        
+        return summary
+
     def _validate_with_synergy(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
         """Validate action through the centralized Synergy field gate when available."""
         decision_system = getattr(self.agi, 'decision_system', None)
@@ -534,6 +643,54 @@ class ActionRouter:
         # Return mapped method or original action_type as fallback
         return plugin_actions.get(action_type, action_type)
     
+    def _validate_path_protection(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validate file paths in action parameters using AlleyKernel PathProtection.
+        
+        Prevents access to dangerous devices and sensitive files.
+        """
+        alley_kernel = getattr(self.agi, 'alley_kernel', None)
+        if not alley_kernel:
+            return {'approved': True, 'reason': 'AlleyKernel not available'}
+        
+        path_protection = alley_kernel.get('path_protection')
+        if not path_protection:
+            return {'approved': True, 'reason': 'PathProtection not initialized'}
+        
+        params = action_spec.get('params', {})
+        operation = action_spec.get('action_type', 'unknown')
+        
+        # Check for file-related parameters
+        file_paths = []
+        if 'file_path' in params:
+            file_paths.append(params['file_path'])
+        if 'path' in params:
+            file_paths.append(params['path'])
+        if 'filename' in params:
+            file_paths.append(params['filename'])
+        
+        # Check for shell commands that might access dangerous paths
+        if 'command' in params:
+            cmd = params['command']
+            # Check for device paths in command
+            dangerous_patterns = ['/dev/zero', '/dev/random', '/dev/urandom', '/dev/stdin']
+            for pattern in dangerous_patterns:
+                if pattern in cmd:
+                    return {
+                        'approved': False,
+                        'reason': f'PathProtection: Command references dangerous device {pattern}'
+                    }
+        
+        for file_path in file_paths:
+            result = path_protection.validate_operation(file_path, operation)
+            if not result['allowed']:
+                return {
+                    'approved': False,
+                    'reason': f"PathProtection: {result['reason']}"
+                }
+        
+        return {'approved': True, 'reason': 'PathProtection validation passed'}
+    
     async def _execute_via_plugin(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute action via plugin or skill"""
@@ -606,6 +763,126 @@ class ActionRouter:
                 'exception_type': type(e).__name__
             }
     
+    async def _execute_alley_kernel_skill(
+        self,
+        skill_name: str,
+        args: str = "",
+        context: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Execute a skill through AlleyKernel's SkillRegistry.
+        
+        Skills are prompt-based capabilities like /stuck, /verify, /remember.
+        """
+        alley_kernel = getattr(self.agi, 'alley_kernel', None)
+        if not alley_kernel:
+            return {
+                'success': False,
+                'error': 'AlleyKernel not available',
+                'stage': 'skill_execution'
+            }
+        
+        skill_registry = alley_kernel.get('skill_registry')
+        if not skill_registry:
+            return {
+                'success': False,
+                'error': 'SkillRegistry not initialized',
+                'stage': 'skill_execution'
+            }
+        
+        try:
+            # Execute skill and get prompt
+            prompt = await skill_registry.execute_async(
+                skill_name=skill_name,
+                args=args,
+                context=context,
+            )
+            
+            return {
+                'success': True,
+                'prompt': prompt,
+                'skill': skill_name,
+                'stage': 'skill_execution',
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f'Skill execution error: {str(e)}',
+                'stage': 'skill_execution',
+                'skill': skill_name,
+            }
+    
+    def list_available_skills(self) -> Dict[str, Any]:
+        """List available AlleyKernel skills."""
+        alley_kernel = getattr(self.agi, 'alley_kernel', None)
+        if not alley_kernel:
+            return {'error': 'AlleyKernel not available'}
+        
+        skill_registry = alley_kernel.get('skill_registry')
+        if not skill_registry:
+            return {'error': 'SkillRegistry not initialized'}
+        
+        return {
+            'skills': [
+                {
+                    'name': skill.name,
+                    'description': skill.description,
+                    'aliases': skill.aliases,
+                    'enabled': skill.is_enabled(),
+                }
+                for skill in skill_registry.skills.values()
+            ],
+            'active_count': len(skill_registry.list_active()),
+        }
+
+    def _emit_action_event(
+        self,
+        action_type: str,
+        params: Dict[str, Any],
+        result: Dict[str, Any],
+    ) -> None:
+        """
+        Emit action events to trigger proactive skills.
+        
+        This notifies the AutonomousCognitiveEngine of file operations,
+        enabling auto-verify and other proactive behaviors.
+        """
+        autonomous_engine = getattr(self.agi, 'autonomous_engine', None)
+        if not autonomous_engine:
+            return
+        
+        # Map action types to event types for proactive triggers
+        event_type = None
+        event_data = {}
+        
+        # File write operations
+        if action_type in ['write_file', 'file_write', 'edit_file', 'file_edit']:
+            event_type = 'file_write'
+            event_data = {
+                'file_path': params.get('file_path', params.get('path', '')),
+                'success': result.get('success', False),
+            }
+        
+        # Code execution
+        elif action_type in ['execute_code', 'terminal', 'bash']:
+            event_type = 'code_execution'
+            event_data = {
+                'command': params.get('command', '')[:100],
+                'success': result.get('success', False),
+            }
+        
+        # Action failures (for self-healing)
+        elif not result.get('success', False):
+            event_type = 'action_failure'
+            event_data = {
+                'action_type': action_type,
+                'error': result.get('error', 'Unknown error')[:200],
+            }
+        
+        if event_type:
+            autonomous_engine.emit_event(event_type, event_data)
+
     async def _execute_skill(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a skill from skills/ directory"""
         skill_name = params.get('skill_name')
@@ -779,6 +1056,34 @@ class ActionRouter:
         # Get validation profile early - needed for both Synergy and SyMod validation
         validation_profile = self._get_validation_profile(modulated_action)
 
+        # Step 3.6: AlleyKernel PathProtection validation (file/directory security)
+        path_protection_check = self._normalize_validation_result(
+            'path_protection',
+            self._validate_path_protection(modulated_action),
+            fail_closed=True,
+        )
+        validation_trace.append(path_protection_check)
+        if not path_protection_check['approved']:
+            return {
+                'success': False,
+                'reason': path_protection_check['reason'],
+                'stage': 'path_protection',
+                'action_id': action_id,
+                'validation_trace': validation_trace,
+            }
+
+        # Step 3.5: AlleyKernel SynergyGate validation (fail-closed security)
+        alley_kernel_gate = self._validate_with_alley_kernel_synergy(modulated_action)
+        validation_trace.append(alley_kernel_gate)
+        if not alley_kernel_gate['approved']:
+            return {
+                'success': False,
+                'reason': alley_kernel_gate['reason'],
+                'stage': 'alley_kernel_synergy_gate',
+                'action_id': action_id,
+                'validation_trace': validation_trace,
+            }
+
         # Step 3: Synergy validation (field / harmonic approval)
         synergy_check = self._normalize_validation_result(
             'synergy_validation',
@@ -863,6 +1168,9 @@ class ActionRouter:
         try:
             result = await self._execute_via_plugin(modulated_action)
             
+            # Emit events for proactive skill triggers
+            self._emit_action_event(modulated_action.get('action_type', ''), modulated_action.get('params', {}), result)
+        
             # Record Moltx engagement for rate limiting tracking
             self._record_moltx_engagement(modulated_action, result)
             

@@ -35,6 +35,21 @@ from .default_goals import get_default_goal_seeder
 from .command_registry import GlobalCommandRegistry, create_command_registry
 from .cross_plugin_orchestrator import CrossPluginOrchestrator, create_cross_plugin_orchestrator
 from .domain_autonomy_manager import DomainAutonomyManager, create_domain_autonomy_manager
+from .alley_kernel import (
+    CognitiveLoop,
+    SynergyGate,
+    ActionRegistry,
+    PathProtection,
+    CostTracker,
+    SkillRegistry,
+    HooksRegistry,
+    create_builtin_skills,
+    create_default_hooks,
+)
+from .alley_kernel.autonomous_engine import (
+    AutonomousCognitiveEngine,
+    create_autonomous_engine,
+)
 
 
 class AGIKernel:
@@ -234,6 +249,27 @@ class AGIKernel:
         # Uses reasoning models to generate dynamic options, validated by SyMod
         self.llm_decision_router = None  # Initialized in decision systems
         
+        # === AlleyKernel Integration (Cognitive Execution Harness) ===
+        self.alley_kernel = self._initialize_alley_kernel()
+        print("🧠 AlleyKernel integrated into AGI Kernel")
+        print("   ✅ CognitiveLoop - session-scoped thought processing")
+        print("   ✅ SynergyGate - fail-closed permission validation")
+        print("   ✅ PathProtection - dangerous device/file blocking")
+        print("   ✅ CostTracker - per-model cost & token tracking")
+        print("   ✅ SkillRegistry - bundled skills (stuck, verify, remember)")
+        print("   ✅ HooksRegistry - lifecycle event system")
+        
+        # === AutonomousCognitiveEngine (Proactive Thinking) ===
+        self.autonomous_engine = create_autonomous_engine(self)
+        if self.autonomous_engine:
+            print("🚀 AutonomousCognitiveEngine activated")
+            print("   ✅ Auto-verify code changes")
+            print("   ✅ Auto-detect stuck sessions")
+            print("   ✅ Auto-compact context before overflow")
+            print("   ✅ Auto-extract memory periodically")
+            print("   ✅ Self-healing on repeated failures")
+            print("   ✅ Goal-driven autonomous pursuit")
+        
         print("✅ AGI Kernel ready")
     
     def _get_onchain_plugin(self):
@@ -241,6 +277,50 @@ class AGIKernel:
         if self.core and hasattr(self.core, 'plugin_manager'):
             return self.core.plugin_manager.plugins.get('onchain')
         return None
+    
+    def _initialize_alley_kernel(self):
+        """
+        Initialize AlleyKernel cognitive execution harness.
+        
+        Returns a dict of AlleyKernel components for AGI integration.
+        """
+        from uuid import uuid4
+        
+        # Create core components
+        session_id = str(uuid4())
+        
+        # Cost tracker for this session
+        cost_tracker = CostTracker(session_id=session_id)
+        
+        # Skill registry with built-in skills
+        skill_registry = create_builtin_skills()
+        
+        # Hooks registry with default hooks
+        hooks_registry = create_default_hooks()
+        
+        # Path protection
+        path_protection = PathProtection()
+        
+        # SynergyGate for permission validation
+        synergy_gate = SynergyGate()
+        
+        # Action registry for command/tool routing
+        action_registry = ActionRegistry()
+        
+        # Cognitive loop (initialized later when needed)
+        cognitive_loop = None
+        
+        return {
+            'session_id': session_id,
+            'cost_tracker': cost_tracker,
+            'skill_registry': skill_registry,
+            'hooks_registry': hooks_registry,
+            'path_protection': path_protection,
+            'synergy_gate': synergy_gate,
+            'action_registry': action_registry,
+            'cognitive_loop': cognitive_loop,
+            '_initialized_at': __import__('datetime').datetime.now().isoformat(),
+        }
     
     def initialize_decision_systems(self, plugin_manager):
         """
