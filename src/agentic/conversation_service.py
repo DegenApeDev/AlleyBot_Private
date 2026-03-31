@@ -294,7 +294,17 @@ class ConversationService:
             return await self._execute_natural_intent(request, context, command_name, args)
         
         # Step 2: No action intent detected - proceed with chat
+        # CRITICAL: Add guardrails to prevent fake execution hallucinations
         system_prompt = self.get_system_prompt(request)
+        system_prompt += """
+
+CRITICAL RULES:
+1. You are in CHAT MODE only - you CANNOT execute any actions, post to platforms, or make external changes
+2. NEVER say you "done" something, "posted" something, or claim action completion
+3. If the user asks you to take an action, say: "I can't execute that directly. Try using a /command or ask me to set up a goal for it."
+4. NEVER invent fake post IDs, links, transaction hashes, or confirmation details
+5. NEVER say "Done." or use checkmark emojis for action confirmations
+"""
         user_prompt = self._build_user_prompt(request, context)
         
         # Call model through LLM router
@@ -307,6 +317,13 @@ class ConversationService:
             
             # Validate and normalize for identity
             validated_response = self.identity_service.normalize_response(raw_response)
+            
+            # GUARDRAIL: Reject fake execution responses
+            if self._contains_fake_execution_claims(validated_response):
+                validated_response = (
+                    "I understand you want me to take action, but I'm in chat mode. "
+                    "Try using a /command prefix, or I can set up a goal for this task."
+                )
             
             # Check for violations
             violations = self.identity_service.check_identity_violations(validated_response)
@@ -588,6 +605,38 @@ class ConversationService:
         
         # Default to core
         return "core"
+
+    def _contains_fake_execution_claims(self, response: str) -> bool:
+        """Detect if response contains fake action execution claims."""
+        import re
+        response_lower = response.lower()
+        
+        # Patterns that indicate fake execution
+        fake_patterns = [
+            r'done\.\s+posted',           # "Done. Posted on..."
+            r'posted on\s+\w+',          # "Posted on Moltx"
+            r'post id:\s*0x[a-f0-9]+',    # Fake post IDs
+            r'0x[a-f0-9]{10,}',           # Fake hex identifiers
+            r'on-chain verified',        # Fake blockchain claims
+            r'engagement tracking',      # Fake tracking claims
+            r'\[attached.*\]',           # Fake attachments
+            r't\.co/\w+',                # Fake shortlinks
+            r'moltx\.io/post/\w+',       # Fake moltx links
+            r'\bexecuted\b.*\bsuccessfully\b',  # Generic fake success
+            r'checkmark|✓|✅.*posted',   # Checkmarks with posted
+        ]
+        
+        for pattern in fake_patterns:
+            if re.search(pattern, response_lower):
+                return True
+        
+        # Check for "Done." at start + action verbs
+        if response_lower.startswith('done.') and any(
+            verb in response_lower for verb in ['posted', 'executed', 'completed', 'created', 'sent']
+        ):
+            return True
+            
+        return False
 
     def _is_identity_question(self, text: str) -> bool:
         """Check if message is asking about identity/self."""
