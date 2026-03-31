@@ -22,6 +22,7 @@ from pathlib import Path
 import logging
 
 from src.agentic.planning import get_plan_manager
+from src.agentic.event_bus import get_event_bus, EventType, EventPriority
 
 logger = logging.getLogger(__name__)
 
@@ -336,6 +337,19 @@ class GoalManager:
             conn.commit()
         
         logger.info(f"🎯 Goal added: {goal.title} ({goal.priority.name})")
+        
+        # Publish event to bus
+        try:
+            event_bus = get_event_bus()
+            event_bus.publish_simple(
+                EventType.GOAL_CREATED,
+                "goal_manager",
+                {"goal": goal.to_dict()},
+                priority=EventPriority.HIGH if goal.priority.value >= 8 else EventPriority.NORMAL
+            )
+        except Exception:
+            pass  # Don't fail if event bus not ready
+        
         return True
     
     def get_goal(self, goal_id: str) -> Optional[Goal]:
@@ -471,6 +485,19 @@ class GoalManager:
             logger.debug(f"Could not send goal completion notification: {e}")
 
         logger.info(f"✅ Goal completed: {goal_id}")
+        
+        # Publish event to bus
+        try:
+            event_bus = get_event_bus()
+            event_bus.publish_simple(
+                EventType.GOAL_COMPLETED,
+                "goal_manager",
+                {"goal_id": goal_id, "outcome": outcome, "goal": goal.to_dict() if goal else None},
+                priority=EventPriority.NORMAL
+            )
+        except Exception:
+            pass
+        
         return True
     
     def record_goal_action_success(self, goal_id: str, note: Optional[str] = None) -> bool:
