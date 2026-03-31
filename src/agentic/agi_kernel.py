@@ -35,6 +35,7 @@ from .default_goals import get_default_goal_seeder
 from .command_registry import GlobalCommandRegistry, create_command_registry
 from .cross_plugin_orchestrator import CrossPluginOrchestrator, create_cross_plugin_orchestrator
 from .domain_autonomy_manager import DomainAutonomyManager, create_domain_autonomy_manager
+from .action_logger import get_action_logger
 from .alley_kernel import (
     CognitiveLoop,
     SynergyGate,
