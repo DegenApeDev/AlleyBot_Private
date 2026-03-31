@@ -400,78 +400,61 @@ class ConversationService:
                 print(f"⚡ Executing detected intent directly: {command_name}")
                 return await self._execute_command_directly(request, context, command_name, args)
             
-            # Create and inject goal into AutonomousGoalManager
+            # === EXECUTE IMMEDIATELY ===
+            # Owner commands should execute NOW, not just create a goal
+            action_router = None
             if self.core and hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
-                goal_manager = getattr(self.core.agi_kernel, 'goal_manager', None)
-
-                if goal_manager is not None:
-                    from src.agentic.autonomous_goals import AutonomousGoal, GoalOrigin
-
-                    # Build action_plan as plain strings (what AutonomousGoalManager expects)
-                    action_plan_steps = [
-                        s['description'] if isinstance(s, dict) else str(s)
-                        for s in (parsed_task.implementation_plan or [])
-                    ]
-                    if not action_plan_steps:
-                        action_plan_steps = [f"Execute {parsed_task.action_type} via {parsed_task.plugin}"]
-
-                    # Add a concrete plugin dispatch step so get_next_action can route it
-                    action_plan_steps.insert(0, f"{parsed_task.plugin}:{parsed_task.action_type}")
-
-                    goal = AutonomousGoal(
-                        id=f"user_request_{int(datetime.now().timestamp())}",
-                        description=parsed_task.description or parsed_task.title,
-                        origin=GoalOrigin.USER_COMMAND,
-                        detected_opportunity=f"Owner requested: {request.message_text[:120]}",
-                        evidence={
-                            'source': 'telegram_owner',
-                            'sender': request.sender_name,
-                            'chat_id': request.chat_id,
-                            'session_id': request.session_id,
-                            'original_message': request.message_text,
-                            'parsed_action': parsed_task.action_type,
-                            'plugin': parsed_task.plugin,
-                        },
-                        action_plan=action_plan_steps,
-                        expected_outcome=f"Successfully executed {parsed_task.action_type}",
-                        success_criteria=[f"Plugin {parsed_task.plugin} returns success"],
-                        priority_score=9.0,   # Owner requests are top priority
-                        urgency=9.0,
-                        impact=8.0,
-                        status='active',      # Skip proposal — owner already approved by asking
-                        activated_at=datetime.now(),
-                    )
-
-                    # Inject directly into goal manager's live list
-                    goal_manager.goals.append(goal)
-                    goal_manager._save()
-
-                    print(f"✅ Injected owner goal as active: {goal.id} — {parsed_task.title}")
-
+                action_router = getattr(self.core.agi_kernel, 'action_router', None)
+            
+            if action_router:
+                from src.agentic.contracts import ActionEnvelope, ImpactLevel, RiskLevel
+                
+                action = ActionEnvelope(
+                    plugin=parsed_task.plugin,
+                    action_type=parsed_task.action_type,
+                    params={
+                        "content": parsed_task.params.get('content', request.message_text),
+                        "topic": parsed_task.params.get('topic'),
+                        "sender_id": request.sender_id,
+                        "is_owner": request.is_owner,
+                        "original_message": request.message_text,
+                    },
+                    context={
+                        "conversation_id": request.conversation_id,
+                        "trust_level": request.trust_level.value,
+                        "source": "natural_intent",
+                        "sender_name": request.sender_name,
+                    },
+                    impact=ImpactLevel.MEDIUM,
+                    risk_level=RiskLevel.LOW,
+                )
+                
+                # EXECUTE THE ACTION
+                print(f"⚡ Executing: {parsed_task.plugin}:{parsed_task.action_type}")
+                result = await action_router.route(action)
+                
+                if result and result.success:
+                    # Also create goal for tracking (async, don't wait)
+                    self._create_tracking_goal(request, parsed_task)
+                    
                     return ConversationResponse(
-                        response_text=(
-                            f"⚡ On it — *{parsed_task.title}*\n\n"
-                            + "\n".join(
-                                f"{i+1}. {s['description'] if isinstance(s, dict) else s}"
-                                for i, s in enumerate(
-                                    parsed_task.implementation_plan[:3]
-                                    if parsed_task.implementation_plan
-                                    else action_plan_steps[1:4]
-                                )
-                            )
-                            + "\n\nI'll update you when complete!"
-                        ),
-                        response_type="goal_created",
+                        response_text=f"✅ Executed *{parsed_task.title}* successfully!",
+                        response_type="action_confirmation",
                         executed_action=parsed_task.action_type,
                         identity_validated=True,
                     )
-
-            # Goal manager unavailable — fall back to a clear message
+                else:
+                    error_msg = result.error if result else "Unknown error"
+                    return ConversationResponse(
+                        response_text=f"⚠️ Action failed: {error_msg[:200]}",
+                        response_type="error",
+                        executed_action=parsed_task.action_type,
+                        identity_validated=True,
+                    )
+            
+            # Action router unavailable
             return ConversationResponse(
-                response_text=(
-                    f"I understand you want: *{parsed_task.title}*\n\n"
-                    "However, the goal engine isn't available right now. Try again in a moment."
-                ),
+                response_text=f"I understand you want to *{parsed_task.title}*, but the action router isn't available right now. Try again in a moment.",
                 response_type="error",
                 identity_validated=True,
             )
