@@ -26,7 +26,7 @@ class NaturalIntentClassifier:
         self.model = self._get_sentence_model()
         self.command_embeddings = {}  # command_name -> embedding
         self.command_metadata = {}  # command_name -> {doc, semantic_tags}
-        self.similarity_threshold = 0.60  # Lower threshold for more natural matching
+        self.similarity_threshold = 0.45  # Lower threshold for more natural matching
         
     def _get_sentence_model(self):
         """Get shared sentence transformer model"""
@@ -56,55 +56,63 @@ class NaturalIntentClassifier:
         }
     
     def _extract_semantic_meaning(self, command_name: str, docstring: str = None) -> List[str]:
-        """
-        Extract semantic meaning from command name and docstring.
-        No hardcoded patterns - pure linguistic analysis.
-        
-        Args:
-            command_name: Command identifier
-            docstring: Optional docstring
-            
-        Returns:
-            List of semantic phrases that describe this command
-        """
+        """Extract semantic meaning from command name and docstring."""
         phrases = []
         
         # Parse command name into semantic components
-        # Example: "moltx_post" -> ["moltx", "post"]
         parts = command_name.lower().replace('_', ' ').split()
         
-        # Build natural language descriptions from parts
-        # OPTIMIZED: Reduced from 6-10 phrases to 2-3 for faster encoding
         if len(parts) >= 2:
-            # Two-part commands: "platform action"
             platform = parts[0]
             action = ' '.join(parts[1:])
             
-            # Generate only the most common variations
+            # Core action phrases
             phrases.extend([
                 f"{action} on {platform}",
                 f"{platform} {action}",
+                f"make a {action} on {platform}",
+                f"create {action} on {platform}",
+                f"{action} something on {platform}",
             ])
             
-            # Add ONE platform-specific variation
+            # Platform-specific variations
             if 'post' in action:
-                phrases.append(f"post on {platform}")
+                phrases.extend([
+                    f"post on {platform}",
+                    f"make a post on {platform}",
+                    f"create post on {platform}",
+                    f"publish on {platform}",
+                    f"share on {platform}",
+                ])
             elif 'engage' in action:
-                phrases.append(f"engage on {platform}")
+                phrases.extend([
+                    f"engage on {platform}",
+                    f"interact on {platform}",
+                    f"reply on {platform}",
+                    f"comment on {platform}",
+                ])
             elif 'feed' in action:
-                phrases.append(f"show {platform} feed")
+                phrases.extend([
+                    f"show {platform} feed",
+                    f"get {platform} feed",
+                    f"{platform} timeline",
+                ])
+            elif 'stats' in action or 'analytics' in action:
+                phrases.extend([
+                    f"{platform} stats",
+                    f"{platform} analytics",
+                    f"show {platform} stats",
+                ])
         else:
-            # Single-part commands
             phrases.append(command_name.replace('_', ' '))
         
         # Add docstring if available
         if docstring:
-            # Clean and add docstring
             doc_clean = docstring.split('\n')[0].strip()
             if doc_clean and len(doc_clean) > 5:
                 phrases.append(doc_clean)
         
-        # Add the raw command name for exact matches
+        # Add raw command name
         phrases.append(command_name.replace('_', ' '))
         
         return phrases
