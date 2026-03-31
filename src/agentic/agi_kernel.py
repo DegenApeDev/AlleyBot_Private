@@ -58,6 +58,10 @@ from .event_bus import (
     EventPriority,
     get_event_bus,
 )
+from .engine_integration import (
+    EngineIntegrationManager,
+    integrate_all_engines,
+)
 
 
 class AGIKernel:
@@ -1706,6 +1710,10 @@ class AGIKernel:
         # Start event bus
         await self.event_bus.start()
         print("🚌 Event bus processing started")
+        
+        # Connect horizontal engines to event bus
+        self.engine_integration = integrate_all_engines(self)
+        print("🔗 Horizontal engines integrated with event bus")
         
         # Start autonomous engine if pending
         if getattr(self, '_autonomous_engine_pending_start', False) and self.autonomous_engine:
