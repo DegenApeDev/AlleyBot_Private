@@ -270,6 +270,17 @@ class AGIKernel:
             print("   ✅ Auto-extract memory periodically")
             print("   ✅ Self-healing on repeated failures")
             print("   ✅ Goal-driven autonomous pursuit")
+            
+            # Start the background cognitive loop
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self.autonomous_engine.start())
+                print("   🧠 Cognitive loop started - AlleyBot is now proactive")
+            except RuntimeError:
+                # No event loop yet, will start later
+                self._autonomous_engine_pending_start = True
+                print("   ⏳ Cognitive loop queued for startup")
         
         print("✅ AGI Kernel ready")
     
@@ -1657,6 +1668,12 @@ class AGIKernel:
     
     async def initialize_async(self):
         """Initialize async components"""
+        # Start autonomous engine if pending
+        if getattr(self, '_autonomous_engine_pending_start', False) and self.autonomous_engine:
+            await self.autonomous_engine.start()
+            self._autonomous_engine_pending_start = False
+            print("   🧠 Cognitive loop started (async init)")
+        
         # Initialize Hermes tools
         try:
             from src.tools.action_router_integration import setup_hermes_tools_integration
