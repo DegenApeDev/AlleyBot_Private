@@ -3,7 +3,9 @@ Symbolic Reasoning Engine for AlleyBot AGI
 Handles logic, rules, constraints, and mathematical proofs
 Complements neural reasoning with formal symbolic reasoning
 """
+import ast
 import logging
+import operator
 from typing import Dict, Any, List, Optional, Set, Tuple
 from dataclasses import dataclass
 from enum import Enum
@@ -329,23 +331,64 @@ class SymbolicEngine:
                 'explanation': f"Could not solve: {e}"
             }
     
+    # Operator map for safe AST-based math evaluation
+    _SAFE_OPS = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.FloorDiv: operator.floordiv,
+        ast.Mod: operator.mod,
+        ast.Pow: operator.pow,
+        ast.USub: operator.neg,
+        ast.UAdd: operator.pos,
+    }
+
+    # Safe builtin functions allowed in expressions
+    _SAFE_FUNCS = {
+        'abs': abs,
+        'min': min,
+        'max': max,
+        'sum': sum,
+        'round': round,
+    }
+
     def _safe_eval(self, expression: str) -> Any:
-        """Safely evaluate mathematical expression"""
-        # Whitelist of safe operations
-        allowed_names = {
-            'abs': abs,
-            'min': min,
-            'max': max,
-            'sum': sum,
-            'round': round,
-        }
+        """Safely evaluate mathematical expression using AST parsing.
         
-        # Remove any dangerous operations
+        No eval() — walks the AST and only allows numeric literals,
+        basic arithmetic operators, and whitelisted functions.
+        """
         if any(dangerous in expression for dangerous in ['__', 'import', 'exec', 'eval']):
             raise ValueError("Unsafe expression")
-        
-        # Evaluate in restricted namespace
-        return eval(expression, {"__builtins__": {}}, allowed_names)
+
+        try:
+            tree = ast.parse(expression.strip(), mode='eval')
+        except SyntaxError as e:
+            raise ValueError(f"Invalid expression: {e}")
+
+        return self._eval_node(tree.body)
+
+    def _eval_node(self, node: ast.AST) -> Any:
+        """Recursively evaluate an AST node (safe arithmetic only)."""
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return node.value
+        if isinstance(node, ast.BinOp):
+            op = self._SAFE_OPS.get(type(node.op))
+            if op is None:
+                raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
+            return op(self._eval_node(node.left), self._eval_node(node.right))
+        if isinstance(node, ast.UnaryOp):
+            op = self._SAFE_OPS.get(type(node.op))
+            if op is None:
+                raise ValueError(f"Unsupported unary operator: {type(node.op).__name__}")
+            return op(self._eval_node(node.operand))
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id in self._SAFE_FUNCS:
+                args = [self._eval_node(a) for a in node.args]
+                return self._SAFE_FUNCS[node.func.id](*args)
+            raise ValueError(f"Unsupported function call")
+        raise ValueError(f"Unsupported expression node: {type(node).__name__}")
     
     def verify_consistency(self) -> Dict[str, Any]:
         """Verify logical consistency of rules and facts"""

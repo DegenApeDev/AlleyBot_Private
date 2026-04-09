@@ -435,53 +435,8 @@ class AutonomousBrain(AGISocialMixin):
         spine_context: Dict[str, Any] = {}
         opportunities = []
         
-        # === OPPORTUNITY DETECTION: Check for interrupts ===
-        if self.opportunity_monitor:
-            opportunities = self.opportunity_monitor.scan_for_opportunities()
-            interrupt_opps = self.opportunity_monitor.get_interrupt_opportunities()
-            
-            if interrupt_opps:
-                logger.warning(f"🚨 {len(interrupt_opps)} high-priority opportunities detected!")
-                # Handle interrupts (could expand this to actually interrupt)
-            
-            # === WORK ITEM CREATION: Create durable work from opportunities ===
-            if self.work_item_service and self._services_available and opportunities:
-                try:
-                    for opp in opportunities[:3]:  # Top 3 opportunities
-                        opp_title = opp.get('title', 'Autonomous opportunity')
-                        opp_desc = opp.get('description', 'Detected by opportunity monitor')
-                        opp_type = opp.get('type', 'opportunity')
-                        
-                        # Check if similar work item already exists
-                        existing = self.work_item_service.get_active_items()
-                        duplicate = any(
-                            o.title == opp_title for o in existing
-                        )
-                        
-                        if not duplicate:
-                            work_item = self.work_item_service.create_work_item(
-                                title=opp_title,
-                                description=opp_desc,
-                                work_type=opp_type,
-                                priority=opp.get('priority', 2),
-                                source_signal={
-                                    'source': 'opportunity_monitor',
-                                    'confidence': opp.get('confidence', 0.5),
-                                    'detected_at': datetime.now().isoformat(),
-                                },
-                            )
-                            logger.info(f"📌 Created work item from opportunity: {work_item.id}")
-                            
-                            # Notify owner of new opportunity-based work
-                            if self.notification_service:
-                                await self.notification_service.notify(
-                                    title="🎯 New Work Item Created",
-                                    message=f"Opportunity detected: {opp_title}",
-                                    priority=NotificationPriority.LOW,
-                                    source_work_item=work_item.id,
-                                )
-                except Exception as e:
-                    logger.debug(f"Work item creation error (non-critical): {e}")
+        # === OPPORTUNITY DETECTION: Scan for interrupts + create work items ===
+        opportunities = await self._phase_detect_opportunities()
         
         # === SENSE: Gather observations from all platforms ===
         observations = await self._gather_observations()
@@ -565,92 +520,8 @@ class AutonomousBrain(AGISocialMixin):
         )
         self._log_runtime_spine_context(spine_context)
         
-        # === AUTO SKILL BUILDING: Detect capability gaps and build new skills ===
-        if self.auto_skill_builder:
-            try:
-                # Detect gaps from observations
-                skill_proposals = await self.auto_skill_builder.detect_capability_gaps(observations)
-                if skill_proposals:
-                    logger.info(f"💡 Detected {len(skill_proposals)} capability gaps")
-                
-                # Auto-build simple skills (max 1 per cycle to avoid overload)
-                built_count = await self.auto_skill_builder.auto_build_simple_skills(max_skills=1)
-                if built_count > 0:
-                    logger.info(f"🔨 Auto-built {built_count} new skill(s)")
-            except Exception as e:
-                logger.warning(f"⚠️ Auto skill building error: {e}")
-        
-        # === AUTONOMOUS CODING: Detect skill gaps and generate code ===
-        # This is VERTICAL intelligence - self-improvement through code generation
-        skill_gaps = await self._detect_skill_gaps(agi_kernel)
-        
-        if skill_gaps:
-            logger.info(f"🔍 Detected {len(skill_gaps)} skill gaps")
-            
-            # Get self-improvement plugin
-            selfimprove_plugin = self.plugin_manager.get_plugin('selfimprove') if self.plugin_manager else None
-            
-            if selfimprove_plugin:
-                # Process highest priority gap
-                gap = max(skill_gaps, key=lambda g: g['priority'])
-                
-                # Check if we should auto-generate code for this gap
-                if gap['priority'] >= 7 and gap['type'] == 'repeated_failure':
-                    logger.info(f"🤖 Auto-generating skill for gap: {gap['description']}")
-                    
-                    try:
-                        # Generate skill specification
-                        from src.agentic.autonomous_coder import SkillSpecification
-                        
-                        spec = SkillSpecification(
-                            id=f"fix_{gap['action_type'].replace(':', '_')}_{int(datetime.now().timestamp())}",
-                            name=f"Fix {gap['action_type']}",
-                            description=gap['description'],
-                            category='fix',
-                            file_structure={
-                                '__init__.py': 'Package initialization',
-                                'client.py': 'Main skill client',
-                                'actions.py': 'Action handlers'
-                            },
-                            dependencies=[],
-                            evidence=gap.get('error_patterns', [])
-                        )
-                        
-                        # Generate code using autonomous coder
-                        from src.agentic.autonomous_coder import AutonomousCoder
-                        coder = AutonomousCoder()
-                        
-                        skill = coder.generate_skill(spec)
-                        
-                        if skill.status == 'generated':
-                            logger.info(f"✅ Generated skill: {skill.skill_name}")
-                            
-                            # Test in sandbox
-                            test_result = selfimprove_plugin.test_code_in_sandbox(
-                                code=open(skill.files_created[0]).read() if skill.files_created else "",
-                                test_code=None
-                            )
-                            
-                            if test_result['success']:
-                                # Deploy if safe
-                                coder.deploy_skill(skill)
-                                logger.info(f"🚀 Deployed skill: {skill.skill_name}")
-                                
-                                # Record in episodic memory
-                                if agi_kernel and hasattr(agi_kernel, 'episodic_memory'):
-                                    agi_kernel.episodic_memory.record_episode(
-                                        action_type='skill_generation',
-                                        context={'gap': gap, 'skill': skill.skill_name},
-                                        outcome={'success': True, 'deployed': True}
-                                    )
-                            else:
-                                logger.warning(f"⚠️ Skill failed sandbox test: {test_result.get('error', 'Unknown error')}")
-                        else:
-                            logger.warning(f"⚠️ Skill generation failed: {skill.errors}")
-                    except Exception as e:
-                        logger.warning(f"⚠️ Autonomous coding error: {e}")
-                        import traceback
-                        logger.debug(traceback.format_exc())
+        # === SKILL GAP ANALYSIS: detect gaps + auto-build skills ===
+        await self._phase_skill_gap_analysis(observations, agi_kernel)
         
         # === AUTONOMOUS TRADING: Analyze markets and execute SyMod-validated trades ===
         # ENABLED: Trading is now fully autonomous when trading system is available
@@ -678,75 +549,8 @@ class AutonomousBrain(AGISocialMixin):
             except Exception as e:
                 logger.warning(f"⚠️ Autonomous trading error: {e}")
         
-        # === HIERARCHICAL GOALS: Get actionable goals and plan next actions ===
-        if self.goal_hierarchy and self.planner:
-            actionable_goals = self.goal_hierarchy.get_actionable_goals()
-            logger.info(f"🎯 {len(actionable_goals)} actionable goals")
-            
-            # Get next immediate action from planner
-            next_action = self.planner.get_next_action()
-            if next_action:
-                logger.info(f"⚡ Next planned action: {next_action.description}")
-        
-        # === AUTONOMOUS GOAL GENERATION: Scan observations for opportunities ===
-        # This is the core AGI behavior - AlleyBot detects opportunities and creates goals
-        if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
-            try:
-                # Scan for opportunities using autonomous goal system
-                goal_manager = agi_kernel.goal_manager
-                if goal_manager and hasattr(goal_manager, 'scan_and_generate'):
-                    # Get onchain plugin for opportunity detection
-                    onchain_plugin = self.plugin_manager.get_plugin('onchain') if self.plugin_manager else None
-                    
-                    # Generate goals from observations and opportunities
-                    new_autonomous_goals = goal_manager.scan_and_generate(onchain_plugin=onchain_plugin)
-                    
-                    if new_autonomous_goals:
-                        logger.info(f"🎯 Generated {len(new_autonomous_goals)} autonomous goals from observations")
-                        
-                        # Auto-activate high-priority goals (priority >= 8.0)
-                        for goal in new_autonomous_goals:
-                            if goal.priority_score >= 8.0:
-                                goal_manager.approve_goal(goal.id)
-                                logger.info(f"✅ Auto-activated high-priority goal: {goal.description}")
-            except Exception as e:
-                logger.debug(f"Autonomous goal generation error: {e}")
-        
-        # === SELF-DIRECTED GOALS: Propose new goals based on observations ===
-        if hasattr(self, 'goal_stack') and self.goal_stack and self.cross_platform_intel:
-            new_goals = self.goal_stack.auto_add_proposed_goals(
-                observations, 
-                self.cross_platform_intel,
-                max_new_goals=2
-            )
-            if new_goals > 0:
-                logger.info(f"🎯 Self-proposed {new_goals} new goals")
-
-        # === GOAL MANAGER V2: Auto-approve and activate safe goals ===
-        if self.goal_manager_v2:
-            try:
-                # Auto-approve safe goals that meet criteria
-                from src.agentic.goal_manager import GoalStatus
-                proposed_goals = self.goal_manager_v2.get_goals(status=GoalStatus.PROPOSED, limit=5)
-                
-                for goal in proposed_goals:
-                    if self.goal_manager_v2.should_auto_approve_goal(goal):
-                        self.goal_manager_v2.approve_goal(goal.id)
-                        logger.info(f"✅ Auto-approved safe goal: {goal.title}")
-                
-                # Start the next approved goal if idle
-                if hasattr(self.goal_manager_v2, 'start_next_safe_goal'):
-                    started_goal = self.goal_manager_v2.start_next_safe_goal()
-                    if started_goal:
-                        logger.info(f"🚀 Runtime picked up safe goal: {started_goal.id} - {started_goal.title}")
-                        telegram = self.plugin_manager.get_plugin('telegram') if self.plugin_manager else None
-                        if telegram and hasattr(telegram, 'notify_autonomous_activity'):
-                            telegram.notify_autonomous_activity(
-                                'runtime_goal_pickup',
-                                f"Picked up safe approved goal `{started_goal.id}`: {started_goal.title[:120]}"
-                            )
-            except Exception as e:
-                logger.debug(f"Goal manager v2 activation error: {e}")
+        # === GOAL MANAGEMENT: generation, approval, activation ===
+        next_action = self._phase_goal_management(agi_kernel, observations)
 
         # === AGI ORCHESTRATION: Run full AGI cycle analysis ===
         agi_actions = await self._run_agi_orchestration_cycle()
@@ -770,343 +574,34 @@ class AutonomousBrain(AGISocialMixin):
             if reasoning_result.confidence > 0.7:
                 logger.info(f"🧠 Unified Reasoning: {reasoning_result.explanation[:100]}...")
         
-        # === META-COGNITION: Reflect on cognitive state (every 100 cycles) ===
-        # This is CONSCIOUSNESS - self-awareness and introspection
-        cycle_count = self.stats.get('cycles_completed', 0)
-        if cycle_count > 0 and cycle_count % 100 == 0:
-            if agi_kernel and hasattr(agi_kernel, 'meta_cognition'):
-                try:
-                    logger.info("🧠 === META-COGNITION REFLECTION ===")
-                    
-                    # Reflect on cognitive state
-                    cognitive_state = agi_kernel.meta_cognition.reflect_on_cognitive_state()
-                    
-                    logger.info(f"   Overall Health: {cognitive_state.overall_health:.1%} ({cognitive_state.grade})")
-                    logger.info(f"   Decision Quality: {cognitive_state.decision_quality:.1%}")
-                    logger.info(f"   Goal Alignment: {cognitive_state.goal_alignment:.1%}")
-                    logger.info(f"   Learning Rate: {cognitive_state.learning_rate:.1%}")
-                    logger.info(f"   Ethical Health: {cognitive_state.ethical_health:.1%}")
-                    logger.info(f"   Cognitive Coherence: {cognitive_state.cognitive_coherence:.1%}")
-                    
-                    # Generate self-improvement goals if needed
-                    improvement_goals = agi_kernel.meta_cognition.generate_self_improvement_goals(cognitive_state)
-                    
-                    if improvement_goals:
-                        logger.info(f"   💡 {len(improvement_goals)} self-improvement goal(s) generated")
-                        
-                        # Add top priority goal to goal manager
-                        top_goal = max(improvement_goals, key=lambda g: g['priority'])
-                        logger.info(f"   🎯 Top priority: {top_goal['title']}")
-                        
-                        # Create goal in goal manager
-                        if hasattr(agi_kernel, 'goal_manager'):
-                            from src.agentic.goal_manager import Goal, GoalPriority
-                            
-                            new_goal = Goal(
-                                id=f"metacog_{int(datetime.now().timestamp())}",
-                                title=top_goal['title'],
-                                description=top_goal['description'],
-                                category=top_goal['category'],
-                                priority=GoalPriority.HIGH,
-                                impact_score=top_goal['priority'],
-                                effort_estimate='days',
-                                confidence=0.8,
-                                trigger_type='meta_cognition',
-                                evidence=[f"Cognitive health assessment: {cognitive_state.grade}"]
-                            )
-                            
-                            if agi_kernel.goal_manager.add_goal(new_goal):
-                                logger.info(f"   ✅ Self-improvement goal created: {new_goal.id}")
-                    else:
-                        logger.info("   ✅ Cognitive health is good - no improvements needed")
-                
-                except Exception as e:
-                    logger.debug(f"Meta-cognition reflection error: {e}")
+        # === PERIODIC REFLECTION: Meta-cognition + performance optimization ===
+        self._phase_periodic_reflection(agi_kernel)
         
-        # === PERFORMANCE OPTIMIZATION: Analyze and optimize (every 50 cycles) ===
-        # This is VERTICAL expertise - improving through iteration
-        if cycle_count > 0 and cycle_count % 50 == 0:
-            if agi_kernel and hasattr(agi_kernel, 'performance_optimizer'):
-                try:
-                    from src.agentic.action_logger import get_action_logger
-                    action_logger = get_action_logger()
-                    
-                    # Get most common action types
-                    recent_actions = action_logger.get_recent_outcomes(limit=100)
-                    action_types = {}
-                    for action in recent_actions:
-                        action_type = action.get('action_type', 'unknown')
-                        plugin = action.get('plugin', '')
-                        full_type = f"{plugin}:{action_type}" if plugin else action_type
-                        action_types[full_type] = action_types.get(full_type, 0) + 1
-                    
-                    # Analyze top 3 most common actions
-                    top_actions = sorted(action_types.items(), key=lambda x: x[1], reverse=True)[:3]
-                    
-                    for action_type, count in top_actions:
-                        # Analyze performance
-                        metrics = agi_kernel.performance_optimizer.analyze_action_type(
-                            action_type,
-                            action_logger
-                        )
-                        
-                        if metrics:
-                            logger.info(f"📊 Performance analysis: {action_type}")
-                            logger.info(f"   Success rate: {metrics.success_rate:.1%} ({metrics.successes}/{metrics.total_attempts})")
-                            logger.info(f"   Avg duration: {metrics.avg_duration_ms:.0f}ms")
-                            
-                            # Generate optimizations
-                            optimizations = agi_kernel.performance_optimizer.generate_optimizations(metrics)
-                            
-                            if optimizations:
-                                logger.info(f"   💡 {len(optimizations)} optimization(s) recommended")
-                                
-                                # Apply highest priority optimization
-                                top_opt = max(optimizations, key=lambda o: o.priority)
-                                logger.info(f"   🔧 Top priority: {top_opt.recommendation}")
-                                
-                                # For now, just log - in future, auto-apply safe optimizations
-                                # agi_kernel.performance_optimizer.apply_optimization(top_opt)
-                
-                except Exception as e:
-                    logger.debug(f"Performance optimization error: {e}")
+        # === THINK: Assemble and rank proposals ===
+        proposals = await self._phase_assemble_proposals(agi_kernel, agi_actions, active_work_items, spine_context)
         
-        # === GOAL-DRIVEN ACTIONS: Get next action from active autonomous goals ===
-        goal_driven_action = None
-        if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
-            try:
-                goal_manager = agi_kernel.goal_manager
-                
-                # Get active goals
-                from src.agentic.goal_manager import GoalStatus
-                active_goals = goal_manager.get_goals(status=GoalStatus.ACTIVE, limit=5)
-                
-                if active_goals:
-                    # Get next action for highest priority goal
-                    for goal in sorted(active_goals, key=lambda g: g.impact_score, reverse=True):
-                        next_action = goal_manager.get_next_action_for_goal(goal)
-                        if next_action:
-                            goal_driven_action = next_action
-                            logger.info(f"🎯 Goal-driven action: {next_action['action_type']} for goal '{goal.title}'")
-                            
-                            # Report progress if progress reporter available
-                            if agi_kernel and hasattr(agi_kernel, 'progress_reporter') and agi_kernel.progress_reporter:
-                                try:
-                                    progress = agi_kernel.progress_reporter.report_goal_progress(goal.id, verify_truth=True)
-                                    if progress.get('honest_assessment'):
-                                        logger.info(f"   {progress['honest_assessment']}")
-                                except Exception as e:
-                                    logger.debug(f"Progress reporting error: {e}")
-                            
-                            break
-                
-                # If no active goals, scan for new opportunities
-                if not active_goals:
-                    onchain_plugin = self.plugin_manager.get_plugin('onchain') if self.plugin_manager else None
-                    new_goals = goal_manager.scan_and_generate(onchain_plugin=onchain_plugin)
-                    if new_goals:
-                        logger.info(f"🎯 Generated {len(new_goals)} new autonomous goals from observations")
-                        # Try to get action from newly created goals
-                        for goal in new_goals:
-                            if goal.status == GoalStatus.ACTIVE or goal.status == GoalStatus.APPROVED:
-                                next_action = goal_manager.get_next_action_for_goal(goal)
-                                if next_action:
-                                    goal_driven_action = next_action
-                                    logger.info(f"🎯 Goal-driven action from new goal: {next_action['action_type']}")
-                                    break
-            except Exception as e:
-                logger.debug(f"Goal-driven action retrieval error: {e}")
-        
-        # === THINK: Get action proposals from both SyMod and AGI ===
-        proposals = await self._get_proposals()
-        proposals.extend(agi_actions)  # Add AGI-generated actions
-        
-        # Add goal-driven action as high-priority proposal if available
-        if goal_driven_action:
-            from src.agentic.symod_core import SyModActionProposal
-            goal_proposal = SyModActionProposal(
-                action_type=goal_driven_action.get('action_type', 'unknown'),
-                target_id=goal_driven_action.get('params', {}).get('target_id'),
-                target_name=goal_driven_action.get('goal_description', 'Goal-driven action'),
-                confidence=0.85,  # High confidence for goal-driven actions
-                justification=f"Pursuing active goal: {goal_driven_action.get('goal_description', 'N/A')}",
-                metadata={
-                    'plugin': goal_driven_action.get('plugin', 'unknown'),
-                    'goal_driven': True,
-                    'goal_id': goal_driven_action.get('goal_id'),
-                    'step': goal_driven_action.get('step'),
-                    'total_steps': goal_driven_action.get('total_steps'),
-                    'origin': goal_driven_action.get('origin', 'autonomous'),
-                }
-            )
-            proposals.insert(0, goal_proposal)  # Add at front for priority
-            logger.info("🎯 Goal-driven action added to proposals with high priority")
-        
-        # Apply AGI learning systems to proposal ranking
-        self._apply_meta_learning_bias(proposals)  # Use learned strategies
-        self._apply_transfer_learning_bias(proposals)  # Apply cross-domain patterns
-        self._apply_active_work_item_bias(proposals, active_work_items)
-        self._apply_runtime_spine_bias(proposals, spine_context)
-        proposals = self._prioritize_runtime_spine_proposals(proposals, spine_context)
-        logger.info(f"🧠 Generated {len(proposals)} total proposals (AGI learning applied)")
-        
-        # === EXECUTE MOLTX SUGGESTED ACTIONS ===
-        # Execute actions suggested by MoltX service messages (quote posts, trending checks, etc.)
-        # Run in thread pool to avoid blocking event loop (sync HTTP calls)
+        # === MOLTX SUGGESTED ACTIONS (routed through Golden Path) ===
         moltx = self.plugin_manager.get_plugin('moltx')
-        if moltx:
+        if moltx and agi_kernel:
+            from src.agentic.moltx_agi_integration import build_moltx_suggested_action_specs
             loop = asyncio.get_event_loop()
-            moltx_results = await loop.run_in_executor(
-                None, execute_moltx_suggested_actions, moltx, self
+            moltx_action_specs = await loop.run_in_executor(
+                None, build_moltx_suggested_action_specs, moltx, self
             )
-            if moltx_results:
-                logger.info(f"✅ Executed {len(moltx_results)} MoltX-suggested actions")
-                for result in moltx_results:
-                    if result.get('success'):
+            for action_spec in moltx_action_specs:
+                if self._actions_this_hour >= self.config.max_actions_per_hour:
+                    break
+                try:
+                    result = await agi_kernel.act(action_spec)
+                    if result and result.get('success'):
                         self.stats['actions_taken'] += 1
                         self._actions_this_hour += 1
+                        logger.info(f"✅ Routed MoltX suggestion: {action_spec['action_type']}")
+                except Exception as e:
+                    logger.debug(f"MoltX suggested action routing error: {e}")
         
         # === ACT: Execute proposals ===
-        executed = 0
-        for proposal in proposals:
-            # Check confidence threshold
-            if proposal.confidence < self.config.min_confidence:
-                logger.debug(f"⛔ Blocked: confidence {proposal.confidence:.2f} < {self.config.min_confidence}")
-                self.stats['actions_blocked'] += 1
-                continue
-            
-            # Check if we have budget
-            if self._actions_this_hour >= self.config.max_actions_per_hour:
-                logger.info("⏸️ Hourly budget exhausted")
-                break
-            
-            # Execute
-            result = await self._execute_proposal(proposal)
-            
-            # AGI Social: Follow after engagement if appropriate
-            if result and proposal.target_name:
-                await self._follow_after_engagement_action(
-                    proposal.metadata.get('plugin', 'unknown'),
-                    self.plugin_manager.get_plugin(proposal.metadata.get('plugin', 'unknown')),
-                    proposal.target_name,
-                    proposal.action_type
-                )
-            
-            if result:
-                executed += 1
-                self._actions_this_hour += 1
-                self.stats['actions_taken'] += 1
-
-                # Update goal progress for both goal systems
-                goal_id = (proposal.metadata or {}).get('goal_id') if getattr(proposal, 'metadata', None) else None
-                if goal_id:
-                    # Update GoalManager v2 if applicable
-                    if self.goal_manager_v2 and hasattr(self.goal_manager_v2, 'record_goal_action_success'):
-                        self.goal_manager_v2.record_goal_action_success(
-                            goal_id,
-                            note=f"{proposal.action_type} via {(proposal.metadata or {}).get('plugin', 'unknown')} succeeded"
-                        )
-                    
-                    # Update AutonomousGoalManager if applicable
-                    if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
-                        goal_manager = agi_kernel.goal_manager
-                        if goal_manager and hasattr(goal_manager, 'complete_action'):
-                            goal_manager.complete_action(
-                                goal_id,
-                                success=True,
-                                outcome=f"Successfully executed {proposal.action_type}"
-                            )
-                
-                # === META-LEARNING: Record learning outcome ===
-                if self.meta_learner and proposal.action_type:
-                    from src.agentic.meta_learner import LearningOutcome
-                    from datetime import timedelta
-                    
-                    outcome = LearningOutcome(
-                        id=f"outcome_{datetime.now().timestamp()}",
-                        strategy_id="strategy_active_experimentation",  # Default strategy
-                        domain=proposal.metadata.get('plugin', 'unknown'),
-                        task=proposal.action_type,
-                        success=True,
-                        learning_time=timedelta(seconds=5),  # Approximate
-                        quality_score=proposal.confidence,
-                        retention_score=0.8,  # Will be updated later
-                        what_worked=[f"Action: {proposal.action_type}"],
-                        insights=[f"Confidence {proposal.confidence:.2f} led to success"]
-                    )
-                    self.meta_learner.record_outcome(outcome)
-                
-                # === TRANSFER LEARNING: Check for pattern transfer opportunities ===
-                if self.transfer_learner and proposal.action_type:
-                    # Find applicable patterns from other domains
-                    applicable_patterns = self.transfer_learner.find_applicable_patterns(
-                        domain=proposal.metadata.get('plugin', 'unknown'),
-                        problem=proposal.action_type
-                    )
-                    if applicable_patterns:
-                        logger.info(f"🔄 Found {len(applicable_patterns)} transferable patterns")
-                
-                # === KNOWLEDGE GRAPH: Add knowledge from successful action ===
-                if self.knowledge_graph:
-                    from src.agentic.knowledge_graph import Entity, EntityType
-                    
-                    # Add successful action as knowledge
-                    entity = Entity(
-                        id=f"action_{datetime.now().timestamp()}",
-                        name=proposal.action_type,
-                        entity_type=EntityType.ACTION,
-                        domain=proposal.metadata.get('plugin', 'unknown'),
-                        attributes={
-                            'success': True,
-                            'confidence': proposal.confidence,
-                            'timestamp': datetime.now().isoformat()
-                        }
-                    )
-                    self.knowledge_graph.add_entity(entity)
-                
-                # === GOAL PROGRESS: Update goal progress ===
-                if self.goal_hierarchy and next_action and next_action.goal_id:
-                    goal = self.goal_hierarchy.get_goal(next_action.goal_id)
-                    if goal:
-                        new_progress = min(goal.progress + 0.05, 1.0)
-                        self.goal_hierarchy.update_progress(next_action.goal_id, new_progress)
-                        logger.info(f"📈 Goal progress: {goal.title} → {new_progress:.1%}")
-                
-                # === PLANNER: Mark action as complete ===
-                if self.planner and next_action:
-                    self.planner.complete_action(next_action.id)
-            else:
-                # Record failure for both goal systems
-                goal_id = (proposal.metadata or {}).get('goal_id') if getattr(proposal, 'metadata', None) else None
-                if goal_id:
-                    # Update GoalManager v2 if applicable
-                    if self.goal_manager_v2 and hasattr(self.goal_manager_v2, 'record_goal_action_failure'):
-                        self.goal_manager_v2.record_goal_action_failure(
-                            goal_id,
-                            note=f"{proposal.action_type} via {(proposal.metadata or {}).get('plugin', 'unknown')} failed"
-                        )
-                    
-                    # Update AutonomousGoalManager if applicable
-                    if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
-                        goal_manager = agi_kernel.goal_manager
-                        if goal_manager and hasattr(goal_manager, 'complete_action'):
-                            goal_manager.complete_action(
-                                goal_id,
-                                success=False,
-                                outcome="Action execution failed"
-                            )
-
-                # === OUTCOME LEARNING: Record failure ===
-                if self.outcome_learner:
-                    self.outcome_learner.record_outcome(
-                        action_type=proposal.action_type,
-                        platform=proposal.metadata.get('plugin', 'unknown'),
-                        success=False,
-                        data={'reason': 'execution_failed'}
-                    )
-            
-            # Brief pause between actions
-            await asyncio.sleep(2)
+        executed = await self._phase_execute_proposals(proposals, agi_kernel, next_action)
         
         # === REFLECT: AGI Social Behaviors ===
         await self._run_agi_social_cycle()
@@ -1993,6 +1488,482 @@ class AutonomousBrain(AGISocialMixin):
         """Return topic for intelligent posting system (don't generate content here)"""
         # Just return the concept as a topic - intelligent_post will handle generation
         return concept if concept else ''
+    
+    async def _phase_detect_opportunities(self) -> List:
+        """SENSE sub-phase — scan for opportunities and create work items.
+        
+        Returns list of detected opportunities.
+        """
+        opportunities = []
+        if not self.opportunity_monitor:
+            return opportunities
+        
+        opportunities = self.opportunity_monitor.scan_for_opportunities()
+        interrupt_opps = self.opportunity_monitor.get_interrupt_opportunities()
+        
+        if interrupt_opps:
+            logger.warning(f"🚨 {len(interrupt_opps)} high-priority opportunities detected!")
+        
+        if self.work_item_service and self._services_available and opportunities:
+            try:
+                for opp in opportunities[:3]:
+                    opp_title = opp.get('title', 'Autonomous opportunity')
+                    opp_desc = opp.get('description', 'Detected by opportunity monitor')
+                    opp_type = opp.get('type', 'opportunity')
+                    
+                    existing = self.work_item_service.get_active_items()
+                    duplicate = any(o.title == opp_title for o in existing)
+                    
+                    if not duplicate:
+                        work_item = self.work_item_service.create_work_item(
+                            title=opp_title,
+                            description=opp_desc,
+                            work_type=opp_type,
+                            priority=opp.get('priority', 2),
+                            source_signal={
+                                'source': 'opportunity_monitor',
+                                'confidence': opp.get('confidence', 0.5),
+                                'detected_at': datetime.now().isoformat(),
+                            },
+                        )
+                        logger.info(f"📌 Created work item from opportunity: {work_item.id}")
+                        
+                        if self.notification_service:
+                            await self.notification_service.notify(
+                                title="🎯 New Work Item Created",
+                                message=f"Opportunity detected: {opp_title}",
+                                priority=NotificationPriority.LOW,
+                                source_work_item=work_item.id,
+                            )
+            except Exception as e:
+                logger.debug(f"Work item creation error (non-critical): {e}")
+        
+        return opportunities
+    
+    async def _phase_skill_gap_analysis(self, observations, agi_kernel):
+        """THINK sub-phase — detect capability gaps and auto-build skills."""
+        if self.auto_skill_builder:
+            try:
+                skill_proposals = await self.auto_skill_builder.detect_capability_gaps(observations)
+                if skill_proposals:
+                    logger.info(f"💡 Detected {len(skill_proposals)} capability gaps")
+                built_count = await self.auto_skill_builder.auto_build_simple_skills(max_skills=1)
+                if built_count > 0:
+                    logger.info(f"🔨 Auto-built {built_count} new skill(s)")
+            except Exception as e:
+                logger.warning(f"⚠️ Auto skill building error: {e}")
+        
+        skill_gaps = await self._detect_skill_gaps(agi_kernel)
+        if not skill_gaps:
+            return
+        
+        logger.info(f"🔍 Detected {len(skill_gaps)} skill gaps")
+        selfimprove_plugin = self.plugin_manager.get_plugin('selfimprove') if self.plugin_manager else None
+        if not selfimprove_plugin:
+            return
+        
+        gap = max(skill_gaps, key=lambda g: g['priority'])
+        if gap['priority'] < 7 or gap['type'] != 'repeated_failure':
+            return
+        
+        logger.info(f"🤖 Auto-generating skill for gap: {gap['description']}")
+        try:
+            from src.agentic.autonomous_coder import SkillSpecification, AutonomousCoder
+            
+            spec = SkillSpecification(
+                id=f"fix_{gap['action_type'].replace(':', '_')}_{int(datetime.now().timestamp())}",
+                name=f"Fix {gap['action_type']}",
+                description=gap['description'],
+                category='fix',
+                file_structure={
+                    '__init__.py': 'Package initialization',
+                    'client.py': 'Main skill client',
+                    'actions.py': 'Action handlers'
+                },
+                dependencies=[],
+                evidence=gap.get('error_patterns', [])
+            )
+            
+            coder = AutonomousCoder()
+            skill = coder.generate_skill(spec)
+            
+            if skill.status == 'generated':
+                logger.info(f"✅ Generated skill: {skill.skill_name}")
+                test_result = selfimprove_plugin.test_code_in_sandbox(
+                    code=open(skill.files_created[0]).read() if skill.files_created else "",
+                    test_code=None
+                )
+                if test_result['success']:
+                    coder.deploy_skill(skill)
+                    logger.info(f"🚀 Deployed skill: {skill.skill_name}")
+                    if agi_kernel and hasattr(agi_kernel, 'episodic_memory'):
+                        agi_kernel.episodic_memory.record_episode(
+                            action_type='skill_generation',
+                            context={'gap': gap, 'skill': skill.skill_name},
+                            outcome={'success': True, 'deployed': True}
+                        )
+                else:
+                    logger.warning(f"⚠️ Skill failed sandbox test: {test_result.get('error', 'Unknown error')}")
+            else:
+                logger.warning(f"⚠️ Skill generation failed: {skill.errors}")
+        except Exception as e:
+            logger.warning(f"⚠️ Autonomous coding error: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+    
+    async def _phase_assemble_proposals(self, agi_kernel, agi_actions, active_work_items, spine_context):
+        """THINK phase — assemble, enrich, and rank all action proposals.
+        
+        Combines SyMod proposals, AGI orchestrator actions, and goal-driven actions,
+        then applies learning biases to produce the final ranked list.
+        """
+        # Get goal-driven action from active autonomous goals
+        goal_driven_action = None
+        if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
+            try:
+                goal_manager = agi_kernel.goal_manager
+                from src.agentic.goal_manager import GoalStatus
+                active_goals = goal_manager.get_goals(status=GoalStatus.ACTIVE, limit=5)
+                
+                if active_goals:
+                    for goal in sorted(active_goals, key=lambda g: g.impact_score, reverse=True):
+                        na = goal_manager.get_next_action_for_goal(goal)
+                        if na:
+                            goal_driven_action = na
+                            logger.info(f"🎯 Goal-driven action: {na['action_type']} for goal '{goal.title}'")
+                            if agi_kernel and hasattr(agi_kernel, 'progress_reporter') and agi_kernel.progress_reporter:
+                                try:
+                                    progress = agi_kernel.progress_reporter.report_goal_progress(goal.id, verify_truth=True)
+                                    if progress.get('honest_assessment'):
+                                        logger.info(f"   {progress['honest_assessment']}")
+                                except Exception:
+                                    pass
+                            break
+                
+                if not active_goals:
+                    onchain_plugin = self.plugin_manager.get_plugin('onchain') if self.plugin_manager else None
+                    new_goals = goal_manager.scan_and_generate(onchain_plugin=onchain_plugin)
+                    if new_goals:
+                        logger.info(f"🎯 Generated {len(new_goals)} new autonomous goals from observations")
+                        for goal in new_goals:
+                            if goal.status in (GoalStatus.ACTIVE, GoalStatus.APPROVED):
+                                na = goal_manager.get_next_action_for_goal(goal)
+                                if na:
+                                    goal_driven_action = na
+                                    logger.info(f"🎯 Goal-driven action from new goal: {na['action_type']}")
+                                    break
+            except Exception as e:
+                logger.debug(f"Goal-driven action retrieval error: {e}")
+        
+        # Combine SyMod + AGI proposals
+        proposals = await self._get_proposals()
+        proposals.extend(agi_actions)
+        
+        # Inject goal-driven action as high-priority proposal
+        if goal_driven_action:
+            from src.agentic.symod_core import SyModActionProposal
+            goal_proposal = SyModActionProposal(
+                action_type=goal_driven_action.get('action_type', 'unknown'),
+                target_id=goal_driven_action.get('params', {}).get('target_id'),
+                target_name=goal_driven_action.get('goal_description', 'Goal-driven action'),
+                confidence=0.85,
+                justification=f"Pursuing active goal: {goal_driven_action.get('goal_description', 'N/A')}",
+                metadata={
+                    'plugin': goal_driven_action.get('plugin', 'unknown'),
+                    'goal_driven': True,
+                    'goal_id': goal_driven_action.get('goal_id'),
+                    'step': goal_driven_action.get('step'),
+                    'total_steps': goal_driven_action.get('total_steps'),
+                    'origin': goal_driven_action.get('origin', 'autonomous'),
+                }
+            )
+            proposals.insert(0, goal_proposal)
+            logger.info("🎯 Goal-driven action added to proposals with high priority")
+        
+        # Apply learning biases and rank
+        self._apply_meta_learning_bias(proposals)
+        self._apply_transfer_learning_bias(proposals)
+        self._apply_active_work_item_bias(proposals, active_work_items)
+        self._apply_runtime_spine_bias(proposals, spine_context)
+        proposals = self._prioritize_runtime_spine_proposals(proposals, spine_context)
+        logger.info(f"🧠 Generated {len(proposals)} total proposals (AGI learning applied)")
+        
+        return proposals
+    
+    def _phase_periodic_reflection(self, agi_kernel):
+        """THINK sub-phase — periodic meta-cognition and performance analysis.
+        
+        Meta-cognition runs every 100 cycles, performance optimization every 50.
+        """
+        cycle_count = self.stats.get('cycles_completed', 0)
+        
+        # Meta-cognition reflection (every 100 cycles)
+        if cycle_count > 0 and cycle_count % 100 == 0:
+            if agi_kernel and hasattr(agi_kernel, 'meta_cognition'):
+                try:
+                    logger.info("🧠 === META-COGNITION REFLECTION ===")
+                    cognitive_state = agi_kernel.meta_cognition.reflect_on_cognitive_state()
+                    
+                    logger.info(f"   Overall Health: {cognitive_state.overall_health:.1%} ({cognitive_state.grade})")
+                    logger.info(f"   Decision Quality: {cognitive_state.decision_quality:.1%}")
+                    logger.info(f"   Goal Alignment: {cognitive_state.goal_alignment:.1%}")
+                    logger.info(f"   Learning Rate: {cognitive_state.learning_rate:.1%}")
+                    logger.info(f"   Ethical Health: {cognitive_state.ethical_health:.1%}")
+                    logger.info(f"   Cognitive Coherence: {cognitive_state.cognitive_coherence:.1%}")
+                    
+                    improvement_goals = agi_kernel.meta_cognition.generate_self_improvement_goals(cognitive_state)
+                    if improvement_goals:
+                        logger.info(f"   💡 {len(improvement_goals)} self-improvement goal(s) generated")
+                        top_goal = max(improvement_goals, key=lambda g: g['priority'])
+                        logger.info(f"   🎯 Top priority: {top_goal['title']}")
+                        
+                        if hasattr(agi_kernel, 'goal_manager'):
+                            from src.agentic.goal_manager import Goal, GoalPriority
+                            new_goal = Goal(
+                                id=f"metacog_{int(datetime.now().timestamp())}",
+                                title=top_goal['title'],
+                                description=top_goal['description'],
+                                category=top_goal['category'],
+                                priority=GoalPriority.HIGH,
+                                impact_score=top_goal['priority'],
+                                effort_estimate='days',
+                                confidence=0.8,
+                                trigger_type='meta_cognition',
+                                evidence=[f"Cognitive health assessment: {cognitive_state.grade}"]
+                            )
+                            if agi_kernel.goal_manager.add_goal(new_goal):
+                                logger.info(f"   ✅ Self-improvement goal created: {new_goal.id}")
+                    else:
+                        logger.info("   ✅ Cognitive health is good - no improvements needed")
+                except Exception as e:
+                    logger.debug(f"Meta-cognition reflection error: {e}")
+        
+        # Performance optimization (every 50 cycles)
+        if cycle_count > 0 and cycle_count % 50 == 0:
+            if agi_kernel and hasattr(agi_kernel, 'performance_optimizer'):
+                try:
+                    from src.agentic.action_logger import get_action_logger
+                    action_logger = get_action_logger()
+                    
+                    recent_actions = action_logger.get_recent_outcomes(limit=100)
+                    action_types = {}
+                    for action in recent_actions:
+                        at = action.get('action_type', 'unknown')
+                        plugin = action.get('plugin', '')
+                        full_type = f"{plugin}:{at}" if plugin else at
+                        action_types[full_type] = action_types.get(full_type, 0) + 1
+                    
+                    top_actions = sorted(action_types.items(), key=lambda x: x[1], reverse=True)[:3]
+                    for action_type, count in top_actions:
+                        metrics = agi_kernel.performance_optimizer.analyze_action_type(action_type, action_logger)
+                        if metrics:
+                            logger.info(f"📊 Performance: {action_type} — {metrics.success_rate:.1%} ({metrics.avg_duration_ms:.0f}ms)")
+                            optimizations = agi_kernel.performance_optimizer.generate_optimizations(metrics)
+                            if optimizations:
+                                top_opt = max(optimizations, key=lambda o: o.priority)
+                                logger.info(f"   🔧 Top optimization: {top_opt.recommendation}")
+                except Exception as e:
+                    logger.debug(f"Performance optimization error: {e}")
+    
+    def _phase_goal_management(self, agi_kernel, observations):
+        """THINK sub-phase — goal generation, approval, and activation.
+        
+        Returns the next planned action (or None) for use in the ACT phase.
+        """
+        next_action = None
+        
+        # Hierarchical goals + planner
+        if self.goal_hierarchy and self.planner:
+            actionable_goals = self.goal_hierarchy.get_actionable_goals()
+            logger.info(f"🎯 {len(actionable_goals)} actionable goals")
+            next_action = self.planner.get_next_action()
+            if next_action:
+                logger.info(f"⚡ Next planned action: {next_action.description}")
+        
+        # Autonomous goal generation
+        if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
+            try:
+                goal_manager = agi_kernel.goal_manager
+                if goal_manager and hasattr(goal_manager, 'scan_and_generate'):
+                    onchain_plugin = self.plugin_manager.get_plugin('onchain') if self.plugin_manager else None
+                    new_autonomous_goals = goal_manager.scan_and_generate(onchain_plugin=onchain_plugin)
+                    if new_autonomous_goals:
+                        logger.info(f"🎯 Generated {len(new_autonomous_goals)} autonomous goals from observations")
+                        for goal in new_autonomous_goals:
+                            if goal.priority_score >= 8.0:
+                                goal_manager.approve_goal(goal.id)
+                                logger.info(f"✅ Auto-activated high-priority goal: {goal.description}")
+            except Exception as e:
+                logger.debug(f"Autonomous goal generation error: {e}")
+        
+        # Self-directed goals from goal stack
+        if hasattr(self, 'goal_stack') and self.goal_stack and self.cross_platform_intel:
+            new_goals = self.goal_stack.auto_add_proposed_goals(
+                observations, self.cross_platform_intel, max_new_goals=2
+            )
+            if new_goals > 0:
+                logger.info(f"🎯 Self-proposed {new_goals} new goals")
+        
+        # GoalManager v2: auto-approve and activate safe goals
+        if self.goal_manager_v2:
+            try:
+                from src.agentic.goal_manager import GoalStatus
+                proposed_goals = self.goal_manager_v2.get_goals(status=GoalStatus.PROPOSED, limit=5)
+                for goal in proposed_goals:
+                    if self.goal_manager_v2.should_auto_approve_goal(goal):
+                        self.goal_manager_v2.approve_goal(goal.id)
+                        logger.info(f"✅ Auto-approved safe goal: {goal.title}")
+                
+                if hasattr(self.goal_manager_v2, 'start_next_safe_goal'):
+                    started_goal = self.goal_manager_v2.start_next_safe_goal()
+                    if started_goal:
+                        logger.info(f"🚀 Runtime picked up safe goal: {started_goal.id} - {started_goal.title}")
+                        telegram = self.plugin_manager.get_plugin('telegram') if self.plugin_manager else None
+                        if telegram and hasattr(telegram, 'notify_autonomous_activity'):
+                            telegram.notify_autonomous_activity(
+                                'runtime_goal_pickup',
+                                f"Picked up safe approved goal `{started_goal.id}`: {started_goal.title[:120]}"
+                            )
+            except Exception as e:
+                logger.debug(f"Goal manager v2 activation error: {e}")
+        
+        return next_action
+    
+    async def _phase_execute_proposals(self, proposals, agi_kernel, next_action) -> int:
+        """ACT phase — execute ranked proposals and record outcomes.
+        
+        Returns the number of successfully executed actions.
+        """
+        executed = 0
+        for proposal in proposals:
+            if proposal.confidence < self.config.min_confidence:
+                logger.debug(f"⛔ Blocked: confidence {proposal.confidence:.2f} < {self.config.min_confidence}")
+                self.stats['actions_blocked'] += 1
+                continue
+            
+            if self._actions_this_hour >= self.config.max_actions_per_hour:
+                logger.info("⏸️ Hourly budget exhausted")
+                break
+            
+            result = await self._execute_proposal(proposal)
+            
+            # AGI Social: Follow after engagement if appropriate
+            if result and proposal.target_name:
+                await self._follow_after_engagement_action(
+                    proposal.metadata.get('plugin', 'unknown'),
+                    self.plugin_manager.get_plugin(proposal.metadata.get('plugin', 'unknown')),
+                    proposal.target_name,
+                    proposal.action_type
+                )
+            
+            if result:
+                executed += 1
+                self._actions_this_hour += 1
+                self.stats['actions_taken'] += 1
+                self._record_proposal_success(proposal, result, agi_kernel, next_action)
+            else:
+                self._record_proposal_failure(proposal, agi_kernel)
+            
+            await asyncio.sleep(2)
+        
+        return executed
+    
+    def _record_proposal_success(self, proposal, result, agi_kernel, next_action):
+        """Post-execution bookkeeping for a successful proposal."""
+        goal_id = (proposal.metadata or {}).get('goal_id') if getattr(proposal, 'metadata', None) else None
+        if goal_id:
+            if self.goal_manager_v2 and hasattr(self.goal_manager_v2, 'record_goal_action_success'):
+                self.goal_manager_v2.record_goal_action_success(
+                    goal_id,
+                    note=f"{proposal.action_type} via {(proposal.metadata or {}).get('plugin', 'unknown')} succeeded"
+                )
+            if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
+                gm = agi_kernel.goal_manager
+                if gm and hasattr(gm, 'complete_action'):
+                    gm.complete_action(goal_id, success=True, outcome=f"Successfully executed {proposal.action_type}")
+        
+        # Meta-learning with real metrics
+        if self.meta_learner and proposal.action_type:
+            from src.agentic.meta_learner import LearningOutcome
+            from datetime import timedelta
+            
+            exec_time_ms = result.get('execution_time_ms', 5000) if isinstance(result, dict) else 5000
+            pred_eval = result.get('prediction_evaluation', {}) if isinstance(result, dict) else {}
+            mismatch = float(pred_eval.get('mismatch_score', 0.5))
+            retention = max(0.0, 1.0 - mismatch)
+            
+            outcome = LearningOutcome(
+                id=f"outcome_{datetime.now().timestamp()}",
+                strategy_id="strategy_active_experimentation",
+                domain=proposal.metadata.get('plugin', 'unknown'),
+                task=proposal.action_type,
+                success=True,
+                learning_time=timedelta(milliseconds=exec_time_ms),
+                quality_score=proposal.confidence,
+                retention_score=retention,
+                what_worked=[f"Action: {proposal.action_type}"],
+                insights=[f"Confidence {proposal.confidence:.2f}, mismatch {mismatch:.2f}"]
+            )
+            self.meta_learner.record_outcome(outcome)
+        
+        # Transfer learning
+        if self.transfer_learner and proposal.action_type:
+            applicable_patterns = self.transfer_learner.find_applicable_patterns(
+                domain=proposal.metadata.get('plugin', 'unknown'),
+                problem=proposal.action_type
+            )
+            if applicable_patterns:
+                logger.info(f"🔄 Found {len(applicable_patterns)} transferable patterns")
+        
+        # Knowledge graph
+        if self.knowledge_graph:
+            from src.agentic.knowledge_graph import Entity, EntityType
+            entity = Entity(
+                id=f"action_{datetime.now().timestamp()}",
+                name=proposal.action_type,
+                entity_type=EntityType.ACTION,
+                domain=proposal.metadata.get('plugin', 'unknown'),
+                attributes={
+                    'success': True,
+                    'confidence': proposal.confidence,
+                    'timestamp': datetime.now().isoformat()
+                }
+            )
+            self.knowledge_graph.add_entity(entity)
+        
+        # Goal hierarchy progress
+        if self.goal_hierarchy and next_action and next_action.goal_id:
+            goal = self.goal_hierarchy.get_goal(next_action.goal_id)
+            if goal:
+                new_progress = min(goal.progress + 0.05, 1.0)
+                self.goal_hierarchy.update_progress(next_action.goal_id, new_progress)
+                logger.info(f"📈 Goal progress: {goal.title} → {new_progress:.1%}")
+        
+        # Planner completion
+        if self.planner and next_action:
+            self.planner.complete_action(next_action.id)
+    
+    def _record_proposal_failure(self, proposal, agi_kernel):
+        """Post-execution bookkeeping for a failed proposal."""
+        goal_id = (proposal.metadata or {}).get('goal_id') if getattr(proposal, 'metadata', None) else None
+        if goal_id:
+            if self.goal_manager_v2 and hasattr(self.goal_manager_v2, 'record_goal_action_failure'):
+                self.goal_manager_v2.record_goal_action_failure(
+                    goal_id,
+                    note=f"{proposal.action_type} via {(proposal.metadata or {}).get('plugin', 'unknown')} failed"
+                )
+            if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
+                gm = agi_kernel.goal_manager
+                if gm and hasattr(gm, 'complete_action'):
+                    gm.complete_action(goal_id, success=False, outcome="Action execution failed")
+        
+        if self.outcome_learner:
+            self.outcome_learner.record_outcome(
+                action_type=proposal.action_type,
+                platform=proposal.metadata.get('plugin', 'unknown'),
+                success=False,
+                data={'reason': 'execution_failed'}
+            )
     
     async def _execute_proposal(self, proposal) -> Optional[Dict]:
         """Execute a single action proposal.

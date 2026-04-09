@@ -302,20 +302,42 @@ Generate ONLY the function code, no imports or explanations:
         
         return True
     
+    # Allowlisted modules for sandbox execution
+    _SANDBOX_MODULES = ('json', 're', 'datetime', 'math', 'hashlib')
+
     def _test_tool_in_sandbox(self, code: str, spec: Dict) -> bool:
-        """Test tool in isolated sandbox environment"""
+        """Test tool in isolated sandbox environment.
+        
+        Uses a restricted namespace with no __builtins__ to prevent
+        access to dangerous operations like os, subprocess, eval, etc.
+        """
         try:
-            # Create isolated namespace
-            namespace = {
-                '__builtins__': __builtins__,
+            # Validate AST before execution — reject code with import statements
+            # or attribute access on dangerous modules
+            tree = ast.parse(code)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name not in self._SANDBOX_MODULES:
+                            print(f"\u26a0\ufe0f Sandbox rejected import: {alias.name}")
+                            return False
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    root = node.module.split('.')[0]
+                    if root not in self._SANDBOX_MODULES:
+                        print(f"\u26a0\ufe0f Sandbox rejected import from: {node.module}")
+                        return False
+
+            # Create restricted namespace — NO __builtins__
+            namespace: Dict[str, Any] = {
+                '__builtins__': {},
                 'json': json,
                 're': __import__('re'),
                 'datetime': __import__('datetime'),
-                'requests': __import__('requests')
             }
             
-            # Execute code in namespace
-            exec(code, namespace)
+            # Compile and execute in restricted namespace
+            compiled = compile(code, '<sandbox>', 'exec')
+            exec(compiled, namespace)  # noqa: S102 — restricted builtins
             
             # Check function exists
             func_name = spec['name']
@@ -358,17 +380,20 @@ Generate ONLY the function code, no imports or explanations:
             return False
     
     def _register_tool_from_code(self, code: str, spec: Dict) -> Optional[str]:
-        """Register tool dynamically in function calling engine"""
+        """Register tool dynamically in function calling engine.
+        
+        Uses restricted namespace — no full __builtins__.
+        """
         try:
-            # Execute code to get function
-            namespace = {
-                '__builtins__': __builtins__,
+            # Restricted namespace — NO __builtins__
+            namespace: Dict[str, Any] = {
+                '__builtins__': {},
                 'json': json,
                 're': __import__('re'),
                 'datetime': __import__('datetime'),
-                'requests': __import__('requests')
             }
-            exec(code, namespace)
+            compiled = compile(code, '<tool_register>', 'exec')
+            exec(compiled, namespace)  # noqa: S102 — restricted builtins
             
             func_name = spec['name']
             func = namespace[func_name]

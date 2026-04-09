@@ -430,27 +430,73 @@ class GoalGenerator:
 
 class AutonomousGoalManager:
     """
-    Manages the lifecycle of autonomously generated goals
+    Autonomous goal generation facade.
+    
+    This class handles **goal generation** (opportunity detection → goal proposal)
+    but delegates all **goal storage** to GoalManager v2 (SQLite-backed).
+    
+    This ensures a single authoritative goal store while preserving the
+    autonomous scanning/generation logic.
     """
     
     def __init__(self, storage_path: str = 'data/autonomous_goals.json'):
-        self.storage_path = Path(storage_path)
-        self.storage_path.parent.mkdir(parents=True, exist_ok=True)
-        self.goals: List[AutonomousGoal] = []
         self.generator: Optional[GoalGenerator] = None
-        self._load()
+        self._goal_manager_v2 = None  # Lazily resolved
+        # Legacy path kept only for one-time migration
+        self._legacy_path = Path(storage_path)
+    
+    @property
+    def goal_manager_v2(self):
+        """Lazily get GoalManager v2 (SQLite) as the single store."""
+        if self._goal_manager_v2 is None:
+            try:
+                from src.agentic.goal_manager import get_goal_manager
+                self._goal_manager_v2 = get_goal_manager()
+            except Exception as e:
+                print(f"⚠️ Could not resolve GoalManager v2: {e}")
+        return self._goal_manager_v2
     
     def initialize_generator(self, unified_memory, phase12_learning, onchain_plugin=None):
         """Initialize goal generation with dependencies"""
         detector = OpportunityDetector(unified_memory, phase12_learning)
         self.generator = GoalGenerator(detector)
     
+    def _autonomous_goal_to_v2(self, ag: AutonomousGoal):
+        """Convert an AutonomousGoal to a GoalManager v2 Goal."""
+        from src.agentic.goal_manager import Goal, GoalPriority, GoalStatus as V2Status
+        
+        # Map priority score to GoalPriority enum
+        if ag.priority_score >= 9:
+            priority = GoalPriority.CRITICAL
+        elif ag.priority_score >= 7:
+            priority = GoalPriority.HIGH
+        elif ag.priority_score >= 5:
+            priority = GoalPriority.MEDIUM
+        elif ag.priority_score >= 3:
+            priority = GoalPriority.LOW
+        else:
+            priority = GoalPriority.BACKLOG
+        
+        return Goal(
+            id=ag.id,
+            title=ag.description[:120],
+            description=ag.description,
+            category='optimization',
+            priority=priority,
+            impact_score=ag.impact,
+            effort_estimate='hours',
+            confidence=min(ag.priority_score / 10.0, 1.0),
+            trigger_type=ag.origin.value if ag.origin else 'opportunity',
+            trigger_data=ag.evidence if isinstance(ag.evidence, dict) else {'evidence': ag.evidence},
+            evidence=ag.success_criteria if isinstance(ag.success_criteria, list) else [],
+            status=V2Status.PROPOSED,
+        )
+    
     def scan_and_generate(self, onchain_plugin=None) -> List[AutonomousGoal]:
         """
-        Scan for opportunities and generate new goals
+        Scan for opportunities and generate new goals.
         
-        This is the main entry point - call this periodically to have
-        the agent generate its own objectives.
+        Generated goals are stored in GoalManager v2 (SQLite).
         """
         if not self.generator:
             print("⚠️ Goal generator not initialized")
@@ -458,201 +504,85 @@ class AutonomousGoalManager:
         
         new_goals = self.generator.generate_goals(onchain_plugin)
         
-        # Filter out duplicates (similar goals already pending)
+        # Store in GoalManager v2 (single authoritative store)
+        gm = self.goal_manager_v2
         filtered_goals = []
         for goal in new_goals:
-            if not self._is_duplicate(goal):
-                goal.status = 'proposed'
-                self.goals.append(goal)
+            if gm:
+                v2_goal = self._autonomous_goal_to_v2(goal)
+                if gm.add_goal(v2_goal):
+                    filtered_goals.append(goal)
+            else:
                 filtered_goals.append(goal)
         
         if filtered_goals:
-            print(f"🎯 Generated {len(filtered_goals)} new autonomous goals")
+            print(f"🎯 Generated {len(filtered_goals)} autonomous goals → GoalManager v2 (SQLite)")
             for g in filtered_goals:
                 print(f"   - {g.description} (priority: {g.priority_score:.1f})")
         
-        self._save()
         return filtered_goals
     
     def approve_goal(self, goal_id: str) -> bool:
-        """
-        Approve a proposed goal for execution
-        
-        In full autonomy mode, this could be automatic for high-confidence goals.
-        For now, user approval or auto-approve high-priority goals.
-        """
-        for goal in self.goals:
-            if goal.id == goal_id:
-                if goal.priority_score >= 8.0:
-                    # Auto-approve high-priority goals
-                    goal.status = 'active'
-                    goal.activated_at = datetime.now()
-                    print(f"✅ Auto-approved high-priority goal: {goal.description}")
-                else:
-                    goal.status = 'approved'
-                    print(f"⏳ Goal approved (waiting execution): {goal.description}")
-                self._save()
-                return True
+        """Approve a goal — delegates to GoalManager v2."""
+        gm = self.goal_manager_v2
+        if gm:
+            return gm.approve_goal(goal_id)
         return False
     
     def get_next_action(self) -> Optional[Dict]:
-        """
-        Get the next action to execute from active goals
+        """Get next action from active goals — delegates to GoalManager v2."""
+        gm = self.goal_manager_v2
+        if not gm:
+            return None
         
-        Returns action with context, or None if no active goals
-        """
-        active_goals = [g for g in self.goals if g.status == 'active']
+        from src.agentic.goal_manager import GoalStatus as V2Status
+        active_goals = gm.get_goals(status=V2Status.ACTIVE, limit=5)
         if not active_goals:
             return None
         
-        # Sort by priority and progress
-        active_goals.sort(key=lambda g: (g.priority_score, -g.current_step), reverse=True)
-        
-        top_goal = active_goals[0]
-
-        def build_action(plugin: str, action_type: str, params: Dict[str, Any]) -> Dict[str, Any]:
-            return {
-                'plugin': plugin,
-                'action_type': action_type,
-                'params': params,
-                'context': {
-                    'goal_driven': True,
-                    'goal_id': top_goal.id,
-                    'goal_description': top_goal.description,
-                    'impact': 'high',
-                    'source': 'autonomous_goal_manager',
-                    'evidence': top_goal.evidence,
-                },
-                'step': top_goal.current_step + 1,
-                'total_steps': len(top_goal.action_plan),
-                'origin': top_goal.origin.value,
-                'goal_id': top_goal.id,  # Top-level for easy access
-                'goal_description': top_goal.description,  # Top-level for DecisionSystem
-                'description': f"Goal: {top_goal.description}",  # For logging
-            }
-        
-        if top_goal.current_step < len(top_goal.action_plan):
-            action = top_goal.action_plan[top_goal.current_step]
-            
-            # Parse plugin:action_type format
-            if ':' in str(action):
-                parts = str(action).split(':', 1)
-                if len(parts) == 2:
-                    plugin = parts[0].strip()
-                    action_type = parts[1].strip()
-                    return build_action(plugin, action_type, {})
-            
-            # Fallback: keyword matching for generic action descriptions
-            action_text = str(action).lower()
-            if 'engage' in action_text or 'reply' in action_text or 'comment' in action_text:
-                return build_action('moltx', 'engage', {'count': 3})
-            if 'post' in action_text or 'write' in action_text or 'publish' in action_text:
-                return build_action('moltx', 'post', {'topic': top_goal.description})
-            if 'analy' in action_text or 'performance' in action_text or 'metric' in action_text:
-                return build_action('analytics', 'analyze', {'time_window': '7d'})
-            if 'check' in action_text and 'notification' in action_text:
-                # Extract platform from action text
-                for platform in ['moltx', 'clawbr', 'moltchan', 'telegram']:
-                    if platform in action_text:
-                        return build_action(platform, 'check_notifications', {})
-                return build_action('moltx', 'check_notifications', {})
-
-            return {
-                'goal_id': top_goal.id,
-                'goal_description': top_goal.description,
-                'action': action,
-                'step': top_goal.current_step + 1,
-                'total_steps': len(top_goal.action_plan),
-                'origin': top_goal.origin.value
-            }
-        
+        for goal in sorted(active_goals, key=lambda g: g.impact_score, reverse=True):
+            action = gm.get_next_action_for_goal(goal)
+            if action:
+                return action
         return None
     
     def complete_action(self, goal_id: str, success: bool, outcome: str = None):
-        """Mark current action as complete and advance"""
-        for goal in self.goals:
-            if goal.id == goal_id:
-                if success:
-                    goal.current_step += 1
-                    
-                    # Check if goal complete
-                    if goal.current_step >= len(goal.action_plan):
-                        goal.status = 'completed'
-                        goal.completed_at = datetime.now()
-                        goal.actual_outcome = outcome
-                        goal.outcome_rating = 0.5  # Default positive
-                        print(f"✅ Completed goal: {goal.description}")
-                else:
-                    goal.status = 'failed'
-                    goal.actual_outcome = outcome
-                    goal.outcome_rating = -0.5
-                    print(f"❌ Failed goal: {goal.description}")
-                
-                self._save()
-                return True
-        return False
+        """Mark action complete — delegates to GoalManager v2."""
+        gm = self.goal_manager_v2
+        if not gm:
+            return False
+        
+        if success:
+            return gm.complete_goal(goal_id, outcome=outcome or "Completed via autonomous action")
+        else:
+            # Use safe-goal failure tracking (includes backoff and cooling)
+            if hasattr(gm, 'record_safe_goal_failure'):
+                return gm.record_safe_goal_failure(
+                    goal_id, note=outcome or "Failed via autonomous action"
+                )
+            return False
     
     def get_active_goals(self) -> List[Dict]:
-        """Get all active goals as dicts"""
-        return [g.to_dict() for g in self.goals if g.status == 'active']
+        """Get active goals from GoalManager v2."""
+        gm = self.goal_manager_v2
+        if not gm:
+            return []
+        from src.agentic.goal_manager import GoalStatus as V2Status
+        goals = gm.get_goals(status=V2Status.ACTIVE, limit=20)
+        return [{'id': g.id, 'description': g.description, 'title': g.title,
+                 'priority_score': g.impact_score, 'status': 'active',
+                 'category': g.category} for g in goals]
     
     def get_proposed_goals(self) -> List[Dict]:
-        """Get goals waiting for approval"""
-        return [g.to_dict() for g in self.goals if g.status == 'proposed']
-    
-    def _is_duplicate(self, new_goal: AutonomousGoal) -> bool:
-        """Check if similar goal already exists"""
-        for existing in self.goals:
-            if existing.status in ['completed', 'failed']:
-                continue
-            # Similar description or same opportunity type
-            if (existing.detected_opportunity == new_goal.detected_opportunity or
-                existing.description == new_goal.description):
-                return True
-        return False
-    
-    def _save(self):
-        """Persist goals"""
-        try:
-            data = [g.to_dict() for g in self.goals]
-            with open(self.storage_path, 'w') as f:
-                json.dump(data, f, indent=2)
-        except Exception as e:
-            print(f"⚠️ Failed to save goals: {e}")
-    
-    def _load(self):
-        """Load goals"""
-        try:
-            if self.storage_path.exists():
-                with open(self.storage_path, 'r') as f:
-                    data = json.load(f)
-                self.goals = []
-                # Handle both old format (list) and new format (dict with 'goals' key)
-                goals_data = data.get('goals', []) if isinstance(data, dict) else data
-                for gdata in goals_data:
-                    # Reconstruct goal
-                    goal = AutonomousGoal(
-                        id=gdata['id'],
-                        description=gdata['description'],
-                        origin=GoalOrigin(gdata['origin']),
-                        detected_opportunity=gdata['detected_opportunity'],
-                        evidence=gdata.get('evidence', {}),
-                        action_plan=gdata.get('action_plan', []),
-                        current_step=gdata.get('current_step', 0),
-                        expected_outcome=gdata.get('expected_outcome', ''),
-                        success_criteria=gdata.get('success_criteria', []),
-                        priority_score=gdata.get('priority_score', 5.0),
-                        urgency=gdata.get('urgency', 5.0),
-                        impact=gdata.get('impact', 5.0),
-                        status=gdata.get('status', 'proposed'),
-                        actual_outcome=gdata.get('actual_outcome'),
-                        outcome_rating=gdata.get('outcome_rating', 0.0)
-                    )
-                    goal.created_at = datetime.fromisoformat(gdata['created_at']) if gdata.get('created_at') else datetime.now()
-                    self.goals.append(goal)
-                print(f"✅ Loaded {len(self.goals)} autonomous goals ({len([g for g in self.goals if g.status == 'active'])} active)")
-        except Exception as e:
-            print(f"⚠️ Failed to load goals: {e}")
+        """Get proposed goals from GoalManager v2."""
+        gm = self.goal_manager_v2
+        if not gm:
+            return []
+        from src.agentic.goal_manager import GoalStatus as V2Status
+        goals = gm.get_goals(status=V2Status.PROPOSED, limit=20)
+        return [{'id': g.id, 'description': g.description, 'title': g.title,
+                 'priority_score': g.impact_score, 'status': 'proposed',
+                 'category': g.category} for g in goals]
 
 
 # Factory function

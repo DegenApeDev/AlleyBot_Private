@@ -441,9 +441,9 @@ CRITICAL RULES:
                         "trust_level": request.trust_level.value,
                         "source": "natural_intent",
                         "sender_name": request.sender_name,
+                        "impact": "medium",
+                        "risk_level": "low",
                     },
-                    impact=ImpactLevel.MEDIUM,
-                    risk_level=RiskLevel.LOW,
                 )
                 
                 # EXECUTE THE ACTION
@@ -515,7 +515,7 @@ CRITICAL RULES:
                     plugin=plugin,
                     action_type=action_type,
                     params={
-                        "command": command_name,
+                        "command_name": command_name,
                         "args": args,
                         "sender_id": request.sender_id,
                         "is_owner": request.is_owner,
@@ -526,9 +526,9 @@ CRITICAL RULES:
                         "trust_level": request.trust_level.value,
                         "source": "natural_intent",
                         "sender_name": request.sender_name,
+                        "impact": "medium",
+                        "risk_level": "low",
                     },
-                    impact=ImpactLevel.MEDIUM,
-                    risk_level=RiskLevel.LOW,
                 )
                 
                 # Execute through action router

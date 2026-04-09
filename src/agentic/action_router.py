@@ -38,14 +38,38 @@ from src.agentic.contracts import (
 
 class ActionRouter:
     """
-    Single entry point for all actions.
+    Single entry point for all actions (the Golden Path).
     
-    Ensures every action goes through:
-    1. AGI Kernel validation (goals, timing, strategy)
-    2. SyMod verification (mathematical truth)
-    3. Plugin execution (actual work)
-    4. Outcome reflection (learning)
+    Validation Ladder (all stages use _normalize_validation_result):
+    
+    1. agi_validation        — Strategic relevance (goals, timing, strategy)   [fail-closed]
+    2. moltx_engage_first    — Platform rate-limit gate                        [fail-closed]
+    3. fairmind_validation   — Ethical consciousness / value alignment          [fail-open]
+    4. episodic_modulation   — Behavioral learning adjustments                 [informational]
+    5. path_protection       — File system / device security                   [fail-closed]
+    6. alley_kernel_synergy  — SynergyGate security gate                       [fail-closed]
+    7. synergy_validation    — Harmonic field timing                            [fail-closed if strict]
+    8. symod_verification    — Mathematical truth (high-impact only)            [fail-closed]
+    9. prediction_artifact   — Pre-action prediction for reflection             [informational]
+    10. hitl_gating          — Human-in-the-loop for high-risk                  [fail-closed]
+    11. plugin_execution     — Actual work via plugin
+    12. reflect_and_learn    — Outcome reflection + learning
     """
+    
+    VALIDATION_STAGES = (
+        'agi_validation',
+        'moltx_engage_first_gate',
+        'fairmind_validation',
+        'episodic_modulation',
+        'path_protection',
+        'alley_kernel_synergy_gate',
+        'synergy_validation',
+        'symod_verification',
+        'prediction_artifact',
+        'hitl_gating',
+        'plugin_execution',
+        'reflect_and_learn',
+    )
     
     def __init__(self, agi_kernel, plugin_manager):
         """
@@ -1073,7 +1097,11 @@ class ActionRouter:
             }
 
         # Step 3.5: AlleyKernel SynergyGate validation (fail-closed security)
-        alley_kernel_gate = self._validate_with_alley_kernel_synergy(modulated_action)
+        alley_kernel_gate = self._normalize_validation_result(
+            'alley_kernel_synergy_gate',
+            self._validate_with_alley_kernel_synergy(modulated_action),
+            fail_closed=True,
+        )
         validation_trace.append(alley_kernel_gate)
         if not alley_kernel_gate['approved']:
             return {
@@ -1765,14 +1793,17 @@ class ActionRouter:
             
             notes_str = " | ".join(notes)
             
+            # Derive real timing from result
+            exec_time_s = float(result.get('execution_time_ms', 0)) / 1000.0
+            
             # Record learning attempt in MetaLearningEngine
             self.agi.meta_engine.record_learning_attempt(
                 domain=domain,
                 context=context,
                 strategy=strategy,
                 success=success,
-                time_to_success=1.0 if success else 0.0,
-                exploration_rate=0.3,
+                time_to_success=exec_time_s if success else 0.0,
+                exploration_rate=0.3 if action_spec.get('context', {}).get('exploration') else 0.1,
                 memory_depth=10,
                 notes=notes_str
             )

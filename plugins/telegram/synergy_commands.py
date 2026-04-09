@@ -190,16 +190,16 @@ class SynergyCommands:
             import sys
             from pathlib import Path
             import types
-            # Workaround: import machinery hangs, use exec instead
+            import importlib.util
             src_path = Path(__file__).parent.parent.parent
             module_path = src_path / 'src/agentic/erc8004_a2a_integration.py'
             
             if 'src.agentic.erc8004_a2a_integration' not in sys.modules:
-                erc8004_module = types.ModuleType('erc8004_a2a_integration')
-                erc8004_module.__file__ = str(module_path)
-                with open(module_path, 'r') as f:
-                    exec(f.read(), erc8004_module.__dict__)
+                spec = importlib.util.spec_from_file_location(
+                    'erc8004_a2a_integration', str(module_path))
+                erc8004_module = importlib.util.module_from_spec(spec)
                 sys.modules['src.agentic.erc8004_a2a_integration'] = erc8004_module
+                spec.loader.exec_module(erc8004_module)
             else:
                 erc8004_module = sys.modules['src.agentic.erc8004_a2a_integration']
             
@@ -267,18 +267,18 @@ class SynergyCommands:
             import sys
             from pathlib import Path
             import types
-            # Workaround: import machinery hangs, use exec instead
+            import importlib.util
             src_path = Path(__file__).parent.parent.parent
             module_path = src_path / 'src/agentic/erc8004_a2a_integration.py'
             
-            erc8004_module = types.ModuleType('erc8004_a2a_integration')
-            erc8004_module.__file__ = str(module_path)
-            
-            with open(module_path, 'r') as f:
-                exec(f.read(), erc8004_module.__dict__)
-            
-            # Inject into sys.modules so future imports work
-            sys.modules['src.agentic.erc8004_a2a_integration'] = erc8004_module
+            if 'src.agentic.erc8004_a2a_integration' not in sys.modules:
+                spec = importlib.util.spec_from_file_location(
+                    'erc8004_a2a_integration', str(module_path))
+                erc8004_module = importlib.util.module_from_spec(spec)
+                sys.modules['src.agentic.erc8004_a2a_integration'] = erc8004_module
+                spec.loader.exec_module(erc8004_module)
+            else:
+                erc8004_module = sys.modules['src.agentic.erc8004_a2a_integration']
             ERC8004Registry = erc8004_module.ERC8004Registry
             erc8004_available = True
         except Exception as e:

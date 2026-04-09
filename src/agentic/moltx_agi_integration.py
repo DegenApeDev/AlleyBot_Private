@@ -189,77 +189,61 @@ def should_check_trending(moltx_plugin) -> bool:
     return False
 
 
-def execute_moltx_suggested_actions(moltx_plugin, brain_instance) -> List[Dict[str, Any]]:
+def build_moltx_suggested_action_specs(moltx_plugin, brain_instance) -> List[Dict[str, Any]]:
     """
-    Execute actions suggested by MoltX service messages
+    Build routable action specs from MoltX service message suggestions.
+    
+    Returns canonical action specs that the brain routes through
+    AGIKernel.act() / ActionRouter — never executes directly.
     
     Args:
         moltx_plugin: The MoltX plugin instance
         brain_instance: The AutonomousBrain instance
     
     Returns:
-        List of execution results
+        List of action spec dicts ready for AGIKernel.act()
     """
-    results = []
+    action_specs = []
     
     if not moltx_plugin or not brain_instance:
-        return results
+        return action_specs
     
     try:
-        # Execute quote-posting if suggested
         if should_execute_quote_posts(moltx_plugin):
-            logger.info("💬 Executing MoltX-suggested quote-posting...")
-            
-            if hasattr(moltx_plugin, 'auto_quote_trending_posts'):
-                result = moltx_plugin.auto_quote_trending_posts(max_quotes=2)
-                
-                if result.get('success'):
-                    quotes_created = result.get('quotes_created', 0)
-                    logger.info(f"✅ Created {quotes_created} quote posts from MoltX suggestion")
-                    
-                    results.append({
-                        'action': 'quote_posts',
-                        'success': True,
-                        'quotes_created': quotes_created,
-                        'source': 'moltx_service_hint'
-                    })
-                else:
-                    logger.warning(f"⚠️ Quote-posting failed: {result.get('error', 'Unknown')}")
-                    results.append({
-                        'action': 'quote_posts',
-                        'success': False,
-                        'error': result.get('error', 'Unknown')
-                    })
+            logger.info("💬 MoltX suggests quote-posting — building routed action spec")
+            action_specs.append({
+                'plugin': 'moltx',
+                'action_type': 'auto_quote_trending_posts',
+                'params': {'max_quotes': 2},
+                'context': {
+                    'source': 'moltx_service_hint',
+                    'impact': 'medium',
+                    'risk_level': 'low',
+                    'trigger': 'moltx_service_suggestion',
+                },
+            })
         
-        # Check trending topics if suggested
         if should_check_trending(moltx_plugin):
-            logger.info("📈 Checking trending topics per MoltX suggestion...")
-            
-            if hasattr(moltx_plugin, '_make_request'):
-                trending_result = moltx_plugin._make_request('GET', '/hashtags/trending', params={'limit': 10})
-                
-                if trending_result and trending_result.get('data'):
-                    hashtags = trending_result.get('data', {}).get('hashtags', [])
-                    logger.info(f"✅ Found {len(hashtags)} trending hashtags")
-                    
-                    # Store in memory for content generation
-                    if hasattr(brain_instance, 'core'):
-                        brain_instance.core.save_memory('moltx_trending_hashtags', hashtags)
-                    
-                    results.append({
-                        'action': 'check_trending',
-                        'success': True,
-                        'hashtags_found': len(hashtags),
-                        'hashtags': [h.get('name', '') for h in hashtags[:5]],
-                        'source': 'moltx_service_hint'
-                    })
+            logger.info("📈 MoltX suggests trending check — building routed action spec")
+            action_specs.append({
+                'plugin': 'moltx',
+                'action_type': 'check_trending',
+                'params': {'limit': 10},
+                'context': {
+                    'source': 'moltx_service_hint',
+                    'impact': 'low',
+                    'risk_level': 'low',
+                    'trigger': 'moltx_service_suggestion',
+                },
+            })
     
     except Exception as e:
-        logger.error(f"❌ Failed to execute MoltX suggested actions: {e}")
-        results.append({
-            'action': 'moltx_suggestions',
-            'success': False,
-            'error': str(e)
-        })
+        logger.error(f"❌ Failed to build MoltX suggested action specs: {e}")
     
-    return results
+    return action_specs
+
+
+# Keep old name as alias for backwards compatibility during transition
+def execute_moltx_suggested_actions(moltx_plugin, brain_instance) -> List[Dict[str, Any]]:
+    """Deprecated: use build_moltx_suggested_action_specs() instead."""
+    return build_moltx_suggested_action_specs(moltx_plugin, brain_instance)

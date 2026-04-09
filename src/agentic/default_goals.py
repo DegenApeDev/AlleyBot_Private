@@ -247,99 +247,90 @@ class DefaultGoalSeeder:
     
     def seed_goals_if_needed(self) -> int:
         """
-        Seed default goals if goal_manager is empty.
+        Seed default goals if GoalManager v2 (SQLite) is empty.
         
         Returns:
             Number of goals seeded
         """
-        # Check if goal_manager exists and has goals
         if not hasattr(self.agi_kernel, 'goal_manager'):
             logger.warning("AGI Kernel has no goal_manager, cannot seed goals")
             return 0
         
-        # Check existing goals in the manager's goals list
-        existing_goals = self.agi_kernel.goal_manager.goals if hasattr(self.agi_kernel.goal_manager, 'goals') else []
+        # Resolve GoalManager v2 (SQLite) — the single authoritative store
+        gm_v2 = None
+        goal_mgr = self.agi_kernel.goal_manager
+        if hasattr(goal_mgr, 'goal_manager_v2'):
+            # AutonomousGoalManager delegates to GoalManager v2
+            gm_v2 = goal_mgr.goal_manager_v2
+        else:
+            # goal_manager might already be GoalManager v2 directly
+            gm_v2 = goal_mgr
         
-        # Count active goals (not all goals, just active ones)
-        active_goal_count = sum(1 for g in existing_goals if getattr(g, 'status', None) == 'active')
-        
-        # If we already have 3+ active goals, don't seed more
-        if active_goal_count >= 3:
-            logger.debug(f"Already have {active_goal_count} active goals, skipping seed")
+        if not gm_v2 or not hasattr(gm_v2, 'get_goals'):
+            logger.warning("Could not resolve GoalManager v2 for seeding")
             return 0
         
-        # Seed default goals using AutonomousGoalManager's AutonomousGoal class
-        from src.agentic.autonomous_goals import AutonomousGoal, GoalOrigin
-        from datetime import datetime
-        import uuid
+        # Check existing active goals in SQLite
+        from src.agentic.goal_manager import GoalStatus, Goal, GoalPriority
+        active_goals = gm_v2.get_goals(status=GoalStatus.ACTIVE, limit=20)
+        if len(active_goals) >= 3:
+            logger.debug(f"Already have {len(active_goals)} active goals, skipping seed")
+            return 0
+        
+        # Also check if default goals already exist (any status)
+        all_goals = gm_v2.get_goals(limit=50)
+        existing_ids = {g.id for g in all_goals}
         
         goals = self.get_default_goals()
         seeded_count = 0
         
         for goal_spec in goals:
+            goal_id = goal_spec['id']
+            if goal_id in existing_ids:
+                continue  # Already seeded
+            
             try:
-                # Build actionable plan from metadata
-                action_plan = []
                 platforms = goal_spec.get('metadata', {}).get('platforms', [])
                 action_types = goal_spec.get('metadata', {}).get('action_types', [])
                 
-                # Create concrete actions from platforms and action types
-                if platforms and action_types:
-                    for platform in platforms[:2]:  # Limit to 2 platforms per goal
-                        for action_type in action_types[:2]:  # Limit to 2 action types
-                            action_plan.append(f"{platform}:{action_type}")
+                # Map priority 1-4 to GoalPriority enum
+                raw_priority = goal_spec.get('priority', 2)
+                if raw_priority >= 3:
+                    priority = GoalPriority.HIGH
+                elif raw_priority >= 2:
+                    priority = GoalPriority.MEDIUM
+                else:
+                    priority = GoalPriority.LOW
                 
-                # Fallback if no concrete actions
-                if not action_plan:
-                    action_plan = [
-                        f"Monitor {goal_spec.get('domain', 'social')} platforms",
-                        f"Identify opportunities related to: {goal_spec['title']}",
-                    ]
-                
-                # Create AutonomousGoal object with all required fields
-                goal = AutonomousGoal(
-                    id=f"default_{uuid.uuid4().hex[:8]}",
+                goal = Goal(
+                    id=goal_id,
+                    title=goal_spec['title'],
                     description=goal_spec['description'],
-                    origin=GoalOrigin.SYSTEM,  # Use SYSTEM origin for default goals
-                    detected_opportunity=f"Default goal seeding for autonomous operation: {goal_spec['title']}",
-                    evidence={
+                    category=goal_spec.get('domain', 'social'),
+                    priority=priority,
+                    impact_score=raw_priority * 2.5,
+                    effort_estimate='hours',
+                    confidence=0.8,
+                    trigger_type='default_seed',
+                    trigger_data={
                         'source': 'default_goal_seeder',
-                        'auto_seeded': True,
                         'platforms': platforms,
                         'action_types': action_types,
+                        'auto_seeded': True,
                     },
-                    action_plan=action_plan,
-                    expected_outcome=f"Maintain active presence and engagement in {goal_spec.get('domain', 'social')} domain",
-                    success_criteria=[
-                        "Regular platform activity",
-                        "Positive community engagement",
-                        "Goal-aligned actions executed"
-                    ],
-                    priority_score=goal_spec.get('priority', 2) * 2.5,  # Map 1-4 to 2.5-10
-                    urgency=5.0,
-                    impact=7.0,
-                    status='active',
-                    created_at=datetime.now(),
-                    activated_at=datetime.now()
+                    evidence=[f"Default goal for {goal_spec.get('domain', 'social')} domain"],
+                    status=GoalStatus.ACTIVE,
                 )
                 
-                # Add goal directly to manager's goals list
-                self.agi_kernel.goal_manager.goals.append(goal)
-                seeded_count += 1
-                logger.info(f"🌱 Seeded default goal: {goal_spec['title']}")
+                if gm_v2.add_goal(goal):
+                    seeded_count += 1
+                    logger.info(f"🌱 Seeded default goal: {goal_spec['title']}")
                 
             except Exception as e:
-                logger.error(f"Failed to seed goal {goal_spec['id']}: {e}")
+                logger.error(f"Failed to seed goal {goal_id}: {e}")
         
         if seeded_count > 0:
-            logger.info(f"🌱 Seeded {seeded_count} default goals for autonomous operation")
-            # Save goals to persistent storage
-            try:
-                if hasattr(self.agi_kernel.goal_manager, '_save'):
-                    self.agi_kernel.goal_manager._save()
-                    logger.info("💾 Saved seeded goals to persistent storage")
-            except Exception as e:
-                logger.warning(f"Could not save seeded goals: {e}")
+            logger.info(f"🌱 Seeded {seeded_count} default goals → GoalManager v2 (SQLite)")
         
         return seeded_count
     

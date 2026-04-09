@@ -300,8 +300,8 @@ class CrossPluginOrchestrator:
                 context={'source': 'cross_plugin_orchestrator'}
             )
             
-            # Execute through router
-            result = await self.agi.action_router.route(envelope.to_dict())
+            # Execute through canonical typed contract
+            result = await self.agi.action_router.route(envelope)
             
             return result
             

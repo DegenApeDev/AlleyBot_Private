@@ -35,43 +35,35 @@ from src.skills.skill_loader import SkillLoader
 
 async def _run_heartbeat_loop(core):
     """
-    Autonomous Heartbeat.
-    Reads HEARTBEAT.md every 15 minutes, checks data/work_items.db,
-    triggers ActionRouter, or uses Hermes Curiosity Drive.
+    Autonomous Heartbeat — STATUS CHECK ONLY.
+    Checks data/work_items.db every 15 minutes and logs system health.
+    Never triggers actions directly — that is the brain's responsibility.
     """
     logger = logging.getLogger("HeartbeatLoop")
-    logger.warning("💓 Heartbeat Loop initialized.")
+    logger.warning("💓 Heartbeat Loop initialized (status-check mode).")
     interval = 15 * 60  # 15 minutes by default
     
     while True:
         try:
-            logger.warning("💓 [HEARTBEAT] Waking up to check tasks...")
+            logger.warning("💓 [HEARTBEAT] Status check...")
             
-            has_items = False
+            pending_count = 0
             try:
                 from src.agentic.work_item_manager import get_work_item_service
                 work_items = get_work_item_service().get_pending_items()
-                has_items = len(work_items) > 0
-            except Exception as w_e:
-                pass # fallback if service not initialized
+                pending_count = len(work_items) if work_items else 0
+            except Exception:
+                pass
 
-            if has_items:
-                logger.warning(f"💓 Found pending work items. Allowing brain to process.")
-            else:
-                logger.warning("💓 0 active work items. Engaging Hermes Curiosity Drive (MoltX scan)...")
-                # Trigger action router to do moltx discovery for trends
-                if hasattr(core, 'agi_kernel') and hasattr(core.agi_kernel, 'action_router'):
-                    action_spec = {
-                        'plugin': 'moltx',
-                        'action_type': 'discover',
-                        'params': {'query': 'crypto trends', 'limit': 10},
-                        'context': {
-                            'source': 'heartbeat_curiosity',
-                            'impact': 'low',
-                            'risk_level': 'low'
-                        }
-                    }
-                    asyncio.create_task(core.agi_kernel.action_router.route_action(action_spec))
+            brain_running = (
+                hasattr(core, 'agi_kernel')
+                and hasattr(core.agi_kernel, 'action_router')
+            )
+
+            logger.warning(
+                f"💓 Status: {pending_count} pending work items | "
+                f"Brain: {'✅' if brain_running else '❌'}"
+            )
             
             await asyncio.sleep(interval)
         except asyncio.CancelledError:

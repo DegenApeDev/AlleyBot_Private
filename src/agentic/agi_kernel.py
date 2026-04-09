@@ -1202,7 +1202,9 @@ class AGIKernel:
         return result
     
     def _evaluate_domain_autonomy_gate(self, action_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Gate real-world autonomy by trusted domain before execution reaches the router."""
+        """Gate real-world autonomy by trusted domain and trust tier."""
+        from src.agentic.contracts import classify_trust_tier, TrustTier
+
         plugin = str(action_spec.get('plugin', '') or '').lower()
         action_type = str(action_spec.get('action_type', '') or '').lower()
         domain = 'analysis'
@@ -1223,10 +1225,31 @@ class AGIKernel:
         if not allowed:
             reason = f'{domain}_autonomy_not_enabled'
 
+        # Classify action trust tier
+        trust_tier = classify_trust_tier(action_spec)
+
+        # T4 actions require explicit owner approval — block autonomous execution
+        if allowed and trust_tier == TrustTier.T4_OWNER_APPROVAL:
+            context = action_spec.get('context', {}) or {}
+            if not context.get('owner_approved'):
+                allowed = False
+                reason = f'T4 action ({action_type}) requires owner approval via /approve'
+
+        # T3 actions require repeated evidence — block without it
+        if allowed and trust_tier == TrustTier.T3_CODE_PROPOSAL:
+            context = action_spec.get('context', {}) or {}
+            has_evidence = (
+                context.get('bounded_upgrade_evidence')
+                or context.get('repeated_evidence_count', 0) >= 2
+            )
+            if not has_evidence:
+                allowed = False
+                reason = f'T3 action ({action_type}) requires repeated evidence of capability gap'
+
         return {
             'allowed': allowed,
             'domain': domain,
-            'trust_tier': profile.get('trust_tier', 'low'),
+            'trust_tier': trust_tier.value,
             'risk_level': profile.get('risk_level', 'high'),
             'reason': reason,
         }

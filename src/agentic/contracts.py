@@ -52,6 +52,86 @@ class TrustBucket(str, Enum):
     BLOCKED = "blocked"
 
 
+class TrustTier(str, Enum):
+    """Action trust tier — governs what level of gating an action requires.
+    
+    T0: Observe only (read APIs, gather data) — auto-execute
+    T1: Safe autonomous (social engagement, content, analysis) — auto-execute + validation ladder
+    T2: Constrained system (config changes, skill loading) — validation + recent success history
+    T3: Code change proposals (self-improvement drafts) — repeated evidence required
+    T4: Self-modification with approval (code deploy, wallet ops) — owner approval required
+    """
+    T0_OBSERVE = "t0_observe"
+    T1_SAFE_AUTO = "t1_safe_auto"
+    T2_CONSTRAINED = "t2_constrained"
+    T3_CODE_PROPOSAL = "t3_code_proposal"
+    T4_OWNER_APPROVAL = "t4_owner_approval"
+
+
+# Action type → trust tier classification
+_ACTION_TIER_MAP: Dict[str, TrustTier] = {
+    # T0 — Observe
+    'discover': TrustTier.T0_OBSERVE,
+    'check_trending': TrustTier.T0_OBSERVE,
+    'get_notifications': TrustTier.T0_OBSERVE,
+    'analyze': TrustTier.T0_OBSERVE,
+    'check_notifications': TrustTier.T0_OBSERVE,
+    'get_feed': TrustTier.T0_OBSERVE,
+    'search': TrustTier.T0_OBSERVE,
+    'read': TrustTier.T0_OBSERVE,
+    # T1 — Safe autonomous
+    'post': TrustTier.T1_SAFE_AUTO,
+    'create_post': TrustTier.T1_SAFE_AUTO,
+    'reply': TrustTier.T1_SAFE_AUTO,
+    'engage': TrustTier.T1_SAFE_AUTO,
+    'like': TrustTier.T1_SAFE_AUTO,
+    'follow': TrustTier.T1_SAFE_AUTO,
+    'auto_quote_trending_posts': TrustTier.T1_SAFE_AUTO,
+    'debate_turn': TrustTier.T1_SAFE_AUTO,
+    'create_debate': TrustTier.T1_SAFE_AUTO,
+    # T2 — Constrained
+    'config_update': TrustTier.T2_CONSTRAINED,
+    'load_skill': TrustTier.T2_CONSTRAINED,
+    'register_tool': TrustTier.T2_CONSTRAINED,
+    # T3 — Code proposal
+    'self_improve': TrustTier.T3_CODE_PROPOSAL,
+    'auto_fix_error': TrustTier.T3_CODE_PROPOSAL,
+    'create_skill': TrustTier.T3_CODE_PROPOSAL,
+    # T4 — Owner approval
+    'wallet_send': TrustTier.T4_OWNER_APPROVAL,
+    'dex_swap': TrustTier.T4_OWNER_APPROVAL,
+    'terminal': TrustTier.T4_OWNER_APPROVAL,
+    'execute_code': TrustTier.T4_OWNER_APPROVAL,
+    'deploy': TrustTier.T4_OWNER_APPROVAL,
+}
+
+# Plugin-level overrides (entire plugin defaults to a tier)
+_PLUGIN_TIER_MAP: Dict[str, TrustTier] = {
+    'onchain': TrustTier.T2_CONSTRAINED,
+    'selfimprove': TrustTier.T3_CODE_PROPOSAL,
+}
+
+
+def classify_trust_tier(action_spec: Dict[str, Any]) -> TrustTier:
+    """Classify an action spec into a trust tier.
+    
+    Checks action_type first, then plugin-level default, then falls back to T1.
+    """
+    action_type = str(action_spec.get('action_type', '')).lower()
+    plugin = str(action_spec.get('plugin', '')).lower()
+    
+    # Exact action_type match
+    if action_type in _ACTION_TIER_MAP:
+        return _ACTION_TIER_MAP[action_type]
+    
+    # Plugin-level default
+    if plugin in _PLUGIN_TIER_MAP:
+        return _PLUGIN_TIER_MAP[plugin]
+    
+    # Default: safe autonomous
+    return TrustTier.T1_SAFE_AUTO
+
+
 class WorkItemState(str, Enum):
     """Work item lifecycle states."""
     ACTIVE = "active"
@@ -283,6 +363,25 @@ class ActionEnvelope:
     # Optional pre-computed artifacts
     prediction: Optional[PredictionRecord] = None
     validation_profile: Optional[ValidationProfile] = None
+    
+    # Known field names — anything else passed as a kwarg is a bug
+    _KNOWN_FIELDS = frozenset({
+        'plugin', 'action_type', 'params', 'context',
+        'prediction', 'validation_profile',
+    })
+    
+    def __post_init__(self):
+        """Guard against accidental extra kwargs (e.g. impact, risk_level)."""
+        import logging as _log
+        for attr in vars(self):
+            if attr.startswith('_'):
+                continue
+            if attr not in self._KNOWN_FIELDS:
+                _log.getLogger(__name__).warning(
+                    f"ActionEnvelope received unexpected field '{attr}'. "
+                    f"If this is impact/risk_level, put it in context dict or "
+                    f"use ValidationProfile instead."
+                )
     
     @property
     def action_id(self) -> str:
