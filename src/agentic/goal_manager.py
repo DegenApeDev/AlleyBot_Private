@@ -286,6 +286,14 @@ class GoalManager:
                 )
             ''')
             
+            # Migration: Add auto_approved column if missing (existing databases)
+            try:
+                conn.execute('SELECT auto_approved FROM goals LIMIT 1')
+            except sqlite3.OperationalError:
+                # Column doesn't exist, add it
+                conn.execute('ALTER TABLE goals ADD COLUMN auto_approved INTEGER DEFAULT 0')
+                logger.info("🔄 Migrated goals table: added auto_approved column")
+            
             # Indexes for fast queries
             conn.execute('CREATE INDEX IF NOT EXISTS idx_status ON goals(status)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_auto_approved ON goals(auto_approved)')
