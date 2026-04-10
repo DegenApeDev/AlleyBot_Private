@@ -1194,10 +1194,14 @@ class AGIKernel:
         result = await self.orchestrator.execute_workflow(workflow)
         
         # Record outcome for learning
-        if result['success']:
-            print(f"✅ Workflow completed: {result['completed_steps']} steps succeeded")
+        if not isinstance(result, dict):
+            print(f"❌ Workflow returned invalid result type: {type(result).__name__}")
+            return {'success': False, 'error': f'Workflow returned {type(result).__name__}', 'workflow_id': workflow.workflow_id}
+        
+        if result.get('success', False):
+            print(f"✅ Workflow completed: {result.get('completed_steps', 0)} steps succeeded")
         else:
-            print(f"❌ Workflow failed: {result['failed_steps']} steps failed")
+            print(f"❌ Workflow failed: {result.get('failed_steps', 0)} steps failed")
         
         return result
     
@@ -1224,6 +1228,19 @@ class AGIKernel:
         reason = 'allowed'
         if not allowed:
             reason = f'{domain}_autonomy_not_enabled'
+        
+        # Evidence-gated auto-enable for self_improvement domain (Phase 1.1)
+        if domain == 'self_improvement' and not allowed:
+            context = action_spec.get('context', {}) or {}
+            has_bounded_evidence = bool(context.get('bounded_upgrade_evidence'))
+            has_repeated_evidence = context.get('repeated_evidence_count', 0) >= 2
+            
+            if has_bounded_evidence or has_repeated_evidence:
+                # Auto-enable self_improvement for this session
+                self.domain_autonomy_profiles['self_improvement']['enabled'] = True
+                allowed = True
+                reason = 'self_improvement_auto_enabled_due_to_evidence'
+                print(f"🧠 Self-improvement domain AUTO-ENABLED (evidence: bounded={has_bounded_evidence}, repeated={has_repeated_evidence})")
 
         # Classify action trust tier
         trust_tier = classify_trust_tier(action_spec)
@@ -1347,6 +1364,19 @@ class AGIKernel:
                 success=success,
                 outcome=outcome
             )
+        
+        # 3.5 Fail-closed: Disable self_improvement domain on failure (Phase 1.1 safety)
+        action_type = outcome_record.get('action_type', '')
+        plugin = outcome_record.get('plugin', '')
+        is_self_improvement = (
+            'self_improve' in action_type or 
+            'auto_fix' in action_type or 
+            plugin == 'selfimprove'
+        )
+        if is_self_improvement and not success:
+            if self.domain_autonomy_profiles.get('self_improvement', {}).get('enabled'):
+                self.domain_autonomy_profiles['self_improvement']['enabled'] = False
+                print(f"🛑 Self-improvement domain AUTO-DISABLED due to failure: {action_type}")
         
         # 4. Meta-learning feedback
         self.adaptive_learner.feedback(
@@ -1748,10 +1778,12 @@ class AGIKernel:
         try:
             from src.tools.action_router_integration import setup_hermes_tools_integration
             tools_result = await setup_hermes_tools_integration(self)
-            if tools_result['success']:
-                print(f"✅ Hermes tools integrated: {tools_result['tools_registered']} tools")
+            if not isinstance(tools_result, dict):
+                print(f"⚠️ Hermes tools integration returned invalid type: {type(tools_result).__name__}")
+            elif tools_result.get('success', False):
+                print(f"✅ Hermes tools integrated: {tools_result.get('tools_registered', 0)} tools")
             else:
-                print(f"⚠️ Hermes tools integration failed: {tools_result['error']}")
+                print(f"⚠️ Hermes tools integration failed: {tools_result.get('error', 'unknown error')}")
         except Exception as e:
             print(f"⚠️ Could not integrate Hermes tools: {e}")
 

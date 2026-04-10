@@ -1874,6 +1874,236 @@ class AGIOrchestrator:
             'platform_results': {p.value: r for p, r in results.items()}
         }
     
+    def generate_goal_proposals(self, observations: List[Dict]) -> List[Dict]:
+        """
+        Proactively generate goals based on observations and owner objectives.
+        
+        Phase 2.1: Brain generates goals without explicit owner instruction.
+        Analyzes gaps between current state and owner objectives, proposes actions.
+        
+        Args:
+            observations: Recent observations from the environment
+            
+        Returns:
+            List of proposed goal dicts with rationale
+        """
+        proposals = []
+        
+        try:
+            from src.agentic.owner_objectives import get_owner_objectives_manager
+            
+            objectives_mgr = get_owner_objectives_manager()
+            active_objectives = objectives_mgr.get_active_objectives()
+            prefs = objectives_mgr.get_engagement_preferences()
+            
+            now = datetime.now()
+            
+            # 1. Check owner engagement gap (6h since last interaction)
+            last_owner_interaction = getattr(self.core, 'last_owner_interaction', None)
+            if last_owner_interaction:
+                hours_since = (now - last_owner_interaction).total_seconds() / 3600
+                if hours_since >= 6 and not prefs.is_quiet_hours():
+                    # Find re-engagement opportunity
+                    proposals.append({
+                        'id': f"reengage_{int(now.timestamp())}",
+                        'title': 'Re-engage with owner',
+                        'description': f'Owner has not interacted in {hours_since:.1f} hours. Propose valuable update or insight.',
+                        'category': 'social',
+                        'priority': 6,
+                        'rationale': 'owner_engagement_gap',
+                        'evidence': [f'Last interaction: {last_owner_interaction.isoformat()}'],
+                        'proposed_action': 'share_valuable_insight',
+                        'objective_alignment': 0.7,
+                    })
+            
+            # 2. Check for content opportunities from observations
+            content_gaps = self._detect_content_opportunities(observations)
+            for gap in content_gaps[:2]:  # Top 2 opportunities
+                alignment = objectives_mgr.score_goal_alignment(gap['description'], 'content')
+                if alignment >= 0.4:  # Above neutral
+                    proposals.append({
+                        'id': f"content_{int(now.timestamp())}_{hash(gap['description']) % 10000}",
+                        'title': f"Content: {gap['topic'][:40]}...",
+                        'description': gap['description'],
+                        'category': 'content',
+                        'priority': 5 if alignment > 0.6 else 4,
+                        'rationale': 'content_opportunity_detected',
+                        'evidence': gap.get('evidence', []),
+                        'proposed_action': 'create_post',
+                        'objective_alignment': alignment,
+                    })
+            
+            # 3. Check for market/analysis opportunities
+            market_signals = self._detect_market_signals(observations)
+            for signal in market_signals[:1]:  # Top 1 signal
+                proposals.append({
+                    'id': f"market_{int(now.timestamp())}_{hash(signal['description']) % 10000}",
+                    'title': f"Analyze: {signal['topic'][:40]}...",
+                    'description': signal['description'],
+                    'category': 'analysis',
+                    'priority': 7 if signal.get('urgency') == 'high' else 5,
+                    'rationale': 'market_volatility_detected',
+                    'evidence': signal.get('evidence', []),
+                    'proposed_action': 'analyze_and_report',
+                    'objective_alignment': 0.6,
+                })
+            
+            # 4. Check for skill gaps (already handled in _phase_skill_gap_analysis)
+            # But add proposals if objectives indicate skill-building priority
+            skill_objectives = [o for o in active_objectives if 'skill' in o.description.lower()]
+            if skill_objectives and hasattr(self.core, 'agi_kernel'):
+                agi = self.core.agi_kernel
+                if hasattr(agi, 'work_item_manager'):
+                    # Check for pending skill gaps
+                    items = agi.work_item_manager.get_all_work_items(limit=20)
+                    skill_gap_items = [i for i in items if i.metadata.get('capability_judgment', {}).get('needs_new_skill')]
+                    if skill_gap_items:
+                        top_gap = skill_gap_items[0]
+                        proposals.append({
+                            'id': f"skill_{int(now.timestamp())}_{hash(top_gap.id) % 10000}",
+                            'title': f"Build skill for {top_gap.title[:40]}...",
+                            'description': f'Address capability gap: {top_gap.description[:100]}',
+                            'category': 'self_improvement',
+                            'priority': 8,  # High priority
+                            'rationale': 'skill_gap_detected_with_objective',
+                            'evidence': [f'Work item: {top_gap.id}', f'Repeated need count: {top_gap.metadata.get("upgrade_evidence", {}).get("repeated_need_count", 0)}'],
+                            'proposed_action': 'build_skill',
+                            'objective_alignment': 0.9,
+                            'bounded_upgrade_evidence': True,
+                        })
+            
+            # 5. Score all proposals by objective alignment
+            for proposal in proposals:
+                base_score = proposal.get('objective_alignment', 0.5)
+                priority_boost = proposal.get('priority', 5) / 10.0
+                proposal['final_score'] = (base_score * 0.6) + (priority_boost * 0.4)
+            
+            # Sort by final score
+            proposals.sort(key=lambda x: x.get('final_score', 0), reverse=True)
+            
+            if proposals:
+                logger.info(f"🎯 Generated {len(proposals)} proactive goals from observations")
+                for p in proposals:
+                    logger.info(f"   - {p['title'][:50]}... (score: {p.get('final_score', 0):.2f})")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Goal proposal generation error: {e}")
+        
+        return proposals
+    
+    def _detect_content_opportunities(self, observations: List[Dict]) -> List[Dict]:
+        """Detect content creation opportunities from observations."""
+        opportunities = []
+        
+        # Look for trending topics, unanswered questions, high-engagement moments
+        for obs in observations:
+            content = str(obs.get('content', '')).lower()
+            
+            # Trending topic pattern
+            if any(word in content for word in ['trending', 'viral', 'breaking', 'hot take']):
+                opportunities.append({
+                    'topic': obs.get('content', 'Trending topic')[:60],
+                    'description': f"Trending topic detected: {obs.get('content', 'unknown')[:100]}. Propose timely content.",
+                    'evidence': [f"Source: {obs.get('source', 'unknown')}", f"Time: {obs.get('timestamp', 'unknown')}"],
+                })
+            
+            # Question pattern (unanswered)
+            if '?' in content and any(word in content for word in ['how', 'why', 'what', 'when']):
+                opportunities.append({
+                    'topic': f"Answer: {content[:50]}...",
+                    'description': f"Unanswered question detected. Propose helpful response or content addressing: {content[:100]}",
+                    'evidence': [f"Question: {content[:80]}..."],
+                })
+        
+        return opportunities
+    
+    def _detect_market_signals(self, observations: List[Dict]) -> List[Dict]:
+        """Detect market/analysis signals from observations."""
+        signals = []
+        
+        for obs in observations:
+            content = str(obs.get('content', '')).lower()
+            
+            # Volatility/price movement patterns
+            if any(word in content for word in ['price', 'surge', 'crash', 'pump', 'dump', 'volatility']):
+                signals.append({
+                    'topic': f"Market: {content[:50]}...",
+                    'description': f"Market volatility detected. Propose analysis and risk assessment: {content[:100]}",
+                    'urgency': 'high' if any(word in content for word in ['crash', 'surge', 'pump']) else 'normal',
+                    'evidence': [f"Signal: {content[:80]}..."],
+                })
+        
+        return signals
+    
+    def synthesize_cross_domain_opportunities(
+        self,
+        observations: List[Dict],
+        market_state: Optional[Dict] = None,
+        social_state: Optional[Dict] = None,
+    ) -> List[Dict]:
+        """
+        Phase 4.1 — Cross-domain synthesis: detect patterns across market, social, content.
+        
+        Combines signals from multiple domains to generate high-value opportunities
+        invisible when analyzing domains in isolation.
+        
+        Args:
+            observations: Recent observations
+            market_state: Current market data
+            social_state: Current social platform state
+            
+        Returns:
+            List of opportunity dicts ready for goal conversion
+        """
+        try:
+            from src.agentic.cross_domain_synthesis import get_cross_domain_synthesizer
+            from src.agentic.owner_objectives import get_owner_objectives_manager
+            
+            synthesizer = get_cross_domain_synthesizer()
+            
+            # Get owner objectives for alignment scoring
+            objectives_mgr = get_owner_objectives_manager()
+            owner_objectives = [
+                o.to_dict() for o in objectives_mgr.get_active_objectives()
+            ]
+            
+            # Run synthesis
+            patterns = synthesizer.synthesize(
+                observations=observations,
+                market_state=market_state,
+                social_state=social_state,
+                owner_objectives=owner_objectives,
+            )
+            
+            # Convert top patterns to goal proposals
+            opportunities = []
+            for pattern in patterns[:2]:  # Top 2
+                if pattern.final_score >= 0.6:  # Quality threshold
+                    opp = {
+                        'id': f"synth_{pattern.id}",
+                        'title': f"Cross-domain: {pattern.pattern_type.name}",
+                        'description': pattern.proposed_action_description,
+                        'category': 'opportunity',
+                        'priority': 7 if pattern.urgency_score > 0.7 else 6,
+                        'rationale': f'cross_domain_synthesis:{pattern.pattern_type.name}',
+                        'evidence': pattern.trigger_observations,
+                        'proposed_action': pattern.proposed_action_type,
+                        'objective_alignment': pattern.objective_alignment,
+                        'feasibility': pattern.feasibility_score,
+                        'cross_domain_score': pattern.final_score,
+                        'source_domains': pattern.source_domains,
+                    }
+                    opportunities.append(opp)
+            
+            if opportunities:
+                logger.info(f"🔮 Cross-domain synthesis: {len(opportunities)} opportunities generated")
+            
+            return opportunities
+            
+        except Exception as e:
+            logger.debug(f"Cross-domain synthesis error: {e}")
+            return []
+    
     def _build_world_state_for_goals(self) -> Dict[str, Any]:
         """
         Build world state snapshot for goal generation.

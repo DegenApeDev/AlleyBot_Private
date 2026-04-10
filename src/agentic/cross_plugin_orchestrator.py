@@ -158,7 +158,11 @@ class CrossPluginOrchestrator:
             step_results = await self._execute_steps_parallel(workflow, ready_steps, results)
             
             for step_id, result in step_results.items():
-                if result['success']:
+                if not isinstance(result, dict):
+                    workflow.failed_steps.append(step_id)
+                    errors.append(f"{step_id}: result was {type(result).__name__}, expected dict")
+                    continue
+                if result.get('success', False):
                     workflow.completed_steps.append(step_id)
                     results[step_id] = result
                 else:

@@ -89,6 +89,7 @@ class Goal:
     # Owner interaction
     owner_notes: Optional[str] = None  # Owner's comments
     owner_priority_override: Optional[int] = None  # Owner can reprioritize
+    auto_approved: bool = False  # Whether this goal was auto-approved (Phase 1.3)
     
     def to_dict(self) -> Dict:
         """Serialize goal to dictionary"""
@@ -115,6 +116,7 @@ class Goal:
             data['started_at'] = datetime.fromisoformat(data['started_at'])
         if data.get('completed_at'):
             data['completed_at'] = datetime.fromisoformat(data['completed_at'])
+        data['auto_approved'] = data.get('auto_approved', False)
         return cls(**data)
     
     @property
@@ -279,12 +281,14 @@ class GoalManager:
                     actual_effort TEXT,
                     outcome TEXT,
                     owner_notes TEXT,
-                    owner_priority_override INTEGER
+                    owner_priority_override INTEGER,
+                    auto_approved INTEGER DEFAULT 0
                 )
             ''')
             
             # Indexes for fast queries
             conn.execute('CREATE INDEX IF NOT EXISTS idx_status ON goals(status)')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_auto_approved ON goals(auto_approved)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_priority ON goals(priority)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_created ON goals(created_at)')
             conn.commit()
@@ -309,7 +313,7 @@ class GoalManager:
             
             # Insert
             conn.execute('''
-                INSERT INTO goals VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO goals VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 goal.id,
                 goal.title,
@@ -332,7 +336,8 @@ class GoalManager:
                 goal.actual_effort,
                 goal.outcome,
                 goal.owner_notes,
-                goal.owner_priority_override
+                goal.owner_priority_override,
+                1 if goal.auto_approved else 0
             ))
             conn.commit()
         
@@ -404,6 +409,72 @@ class GoalManager:
             ).fetchone()
         return bool(row and row[0] > 0)
     
+    def _is_auto_approval_safe(self, goal: Goal) -> bool:
+        """Check if goal is safe to auto-approve (Phase 1.3)."""
+        # Safety valve: check recent auto-approved goal failures
+        recent_failures = self._count_recent_auto_approved_failures(hours=24)
+        if recent_failures >= 3:
+            logger.warning(f"🛑 Auto-approval paused: {recent_failures} recent failures")
+            return False
+        
+        # Only auto-approve LOW or MEDIUM priority
+        if goal.priority not in (GoalPriority.LOW, GoalPriority.MEDIUM):
+            return False
+        
+        # Only auto-approve if confidence is reasonable
+        if goal.confidence < 0.5:
+            return False
+        
+        # Check impact score (should be low to medium)
+        if goal.impact_score > 7.0:
+            return False
+        
+        return True
+    
+    def _count_recent_auto_approved_failures(self, hours: int = 24) -> int:
+        """Count auto-approved goals that failed in last N hours (safety valve)."""
+        cutoff = datetime.now() - timedelta(hours=hours)
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                row = conn.execute('''
+                    SELECT COUNT(*) as count FROM goals
+                    WHERE status = ?
+                    AND auto_approved = 1
+                    AND started_at > ?
+                ''', (GoalStatus.FAILED.name, cutoff.isoformat())).fetchone()
+                return row['count'] if row else 0
+        except Exception:
+            return 0
+    
+    def maybe_auto_approve_goal(self, goal_id: str) -> bool:
+        """Auto-approve goal if it meets safety criteria (Phase 1.3)."""
+        goal = self.get_goal(goal_id)
+        if not goal or goal.status != GoalStatus.PROPOSED:
+            return False
+        
+        if not self._is_auto_approval_safe(goal):
+            return False
+        
+        # Auto-approve the goal
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''
+                UPDATE goals 
+                SET status = ?, approved_at = ?, auto_approved = 1, 
+                    owner_notes = ?
+                WHERE id = ?
+            ''', (
+                GoalStatus.APPROVED.name,
+                datetime.now().isoformat(),
+                1,
+                "Auto-approved: LOW/MEDIUM priority, low risk",
+                goal_id
+            ))
+            conn.commit()
+        
+        logger.info(f"🤖 Goal AUTO-APPROVED: {goal_id} ({goal.priority.name}, confidence={goal.confidence:.2f})")
+        return True
+    
     def approve_goal(self, goal_id: str, owner_notes: Optional[str] = None) -> bool:
         """Owner approves a proposed goal"""
         goal = self.get_goal(goal_id)
@@ -417,7 +488,7 @@ class GoalManager:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute('''
                 UPDATE goals 
-                SET status = ?, approved_at = ?, owner_notes = ?
+                SET status = ?, approved_at = ?, owner_notes = ?, auto_approved = 0
                 WHERE id = ?
             ''', (
                 GoalStatus.APPROVED.name,
@@ -1083,7 +1154,8 @@ class GoalManager:
             actual_effort=get('actual_effort'),
             outcome=get('outcome'),
             owner_notes=get('owner_notes'),
-            owner_priority_override=get('owner_priority_override')
+            owner_priority_override=get('owner_priority_override'),
+            auto_approved=bool(get('auto_approved', 0))
         )
 
 

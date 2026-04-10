@@ -580,6 +580,12 @@ class AutonomousBrain(AGISocialMixin):
         # === THINK: Assemble and rank proposals ===
         proposals = await self._phase_assemble_proposals(agi_kernel, agi_actions, active_work_items, spine_context)
         
+        # === PERSISTENT INTENTS: Generate actions for long-running objectives (Phase 3.1) ===
+        await self._phase_maintain_persistent_intents(agi_kernel, proposals)
+        
+        # === CROSS-DOMAIN SYNTHESIS & STRATEGIC PLANNING (Phase 4.1-4.2) ===
+        await self._phase_cross_domain_synthesis_and_planning(agi_kernel, observations, proposals)
+        
         # === MOLTX SUGGESTED ACTIONS (routed through Golden Path) ===
         moltx = self.plugin_manager.get_plugin('moltx')
         if moltx and agi_kernel:
@@ -1542,6 +1548,33 @@ class AutonomousBrain(AGISocialMixin):
     
     async def _phase_skill_gap_analysis(self, observations, agi_kernel):
         """THINK sub-phase — detect capability gaps and auto-build skills."""
+        # Phase 1.1: Auto-enable self_improvement domain when 3+ needs_new_skill judgments exist
+        if agi_kernel and hasattr(agi_kernel, 'work_item_manager'):
+            try:
+                wm = agi_kernel.work_item_manager
+                # Query work items for repeated needs_new_skill evidence
+                all_items = wm.get_all_work_items(limit=100)
+                needs_skill_count = 0
+                for item in all_items:
+                    metadata = item.metadata if hasattr(item, 'metadata') else {}
+                    if not metadata:
+                        continue
+                    judgment = metadata.get('capability_judgment', {})
+                    if judgment.get('needs_new_skill'):
+                        evidence = metadata.get('upgrade_evidence', {})
+                        repeated_count = evidence.get('repeated_need_count', 0)
+                        if repeated_count >= 2:
+                            needs_skill_count += 1
+                
+                # Auto-enable self_improvement domain if threshold met
+                if needs_skill_count >= 3:
+                    profiles = getattr(agi_kernel, 'domain_autonomy_profiles', {})
+                    if not profiles.get('self_improvement', {}).get('enabled', False):
+                        profiles['self_improvement']['enabled'] = True
+                        logger.info(f"🧠 Self-improvement domain AUTO-ENABLED ({needs_skill_count} work items need new skills)")
+            except Exception as e:
+                logger.debug(f"Could not check work items for skill gaps: {e}")
+        
         if self.auto_skill_builder:
             try:
                 skill_proposals = await self.auto_skill_builder.detect_capability_gaps(observations)
@@ -1610,6 +1643,190 @@ class AutonomousBrain(AGISocialMixin):
             logger.warning(f"⚠️ Autonomous coding error: {e}")
             import traceback
             logger.debug(traceback.format_exc())
+    
+    async def _phase_maintain_persistent_intents(self, agi_kernel, proposals):
+        """Phase 3.1 — Check persistent intents and generate advancement actions.
+        
+        Unlike goals (discrete outcomes), intents are long-running objectives
+        that generate multiple actions over days/weeks.
+        """
+        from src.agentic.persistent_intent import get_persistent_intent_manager
+        
+        try:
+            intent_mgr = get_persistent_intent_manager()
+            ready_intents = intent_mgr.get_ready_intents()
+            
+            if not ready_intents:
+                return
+            
+            logger.info(f"🎯 {len(ready_intents)} persistent intents ready for action")
+            
+            for intent in ready_intents[:2]:  # Top 2 ready intents
+                # Generate action to advance intent
+                action = intent_mgr.generate_action_for_intent(intent)
+                
+                if action:
+                    # Create proposal for this intent-driven action
+                    intent_proposal = {
+                        'plugin': self._map_intent_action_to_plugin(action['action_type']),
+                        'action_type': action['action_type'],
+                        'params': {
+                            'intent_id': intent.id,
+                            'intent_objective': intent.objective,
+                            'step_description': action['description'],
+                        },
+                        'context': {
+                            'source': 'persistent_intent',
+                            'intent_id': intent.id,
+                            'intent_priority': intent.priority,
+                            'progress_percent': intent.progress_percent,
+                            'goal_description': f"Advance intent: {intent.objective[:50]}...",
+                            'impact': 'medium',
+                            'risk_level': 'low',
+                        },
+                        'confidence': 0.7,
+                        'description': action['description'],
+                    }
+                    
+                    proposals.append(intent_proposal)
+                    logger.info(f"   📋 Intent action queued: {action['description'][:50]}...")
+                    
+                    # Record that we're attempting this action
+                    intent_mgr.record_intent_action(
+                        intent_id=intent.id,
+                        action_description=action['description'],
+                        success=False  # Will update to True if actually executed
+                    )
+        
+        except Exception as e:
+            logger.debug(f"Persistent intent processing error: {e}")
+    
+    def _map_intent_action_to_plugin(self, action_type: str) -> str:
+        """Map intent action types to appropriate plugins."""
+        mapping = {
+            'create_post': 'moltx',
+            'engage': 'moltx',
+            'analyze': 'analytics',
+            'execute_skill': 'selfimprove',
+        }
+        return mapping.get(action_type, 'core')
+    
+    async def _phase_cross_domain_synthesis_and_planning(
+        self,
+        agi_kernel,
+        observations,
+        proposals,
+    ) -> None:
+        """
+        Phase 4.1-4.2 — Cross-domain synthesis and strategic planning.
+        
+        Detects patterns across market, social, content domains and
+        advances multi-day strategic plans.
+        """
+        try:
+            from src.agentic.cross_domain_synthesis import get_cross_domain_synthesizer
+            from src.agentic.strategic_planner import get_strategic_planner
+            
+            # 4.1: Cross-domain synthesis
+            synthesizer = get_cross_domain_synthesizer()
+            
+            # Build market and social state from observations
+            market_state = self._extract_market_state(observations)
+            social_state = self._extract_social_state(observations)
+            
+            # Run synthesis via orchestrator
+            if agi_kernel and hasattr(agi_kernel, 'orchestrator'):
+                opportunities = agi_kernel.orchestrator.synthesize_cross_domain_opportunities(
+                    observations, market_state, social_state
+                )
+                
+                for opp in opportunities:
+                    # Convert to proposal
+                    cross_domain_proposal = {
+                        'plugin': self._map_intent_action_to_plugin(opp['proposed_action']),
+                        'action_type': opp['proposed_action'],
+                        'params': {
+                            'description': opp['description'],
+                            'source': 'cross_domain_synthesis',
+                            'domains': opp.get('source_domains', []),
+                        },
+                        'context': {
+                            'source': 'cross_domain_synthesis',
+                            'goal_description': f"Cross-domain: {opp['title']}",
+                            'impact': 'high',
+                            'risk_level': 'low',
+                            'objective_alignment': opp.get('objective_alignment', 0.5),
+                            'cross_domain_score': opp.get('cross_domain_score', 0.6),
+                        },
+                        'confidence': opp.get('cross_domain_score', 0.6),
+                        'description': opp['description'],
+                    }
+                    
+                    proposals.append(cross_domain_proposal)
+                    logger.info(f"   🔮 Cross-domain opportunity: {opp['title'][:50]}...")
+            
+            # 4.2: Strategic planning
+            planner = get_strategic_planner()
+            
+            # Advance plan if needed (check daily)
+            current_plan = planner.get_current_plan()
+            if not current_plan:
+                # Create initial plan
+                from src.agentic.owner_objectives import get_owner_objectives_manager
+                objectives_mgr = get_owner_objectives_manager()
+                objectives = objectives_mgr.get_active_objectives()
+                
+                plan = planner.create_plan(
+                    plan_type='growth',
+                    owner_objectives=[o.to_dict() for o in objectives],
+                )
+                if plan:
+                    logger.info(f"📋 Strategic plan created: {plan.title}")
+            else:
+                # Check if we need to advance to next cycle
+                days_elapsed = (datetime.now() - current_plan.created_at).days
+                if days_elapsed >= current_plan.horizon_days:
+                    new_plan = planner.advance_plan()
+                    if new_plan:
+                        logger.info(f"📋 Advanced to new strategic plan: {new_plan.title}")
+        
+        except Exception as e:
+            logger.debug(f"Cross-domain synthesis error: {e}")
+    
+    def _extract_market_state(self, observations: List[Dict]) -> Dict[str, Any]:
+        """Extract market state from observations."""
+        volatility_signals = []
+        for obs in observations:
+            content = str(obs.get('content', '')).lower()
+            if any(word in content for word in ['crash', 'surge', 'pump', 'dump', 'volatile']):
+                volatility_signals.append(1.0 if 'crash' in content else 0.7)
+        
+        return {
+            'volatility_index': max(volatility_signals) if volatility_signals else 0.3,
+            'risk_level': 'high' if volatility_signals else 'low',
+        }
+    
+    def _extract_social_state(self, observations: List[Dict]) -> Dict[str, Any]:
+        """Extract social platform state from observations."""
+        engagement_signals = []
+        trending = []
+        
+        for obs in observations:
+            content = str(obs.get('content', '')).lower()
+            if any(word in content for word in ['engaging', 'viral', 'trending']):
+                engagement_signals.append(0.8)
+            if any(word in content for word in ['trending', 'viral']):
+                # Try to extract topic
+                words = content.split()
+                for i, word in enumerate(words):
+                    if word in ['about', 'on'] and i + 1 < len(words):
+                        trending.append(words[i + 1])
+        
+        return {
+            'engagement_rate': sum(engagement_signals) / max(len(engagement_signals), 1),
+            'trending_topic_match': len(trending) > 0,
+            'trending_topics': trending[:3],
+        }
     
     async def _phase_assemble_proposals(self, agi_kernel, agi_actions, active_work_items, spine_context):
         """THINK phase — assemble, enrich, and rank all action proposals.
@@ -1772,6 +1989,42 @@ class AutonomousBrain(AGISocialMixin):
         """
         next_action = None
         
+        # Phase 2.1: Proactive goal generation via orchestrator
+        if agi_kernel and hasattr(agi_kernel, 'orchestrator'):
+            try:
+                orchestrator = agi_kernel.orchestrator
+                if orchestrator and hasattr(orchestrator, 'generate_goal_proposals'):
+                    proactive_proposals = orchestrator.generate_goal_proposals(observations)
+                    for proposal in proactive_proposals[:2]:  # Top 2 proposals
+                        # Convert to Goal and add to manager
+                        from src.agentic.goal_manager import Goal, GoalPriority
+                        goal = Goal(
+                            id=proposal['id'],
+                            title=proposal['title'],
+                            description=proposal['description'],
+                            category=proposal['category'],
+                            priority=GoalPriority.MEDIUM if proposal.get('priority', 5) <= 5 else GoalPriority.HIGH,
+                            impact_score=float(proposal.get('priority', 5)),
+                            effort_estimate='hours',
+                            confidence=proposal.get('objective_alignment', 0.5),
+                            trigger_type=proposal.get('rationale', 'proactive_generation'),
+                            trigger_data={
+                                'source': 'orchestrator_generate_goal_proposals',
+                                'proposed_action': proposal.get('proposed_action'),
+                                'evidence': proposal.get('evidence', []),
+                            },
+                            evidence=proposal.get('evidence', []),
+                        )
+                        # Add evidence for bounded upgrades if skill-related
+                        if proposal.get('bounded_upgrade_evidence'):
+                            goal.trigger_data['bounded_upgrade_evidence'] = True
+                        
+                        if self.goal_manager_v2:
+                            if self.goal_manager_v2.add_goal(goal):
+                                logger.info(f"🎯 Proactive goal added: {goal.title[:50]}...")
+            except Exception as e:
+                logger.debug(f"Proactive goal generation error: {e}")
+        
         # Hierarchical goals + planner
         if self.goal_hierarchy and self.planner:
             actionable_goals = self.goal_hierarchy.get_actionable_goals()
@@ -1780,7 +2033,7 @@ class AutonomousBrain(AGISocialMixin):
             if next_action:
                 logger.info(f"⚡ Next planned action: {next_action.description}")
         
-        # Autonomous goal generation
+        # Autonomous goal generation (legacy)
         if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
             try:
                 goal_manager = agi_kernel.goal_manager
@@ -1810,9 +2063,9 @@ class AutonomousBrain(AGISocialMixin):
                 from src.agentic.goal_manager import GoalStatus
                 proposed_goals = self.goal_manager_v2.get_goals(status=GoalStatus.PROPOSED, limit=5)
                 for goal in proposed_goals:
-                    if self.goal_manager_v2.should_auto_approve_goal(goal):
-                        self.goal_manager_v2.approve_goal(goal.id)
-                        logger.info(f"✅ Auto-approved safe goal: {goal.title}")
+                    # Phase 1.3: Auto-approve safe goals (LOW/MEDIUM priority, low risk)
+                    if self.goal_manager_v2.maybe_auto_approve_goal(goal.id):
+                        logger.info(f"🤖 Auto-approved safe goal: {goal.title} ({goal.priority.name})")
                 
                 if hasattr(self.goal_manager_v2, 'start_next_safe_goal'):
                     started_goal = self.goal_manager_v2.start_next_safe_goal()

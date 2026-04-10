@@ -707,10 +707,16 @@ class ActionRouter:
         
         for file_path in file_paths:
             result = path_protection.validate_operation(file_path, operation)
-            if not result['allowed']:
+            if not isinstance(result, dict):
+                # Path protection returned unexpected type, fail closed
                 return {
                     'approved': False,
-                    'reason': f"PathProtection: {result['reason']}"
+                    'reason': f"PathProtection: validate_operation returned {type(result).__name__}, expected dict"
+                }
+            if not result.get('allowed', False):
+                return {
+                    'approved': False,
+                    'reason': f"PathProtection: {result.get('reason', 'unknown')}"
                 }
         
         return {'approved': True, 'reason': 'PathProtection validation passed'}

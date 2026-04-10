@@ -386,9 +386,12 @@ For more info, see [CONTRIBUTING.md](https://github.com/openhome-dev/abilities/b
                 description=f"AlleyBot {plugin_name} plugin converted to OpenHome format"
             )
             
-            if result['success']:
+            if isinstance(result, dict) and result.get('success', False):
                 logger.info(f"✅ Autonomous conversion complete: {plugin_name}")
-                logger.info(f"📁 Output: {result['ability_dir']}")
+                logger.info(f"📁 Output: {result.get('ability_dir', 'unknown')}")
+            elif not isinstance(result, dict):
+                logger.error(f"❌ Conversion returned invalid type: {type(result).__name__}")
+                return {'success': False, 'error': f'Invalid result type: {type(result).__name__}'}
             
             return result
         
