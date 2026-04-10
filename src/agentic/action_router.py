@@ -455,8 +455,8 @@ class ActionRouter:
                 output_tokens=output_tokens,
                 api_duration_ms=api_duration_ms,
             )
-        except Exception:
-            pass  # Fail silently to not break action execution
+        except Exception as e:
+            logger.debug(f"Cost tracking failed (non-critical): {e}")  # Log but don't break execution
     
     def get_alley_kernel_summary(self) -> Dict[str, Any]:
         """Get summary of AlleyKernel state for monitoring."""

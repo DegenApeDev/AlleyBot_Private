@@ -1351,8 +1351,8 @@ class AGIKernel:
                     outcome_record=outcome_record,
                     trust_state=action_family_trust_state,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to record routed outcome: {e}")
 
         self._update_work_item_from_outcome(success=success, outcome_record=outcome_record, outcome=outcome)
         
@@ -1491,8 +1491,9 @@ class AGIKernel:
                 age_hours = (datetime.now(created_dt.tzinfo) - created_dt).total_seconds() / 3600
                 if age_hours > 24:
                     return False  # Work item too old, opportunity likely stale
-            except Exception:
-                pass  # Can't parse date, default to retry
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Failed to parse work item date: {e}, allowing retry")
+                # Can't parse date, default to allowing retry
         
         return True  # Opportunity still valid, can retry
 

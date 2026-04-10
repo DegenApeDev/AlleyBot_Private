@@ -1853,8 +1853,8 @@ class AutonomousBrain(AGISocialMixin):
                                     progress = agi_kernel.progress_reporter.report_goal_progress(goal.id, verify_truth=True)
                                     if progress.get('honest_assessment'):
                                         logger.info(f"   {progress['honest_assessment']}")
-                                except Exception:
-                                    pass
+                                except Exception as e:
+                                    logger.debug(f"Progress report failed for goal {goal.id}: {e}")
                             break
                 
                 if not active_goals:
@@ -2606,7 +2606,8 @@ class AutonomousBrain(AGISocialMixin):
                         limit=50
                     )
                     recent_failures = episodes if episodes else []
-                except:
+                except (AttributeError, TypeError) as e:
+                    logger.warning(f"Episodic memory query failed: {e}, using fallback")
                     # Fallback: try alternative method
                     if hasattr(agi_kernel.episodic_memory, 'episodes'):
                         all_episodes = agi_kernel.episodic_memory.episodes[-50:]
@@ -2923,7 +2924,8 @@ class AutonomousBrain(AGISocialMixin):
         """Calculate success rate from action log"""
         try:
             return self.action_logger.get_success_rate(hours=24)
-        except:
+        except (AttributeError, TypeError, ZeroDivisionError) as e:
+            logger.debug(f"Failed to get success rate: {e}")
             return 0.0
     
     def set_mode(self, mode: str) -> str:
