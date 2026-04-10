@@ -429,7 +429,8 @@ class StrategicPlanner:
         def load_json(field):
             try:
                 return json.loads(row[field]) if row[field] else []
-            except:
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.debug(f"Failed to parse JSON field: {e}")
                 return []
         
         milestones_data = load_json('milestones')

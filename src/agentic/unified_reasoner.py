@@ -518,8 +518,8 @@ Decision:"""
                             pattern, context.domain
                         )
                     })
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to process pattern for analogy: {e}")
         
         # Sort by transferability
         analogies.sort(key=lambda x: x.get('transferability', 0), reverse=True)

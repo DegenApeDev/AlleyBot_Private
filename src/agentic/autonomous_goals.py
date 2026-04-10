@@ -187,8 +187,8 @@ class OpportunityDetector:
                             'urgency': 6,
                             'target_user': user.get('user_id')
                         })
-                except:
-                    pass
+                except (KeyError, TypeError) as e:
+                    logger.debug(f"Failed to process user interaction: {e}")
         
         return opportunities
     

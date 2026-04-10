@@ -74,7 +74,8 @@ class ProgressReporter:
         if isinstance(plan_steps, str):
             try:
                 plan_steps = json.loads(plan_steps)
-            except:
+            except json.JSONDecodeError as e:
+                logger.debug(f"Failed to parse plan steps JSON: {e}")
                 plan_steps = []
         
         # Count completed vs total steps

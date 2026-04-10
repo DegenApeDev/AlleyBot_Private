@@ -109,8 +109,8 @@ class SkillExecutor:
                     if lines:
                         skill_info['description'] = lines[0].strip('#').strip()
                     break
-                except:
-                    pass
+                except (IOError, OSError) as e:
+                    logger.debug(f"Failed to read skill file: {e}")
         
         # Only return if we found an entry point
         return skill_info if skill_info['entry_point'] else None

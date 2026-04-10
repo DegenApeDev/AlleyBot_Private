@@ -49,7 +49,8 @@ class MemoryPruner:
                 timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
             else:
                 timestamp = datetime.now()
-        except:
+        except (ValueError, TypeError) as e:
+            logger.debug(f"Failed to parse timestamp: {e}")
             timestamp = datetime.now()
         
         age_days = (datetime.now() - timestamp).days

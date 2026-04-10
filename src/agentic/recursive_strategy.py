@@ -456,7 +456,8 @@ class Phase8SynergyAudit:
             result = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], 
                                   capture_output=True, text=True)
             return result.stdout.strip() or "unknown"
-        except:
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.debug(f"Failed to get git commit hash: {e}")
             return "unknown"
 
 

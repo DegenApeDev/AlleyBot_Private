@@ -713,7 +713,8 @@ class Metacognition:
         # Calculate volatility
         try:
             volatility = statistics.stdev(recent_performance)
-        except:
+        except statistics.StatisticsError as e:
+            logger.debug(f"Could not calculate volatility: {e}")
             volatility = 0
         
         # Calculate trend

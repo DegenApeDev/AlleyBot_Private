@@ -245,8 +245,8 @@ class CompetitorMonitor:
                     try:
                         dt = datetime.fromisoformat(post['posted_at'])
                         hours_dist[dt.hour] += 1
-                    except:
-                        pass
+                    except (ValueError, TypeError, KeyError) as e:
+                        logger.debug(f"Failed to parse post timestamp: {e}")
                 
                 # Topic analysis
                 topics = defaultdict(int)
