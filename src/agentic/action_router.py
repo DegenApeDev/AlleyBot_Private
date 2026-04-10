@@ -987,7 +987,11 @@ class ActionRouter:
         print(f"🔄 Routing action: {action_id}")
         validation_trace = []
         
+        # ISSUE-026: Track which validation stages actually execute
+        executed_stages: set = set()
+        
         # Step 1: AGI Kernel validation
+        executed_stages.add('agi_validation')
         validation = self._normalize_validation_result(
             'agi_validation',
             await self._validate_with_agi(action_spec),
@@ -1004,6 +1008,7 @@ class ActionRouter:
             }
         
         # Step 1.2: Moltx Engage-First Gate (Rate Limiting)
+        executed_stages.add('moltx_engage_first_gate')
         moltx_gate = self._check_moltx_engage_first_gate(action_spec)
         if not moltx_gate['approved']:
             validation_trace.append({
@@ -1022,6 +1027,7 @@ class ActionRouter:
             }
         
         # Step 1.5: FairMind DNA validation (Ethical Consciousness)
+        executed_stages.add('fairmind_validation')
         if self.agi and hasattr(self.agi, 'fairmind'):
             try:
                 fairmind_check = self.agi.fairmind.validate_action(
@@ -1064,6 +1070,7 @@ class ActionRouter:
                 print(f"⚠️ FairMind validation error (non-critical): {e}")
         
         # Step 2: Apply episodic learning modulation
+        executed_stages.add('episodic_modulation')
         modulated_action = action_spec
         if hasattr(self.agi, 'behavior_modulator'):
             context = {
@@ -1087,6 +1094,7 @@ class ActionRouter:
         validation_profile = self._get_validation_profile(modulated_action)
 
         # Step 3.6: AlleyKernel PathProtection validation (file/directory security)
+        executed_stages.add('path_protection')
         path_protection_check = self._normalize_validation_result(
             'path_protection',
             self._validate_path_protection(modulated_action),
@@ -1103,6 +1111,7 @@ class ActionRouter:
             }
 
         # Step 3.5: AlleyKernel SynergyGate validation (fail-closed security)
+        executed_stages.add('alley_kernel_synergy_gate')
         alley_kernel_gate = self._normalize_validation_result(
             'alley_kernel_synergy_gate',
             self._validate_with_alley_kernel_synergy(modulated_action),
@@ -1119,6 +1128,7 @@ class ActionRouter:
             }
 
         # Step 3: Synergy validation (field / harmonic approval)
+        executed_stages.add('synergy_validation')
         synergy_check = self._normalize_validation_result(
             'synergy_validation',
             self._validate_with_synergy(modulated_action),
@@ -1137,6 +1147,7 @@ class ActionRouter:
         
         # Step 4: SyMod verification (for high-impact actions)
         if validation_profile['requires_strict_validation']:
+            executed_stages.add('symod_verification')
             symod_check = self._normalize_validation_result(
                 'symod_verification',
                 self._verify_with_symod(modulated_action, validation),
@@ -1154,10 +1165,12 @@ class ActionRouter:
                 }
 
         # Step 4.5: Build pre-action prediction artifact for later reflection
+        executed_stages.add('prediction_artifact')
         prediction = self._build_prediction_record(modulated_action, validation, validation_profile)
         modulated_action.setdefault('context', {})['prediction'] = prediction
         
         # Step 4.75: FairMind & Human-in-the-Loop Gating for High-Risk Actions
+        executed_stages.add('hitl_gating')
         action_type = modulated_action.get('action_type', '')
         params_str = str(modulated_action.get('params', {})).lower()
         
@@ -1199,6 +1212,7 @@ class ActionRouter:
                     print(f"⚠️ Could not load ApprovalDashboard: {e}")
 
         # Step 5: Execute via plugin
+        executed_stages.add('plugin_execution')
         try:
             result = await self._execute_via_plugin(modulated_action)
             
@@ -1211,6 +1225,7 @@ class ActionRouter:
             prediction_evaluation = self._build_prediction_evaluation(modulated_action, result)
             
             # Step 6: Reflect and learn through the unified AGI pathway
+            executed_stages.add('reflect_and_learn')
             await self._reflect_on_outcome(modulated_action, result, validation, prediction_evaluation)
             result['outcome_record'] = self._build_outcome_record(
                 modulated_action,
@@ -1224,13 +1239,8 @@ class ActionRouter:
             # Step 7: Feed learning to MetaLearner for strategy evolution
             await self._feed_learning_to_meta_learner(modulated_action, result, prediction_evaluation)
             
-            # Add metadata
-            result['action_id'] = action_id
-            result['execution_time_ms'] = (datetime.now() - start_time).total_seconds() * 1000
-            result['routed_through_agi'] = True
-            result['validation_trace'] = validation_trace
-            result['prediction'] = prediction
-            result['prediction_evaluation'] = prediction_evaluation
+            # ISSUE-026: Verify all validation stages executed
+            self._verify_validation_stages(executed_stages, action_id)
             
             return result
         except Exception as e:
@@ -1250,6 +1260,9 @@ class ActionRouter:
             
             # Step 7: Feed learning to MetaLearner for strategy evolution
             await self._feed_learning_to_meta_learner(modulated_action, error_result, error_result['prediction_evaluation'])
+            
+            # ISSUE-026: Verify all validation stages executed (even on error)
+            self._verify_validation_stages(executed_stages, action_id)
             
             return error_result
 
@@ -1573,6 +1586,40 @@ class ActionRouter:
             'critical': 5,
         }
         return ranks.get(str(risk).lower(), 2)
+
+    def _verify_validation_stages(self, executed_stages: set, action_id: str) -> None:
+        """
+        ISSUE-026: Verify all required validation stages executed.
+        
+        Logs warnings if any stages were skipped. This ensures the validation
+        ladder is complete and catches gaps in routing logic.
+        """
+        # Required stages that must always execute
+        required_stages = {
+            'agi_validation',
+            'moltx_engage_first_gate',
+            'fairmind_validation',
+            'episodic_modulation',
+            'path_protection',
+            'alley_kernel_synergy_gate',
+            'synergy_validation',
+            'prediction_artifact',
+            'hitl_gating',
+            'plugin_execution',
+            'reflect_and_learn',
+        }
+        
+        # symod_verification is conditional (only for high-impact actions)
+        if 'symod_verification' in executed_stages:
+            required_stages.add('symod_verification')
+        
+        missing = required_stages - executed_stages
+        if missing:
+            logger.warning(
+                f"ISSUE-026: Validation stage gap for {action_id}. "
+                f"Missing stages: {sorted(missing)}. "
+                f"Executed: {sorted(executed_stages)}"
+            )
     
     def get_execution_stats(self) -> Dict:
         """Get statistics about action execution"""

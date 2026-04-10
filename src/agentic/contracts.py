@@ -224,7 +224,18 @@ class ValidationProfile:
     risk_level: RiskLevel = RiskLevel.MEDIUM
     trust_level: TrustLevel = TrustLevel.NORMAL
     requires_strict_validation: bool = False
-    
+
+    def __post_init__(self):
+        """ISSUE-013: Validate field values on instantiation."""
+        if not isinstance(self.impact, ImpactLevel):
+            raise ValueError(f"impact must be ImpactLevel enum, got {type(self.impact)}")
+        if not isinstance(self.risk_level, RiskLevel):
+            raise ValueError(f"risk_level must be RiskLevel enum, got {type(self.risk_level)}")
+        if not isinstance(self.trust_level, TrustLevel):
+            raise ValueError(f"trust_level must be TrustLevel enum, got {type(self.trust_level)}")
+        if not isinstance(self.requires_strict_validation, bool):
+            raise ValueError(f"requires_strict_validation must be bool, got {type(self.requires_strict_validation)}")
+
     @classmethod
     def from_action_spec(cls, action_spec: Dict[str, Any]) -> "ValidationProfile":
         """Build validation profile from raw action spec."""
@@ -267,7 +278,22 @@ class PredictionRecord:
     confidence: float
     exploration: Optional[Dict[str, Any]] = None
     basis: Dict[str, Any] = field(default_factory=dict)
-    
+
+    def __post_init__(self):
+        """ISSUE-013: Validate field values on instantiation."""
+        if not self.timestamp:
+            raise ValueError("timestamp is required")
+        if not self.plugin:
+            raise ValueError("plugin is required")
+        if not self.action_type:
+            raise ValueError("action_type is required")
+        if self.expected_value not in ('low', 'medium', 'high'):
+            raise ValueError(f"expected_value must be 'low', 'medium', or 'high', got {self.expected_value}")
+        if self.expected_risk not in ('low', 'medium', 'high', 'critical'):
+            raise ValueError(f"expected_risk must be 'low', 'medium', 'high', or 'critical', got {self.expected_risk}")
+        if not (0.0 <= self.confidence <= 1.0):
+            raise ValueError(f"confidence must be between 0.0 and 1.0, got {self.confidence}")
+
     @classmethod
     def from_action_spec(
         cls,
@@ -434,7 +460,20 @@ class ActionOutcome:
     # Execution metadata
     execution_time_ms: float = 0.0
     routed_through_agi: bool = True
-    
+
+    def __post_init__(self):
+        """ISSUE-013: Validate field values on instantiation."""
+        if not self.action_id:
+            raise ValueError("action_id is required")
+        if not self.plugin:
+            raise ValueError("plugin is required")
+        if not self.action_type:
+            raise ValueError("action_type is required")
+        if self.execution_time_ms < 0:
+            raise ValueError(f"execution_time_ms must be non-negative, got {self.execution_time_ms}")
+        if not isinstance(self.success, bool):
+            raise ValueError(f"success must be bool, got {type(self.success)}")
+
     @classmethod
     def from_result_dict(cls, result: Dict[str, Any], action_envelope: ActionEnvelope) -> "ActionOutcome":
         """Build from legacy result dictionary."""
