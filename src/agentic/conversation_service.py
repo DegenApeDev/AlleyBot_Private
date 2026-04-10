@@ -461,7 +461,7 @@ CRITICAL RULES:
                         identity_validated=True,
                     )
                 else:
-                    error_msg = result.error if result else "Unknown error"
+                    error_msg = result.error if result and result.error else "Unknown error"
                     return ConversationResponse(
                         response_text=f"⚠️ Action failed: {error_msg[:200]}",
                         response_type="error",
