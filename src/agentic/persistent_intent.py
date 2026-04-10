@@ -518,6 +518,52 @@ class PersistentIntentManager:
         
         return "\n".join(lines)
 
+    # =========================================================================
+    # ASYNC WRAPPERS (P0-002: Fix Async Blocking I/O)
+    # =========================================================================
+
+    async def aget_intent(self, intent_id: str) -> Optional[PersistentIntent]:
+        """Async version of get_intent - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_intent, intent_id)
+
+    async def aget_active_intents(self, limit: int = 20) -> List[PersistentIntent]:
+        """Async version of get_active_intents - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_active_intents, limit)
+
+    async def aget_ready_intents(self, limit: int = 5) -> List[PersistentIntent]:
+        """Async version of get_ready_intents - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_ready_intents, limit)
+
+    async def aadd_intent(self, intent: PersistentIntent) -> bool:
+        """Async version of add_intent - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.add_intent, intent)
+
+    async def arecord_action(self, intent_id: str, success: bool, outcome: str) -> bool:
+        """Async version of record_action - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.record_action, intent_id, success, outcome)
+
+    async def acomplete_intent(self, intent_id: str, final_outcome: str) -> bool:
+        """Async version of complete_intent - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.complete_intent, intent_id, final_outcome)
+
+    async def aget_next_action_for_intent(self, intent: PersistentIntent) -> Optional[Dict[str, Any]]:
+        """Async version of get_next_action_for_intent - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_next_action_for_intent, intent)
+
 
 # Singleton
 _manager_instance: Optional[PersistentIntentManager] = None

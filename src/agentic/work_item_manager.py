@@ -428,6 +428,48 @@ class WorkItemManager:
             return min(repeated_need_count, 3)
         return 0
 
+    # =========================================================================
+    # ASYNC WRAPPERS (P0-002: Fix Async Blocking I/O)
+    # =========================================================================
+
+    async def aget_work_item(self, item_id: str) -> Optional[Dict[str, Any]]:
+        """Async version of get_work_item - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_work_item, item_id)
+
+    async def aget_ready_items(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Async version of get_ready_items - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_ready_items, limit)
+
+    async def aget_active_items(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Async version of get_active_items - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_active_items, limit)
+
+    async def aupsert_work_item(self, item: Dict[str, Any]) -> bool:
+        """Async version of upsert_work_item - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.upsert_work_item, item)
+
+    async def aupdate_work_item_status(
+        self,
+        work_item_id: str,
+        status: str,
+        blocked_reason: Optional[str] = None,
+        last_outcome: Optional[str] = None
+    ) -> bool:
+        """Async version of update_work_item_status - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.update_work_item_status, work_item_id, status, blocked_reason, last_outcome
+        )
+
 
 def create_work_item_manager(core=None) -> WorkItemManager:
     if core and hasattr(core, 'data_dir') and core.data_dir:

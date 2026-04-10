@@ -487,6 +487,40 @@ class StrategicPlanner:
         
         return "\n".join(lines)
 
+    # =========================================================================
+    # ASYNC WRAPPERS (P0-002: Fix Async Blocking I/O)
+    # =========================================================================
+
+    async def aget_current_plan(self) -> Optional['StrategicPlan']:
+        """Async version of get_current_plan - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_current_plan)
+
+    async def acreate_plan(self, plan_type: str = 'growth', owner_objectives: List[Dict] = None) -> Optional['StrategicPlan']:
+        """Async version of create_plan - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.create_plan, plan_type, owner_objectives)
+
+    async def aadvance_plan(self) -> Optional['StrategicPlan']:
+        """Async version of advance_plan - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.advance_plan)
+
+    async def aupdate_milestone_status(self, milestone_id: str, status: str, outcome: str = "") -> bool:
+        """Async version of update_milestone_status - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.update_milestone_status, milestone_id, status, outcome)
+
+    async def aget_plan_history(self, limit: int = 10) -> List['StrategicPlan']:
+        """Async version of get_plan_history - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_plan_history, limit)
+
 
 # Singleton
 _planner_instance: Optional[StrategicPlanner] = None

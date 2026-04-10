@@ -345,6 +345,58 @@ class OwnerObjectivesManager:
         
         return "\n".join(lines)
 
+    # =========================================================================
+    # ASYNC WRAPPERS (P0-002: Fix Async Blocking I/O)
+    # =========================================================================
+
+    async def aget_active_objectives(self) -> List[OwnerObjective]:
+        """Async version of get_active_objectives - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_active_objectives)
+
+    async def aget_objective_by_id(self, objective_id: str) -> Optional[OwnerObjective]:
+        """Async version of get_objective_by_id - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_objective_by_id, objective_id)
+
+    async def aadd_objective(self, objective: OwnerObjective) -> bool:
+        """Async version of add_objective - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.add_objective, objective)
+
+    async def aupdate_objective(self, objective_id: str, **updates) -> bool:
+        """Async version of update_objective - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.update_objective, objective_id, **updates)
+
+    async def adelete_objective(self, objective_id: str) -> bool:
+        """Async version of delete_objective - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.delete_objective, objective_id)
+
+    async def aget_engagement_preferences(self) -> 'EngagementPreferences':
+        """Async version of get_engagement_preferences - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_engagement_preferences)
+
+    async def aupdate_engagement_preferences(self, **updates) -> bool:
+        """Async version of update_engagement_preferences - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.update_engagement_preferences, **updates)
+
+    async def ascore_goal_alignment(self, goal_description: str) -> float:
+        """Async version of score_goal_alignment - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.score_goal_alignment, goal_description)
+
 
 # Singleton
 _objectives_manager: Optional[OwnerObjectivesManager] = None
