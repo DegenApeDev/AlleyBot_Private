@@ -1840,11 +1840,11 @@ class AutonomousBrain(AGISocialMixin):
             try:
                 goal_manager = agi_kernel.goal_manager
                 from src.agentic.goal_manager import GoalStatus
-                active_goals = goal_manager.get_goals(status=GoalStatus.ACTIVE, limit=5)
+                active_goals = await goal_manager.aget_goals(status=GoalStatus.ACTIVE, limit=5)
                 
                 if active_goals:
                     for goal in sorted(active_goals, key=lambda g: g.impact_score, reverse=True):
-                        na = goal_manager.get_next_action_for_goal(goal)
+                        na = await goal_manager.aget_next_action_for_goal(goal)
                         if na:
                             goal_driven_action = na
                             logger.info(f"🎯 Goal-driven action: {na['action_type']} for goal '{goal.title}'")
@@ -1948,7 +1948,7 @@ class AutonomousBrain(AGISocialMixin):
                                 trigger_type='meta_cognition',
                                 evidence=[f"Cognitive health assessment: {cognitive_state.grade}"]
                             )
-                            if agi_kernel.goal_manager.add_goal(new_goal):
+                            if await agi_kernel.goal_manager.aadd_goal(new_goal):
                                 logger.info(f"   ✅ Self-improvement goal created: {new_goal.id}")
                     else:
                         logger.info("   ✅ Cognitive health is good - no improvements needed")
@@ -1962,7 +1962,7 @@ class AutonomousBrain(AGISocialMixin):
                     from src.agentic.action_logger import get_action_logger
                     action_logger = get_action_logger()
                     
-                    recent_actions = action_logger.get_recent_outcomes(limit=100)
+                    recent_actions = await action_logger.aget_recent_outcomes(limit=100)
                     action_types = {}
                     for action in recent_actions:
                         at = action.get('action_type', 'unknown')
@@ -2646,7 +2646,7 @@ class AutonomousBrain(AGISocialMixin):
                     action_logger = get_action_logger()
                     
                     # Get recent actions with "not found" errors
-                    recent_actions = action_logger.get_recent_outcomes(limit=50)
+                    recent_actions = await action_logger.aget_recent_outcomes(limit=50)
                     
                     for action in recent_actions:
                         error = action.get('error', '')
@@ -2672,7 +2672,7 @@ class AutonomousBrain(AGISocialMixin):
                     action_logger = get_action_logger()
                     
                     # Get actions with high duration
-                    recent_actions = action_logger.get_recent_outcomes(limit=50)
+                    recent_actions = await action_logger.aget_recent_outcomes(limit=50)
                     
                     # Group by action type and calculate avg duration
                     action_durations = {}
