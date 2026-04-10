@@ -317,7 +317,8 @@ class ContextualAwareness:
         try:
             active_goals = self.goal_manager.get_active_goals()
             return [goal.description for goal in active_goals[:5]]
-        except:
+        except Exception as e:
+            logger.debug(f"Failed to get active goals: {e}")
             return []
     
     def _get_recent_activity(self) -> List[str]:
@@ -346,8 +347,8 @@ class ContextualAwareness:
                         'recent_events': len(platform_events),
                         'last_activity': platform_events[0].timestamp if platform_events else None
                     }
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to get platform states: {e}")
         
         return states
     

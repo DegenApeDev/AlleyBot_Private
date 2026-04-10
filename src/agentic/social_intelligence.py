@@ -378,8 +378,8 @@ class SocialIntelligence:
                     cv = statistics.stdev(response_times) / statistics.mean(response_times)
                     if cv < 0.1:  # Very consistent
                         flags += 0.2
-                except:
-                    pass
+                except (statistics.StatisticsError, ZeroDivisionError) as e:
+                    logger.debug(f"Statistics calculation failed: {e}")
         
         # Check content patterns (repetition)
         contents = [i['content'] for i in interactions if i['content']]
@@ -453,8 +453,8 @@ class SocialIntelligence:
                 # Lower CV = more reliable
                 reliability = max(0, 1 - cv)
                 return min(1.0, 0.5 + reliability * 0.5)
-            except:
-                pass
+            except (statistics.StatisticsError, ZeroDivisionError) as e:
+                logger.debug(f"Statistics calculation failed: {e}")
         
         return 0.5
     

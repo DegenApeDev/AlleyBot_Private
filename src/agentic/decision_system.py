@@ -1379,8 +1379,8 @@ If no action is appropriate right now, respond with "none".
                     hours_since = (datetime.datetime.now() - last_run).total_seconds() / 3600
                     # Bonus for actions not run in a while
                     score += min(hours_since / 24, 0.5)  # Max 0.5 bonus
-                except:
-                    pass
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Failed to parse last_run date: {e}")
             else:
                 score += 0.5  # Bonus for never-run actions
             

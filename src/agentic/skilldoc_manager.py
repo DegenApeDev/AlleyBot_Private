@@ -144,8 +144,8 @@ class SkillDocManager:
                                     for callback in self.update_callbacks:
                                         try:
                                             callback(p, content.decode('utf-8', errors='ignore'))
-                                        except:
-                                            pass
+                                        except Exception as e:
+                                            logger.debug(f"Callback failed for {p}: {e}")
                                 else:
                                     results[p] = {'updated': False, 'reason': 'checksum_match'}
                                     self.last_modified[p] = remote_modified
@@ -262,8 +262,8 @@ class SkillDocManager:
             )
             if result.returncode == 0 and result.stdout:
                 return result.stdout
-        except:
-            pass
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.debug(f"Git command failed: {e}")
         return None
 
 

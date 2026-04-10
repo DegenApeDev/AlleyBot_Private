@@ -337,8 +337,8 @@ class PredictiveSuggestions:
                 active = stats.get('active', 0)
                 if active > 0:
                     briefing_parts.append(f"You have {active} active goals.")
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to get goal stats: {e}")
         
         # Add performance insight
         if self.content_intelligence:
@@ -348,8 +348,8 @@ class PredictiveSuggestions:
                 total = stats.get('total_content', 0)
                 if total > 0:
                     briefing_parts.append(f"Posted {total} times yesterday.")
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to analyze content performance: {e}")
         
         briefing_parts.append("What should we work on today?")
         

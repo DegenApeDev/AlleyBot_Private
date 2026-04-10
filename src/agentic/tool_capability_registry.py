@@ -81,8 +81,8 @@ class ToolCapabilityRegistry:
                 if hasattr(plugin, 'get_commands'):
                     try:
                         actions = plugin.get_commands()
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Failed to get commands from {plugin_name}: {e}")
                 
                 # Store tool metadata
                 self.tool_metadata[plugin_name] = {
@@ -198,8 +198,8 @@ class ToolCapabilityRegistry:
                     if lines:
                         skill_info['description'] = lines[0].strip('#').strip()
                     break
-                except:
-                    pass
+                except (IOError, OSError) as e:
+                    logger.debug(f"Failed to read skill file: {e}")
         
         # Infer capabilities from skill name
         skill_name = skill_dir.name.lower()
