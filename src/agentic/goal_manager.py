@@ -12,6 +12,7 @@ Enables Alley to:
 Part of AGI Core - Phase 2: Goal Management
 """
 
+import asyncio
 import json
 import sqlite3
 from datetime import datetime, timedelta
@@ -1165,6 +1166,88 @@ class GoalManager:
             owner_priority_override=get('owner_priority_override'),
             auto_approved=bool(get('auto_approved', 0))
         )
+
+    # =========================================================================
+    # ASYNC WRAPPERS (P0-002: Fix Async Blocking I/O)
+    # =========================================================================
+    # These methods wrap synchronous DB operations in run_in_executor
+    # to prevent blocking the async event loop. They provide the same
+    # functionality as their sync counterparts but can be called from
+    # async contexts without blocking.
+    # =========================================================================
+
+    async def aget_goals(
+        self,
+        status: Optional[GoalStatus] = None,
+        category: Optional[str] = None,
+        priority_min: Optional[int] = None,
+        limit: int = 50
+    ) -> List[Goal]:
+        """Async version of get_goals - non-blocking"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.get_goals, status, category, priority_min, limit
+        )
+
+    async def aget_goal(self, goal_id: str) -> Optional[Goal]:
+        """Async version of get_goal - non-blocking"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_goal, goal_id)
+
+    async def aadd_goal(self, goal: Goal) -> bool:
+        """Async version of add_goal - non-blocking"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.add_goal, goal)
+
+    async def aapprove_goal(self, goal_id: str) -> bool:
+        """Async version of approve_goal - non-blocking"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.approve_goal, goal_id)
+
+    async def astart_goal(self, goal_id: str) -> bool:
+        """Async version of start_goal - non-blocking"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.start_goal, goal_id)
+
+    async def acomplete_goal(self, goal_id: str, outcome: str = "") -> bool:
+        """Async version of complete_goal - non-blocking"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.complete_goal, goal_id, outcome)
+
+    async def aget_active_goals(self, limit: int = 10) -> List[Goal]:
+        """Async version of get_active_goals - non-blocking"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_active_goals, limit)
+
+    async def aget_pending_goals(self, limit: int = 10) -> List[Goal]:
+        """Async version of get_pending_goals - non-blocking"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_pending_goals, limit)
+
+    async def aget_next_action_for_goal(self, goal: Goal) -> Optional[Dict]:
+        """Async version of get_next_action_for_goal - non-blocking"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_next_action_for_goal, goal)
+
+    async def areject_goal(self, goal_id: str, reason: str = "") -> bool:
+        """Async version of reject_goal - non-blocking"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.reject_goal, goal_id, reason)
+
+    async def aget_stats(self) -> Dict[str, int]:
+        """Async version of get_stats - non-blocking"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_stats)
+
+    async def arecord_goal_failure(self, goal_id: str, error: str) -> bool:
+        """Async version of record_goal_failure - non-blocking"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.record_goal_failure, goal_id, error)
+
+    async def arecord_goal_success(self, goal_id: str, outcome: str) -> bool:
+        """Async version of record_goal_success - non-blocking"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.record_goal_success, goal_id, outcome)
 
 
 # Singleton

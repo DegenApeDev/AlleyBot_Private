@@ -503,6 +503,68 @@ class ActionLogger:
         """Close database connection"""
         pass  # SQLite connections are context-managed
 
+    # =========================================================================
+    # ASYNC WRAPPERS (P0-002: Fix Async Blocking I/O)
+    # =========================================================================
+    # These methods wrap synchronous DB operations in run_in_executor
+    # to prevent blocking the async event loop.
+    # =========================================================================
+
+    async def alog_action(self, record: ActionRecord) -> bool:
+        """Async version of log_action - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.log_action, record)
+
+    async def alog_outcome_record(self, outcome_record: Dict[str, Any]) -> Optional[ActionRecord]:
+        """Async version of log_outcome_record - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.log_outcome_record, outcome_record)
+
+    async def aget_recent_actions(self,
+                                   plugin: Optional[str] = None,
+                                   action_type: Optional[str] = None,
+                                   outcome: Optional[str] = None,
+                                   limit: int = 50) -> List[ActionRecord]:
+        """Async version of get_recent_actions - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.get_recent_actions, plugin, action_type, outcome, limit
+        )
+
+    async def aget_recent_outcomes(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Async version of get_recent_outcomes - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_recent_outcomes, limit)
+
+    async def aget_success_rate(self,
+                                 plugin: Optional[str] = None,
+                                 action_type: Optional[str] = None,
+                                 hours: int = 24) -> float:
+        """Async version of get_success_rate - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.get_success_rate, plugin, action_type, hours
+        )
+
+    async def aget_statistics(self, hours: int = 24) -> Dict[str, Any]:
+        """Async version of get_statistics - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_statistics, hours)
+
+    async def aget_action_performance_summary(self, hours: int = 72, limit: int = 25) -> Dict[str, Dict[str, Any]]:
+        """Async version of get_action_performance_summary - non-blocking"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.get_action_performance_summary, hours, limit
+        )
+
 
 # Singleton instance
 _action_logger_instance: Optional[ActionLogger] = None
