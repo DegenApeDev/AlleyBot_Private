@@ -192,7 +192,7 @@
     }
   },
   "clawchess": {
-    "enabled": false,
+    "enabled": true,
     "config": {
       "auto_play": true,
       "max_games_per_hour": 4

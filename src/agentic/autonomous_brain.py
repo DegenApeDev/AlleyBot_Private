@@ -575,7 +575,7 @@ class AutonomousBrain(AGISocialMixin):
                 logger.info(f"🧠 Unified Reasoning: {reasoning_result.explanation[:100]}...")
         
         # === PERIODIC REFLECTION: Meta-cognition + performance optimization ===
-        self._phase_periodic_reflection(agi_kernel)
+        await self._phase_periodic_reflection(agi_kernel)
         
         # === THINK: Assemble and rank proposals ===
         proposals = await self._phase_assemble_proposals(agi_kernel, agi_actions, active_work_items, spine_context)
@@ -1907,9 +1907,9 @@ class AutonomousBrain(AGISocialMixin):
         
         return proposals
     
-    def _phase_periodic_reflection(self, agi_kernel):
+    async def _phase_periodic_reflection(self, agi_kernel):
         """THINK sub-phase — periodic meta-cognition and performance analysis.
-        
+
         Meta-cognition runs every 100 cycles, performance optimization every 50.
         """
         cycle_count = self.stats.get('cycles_completed', 0)
