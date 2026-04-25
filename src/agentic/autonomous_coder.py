@@ -437,14 +437,15 @@ class TestSkill:
         assert isinstance(result, dict)
 '''
     
-    def deploy_skill(self, skill: GeneratedSkill) -> bool:
+    MIN_COVERAGE_PERCENT = 80
+
+    def deploy_skill(self, skill: GeneratedSkill, test_results: Optional[Dict] = None) -> bool:
         """
-        Deploy a generated skill to production.
-        
-        This marks the skill as deployed and makes it available for use.
+        Deploy a generated skill to production with fall-safe rollback.
         
         Args:
             skill: GeneratedSkill to deploy
+            test_results: Optional dict with 'passed', 'total', 'coverage' keys
             
         Returns:
             True if deployment successful
@@ -454,6 +455,40 @@ class TestSkill:
                 logger.warning(f"Cannot deploy skill {skill.skill_name} - status is {skill.status}")
                 return False
             
+            # 6.3: Check test coverage requirement
+            if test_results:
+                coverage = test_results.get('coverage', 0)
+                if coverage < self.MIN_COVERAGE_PERCENT:
+                    logger.warning(f"⚠️ Coverage {coverage}% < {self.MIN_COVERAGE_PERCENT}%, blocking deployment")
+                    skill.errors.append(f"Coverage requirement not met: {coverage}% < {self.MIN_COVERAGE_PERCENT}%")
+                    return False
+                
+                passed = test_results.get('passed', 0)
+                total = test_results.get('total', 0)
+                if total > 0 and (passed / total) < 0.8:
+                    logger.warning(f"⚠️ Test pass rate {passed/total:.0%} < 80%, blocking deployment")
+                    skill.errors.append(f"Test pass rate requirement not met")
+                    return False
+            
+            # 6.4: Fall-safe - backup existing files before deployment
+            backup_dir = None
+            try:
+                skill_dir = Path(skill.skill_path)
+                if skill_dir.exists():
+                    backup_parent = Path('.sandbox/backups')
+                    backup_parent.mkdir(parents=True, exist_ok=True)
+                    backup_dir = backup_parent / f"{skill.spec_id}_{int(datetime.now().timestamp())}"
+                    backup_dir.mkdir(exist_ok=True)
+                    # Backup existing files
+                    for f in skill_dir.glob('*'):
+                        if f.is_file():
+                            import shutil
+                            shutil.copy2(f, backup_dir / f.name)
+                    logger.info(f"📦 Backed up existing skill to {backup_dir}")
+            except Exception as be:
+                logger.warning(f"⚠️ Backup failed, proceeding anyway: {be}")
+                backup_dir = None
+            
             # Update skill status
             skill.status = 'deployed'
             self.generated_skills[skill.spec_id] = skill
@@ -462,13 +497,24 @@ class TestSkill:
             try:
                 skill_dir = Path(skill.skill_path)
                 if skill_dir.exists() and skill.files_created:
-                    # Try to find and load via plugin manager
                     from src.core.plugin_manager import get_plugin_manager
                     pm = get_plugin_manager()
                     if pm and hasattr(pm, 'reload_plugin'):
                         pm.reload_plugin(skill.spec_id)
                         logger.info(f"🔀 Hot-reloaded skill plugin: {skill.skill_name}")
             except Exception as re:
+                # 6.4: Rollback on hot-load failure
+                if backup_dir and backup_dir.exists():
+                    logger.warning(f"⚠️ Hot-reload failed, rolling back from {backup_dir}")
+                    try:
+                        import shutil
+                        for f in backup_dir.glob('*'):
+                            if f.is_file():
+                                target = skill_dir / f.name
+                                shutil.copy2(f, target)
+                        logger.info("✅ Rollback complete")
+                    except Exception as rb:
+                        logger.error(f"❌ Rollback failed: {rb}")
                 logger.warning(f"⚠️ Hot-reload failed (skill available on restart): {re}")
             
             logger.info(f"🚀 Deployed skill: {skill.skill_name} at {skill.skill_path}")

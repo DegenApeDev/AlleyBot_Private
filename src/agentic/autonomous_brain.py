@@ -2934,6 +2934,30 @@ class AutonomousBrain(AGISocialMixin):
                                 })
                 except Exception as e:
                     logger.debug(f"Performance bottleneck detection error: {e}")
+            
+            # 6.5: Wire skill gap detection to SelfModel belief data
+            try:
+                from src.agentic.self_model import get_self_model
+                self_model = get_self_model()
+                
+                # Get learning priorities from SelfModel
+                learning_priorities = self_model.what_should_i_learn()
+                
+                for item in learning_priorities:
+                    skill_gaps.append({
+                        'type': 'belief_driven_learning',
+                        'domain': item.get('domain', 'unknown'),
+                        'action_type': item.get('action_type', 'unknown'),
+                        'reason': item.get('reason', 'unknown'),
+                        'sample_size': item.get('sample_size', 0),
+                        'success_rate': item.get('success_rate', 0),
+                        'priority': 8 if item.get('priority') == 'high' else 5,
+                        'description': f"Belief-driven: {item.get('reason')} - {item.get('action_type')}",
+                        'error_patterns': [f"Low confidence due to {item.get('reason')}"]
+                    })
+                logger.debug(f"Added {len(learning_priorities)} belief-driven skill gaps")
+            except Exception as e:
+                logger.debug(f"SelfModel integration error: {e}")
         
         except Exception as e:
             logger.debug(f"Skill gap detection error: {e}")

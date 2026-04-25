@@ -319,6 +319,99 @@ class DynamicSkillsMixin:
                 if self.check_skill_needs_update(name)
             ]
         }
+    
+    # 6.7: Skill deprecation on repeated failures
+    MAX_CONSECUTIVE_FAILURES = 5
+    MAX_FAILURE_RATE_THRESHOLD = 0.7
+    
+    def deprecate_skill(self, skill_name: str, reason: str = "repeated_failures") -> Dict[str, Any]:
+        """
+        Deprecate a skill that has failed repeatedly.
+        Moves to archive and updates beliefs.
+        
+        Args:
+            skill_name: Name of skill to deprecate
+            reason: Reason for deprecation
+            
+        Returns:
+            Dict with deprecation result
+        """
+        if skill_name not in self.skill_registry:
+            return {'success': False, 'error': f'Skill {skill_name} not found'}
+        
+        skill_info = self.skill_registry[skill_name]
+        perf = self.skill_performance.get(skill_name, {})
+        
+        # Check deprecation criteria
+        consecutive_failures = perf.get('failures', 0)
+        if perf.get('uses', 0) > 0:
+            failure_rate = perf['failures'] / perf['uses']
+        else:
+            failure_rate = 0
+        
+        if consecutive_failures < self.MAX_CONSECUTIVE_FAILURES and failure_rate < self.MAX_FAILURE_RATE_THRESHOLD:
+            return {'success': False, 'error': 'Skill does not meet deprecation criteria'}
+        
+        print(f"🗑️ Deprecating skill: {skill_name} (failures: {consecutive_failures}, rate: {failure_rate:.0%})")
+        
+        # Archive the skill
+        try:
+            old_file = Path(skill_info['file'])
+            if old_file.exists():
+                archive_dir = self.generated_skills_dir / 'deprecated'
+                archive_dir.mkdir(exist_ok=True)
+                deprecated_file = archive_dir / f"{skill_name}_deprecated_{int(time.time())}.py"
+                old_file.rename(deprecated_file)
+                print(f"📦 Archived to {deprecated_file}")
+        except Exception as e:
+            print(f"⚠️ Failed to archive skill file: {e}")
+        
+        # Update registry status
+        self.skill_registry[skill_name]['status'] = 'deprecated'
+        self.skill_registry[skill_name]['deprecated_at'] = datetime.now().isoformat()
+        self.skill_registry[skill_name]['deprecation_reason'] = reason
+        
+        # Record in beliefs for future learning
+        try:
+            from src.agentic.belief_engine import get_belief_engine
+            be = get_belief_engine()
+            if be:
+                be.add_belief(
+                    predicate=f"skill_{skill_name}_deprecated",
+                    confidence=0.9,
+                    domain="self_improvement",
+                    evidence=[f"Failed {consecutive_failures} times ({failure_rate:.0%} rate)", reason],
+                    source="skill_deprecation"
+                )
+        except Exception as be:
+            print(f"⚠️ Failed to record deprecation in beliefs: {be}")
+        
+        self._save_skill_state()
+        print(f"✅ Skill '{skill_name}' deprecated and recorded in beliefs")
+        
+        return {
+            'success': True,
+            'skill_name': skill_name,
+            'consecutive_failures': consecutive_failures,
+            'failure_rate': failure_rate,
+            'reason': reason
+        }
+    
+    def auto_deprecate_failing_skills(self) -> List[Dict]:
+        """
+        Check all skills and auto-deprecate those meeting criteria.
+        Called periodically by brain cycle.
+        """
+        deprecated = []
+        
+        for skill_name in list(self.skill_registry.keys()):
+            skill_info = self.skill_registry[skill_name]
+            if skill_info.get('status') == 'active':
+                result = self.deprecate_skill(skill_name)
+                if result.get('success'):
+                    deprecated.append(result)
+        
+        return deprecated
 
     def compose_dynamic_chain(self, goal: str, available_actions: List[str]) -> Optional[List[Dict]]:
         """
