@@ -295,13 +295,12 @@ class DefaultGoalSeeder:
         for goal_spec in goals:
             goal_id = goal_spec['id']
             if goal_id in existing_ids:
-                continue  # Already seeded
+                continue
             
             try:
                 platforms = goal_spec.get('metadata', {}).get('platforms', [])
                 action_types = goal_spec.get('metadata', {}).get('action_types', [])
                 
-                # Map priority 1-4 to GoalPriority enum
                 raw_priority = goal_spec.get('priority', 2)
                 if raw_priority >= 3:
                     priority = GoalPriority.HIGH
@@ -335,9 +334,8 @@ class DefaultGoalSeeder:
                     logger.info(f"🌱 Seeded default goal: {goal_spec['title']}")
                 else:
                     logger.debug(f"Goal already exists or add failed: {goal_id}")
-                    
-                except Exception as e:
-                    logger.error(f"Failed to seed goal {goal_id}: {e}")
+            except Exception as e:
+                logger.error(f"Failed to seed goal {goal_id}: {e}")
         
         if seeded_count > 0:
             logger.info(f"🌱 Seeded {seeded_count} default goals → GoalManager v2 (SQLite)")
