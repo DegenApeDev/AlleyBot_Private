@@ -204,33 +204,23 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
         """Run one think cycle — delegates to AutonomousBrain if available, else legacy pipeline"""
         self.cycle_count += 1
 
-        # === Unified path: delegate to AutonomousBrain._execute_cycle() ===
+        # === Unified path: AutonomousBrain is running autonomously in its own thread ===
         if self._autonomous_brain is not None:
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # Schedule as a coroutine task (non-blocking)
-                    asyncio.ensure_future(self._autonomous_brain._execute_cycle())
-                    return {
-                        'cycle': self.cycle_count,
-                        'action': 'agi_cycle',
-                        'platform': 'all',
-                        'reason': 'Delegated to AutonomousBrain unified cycle',
-                        'success': True,
-                        'output': 'AGI cycle scheduled',
-                    }
-                else:
-                    loop.run_until_complete(self._autonomous_brain._execute_cycle())
-                    return {
-                        'cycle': self.cycle_count,
-                        'action': 'agi_cycle',
-                        'platform': 'all',
-                        'reason': 'AutonomousBrain unified cycle complete',
-                        'success': True,
-                        'output': 'AGI cycle complete',
-                    }
-            except Exception as e:
-                print(f"AutonomousBrain cycle failed, falling back: {e}")
+            # The brain is already running in its own event loop via start_autonomous().
+            # No need to call _execute_cycle() from here — it's already looping.
+            # Just report status.
+            brain_running = getattr(self._autonomous_brain, '_running', False)
+            stats = getattr(self._autonomous_brain, 'stats', {})
+            actions = stats.get('actions_taken', 0)
+            cycles = stats.get('cycles_completed', 0)
+            return {
+                'cycle': self.cycle_count,
+                'action': 'agi_cycle',
+                'platform': 'all',
+                'reason': f'AutonomousBrain running (cycles={cycles}, actions={actions})',
+                'success': brain_running,
+                'output': 'Brain running autonomously',
+            }
 
         # === Legacy fallback: original BrainPlugin pipeline ===
         context = self.gather_full_context()
