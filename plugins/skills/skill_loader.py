@@ -40,41 +40,49 @@ class SkillLoaderMixin:
                     if info:
                         self.skill_index[name] = info
 
+    def _index_single_plugin(self, plugin_name: str):
+        """Index a single plugin as skill"""
+        mod_name = f"plugins.{plugin_name}.{plugin_name}"
+        try:
+            plugin_module = importlib.import_module(mod_name)
+            info = getattr(plugin_module, "PLUGIN_INFO", None)
+            if not info:
+                return
+            skill_name = plugin_name
+            desc = info.get("description", f"{skill_name} plugin")
+            metadata = {
+                "category": "plugin",
+                "version": info.get("version", "1.0.0"),
+                "author": info.get("author", "AlleyBot"),
+            }
+            aliases = [skill_name]
+            name = info.get("name", "")
+            if name and name != skill_name:
+                aliases.append(name)
+            aliases.extend(info.get("aliases", []))
+            self.skill_index[skill_name] = {
+                "description": desc,
+                "metadata": metadata,
+                "aliases": aliases,
+            }
+            print(f"🔧 Indexed plugin skill: {skill_name}")
+        except Exception as e:
+            print(f"⚠️ Could not index plugin {plugin_name}: {e}")
+
     def _index_plugins(self):
         """Index available plugins as skills"""
         plugins_dir = os.path.dirname(os.path.dirname(__file__))
         if not os.path.exists(plugins_dir):
             return
+        # Pre-load core plugin first
+        self._index_single_plugin("core")
         for entry in sorted(os.listdir(plugins_dir)):
+            if entry == "core":
+                continue
             full_path = os.path.join(plugins_dir, entry)
             if not os.path.isdir(full_path) or entry.startswith(".") or entry == "skills":
                 continue
-            mod_name = f"plugins.{entry}.{entry}"
-            try:
-                plugin_module = importlib.import_module(mod_name)
-                info = getattr(plugin_module, "PLUGIN_INFO", None)
-                if not info:
-                    continue
-                skill_name = entry
-                desc = info.get("description", f"{skill_name} plugin")
-                metadata = {
-                    "category": "plugin",
-                    "version": info.get("version", "1.0.0"),
-                    "author": info.get("author", "AlleyBot"),
-                }
-                aliases = [skill_name]
-                name = info.get("name", "")
-                if name and name != skill_name:
-                    aliases.append(name)
-                aliases.extend(info.get("aliases", []))
-                self.skill_index[skill_name] = {
-                    "description": desc,
-                    "metadata": metadata,
-                    "aliases": aliases,
-                }
-                print(f"🔧 Indexed plugin skill: {skill_name}")
-            except Exception as e:
-                print(f"⚠️ Could not index plugin {entry}: {e}")
+            self._index_single_plugin(entry)
 
     def _parse_skill_frontmatter(self, path: str) -> Optional[Dict[str, Any]]:
         """Parse frontmatter for skill index (lightweight)"""
@@ -140,6 +148,11 @@ class SkillLoaderMixin:
             return None
         skill_name = resolved
 
+        # Check core availability during skill loading
+        if "core" not in self.skill_index:
+            print(f"⚠️ Core plugin unavailable. Cannot load skill '{skill_name}'.")
+            return None
+
         # Load from file
         path = os.path.join(self.skill_dir, f"{skill_name}.md")
         if os.path.exists(path):
@@ -198,45 +211,3 @@ For available commands: !help {skill_name}"""
             }
         except (ImportError, AttributeError):
             return None
-
-    def find_skill_for_task(self, task_description: str) -> Optional[str]:
-        """Find the most relevant skill for a given task"""
-        if not self.skill_index:
-            return None
-
-        # Direct alias resolution
-        resolved = self._resolve_alias(task_description.strip())
-        if resolved:
-            return resolved
-
-        task_lower = task_description.lower()
-        task_words = set(task_lower.split())
-        best_match = None
-        best_score = 0
-
-        for name, info in self.skill_index.items():
-            desc_lower = info.get("description", "").lower()
-            desc_words = set(desc_lower.split())
-            score = len(task_words & desc_words)
-
-            # Bonus for name matches
-            name_check = name.replace("-", " ").replace("_", " ")
-            name_words = set(name_check.lower().split())
-            score += len(task_words & name_words) * 2
-
-            name_lower = name.lower()
-            if name_lower in task_lower:
-                score += 3
-
-            # Prioritize core and plugins
-            category = info.get("metadata", {}).get("category", "")
-            if category == "core":
-                score += 5
-            elif category == "plugin":
-                score += 2
-
-            if score > best_score:
-                best_score = score
-                best_match = name
-
-        return best_match

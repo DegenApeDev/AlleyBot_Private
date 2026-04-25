@@ -7,7 +7,7 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
     def __init__(self, config):
         super().__init__(config)
         self.name = "unknown_handler"
-        self.version = "1.1.0"
+        self.version = "1.2.0"
         self.plugin_aliases = {
             'clawbr_d': 'clawbr_debates',
             'deb': 'clawbr_debates',
@@ -21,6 +21,14 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
             'gpt': 'chat',
             'convo': 'chat',
             'talk': 'chat',
+            'core': 'core',
+            'cr': 'core',
+            'img': 'image_gen',
+            'image': 'image_gen',
+            'code': 'code_exec',
+            'exec': 'code_exec',
+            'search': 'web_search',
+            'web': 'web_search',
         }
         self.known_plugins = [
             "help",
@@ -29,6 +37,7 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
             "image_gen",
             "code_exec",
             "web_search",
+            "core",
             "unknown",
             "retry",
             "correct",
@@ -62,6 +71,9 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
         # Resolve aliases before treating as unknown
         if command_name in self.plugin_aliases:
             real_command = self.plugin_aliases[command_name]
+            # Validate target plugin is known
+            if real_command not in self.known_plugins:
+                return f"Alias '{full_command}' points to unknown plugin '{real_command}'. Try '!help'."
             suggestion = f"!{real_command}"
             if params_str:
                 suggestion += f" {params_str}"
@@ -96,13 +108,19 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
             if (command_lower == alias or
                 command_lower.startswith(alias) or
                 alias.startswith(command_lower)):
-                suggestions.append(f"'{orig_cmd}' might be '{real}'? Try '!{real}'.")
+                # Validate real plugin known
+                if real in self.known_plugins:
+                    suggestions.append(f"'{orig_cmd}' might be '{real}'? Try '!{real}'.")
+                else:
+                    print(f"[UnknownHandler] Alias '{alias}' points to unknown '{real}' - skipping suggestion.")
 
         # Keyword-based suggestions
         if "help" in lower_input or "list" in lower_input:
             suggestions.append("Try '!help' for available commands.")
         if any(word in lower_input for word in ["chat", "talk", "convo"]):
             suggestions.append("Try the 'chat' skill for conversation.")
+        if "core" in lower_input or "fallback" in lower_input:
+            suggestions.append("Try '!core' for fallback handling.")
 
         # Fuzzy matching on known plugins
         matches = get_close_matches(command_lower, self.known_plugins, n=3, cutoff=0.6)
@@ -115,10 +133,11 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
         return "Try '!help' or describe what you need."
 
     def _trigger_fallback(self, command_key: str) -> str:
-        print(f"[UnknownHandler] Repeated failures (max 3) for '{command_key}'. Triggering fallback and full reset.")
-        self.failure_counts.clear()
+        print(f"[UnknownHandler] Repeated failures (max 3) for '{command_key}'. Triggering core fallback.")
+        self.failure_counts.pop(command_key, None)
         self.last_unknown = None
-        return f"Max retries (3) exceeded for '{command_key}'. All counters reset. Fallback to chat. Try '!chat {command_key}' or '!help'."
+        fallback = f"!core {command_key}"
+        return f"Max retries (3) exceeded for '{command_key}'. Counter reset. Fallback to core: {fallback}, or '!chat {command_key}', or '!help'."
 
     def retry_last(self, args: list) -> str:
         if not self.last_unknown:
@@ -170,14 +189,17 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
             command_name = parts[0].strip().lower()
             if command_name in self.plugin_aliases:
                 real = self.plugin_aliases[command_name]
-                params = parts[1] if len(parts) > 1 else ""
-                use_cmd = f"!{real}"
-                if params:
-                    use_cmd += f" {params}"
-                corrected = f"{real}"
-                if params:
-                    corrected += f" {params}"
-                return f"Corrected to '{corrected}'. Try {use_cmd}."
+                if real in self.known_plugins:
+                    params = parts[1] if len(parts) > 1 else ""
+                    use_cmd = f"!{real}"
+                    if params:
+                        use_cmd += f" {params}"
+                    corrected = f"{real}"
+                    if params:
+                        corrected += f" {params}"
+                    return f"Corrected to '{corrected}'. Try {use_cmd}."
+                else:
+                    return f"Alias targets unknown plugin '{real}'. Try '!help'."
 
         # Spell check / intent mappings
         lower_input = unknown_input.lower()
@@ -187,33 +209,26 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
             "hi": "hello - use '!chat hi'",
             "bye": "goodbye - use '!chat bye'",
             "goodbye": "goodbye - use '!chat goodbye'",
-            "debate": "clawbr_debates - use '!clawbr_debates <topic>'",
             "image": "image_gen - use '!image_gen <prompt>'",
+            "img": "image_gen - use '!image_gen <prompt>'",
+            "pic": "image_gen - use '!image_gen <prompt>'",
+            "picture": "image_gen - use '!image_gen <prompt>'",
             "code": "code_exec - use '!code_exec <code>'",
+            "exec": "code_exec - use '!code_exec <code>'",
+            "python": "code_exec - use '!code_exec <python code>'",
             "search": "web_search - use '!web_search <query>'",
+            "google": "web_search - use '!web_search <query>'",
+            "core": "core - use '!core <input>'",
         }
-        for key, corr in corrections.items():
+        for key, value in corrections.items():
             if key in lower_input:
-                return corr
-
-        # Fuzzy correction on known plugins
-        command_lower = self.get_command_key(unknown_input)
-        matches = get_close_matches(command_lower, self.known_plugins, n=1, cutoff=0.7)
-        if matches:
-            real = matches[0]
-            parts = unknown_input.split(maxsplit=1)
-            params = parts[1] if len(parts) > 1 else ""
-            use_cmd = f"!{real}"
-            if params:
-                use_cmd += f" {params}"
-            return f"Maybe '{real}'? Try {use_cmd}."
-
-        return "Could not auto-correct. Check spelling or try '!help'."
+                return value
+        return f"Could not auto-correct '{unknown_input}'. Try '!help'."
 
 PLUGIN_INFO = {
     "name": "unknown_handler",
-    "version": "1.1.0",
-    "description": "Improved unknown handler with expanded plugin aliases (e.g., 'clawbr_d' -> 'clawbr_debates'), fuzzy matching via difflib, per-command retry logic (max 3 attempts), better error recovery in retry/correct/reset, fallback with full reset, comprehensive suggestions, and auto-correction.",
+    "version": "1.2.0",
+    "description": "Handles unknown commands with aliases, suggestions, failure tracking, retry, correct, reset, and core fallback.",
     "author": "AlleyBot"
 }
 
