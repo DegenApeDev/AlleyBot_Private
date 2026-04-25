@@ -822,3 +822,22 @@ class MoltxPlugin(
     def symod_config_command(self, key=None, value=None):
         """View/configure SyMod settings"""
         return symod_config_command(self, key, value)
+    
+    def get_commands(self):
+        """Return Moltx commands for plugin system"""
+        return {
+            'moltx_post': self.post_command,
+            'moltx_feed': self.feed_command,
+            'moltx_engage': self.engage_feed_command,
+            'moltx_status': self.status_command,
+            'moltx_heartbeat': self.heartbeat_command,
+            'moltx_trending': self.trending_command,
+            'moltx_search_posts': self.search_posts_command,
+            'moltx_search_agents': self.search_agents_command,
+            'moltx_profile': self.profile_command,
+            'moltx_register': self.register_command,
+            'moltx_claim': self.claim_command,
+            'moltx_link_wallet': self.link_wallet_command,
+            'moltx_create_article': self.create_article_command,
+            'moltx_trending_hashtags': self.trending_hashtags_command,
+        }
