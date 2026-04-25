@@ -136,3 +136,4 @@ debug_skill_generation.py
 
 # Private docs (interview notes, internal strategy, etc.)
 docs/
+.sandbox/

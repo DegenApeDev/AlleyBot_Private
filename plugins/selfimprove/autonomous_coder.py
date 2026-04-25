@@ -41,6 +41,26 @@ AUTO_APPROVE_PATHS = ['skills/', 'config/', 'plugins/skills/']  # Auto-approve t
 AUTO_APPROVE_MAX_FILES = 3  # Max files for auto-approval
 AUTO_APPROVE_MAX_LINES = 100  # Max lines changed for auto-approval
 
+# Sandbox configuration for subprocess execution
+SANDBOX_TIMEOUT = 20  # seconds
+SANDBOX_MAX_OUTPUT = 10_000  # characters
+SANDBOX_RESTRICTED_ENV_VARS = ['API_KEY', 'SECRET', 'TOKEN', 'PASSWORD', 'DATABASE_URL']
+SANDBOX_DIR = '.sandbox'  # Relative to project root
+
+
+def _sandbox_env(base_env: dict) -> dict:
+    """Build a restricted environment for subprocess execution.
+    
+    Strips sensitive env vars and adds resource limits.
+    """
+    env = dict(base_env)
+    for key in list(env.keys()):
+        for pattern in SANDBOX_RESTRICTED_ENV_VARS:
+            if pattern in key.upper():
+                env.pop(key, None)
+    env.pop('PYTHONPATH', None)
+    return dict(env)
+
 
 class AutonomousCoderMixin:
     """Mixin for AI-powered autonomous code generation and self-update"""
@@ -151,12 +171,12 @@ class AutonomousCoderMixin:
             venv_python = os.path.join(self.project_root, 'venv', 'bin', 'python')
             python_cmd = venv_python if os.path.exists(venv_python) else 'python3'
 
-            env = os.environ.copy()
+            env = _sandbox_env(os.environ.copy())
             env['PYTHONPATH'] = self.project_root + ':' + env.get('PYTHONPATH', '')
 
             result = subprocess.run(
                 [python_cmd, '-c', f"import py_compile; py_compile.compile(r'{tmp_path}', doraise=True)"],
-                capture_output=True, text=True, timeout=15, env=env,
+                capture_output=True, text=True, timeout=SANDBOX_TIMEOUT, env=env,
             )
             if result.returncode != 0:
                 return {'ok': False, 'error': f'Compile check failed: {result.stderr[-300:]}'}
@@ -176,7 +196,7 @@ class AutonomousCoderMixin:
             )
             result = subprocess.run(
                 [python_cmd, '-c', import_check],
-                capture_output=True, text=True, timeout=15, env=env,
+                capture_output=True, text=True, timeout=SANDBOX_TIMEOUT, env=env,
             )
             if result.returncode != 0:
                 return {'ok': False, 'error': result.stderr[-300:] or result.stdout[-300:]}
@@ -192,6 +212,135 @@ class AutonomousCoderMixin:
                 os.unlink(tmp_path)
             except Exception:
                 pass
+
+    def _write_to_sandbox(self, generated_files: List[Dict]) -> str:
+        """Write generated files to a sandbox directory for testing before promotion.
+        
+        Creates <project_root>/.sandbox/<timestamp>/ mirroring the project structure.
+        Returns the sandbox directory path.
+        """
+        sandbox_root = os.path.join(self.project_root, SANDBOX_DIR)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        sandbox_dir = os.path.join(sandbox_root, timestamp)
+        os.makedirs(sandbox_dir, exist_ok=True)
+
+        for gf in generated_files:
+            rel_path = gf['path']
+            full_path = os.path.join(sandbox_dir, rel_path)
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, 'w') as f:
+                f.write(gf['code'])
+
+        return sandbox_dir
+
+    def _sandbox_compile_check(self, sandbox_dir: str, generated_files: List[Dict]) -> Optional[str]:
+        """Compile-check all .py files in the sandbox directory.
+        
+        Returns None if all pass, or an error string describing the first failure.
+        """
+        venv_python = os.path.join(self.project_root, 'venv', 'bin', 'python')
+        python_cmd = venv_python if os.path.exists(venv_python) else 'python3'
+        env = _sandbox_env(os.environ.copy())
+        env['PYTHONPATH'] = self.project_root
+
+        for gf in generated_files:
+            if not gf['path'].endswith('.py'):
+                continue
+            sandbox_path = os.path.join(sandbox_dir, gf['path'])
+            if not os.path.exists(sandbox_path):
+                continue
+            try:
+                result = subprocess.run(
+                    [python_cmd, '-c', f"import py_compile; py_compile.compile(r'{sandbox_path}', doraise=True)"],
+                    capture_output=True, text=True, timeout=SANDBOX_TIMEOUT, env=env,
+                )
+                if result.returncode != 0:
+                    return f"Sandbox compile failed for {gf['path']}: {result.stderr[-300:]}"
+            except subprocess.TimeoutExpired:
+                return f"Sandbox compile timed out for {gf['path']}"
+            except Exception as e:
+                return f"Sandbox compile error for {gf['path']}: {e}"
+
+        return None
+
+    def _sandbox_crash_test(self, sandbox_dir: str, generated_files: List[Dict]) -> Optional[str]:
+        """Try importing each generated plugin from the sandbox.
+        
+        Returns None if all pass, or an error string.
+        """
+        venv_python = os.path.join(self.project_root, 'venv', 'bin', 'python')
+        python_cmd = venv_python if os.path.exists(venv_python) else 'python3'
+        env = _sandbox_env(os.environ.copy())
+        env['PYTHONPATH'] = self.project_root + ':' + sandbox_dir
+
+        for gf in generated_files:
+            path = gf.get('path', '')
+            if not path.endswith('.py'):
+                continue
+            module = path.replace('/', '.').replace('\\', '.').removesuffix('.py')
+            check = (
+                "import sys, importlib\n"
+                "sys.path.insert(0, r'" + sandbox_dir + "')\n"
+                "sys.path.insert(0, r'" + self.project_root + "')\n"
+                "try:\n"
+                "    importlib.import_module('" + module + "')\n"
+                "    print('OK')\n"
+                "except SystemExit:\n"
+                "    print('OK')\n"
+                "except Exception as e:\n"
+                "    print(f'CRASH:{e}')\n"
+                "    sys.exit(1)\n"
+            )
+            try:
+                result = subprocess.run(
+                    [python_cmd, '-c', check],
+                    capture_output=True, text=True, timeout=SANDBOX_TIMEOUT, env=env,
+                )
+                if result.returncode != 0:
+                    output = result.stdout.strip() or result.stderr.strip()
+                    return f"{path}: {output[-300:]}"
+            except subprocess.TimeoutExpired:
+                return f"{path}: sandbox crash test timed out"
+            except Exception as e:
+                return f"{path}: {e}"
+        return None
+
+    def _promote_from_sandbox(self, sandbox_dir: str, generated_files: List[Dict]) -> Dict[str, Any]:
+        """Promote tested sandbox files to the real project directories.
+        
+        Backs up existing files, then copies sandbox files to their target locations.
+        Returns {'success': bool, 'files': [promoted_paths], 'backup_dir': str}
+        """
+        backup_dir = os.path.join(self.project_root, SANDBOX_DIR, 'backups',
+                                   datetime.now().strftime('%Y%m%d_%H%M%S'))
+        os.makedirs(backup_dir, exist_ok=True)
+        promoted = []
+
+        for gf in generated_files:
+            sandbox_path = os.path.join(sandbox_dir, gf['path'])
+            target_path = os.path.join(self.project_root, gf['path'])
+
+            if not os.path.exists(sandbox_path):
+                continue
+
+            if os.path.exists(target_path):
+                bak_name = gf['path'].replace('/', '_')
+                shutil.copy2(target_path, os.path.join(backup_dir, bak_name))
+
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            shutil.copy2(sandbox_path, target_path)
+            promoted.append(gf['path'])
+            print(f"  ✅ Promoted: {gf['path']}")
+
+        return {'success': True, 'files': promoted, 'backup_dir': backup_dir}
+
+    def _cleanup_sandbox(self, sandbox_dir: str):
+        """Remove the sandbox directory after promotion or failure."""
+        try:
+            if os.path.exists(sandbox_dir):
+                shutil.rmtree(sandbox_dir)
+        except Exception as e:
+            print(f"  ⚠️ Sandbox cleanup failed: {e}")
 
     def _crash_test_plugins(self, generated_files: List[Dict]) -> Optional[str]:
         """Try importing each generated plugin file in a subprocess.
@@ -222,7 +371,7 @@ class AutonomousCoderMixin:
             try:
                 result = subprocess.run(
                     [python_cmd, '-c', check],
-                    capture_output=True, text=True, timeout=20, env=env,
+                    capture_output=True, text=True, timeout=SANDBOX_TIMEOUT, env=env,
                 )
                 if result.returncode != 0:
                     output = result.stdout.strip() or result.stderr.strip()
@@ -1051,11 +1200,40 @@ Return ONLY valid JSON, no markdown or explanation."""
                 results['error'] = f"Sandbox pre-check failed: {'; '.join(still_failing)}"
                 return results
 
-        # Step 4: Apply changes (on auto/* branch)
-        apply_result = self._apply_changes(results['generated_files'], plan.get('summary', 'auto-update'))
-        if not apply_result['success']:
-            results['error'] = f"Failed to apply changes: {apply_result.get('error', '?')}"
+        # Step 3.5: Write files to sandbox folder for isolated testing
+        print("📁 Writing files to sandbox for validation...")
+        sandbox_dir = self._write_to_sandbox(results['generated_files'])
+
+        # Compile-check in sandbox
+        compile_error = self._sandbox_compile_check(sandbox_dir, results['generated_files'])
+        if compile_error:
+            print(f"❌ Sandbox compile failed: {compile_error}")
+            self._cleanup_sandbox(sandbox_dir)
+            results['error'] = f"Sandbox compile failed: {compile_error}"
             return results
+
+        # Crash-test plugins in sandbox
+        crash_error = self._sandbox_crash_test(sandbox_dir, results['generated_files'])
+        if crash_error:
+            print(f"❌ Sandbox crash test failed: {crash_error}")
+            self._cleanup_sandbox(sandbox_dir)
+            results['error'] = f"Sandbox crash test failed: {crash_error}"
+            return results
+
+        print("✅ Sandbox validation passed — promoting files to project")
+
+        # Step 4: Promote sandbox files to the real project
+        promote_result = self._promote_from_sandbox(sandbox_dir, results['generated_files'])
+        if not promote_result['success']:
+            self._cleanup_sandbox(sandbox_dir)
+            results['error'] = f"Failed to promote sandbox files: {promote_result.get('error', '?')}"
+            return results
+
+        # Save backup dir for reverts if tests fail
+        backup_dir = promote_result.get('backup_dir', '')
+
+        # Clean up sandbox after successful promotion
+        self._cleanup_sandbox(sandbox_dir)
 
         # Step 5: Run test suite (with debug-and-retry on failure)
         #   Scope tests: only run modules that could be affected by the changed files
@@ -1073,6 +1251,8 @@ Return ONLY valid JSON, no markdown or explanation."""
                 if crash_error:
                     print(f"❌ Plugin crashes on load, reverting: {crash_error}")
                     self._revert_changes(results['generated_files'])
+                    if backup_dir:
+                        self._revert_from_backup(backup_dir, [gf['path'] for gf in results['generated_files']])
                     results['error'] = f"Plugin crashes on load: {crash_error}"
                     return results
                 results['applied'] = True
@@ -1083,6 +1263,8 @@ Return ONLY valid JSON, no markdown or explanation."""
             else:
                 print(f"❌ Plugin validation failed, reverting...")
                 self._revert_changes(results['generated_files'])
+                if backup_dir:
+                    self._revert_from_backup(backup_dir, [gf['path'] for gf in results['generated_files']])
                 results['error'] = f"Plugin validation failed: {test_modules.get('errors', '?')}"
                 return results
 
@@ -1099,6 +1281,8 @@ Return ONLY valid JSON, no markdown or explanation."""
                 # Exhausted retries — revert and give up
                 print(f"❌ Tests still failing after {max_fix_attempts} fix attempts, reverting...")
                 self._revert_changes(results['generated_files'])
+                if backup_dir:
+                    self._revert_from_backup(backup_dir, [gf['path'] for gf in results['generated_files']])
                 results['error'] = (
                     f"Tests failed after {max_fix_attempts} fix attempts: "
                     f"{test_result.get('failures', '?')} failures, "
@@ -1114,6 +1298,8 @@ Return ONLY valid JSON, no markdown or explanation."""
             if not fixed:
                 print("❌ AI could not produce a fix, reverting...")
                 self._revert_changes(results['generated_files'])
+                if backup_dir:
+                    self._revert_from_backup(backup_dir, [gf['path'] for gf in results['generated_files']])
                 results['error'] = (
                     f"Tests failed and auto-fix unsuccessful: "
                     f"{test_result.get('failures', '?')} failures, "

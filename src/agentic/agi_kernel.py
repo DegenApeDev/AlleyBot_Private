@@ -62,6 +62,7 @@ from .engine_integration import (
     EngineIntegrationManager,
     integrate_all_engines,
 )
+from .cognitive_integration import get_cognitive
 
 
 class AGIKernel:
@@ -298,6 +299,14 @@ class AGIKernel:
                 self._autonomous_engine_pending_start = True
                 print("   ⏳ Cognitive loop queued for startup")
         
+        # === Cognitive Integration (BeliefEngine + SelfModel + GoalPlanner) ===
+        self.cognitive = get_cognitive()
+        print("🧠 Cognitive Integration wired into AGI Kernel")
+        print("   ✅ BeliefEngine - predict-compare-update learning")
+        print("   ✅ SelfModel - calibrated capability tracking")
+        print("   ✅ GoalPlanner - dependency-graph planning with rollback")
+        print("   ✅ KnowledgeGraph - analogical transfer & outcome learning")
+
         print("✅ AGI Kernel ready")
     
     def _get_onchain_plugin(self):
@@ -665,6 +674,22 @@ class AGIKernel:
         if active_goals:
             print(f"🎯 Decision context enriched with {len(active_goals)} active goals")
         
+        # Cognitive prediction: predict outcome before deciding
+        if self.cognitive:
+            try:
+                domain = context.get('platform', 'general') if context else 'general'
+                prediction = self.cognitive.predict_action_outcome(
+                    action=f"decide:{domain}",
+                    domain=domain,
+                )
+                enriched_context['cognitive_prediction'] = prediction
+                if not prediction.get('should_attempt', True):
+                    print(f"⚠️ Cognitive: {prediction.get('attempt_reason', 'not recommended')}")
+                if prediction.get('should_wait', False):
+                    print(f"⏳ Cognitive: {prediction.get('wait_reason', 'gather more data')}")
+            except Exception as e:
+                print(f"⚠️ Cognitive prediction failed: {e}")
+
         # Use decision system for autonomous thinking
         action = self.decision_system.decide_next_action(enriched_context)
         

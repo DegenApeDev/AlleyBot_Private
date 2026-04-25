@@ -9,6 +9,8 @@ with genuine calibration tracking and capability assessment.
 """
 
 import json
+import logging
+import threading
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
@@ -69,6 +71,7 @@ class SelfModel:
     def __init__(self, storage_path: str = 'data/self_model.json'):
         self.storage_path = Path(storage_path)
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
         self.capabilities: Dict[str, CapabilityEstimate] = {}
         self.outcome_history: List[Dict] = []
         self._load()
@@ -81,75 +84,76 @@ class SelfModel:
         actual_success: bool,
         context: str = "",
     ) -> Dict:
-        key = f"{domain}:{action_type}"
-        cap = self.capabilities.get(key, CapabilityEstimate(
-            domain=domain, action_type=action_type
-        ))
+        with self._lock:
+            key = f"{domain}:{action_type}"
+            cap = self.capabilities.get(key, CapabilityEstimate(
+                domain=domain, action_type=action_type
+            ))
 
-        cap.sample_size += 1
-        cap.avg_actual_success = (
-            (cap.avg_actual_success * (cap.sample_size - 1) + (1.0 if actual_success else 0.0))
-            / cap.sample_size
-        )
-        cap.avg_predicted_confidence = (
-            (cap.avg_predicted_confidence * (cap.sample_size - 1) + predicted_confidence)
-            / cap.sample_size
-        )
+            cap.sample_size += 1
+            cap.avg_actual_success = (
+                (cap.avg_actual_success * (cap.sample_size - 1) + (1.0 if actual_success else 0.0))
+                / cap.sample_size
+            )
+            cap.avg_predicted_confidence = (
+                (cap.avg_predicted_confidence * (cap.sample_size - 1) + predicted_confidence)
+                / cap.sample_size
+            )
 
-        if actual_success:
-            cap.consecutive_successes += 1
-            cap.consecutive_failures = 0
-            if context and context not in cap.best_conditions:
-                cap.best_conditions.append(context)
-                if len(cap.best_conditions) > 10:
-                    cap.best_conditions.pop(0)
-        else:
-            cap.consecutive_failures += 1
-            cap.consecutive_successes = 0
-            if context and context not in cap.worst_conditions:
-                cap.worst_conditions.append(context)
-                if len(cap.worst_conditions) > 10:
-                    cap.worst_conditions.pop(0)
-
-        recent = self._get_recent_outcomes(key, count=10)
-        if len(recent) >= 3:
-            recent_rate = sum(1 for r in recent if r['success']) / len(recent)
-            overall_rate = cap.avg_actual_success
-            if recent_rate > overall_rate + 0.1:
-                cap.recent_trend = "improving"
-            elif recent_rate < overall_rate - 0.1:
-                cap.recent_trend = "declining"
+            if actual_success:
+                cap.consecutive_successes += 1
+                cap.consecutive_failures = 0
+                if context and context not in cap.best_conditions:
+                    cap.best_conditions.append(context)
+                    if len(cap.best_conditions) > 10:
+                        cap.best_conditions.pop(0)
             else:
-                cap.recent_trend = "stable"
-        else:
-            cap.recent_trend = "unknown"
+                cap.consecutive_failures += 1
+                cap.consecutive_successes = 0
+                if context and context not in cap.worst_conditions:
+                    cap.worst_conditions.append(context)
+                    if len(cap.worst_conditions) > 10:
+                        cap.worst_conditions.pop(0)
 
-        cap.success_rate = cap.avg_actual_success
-        cap.last_attempt = datetime.now().isoformat()
-        self.capabilities[key] = cap
+            recent = self._get_recent_outcomes(key, count=10)
+            if len(recent) >= 3:
+                recent_rate = sum(1 for r in recent if r.get('actual', False)) / len(recent)
+                overall_rate = cap.avg_actual_success
+                if recent_rate > overall_rate + 0.1:
+                    cap.recent_trend = "improving"
+                elif recent_rate < overall_rate - 0.1:
+                    cap.recent_trend = "declining"
+                else:
+                    cap.recent_trend = "stable"
+            else:
+                cap.recent_trend = "unknown"
 
-        self.outcome_history.append({
-            'domain': domain,
-            'action_type': action_type,
-            'predicted': predicted_confidence,
-            'actual': actual_success,
-            'context': context,
-            'timestamp': datetime.now().isoformat(),
-        })
-        if len(self.outcome_history) > 1000:
-            self.outcome_history = self.outcome_history[-500:]
+            cap.success_rate = cap.avg_actual_success
+            cap.last_attempt = datetime.now().isoformat()
+            self.capabilities[key] = cap
 
-        self._save()
+            self.outcome_history.append({
+                'domain': domain,
+                'action_type': action_type,
+                'predicted': predicted_confidence,
+                'actual': actual_success,
+                'context': context,
+                'timestamp': datetime.now().isoformat(),
+            })
+            if len(self.outcome_history) > 1000:
+                self.outcome_history = self.outcome_history[-500:]
 
-        return {
-            'domain': domain,
-            'action_type': action_type,
-            'confidence': predicted_confidence,
-            'success': actual_success,
-            'calibrated': cap.is_calibrated,
-            'trend': cap.recent_trend,
-            'sample_size': cap.sample_size,
-        }
+            self._save()
+
+            return {
+                'domain': domain,
+                'action_type': action_type,
+                'confidence': predicted_confidence,
+                'success': actual_success,
+                'calibrated': cap.is_calibrated,
+                'trend': cap.recent_trend,
+                'sample_size': cap.sample_size,
+            }
 
     def _get_recent_outcomes(self, key: str, count: int = 10) -> List[Dict]:
         matches = [
@@ -320,29 +324,33 @@ class SelfModel:
         return " | ".join(parts) if parts else "Continue standard operations"
 
     def _save(self):
-        try:
-            data = {
-                'capabilities': {k: v.to_dict() for k, v in self.capabilities.items()},
-                'outcome_history': self.outcome_history[-500:],
-            }
-            with open(self.storage_path, 'w') as f:
-                json.dump(data, f, indent=2, default=str)
-        except Exception:
-            pass
+        with self._lock:
+            try:
+                data = {
+                    'capabilities': {k: v.to_dict() for k, v in self.capabilities.items()},
+                    'outcome_history': self.outcome_history[-500:],
+                }
+                with open(self.storage_path, 'w') as f:
+                    json.dump(data, f, indent=2, default=str)
+            except Exception as e:
+                logging.getLogger(__name__).warning(f"SelfModel save failed: {e}")
 
     def _load(self):
         try:
             if self.storage_path.exists():
                 with open(self.storage_path, 'r') as f:
                     data = json.load(f)
-                self.capabilities = {
-                    k: CapabilityEstimate.from_dict(v)
-                    for k, v in data.get('capabilities', {}).items()
-                }
-                self.outcome_history = data.get('outcome_history', [])
-        except Exception:
-            self.capabilities = {}
-            self.outcome_history = []
+                with self._lock:
+                    self.capabilities = {
+                        k: CapabilityEstimate.from_dict(v)
+                        for k, v in data.get('capabilities', {}).items()
+                    }
+                    self.outcome_history = data.get('outcome_history', [])
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"SelfModel load failed: {e}")
+            with self._lock:
+                self.capabilities = {}
+                self.outcome_history = []
 
 
 def get_self_model(storage_path: str = 'data/self_model.json') -> SelfModel:

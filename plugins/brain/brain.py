@@ -154,6 +154,20 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
                 plugin_manager=core.plugin_manager if core else None,
             )
             print("🔗 BrainPlugin: AutonomousBrain unified loop ready")
+
+            # Wire Telegram into CognitiveIntegration
+            try:
+                telegram_plugin = None
+                if core and hasattr(core, 'plugin_manager') and core.plugin_manager:
+                    telegram_plugin = core.plugin_manager.plugins.get('telegram')
+                if telegram_plugin:
+                    from src.agentic.cognitive_integration import get_cognitive
+                    cognitive = get_cognitive(telegram_plugin=telegram_plugin)
+                    print("🔗 BrainPlugin: Telegram wired into CognitiveIntegration")
+                else:
+                    print("🔗 BrainPlugin: No telegram plugin found for CognitiveIntegration")
+            except Exception as e:
+                print(f"⚠️ BrainPlugin: Failed to wire Telegram into CognitiveIntegration: {e}")
         except Exception as e:
             self._autonomous_brain = None
             print(f"⚠️ BrainPlugin: AutonomousBrain not available, using legacy loop: {e}")
@@ -264,7 +278,6 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
                     loop.run_until_complete(
                         self._autonomous_brain.start(mode=self.config.get('mode', 'normal'))
                     )
-                    loop.run_forever()
                 except Exception as e:
                     print(f"🧠 AutonomousBrain loop error: {e}")
                 finally:

@@ -8,6 +8,8 @@ we check which precondition was wrong and try an alternative path.
 """
 
 import json
+import logging
+import threading
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
@@ -176,6 +178,7 @@ class GoalPlanner:
     def __init__(self, storage_path: str = 'data/plans.json'):
         self.storage_path = Path(storage_path)
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
         self.plans: Dict[str, Plan] = {}
         self.tool_registry = TOOL_REGISTRY
         self._load()
@@ -208,28 +211,29 @@ class GoalPlanner:
         self_model=None,
         priority: float = 0.5,
     ) -> Plan:
-        plan_id = f"plan_{int(datetime.now().timestamp())}"
-        steps = self._generate_steps(goal, domain, belief_engine, self_model)
+        with self._lock:
+            plan_id = f"plan_{int(datetime.now().timestamp())}"
+            steps = self._generate_steps(goal, domain, belief_engine, self_model)
 
-        for i, step in enumerate(steps):
-            if i > 0:
-                step.depends_on = [steps[i - 1].id]
-                step.preconditions = [f"Step '{steps[i-1].id}' completed successfully"]
+            for i, step in enumerate(steps):
+                if i > 0:
+                    step.depends_on = [steps[i - 1].id]
+                    step.preconditions = [f"Step '{steps[i-1].id}' completed successfully"]
 
-        plan = Plan(
-            id=plan_id, goal=goal, domain=domain,
-            steps=steps, status="pending", priority=priority,
-        )
+            plan = Plan(
+                id=plan_id, goal=goal, domain=domain,
+                steps=steps, status="pending", priority=priority,
+            )
 
-        if belief_engine:
-            self._validate_plan_against_beliefs(plan, belief_engine)
+            if belief_engine:
+                self._validate_plan_against_beliefs(plan, belief_engine)
 
-        if self_model:
-            self._validate_plan_against_capabilities(plan, self_model)
+            if self_model:
+                self._validate_plan_against_capabilities(plan, self_model)
 
-        self.plans[plan_id] = plan
-        self._save()
-        return plan
+            self.plans[plan_id] = plan
+            self._save()
+            return plan
 
     def _generate_steps(
         self,
@@ -444,45 +448,47 @@ class GoalPlanner:
         return max(ready_steps, key=lambda s: s.confidence)
 
     def mark_step_completed(self, plan_id: str, step_id: str, result: Dict) -> Plan:
-        plan = self.plans.get(plan_id)
-        if not plan:
-            return None
+        with self._lock:
+            plan = self.plans.get(plan_id)
+            if not plan:
+                return None
 
-        step = next((s for s in plan.steps if s.id == step_id), None)
-        if step:
-            step.status = "completed"
-            step.result = result
-            step.completed_at = datetime.now().isoformat()
+            step = next((s for s in plan.steps if s.id == step_id), None)
+            if step:
+                step.status = "completed"
+                step.result = result
+                step.completed_at = datetime.now().isoformat()
 
-        all_completed = all(s.status in ("completed", "skipped") for s in plan.steps)
-        if all_completed:
-            plan.status = "completed"
-            plan.completed_at = datetime.now().isoformat()
+            all_completed = all(s.status in ("completed", "skipped") for s in plan.steps)
+            if all_completed:
+                plan.status = "completed"
+                plan.completed_at = datetime.now().isoformat()
 
-        self._save()
-        return plan
+            self._save()
+            return plan
 
     def mark_step_failed(self, plan_id: str, step_id: str, reason: str, result: Dict = None) -> Plan:
-        plan = self.plans.get(plan_id)
-        if not plan:
-            return None
+        with self._lock:
+            plan = self.plans.get(plan_id)
+            if not plan:
+                return None
 
-        step = next((s for s in plan.steps if s.id == step_id), None)
-        if step:
-            step.status = "failed"
-            step.failure_reason = reason
-            step.result = result
+            step = next((s for s in plan.steps if s.id == step_id), None)
+            if step:
+                step.status = "failed"
+                step.failure_reason = reason
+                step.result = result
 
-        dependent_steps = [s for s in plan.steps if step_id in s.depends_on]
-        if dependent_steps:
-            for dep_step in dependent_steps:
-                dep_step.status = "blocked"
-                dep_step.failure_reason = f"Dependency {step_id} failed: {reason}"
+            dependent_steps = [s for s in plan.steps if step_id in s.depends_on]
+            if dependent_steps:
+                for dep_step in dependent_steps:
+                    dep_step.status = "blocked"
+                    dep_step.failure_reason = f"Dependency {step_id} failed: {reason}"
 
-        plan.status = "failed"
-        plan.failure_reason = f"Step {step_id} failed: {reason}"
-        self._save()
-        return plan
+            plan.status = "failed"
+            plan.failure_reason = f"Step {step_id} failed: {reason}"
+            self._save()
+            return plan
 
     def get_alternative_path(self, plan: Plan, failed_step_id: str) -> Optional[PlanStep]:
         failed_step = next((s for s in plan.steps if s.id == failed_step_id), None)
@@ -531,21 +537,25 @@ class GoalPlanner:
         }
 
     def _save(self):
-        try:
-            data = {k: v.to_dict() for k, v in self.plans.items()}
-            with open(self.storage_path, 'w') as f:
-                json.dump(data, f, indent=2, default=str)
-        except Exception:
-            pass
+        with self._lock:
+            try:
+                data = {k: v.to_dict() for k, v in self.plans.items()}
+                with open(self.storage_path, 'w') as f:
+                    json.dump(data, f, indent=2, default=str)
+            except Exception as e:
+                logging.getLogger(__name__).warning(f"GoalPlanner save failed: {e}")
 
     def _load(self):
         try:
             if self.storage_path.exists():
                 with open(self.storage_path, 'r') as f:
                     data = json.load(f)
-                self.plans = {k: Plan.from_dict(v) for k, v in data.items()}
-        except Exception:
-            self.plans = {}
+                with self._lock:
+                    self.plans = {k: Plan.from_dict(v) for k, v in data.items()}
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"GoalPlanner load failed: {e}")
+            with self._lock:
+                self.plans = {}
 
 
 def get_goal_planner(storage_path: str = 'data/plans.json') -> GoalPlanner:

@@ -18,6 +18,9 @@ import asyncio
 from typing import Dict, Any, Optional
 from datetime import datetime
 import inspect
+import logging
+
+logger = logging.getLogger(__name__)
 
 from src.agentic.action_logger import get_action_logger
 from src.agentic.planning import get_plan_manager
@@ -1087,12 +1090,12 @@ class ActionRouter:
             # Log episodic warnings if present
             if modulated_action.get('episodic_warnings'):
                 for warning in modulated_action['episodic_warnings']:
-                    print(warning)
+                    logger.warning(warning)
             
             # Log episodic insights if present
             if modulated_action.get('episodic_insights'):
                 for insight in modulated_action['episodic_insights']:
-                    print(insight)
+                    logger.info(insight)
 
         # Step 2.5: Belief prediction — predict outcome before acting
         executed_stages.add('belief_prediction')
@@ -1105,10 +1108,10 @@ class ActionRouter:
         modulated_action['_belief_prediction'] = belief_prediction
         
         if not belief_prediction.get('should_attempt', True):
-            print(f"⚠️ SelfModel advises against {action_domain}/{action_type}: {belief_prediction.get('attempt_reason', 'unknown')}")
+            logger.warning(f"⚠️ SelfModel advises against {action_domain}/{action_type}: {belief_prediction.get('attempt_reason', 'unknown')}")
         
         if belief_prediction.get('should_wait', False):
-            print(f"⏳ BeliefEngine suggests gathering more data: {belief_prediction.get('wait_reason', 'unknown')}")
+            logger.info(f"⏳ BeliefEngine suggests gathering more data: {belief_prediction.get('wait_reason', 'unknown')}")
 
         # Get validation profile early - needed for both Synergy and SyMod validation
         validation_profile = self._get_validation_profile(modulated_action)
@@ -1213,7 +1216,7 @@ class ActionRouter:
                         'issues': [{'type': 'FairMind Risk Matrix Match', 'risk_level': 'HIGH'}]
                     }
                     
-                    print(f"⚠️ Action {action_id} flagged as HIGH_RISK by FairMind matrix. Requesting Telegram approval...")
+                    logger.warning(f"⚠️ Action {action_id} flagged as HIGH_RISK by FairMind matrix. Requesting Telegram approval...")
                     
                     is_approved = await self.agi.approval_dashboard.request_approval(
                         action=action_id,
@@ -1229,7 +1232,7 @@ class ActionRouter:
                             'action_id': action_id,
                         }
                 except Exception as e:
-                    print(f"⚠️ Could not load ApprovalDashboard: {e}")
+                    logger.warning(f"⚠️ Could not load ApprovalDashboard: {e}")
 
         # Step 5: Execute via plugin
         executed_stages.add('plugin_execution')
@@ -1261,7 +1264,7 @@ class ActionRouter:
                         outcome_description=result.get('data', {}).get('result', '')[:200] if result.get('success') else result.get('error', '')[:200],
                     )
                 except Exception as e:
-                    print(f"⚠️ Cognitive outcome recording failed: {e}")
+                    logger.warning(f"⚠️ Cognitive outcome recording failed: {e}")
             
             result['outcome_record'] = self._build_outcome_record(
                 modulated_action,

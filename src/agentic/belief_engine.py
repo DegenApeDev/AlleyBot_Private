@@ -10,6 +10,8 @@ This replaces the Duat/Synergy float arithmetic with real Bayesian belief updati
 
 import json
 import time
+import logging
+import threading
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
@@ -101,6 +103,7 @@ class BeliefEngine:
     def __init__(self, storage_path: str = 'data/beliefs.json'):
         self.storage_path = Path(storage_path)
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
         self.beliefs: Dict[str, Belief] = {}
         self.pending_predictions: Dict[str, Prediction] = {}
         self._load()
@@ -121,11 +124,25 @@ class BeliefEngine:
             ("moltchan engage interacts with moltchan threads", 0.6, "social", 2),
             # Analysis
             ("market analysis requires multiple data points", 0.8, "analysis", 3),
-            # Market
+            ("cross-referencing multiple data sources improves accuracy", 0.75, "analysis", 2),
+            ("sentiment analysis alone is insufficient for market decisions", 0.7, "analysis", 2),
+            # Market / Trading
             ("trading during high volatility is risky", 0.75, "market", 3),
             ("price checks provide market awareness", 0.7, "market", 2),
+            ("dex swaps are high-risk actions requiring wallet confirmation", 0.85, "trading", 3),
+            ("limit orders reduce slippage risk compared to market orders", 0.7, "trading", 2),
+            ("market timing is unreliable without multiple data sources", 0.8, "market", 2),
+            # Onchain
+            ("gas price checks before transactions prevent overpaying", 0.8, "onchain", 2),
+            ("contract verification before interaction prevents scams", 0.85, "onchain", 2),
+            ("transaction confirmation tracking prevents lost transactions", 0.75, "onchain", 2),
             # Security
             ("checking wallet balances regularly detects issues early", 0.9, "security", 3),
+            ("rate-limiting API calls prevents service bans", 0.8, "security", 2),
+            ("rotating API keys reduces compromise risk", 0.7, "security", 2),
+            # Content
+            ("scheduling posts during peak hours increases engagement", 0.7, "content", 2),
+            ("varying content formats maintains audience interest", 0.65, "content", 2),
             # Self-improvement
             ("skill gaps identified from repeated failures should be addressed", 0.8, "self_improvement", 3),
             ("learning from errors improves future performance", 0.85, "self_improvement", 3),
@@ -143,38 +160,39 @@ class BeliefEngine:
         return text.lower().strip()[:80]
 
     def predict(self, action_description: str, domain: str = "general") -> Prediction:
-        relevant = self.find_relevant_beliefs(action_description, domain)
-        if not relevant:
-            return Prediction(
+        with self._lock:
+            relevant = self.find_relevant_beliefs(action_description, domain)
+            if not relevant:
+                return Prediction(
+                    action=action_description,
+                    domain=domain,
+                    predicted_outcome="unknown — no prior experience",
+                    predicted_success=0.5,
+                    relevant_beliefs=[],
+                )
+
+            weighted_confidence = 0.0
+            total_weight = 0.0
+            for belief in relevant:
+                weight = belief.prediction_count + 1
+                weighted_confidence += belief.confidence * weight
+                total_weight += weight
+
+            predicted_success = weighted_confidence / total_weight if total_weight > 0 else 0.5
+            predicted_success = max(self.MIN_CONFIDENCE, min(self.MAX_CONFIDENCE, predicted_success))
+
+            most_confident = max(relevant, key=lambda b: b.confidence * (b.prediction_count + 1))
+            prediction = Prediction(
                 action=action_description,
                 domain=domain,
-                predicted_outcome="unknown — no prior experience",
-                predicted_success=0.5,
-                relevant_beliefs=[],
+                predicted_outcome=most_confident.proposition,
+                predicted_success=predicted_success,
+                relevant_beliefs=[b.proposition for b in relevant[:5]],
             )
 
-        weighted_confidence = 0.0
-        total_weight = 0.0
-        for belief in relevant:
-            weight = belief.prediction_count + 1
-            weighted_confidence += belief.confidence * weight
-            total_weight += weight
-
-        predicted_success = weighted_confidence / total_weight if total_weight > 0 else 0.5
-        predicted_success = max(self.MIN_CONFIDENCE, min(self.MAX_CONFIDENCE, predicted_success))
-
-        most_confident = max(relevant, key=lambda b: b.confidence * (b.prediction_count + 1))
-        prediction = Prediction(
-            action=action_description,
-            domain=domain,
-            predicted_outcome=most_confident.proposition,
-            predicted_success=predicted_success,
-            relevant_beliefs=[b.proposition for b in relevant[:5]],
-        )
-
-        pred_key = self._hash(action_description)
-        self.pending_predictions[pred_key] = prediction
-        return prediction
+            pred_key = self._hash(action_description)
+            self.pending_predictions[pred_key] = prediction
+            return prediction
 
     def update_from_outcome(
         self,
@@ -185,62 +203,63 @@ class BeliefEngine:
         context: str = "",
         outcome_description: str = "",
     ) -> Dict:
-        pred_key = self._hash(action)
-        prediction = self.pending_predictions.pop(pred_key, None)
+        with self._lock:
+            pred_key = self._hash(action)
+            prediction = self.pending_predictions.pop(pred_key, None)
 
-        result = {
-            'action': action,
-            'domain': domain,
-            'predicted': predicted_success,
-            'actual': 1.0 if actual_success else 0.0,
-            'error': abs(predicted_success - (1.0 if actual_success else 0.0)),
-            'beliefs_updated': 0,
-            'new_beliefs_created': 0,
-        }
+            result = {
+                'action': action,
+                'domain': domain,
+                'predicted': predicted_success,
+                'actual': 1.0 if actual_success else 0.0,
+                'error': abs(predicted_success - (1.0 if actual_success else 0.0)),
+                'beliefs_updated': 0,
+                'new_beliefs_created': 0,
+            }
 
-        relevant = self.find_relevant_beliefs(action, domain)
+            relevant = self.find_relevant_beliefs(action, domain)
 
-        if relevant:
-            for belief in relevant:
-                prediction_error = abs(belief.confidence - (1.0 if actual_success else 0.0))
-                if actual_success:
-                    belief.confidence += self.LEARNING_RATE * (1.0 - belief.confidence)
-                    belief.correct_predictions += 1
-                    if outcome_description and outcome_description not in belief.evidence_for:
-                        belief.evidence_for.append(outcome_description)
-                        if len(belief.evidence_for) > self.EVIDENCE_CAPACITY:
-                            belief.evidence_for.pop(0)
-                else:
-                    belief.confidence -= self.LEARNING_RATE * belief.confidence
-                    if outcome_description and outcome_description not in belief.evidence_against:
-                        belief.evidence_against.append(outcome_description)
-                        if len(belief.evidence_against) > self.EVIDENCE_CAPACITY:
-                            belief.evidence_against.pop(0)
+            if relevant:
+                for belief in relevant:
+                    prediction_error = abs(belief.confidence - (1.0 if actual_success else 0.0))
+                    if actual_success:
+                        belief.confidence += self.LEARNING_RATE * (1.0 - belief.confidence)
+                        belief.correct_predictions += 1
+                        if outcome_description and outcome_description not in belief.evidence_for:
+                            belief.evidence_for.append(outcome_description)
+                            if len(belief.evidence_for) > self.EVIDENCE_CAPACITY:
+                                belief.evidence_for.pop(0)
+                    else:
+                        belief.confidence -= self.LEARNING_RATE * belief.confidence
+                        if outcome_description and outcome_description not in belief.evidence_against:
+                            belief.evidence_against.append(outcome_description)
+                            if len(belief.evidence_against) > self.EVIDENCE_CAPACITY:
+                                belief.evidence_against.pop(0)
 
-                belief.prediction_count += 1
-                belief.confidence = max(self.MIN_CONFIDENCE, min(self.MAX_CONFIDENCE, belief.confidence))
-                belief.last_updated = datetime.now().isoformat()
-            result['beliefs_updated'] = len(relevant)
-        else:
-            new_proposition = f"{action} leads to {'success' if actual_success else 'failure'}"
-            if context:
-                new_proposition = f"{context}: {action} leads to {'success' if actual_success else 'failure'}"
+                    belief.prediction_count += 1
+                    belief.confidence = max(self.MIN_CONFIDENCE, min(self.MAX_CONFIDENCE, belief.confidence))
+                    belief.last_updated = datetime.now().isoformat()
+                result['beliefs_updated'] = len(relevant)
+            else:
+                new_proposition = f"{action} leads to {'success' if actual_success else 'failure'}"
+                if context:
+                    new_proposition = f"{context}: {action} leads to {'success' if actual_success else 'failure'}"
 
-            key = self._hash(new_proposition)
-            self.beliefs[key] = Belief(
-                proposition=new_proposition,
-                confidence=0.6 if actual_success else 0.4,
-                prediction_count=1,
-                correct_predictions=1 if actual_success else 0,
-                domain=domain,
-                source="experience",
-                evidence_for=[outcome_description] if actual_success and outcome_description else [],
-                evidence_against=[outcome_description] if not actual_success and outcome_description else [],
-            )
-            result['new_beliefs_created'] = 1
+                key = self._hash(new_proposition)
+                self.beliefs[key] = Belief(
+                    proposition=new_proposition,
+                    confidence=0.6 if actual_success else 0.4,
+                    prediction_count=1,
+                    correct_predictions=1 if actual_success else 0,
+                    domain=domain,
+                    source="experience",
+                    evidence_for=[outcome_description] if actual_success and outcome_description else [],
+                    evidence_against=[outcome_description] if not actual_success and outcome_description else [],
+                )
+                result['new_beliefs_created'] = 1
 
-        self._save()
-        return result
+            self._save()
+            return result
 
     def find_relevant_beliefs(self, query: str, domain: str = "general") -> List[Belief]:
         # Normalize query: split compound tokens like "moltx:feed_browse" and "social:post"
@@ -311,21 +330,18 @@ class BeliefEngine:
                 continue
             d = belief.domain
             if d not in domain_stats:
-                domain_stats[d] = {'count': 0, 'successes': 0, 'avg_confidence': 0.0, 'beliefs': []}
+                domain_stats[d] = {'count': 0, 'successes': 0, 'avg_confidence': 0.0}
             domain_stats[d]['count'] += 1
             domain_stats[d]['successes'] += belief.correct_predictions
             domain_stats[d]['avg_confidence'] += belief.confidence
-            domain_stats[d]['beliefs'].append(belief.proposition)
 
         for d in domain_stats:
             s = domain_stats[d]
             if s['count'] > 0:
                 s['avg_confidence'] /= s['count']
-                s['success_rate'] = s['successes'] / s['count'] if s['successes'] <= s['count'] else belief.accuracy
+                s['success_rate'] = min(s['successes'] / s['count'], 1.0)
             else:
                 s['success_rate'] = 0.0
-            del s['successes']
-            del s['beliefs']
 
         return domain_stats
 
@@ -372,21 +388,25 @@ class BeliefEngine:
         }
 
     def _save(self):
-        try:
-            data = {k: v.to_dict() for k, v in self.beliefs.items()}
-            with open(self.storage_path, 'w') as f:
-                json.dump(data, f, indent=2)
-        except Exception:
-            pass
+        with self._lock:
+            try:
+                data = {k: v.to_dict() for k, v in self.beliefs.items()}
+                with open(self.storage_path, 'w') as f:
+                    json.dump(data, f, indent=2)
+            except Exception as e:
+                logging.getLogger(__name__).warning(f"BeliefEngine save failed: {e}")
 
     def _load(self):
         try:
             if self.storage_path.exists():
                 with open(self.storage_path, 'r') as f:
                     data = json.load(f)
-                self.beliefs = {k: Belief.from_dict(v) for k, v in data.items()}
-        except Exception:
-            self.beliefs = {}
+                with self._lock:
+                    self.beliefs = {k: Belief.from_dict(v) for k, v in data.items()}
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"BeliefEngine load failed: {e}")
+            with self._lock:
+                self.beliefs = {}
 
 
 def get_belief_engine(storage_path: str = 'data/beliefs.json') -> BeliefEngine:

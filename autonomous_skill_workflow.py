@@ -16,7 +16,9 @@ class AutonomousSkillWorkflow:
     
     def __init__(self, core):
         self.core = core
-        self.skill_generator = SkillGenerator()
+        llm = getattr(core, 'llm', None) if core else None
+        skills_dir = getattr(core, 'skills_dir', 'dynamic_skills') if core else 'dynamic_skills'
+        self.skill_generator = SkillGenerator(llm=llm, skills_dir=skills_dir)
         self.autonomous_coder = AutonomousCoder()
         self.idea_sources = self._initialize_idea_sources()
         self.skill_queue = []

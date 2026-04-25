@@ -40,7 +40,6 @@ from src.agentic.multi_timescale_planner import get_multi_timescale_planner
 from src.agentic.meta_learner import get_meta_learner
 from src.agentic.goal_manager import get_goal_manager
 from src.agentic.default_goals import get_default_goal_seeder
-from src.agentic.duat_cognition import get_duat_engine
 
 # Cognitive Integration: BeliefEngine, SelfModel, GoalPlanner replace Duat/Synergy numerology
 from src.agentic.cognitive_integration import get_cognitive
@@ -152,10 +151,7 @@ class AutonomousBrain(AGISocialMixin):
         self.plugin_manager = plugin_manager
         self.symod = symod or get_symod_manager()
         
-        # Duat Cognition Engine - consciousness state tracking (legacy, kept for compatibility)
-        self.duat = get_duat_engine()
-        
-        # Cognitive Integration: BeliefEngine + SelfModel + GoalPlanner + KnowledgeGraph
+        # Duat Cognition Engine removed — replaced by CognitiveIntegration
         self.cognitive = get_cognitive()
         
         # Configuration
@@ -443,9 +439,7 @@ class AutonomousBrain(AGISocialMixin):
             f"Calibrated: {cognitive_reflection.get('calibration', {}).get('calibrated', 'unknown')}"
         )
         
-        # Legacy Duat reflection (kept for compatibility)
-        duat_reflection = self.duat.reflection()
-        logger.info(f"🜂 Duat State: awareness={duat_reflection['awareness']:.2f}, distortion={duat_reflection['distortion']:.2f}")
+        # Duat replaced by CognitiveIntegration — reflection is above
         
         active_work_items: List[Dict[str, Any]] = []
         spine_context: Dict[str, Any] = {}
@@ -639,11 +633,7 @@ class AutonomousBrain(AGISocialMixin):
             f"Error: {calibration.get('mean_absolute_error', '?')}"
         )
 
-        # Legacy Duat (kept for compatibility)
-        duat_purification = self.duat.purification()
-        duat_renewal = self.duat.renewal()
-        self.duat.advance_time()
-        self.duat.save_state()
+        # Duat replaced by CognitiveIntegration — cycle-end reflection above
 
         if executed == 0:
             # Generate and execute exploratory proposals when idle
@@ -2509,7 +2499,7 @@ class AutonomousBrain(AGISocialMixin):
         blocked_by_runtime = bool(top_judgment.get('blocked_by_runtime_readiness'))
         trust_bucket = str(top_judgment.get('trust_bucket', 'unknown') or 'unknown')
 
-        synergy_ripe = opportunity_urgent or recent_interaction_count > 0 or can_execute_now
+        opportunity_ripe = opportunity_urgent or recent_interaction_count > 0 or can_execute_now
         security_allows = not blocked_by_policy
         current_capability_ready = can_execute_now and not blocked_by_runtime
 
@@ -2521,7 +2511,7 @@ class AutonomousBrain(AGISocialMixin):
             'top_work_item_id': top_work_item.get('id'),
             'top_work_item_type': top_work_item.get('type'),
             'top_work_item_summary': top_work_item.get('summary'),
-            'synergy_ripe': synergy_ripe,
+            'opportunity_ripe': opportunity_ripe,
             'security_allows': security_allows,
             'current_capability_ready': current_capability_ready,
             'blocked_by_policy': blocked_by_policy,
@@ -2543,10 +2533,10 @@ class AutonomousBrain(AGISocialMixin):
         if not spine_context:
             return
         logger.info(
-            "🧭 Spine | found=%s meaningful=%s synergy_ripe=%s security_allows=%s capability_ready=%s top_work=%s",
+            "🧭 Spine | found=%s meaningful=%s opportunity_ripe=%s security_allows=%s capability_ready=%s top_work=%s",
             spine_context.get('recent_findings_count', 0),
             spine_context.get('has_meaningful_work', False),
-            spine_context.get('synergy_ripe', False),
+            spine_context.get('opportunity_ripe', False),
             spine_context.get('security_allows', False),
             spine_context.get('current_capability_ready', False),
             spine_context.get('top_work_item_summary', 'none'),
@@ -2558,7 +2548,7 @@ class AutonomousBrain(AGISocialMixin):
             return
 
         meaningful_work = bool(spine_context.get('has_meaningful_work'))
-        synergy_ripe = bool(spine_context.get('synergy_ripe'))
+        opportunity_ripe = bool(spine_context.get('opportunity_ripe'))
         security_allows = bool(spine_context.get('security_allows'))
         capability_ready = bool(spine_context.get('current_capability_ready'))
         top_work_type = str(spine_context.get('top_work_item_type', '') or '').lower()
@@ -2578,7 +2568,7 @@ class AutonomousBrain(AGISocialMixin):
                 adjustment += 0.08
             if top_work_type == 'trend_opportunity' and any(token in blob for token in ['analy', 'post', 'trend']):
                 adjustment += 0.06
-            if synergy_ripe and any(token in blob for token in ['engage', 'reply', 'analy', 'post']):
+            if opportunity_ripe and any(token in blob for token in ['engage', 'reply', 'analy', 'post']):
                 adjustment += 0.05
             # Note: Self-improvement and auto-fix are now enabled for autonomous evolution
             # The checks below are for informational logging only - not blocking

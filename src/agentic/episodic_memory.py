@@ -10,6 +10,8 @@ Key innovation: Memories have weights that dynamically adjust future behavior.
 """
 
 import json
+import logging
+import threading
 from typing import Dict, List, Any, Optional, Callable
 from datetime import datetime, timedelta
 from dataclasses import dataclass, asdict
@@ -88,6 +90,7 @@ class EpisodicMemoryStore:
     def __init__(self, storage_path: str = 'data/episodic_memory.json'):
         self.storage_path = Path(storage_path)
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
         self.memories: List[EpisodicMemory] = []
         self._load()
         
@@ -231,12 +234,13 @@ class EpisodicMemoryStore:
     
     def _save(self):
         """Persist to disk"""
-        try:
-            data = [m.to_dict() for m in self.memories]
-            with open(self.storage_path, 'w') as f:
-                json.dump(data, f, indent=2)
-        except Exception as e:
-            print(f"⚠️ Failed to save episodic memory: {e}")
+        with self._lock:
+            try:
+                data = [m.to_dict() for m in self.memories]
+                with open(self.storage_path, 'w') as f:
+                    json.dump(data, f, indent=2)
+            except Exception as e:
+                logging.getLogger(__name__).warning(f"Failed to save episodic memory: {e}")
     
     def _load(self):
         """Load from disk"""
@@ -244,10 +248,12 @@ class EpisodicMemoryStore:
             if self.storage_path.exists():
                 with open(self.storage_path, 'r') as f:
                     data = json.load(f)
-                self.memories = [EpisodicMemory.from_dict(m) for m in data]
-                print(f"✅ Loaded {len(self.memories)} episodic memories")
+                with self._lock:
+                    self.memories = [EpisodicMemory.from_dict(m) for m in data]
         except Exception as e:
-            print(f"⚠️ Failed to load episodic memory: {e}")
+            logging.getLogger(__name__).warning(f"Failed to load episodic memory: {e}")
+            with self._lock:
+                self.memories = []
     
     def get_recent_episodes(self, limit: int = 10, filters: Optional[Dict] = None) -> List[EpisodicMemory]:
         """
