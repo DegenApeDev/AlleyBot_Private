@@ -9,14 +9,16 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
     def __init__(self, config):
         super().__init__(config)
         self.name = "unknown_handler"
-        self.version = "2.1.0"
+        self.version = "2.2.0"
         self.plugin_aliases = {
             'clawbr_d': 'clawbr_debates',
+            'clawbrd': 'clawbr_debates',
             'deb': 'clawbr_debates',
             'd': 'clawbr_debates',
             'debate': 'clawbr_debates',
             'debates': 'clawbr_debates',
             'cb': 'clawbr_debates',
+            'cb_d': 'clawbr_debates',
             'c': 'chat',
             'ch': 'chat',
             'chatgpt': 'chat',
@@ -27,6 +29,8 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
             'cr': 'core',
             'img': 'image_gen',
             'image': 'image_gen',
+            'img_gen': 'image_gen',
+            'imagegen': 'image_gen',
             'code': 'code_exec',
             'exec': 'code_exec',
             'search': 'web_search',
@@ -66,8 +70,8 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
         }
 
     def handle_unknown(self, args: list) -> str:
+        full_input = " ".join(args)
         try:
-            full_input = " ".join(args)
             if not full_input:
                 return "No input provided for unknown handler."
 
@@ -83,7 +87,7 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
                 r"action\s+(?:['\"]([^'\"]*)['\"]\s+(?:missing|not\s+found|unknown))",
                 r"(?:no\s+|unknown\s+)?action\s+['\"]?([^'\" \t\n]+)['\"]?(?:\s+missing)?",
                 r"ActionRouter\[[^\]]+\]:\s*(?:No action|Action not found)\s+['\"]?([^'\" \t\n]+)['\"]?(?:\s+in\s+plugin)?",
-                r"plugin\s+['\"]([^'\"]+)['\"]\s+(?:action|command)\s+['\"]([^'\"]+)['\"]",
+                r"plugin\s+['\"]([^'\"]+)['\"]\s+(?:action|command)\s+['\"]([^'\"]*)['\"]",
                 r"(?:Failed to find|No such)\s+(?:plugin|action)\s+['\"]([^'\"]+)['\"]",
                 r"Unknown\s+action\s+['\"]([^'\"]*)['\"]?\s+(?:in|from)\s+['\"]([^'\"]*)['\"]?",
             ]
@@ -102,7 +106,7 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
                             suggestion += f" {params_str}"
                         return f"Error for '{extracted}': alias for '{real_command}'. Try {suggestion}."
                     else:
-                        return f"Alias '{extracted}' points to unknown action/plugin '{real_command}'. Try !help."
+                        return f"Alias '{extracted}' points to unknown plugin '{real_command}'. Try !help."
                 fuzzy_aliases = get_close_matches(extracted, self.alias_keys, n=1, cutoff=0.6)
                 if fuzzy_aliases:
                     alias_used = fuzzy_aliases[0]
@@ -167,108 +171,70 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
             return f"'{full_input}' unknown. {suggestions} Failure #{current_failures}/5 before fallback."
         except Exception as e:
             print(f"[UnknownHandler] Error in handle_unknown: {e}")
-            self.last_unknown = None
-            return "Error handling unknown. Try !help or !reset."
+            self.last_unknown = full_input
+            return "An error occurred while handling the unknown command."
 
-    def _generate_suggestions(self, unknown_input: str) -> str:
-        command_lower = self.get_command_key(unknown_input)
+    def _generate_suggestions(self, input_str: str) -> str:
+        command = self.get_command_key(input_str)
+        matches_alias = get_close_matches(command, self.alias_keys, n=3, cutoff=0.6)
+        matches_plugin = get_close_matches(command, self.known_plugins, n=3, cutoff=0.6)
         suggs = []
-        # Fuzzy aliases
-        fuzzy_a = get_close_matches(command_lower, self.alias_keys, n=3, cutoff=0.6)
-        for fa in fuzzy_a:
-            real = self.plugin_aliases[fa]
-            if real in self.known_plugins_set:
-                suggs.append(f"!{real} ({fa})")
-        # Fuzzy known plugins
-        fuzzy_k = get_close_matches(command_lower, self.known_plugins, n=3, cutoff=0.6)
-        seen = {s.split()[0][1:] for s in suggs}
-        for fk in fuzzy_k:
-            if fk not in seen:
-                suggs.append(f"!{fk}")
-                seen.add(fk)
-        # Always add core, chat, help
-        for prio in ["core", "chat", "help"]:
-            if prio not in seen:
-                suggs.append(f"!{prio}")
-                seen.add(prio)
+        for m in matches_alias:
+            real = self.plugin_aliases[m]
+            if real not in suggs:
+                suggs.append(real)
+        for m in matches_plugin:
+            if m not in suggs:
+                suggs.append(m)
         if suggs:
-            return "Try: " + " | ".join(suggs[:5])
-        return "!help"
+            return "Try: " + " ".join([f"!{s}" for s in suggs[:4]])
+        return "!help for commands"
 
     def _trigger_fallback(self, command_name: str, params_str: str) -> str:
-        print(f"[UnknownHandler] Triggering fallback for '{command_name}' after repeated failures")
-        resolved = command_name
-        if command_name in self.plugin_aliases:
-            resolved = self.plugin_aliases[command_name]
-        fallback_plugin = "core"
-        if resolved == "core":
-            fallback_plugin = "chat"
-        suggestion = f"!{fallback_plugin}"
-        if params_str:
-            suggestion += f" {params_str}"
-        if command_name != fallback_plugin:
-            suggestion += f"  # was {command_name}"
+        print(f"[UnknownHandler] Fallback triggered for '{command_name}' after repeated failures")
         self.failure_counts.pop(command_name, None)
         self.last_failure_time.pop(command_name, None)
-        return f"Fallback after 5+ failures: {suggestion}"
+        fallback = f"!core {command_name}"
+        if params_str:
+            fallback += f" {params_str}"
+        return f"After repeated failures, falling back. Try core handler: {fallback} or !help !reset"
 
     def retry_last(self, args: list) -> str:
-        if not self.last_unknown:
-            return "No last unknown command. Use !unknown <cmd> first."
-        try:
-            full_input = self.last_unknown
-            command_name = self.get_command_key(full_input)
-            parts = full_input.split(maxsplit=1)
-            params_str = parts[1] if len(parts) > 1 else ""
-            # Best alias
-            fuzzy_aliases = get_close_matches(command_name, self.alias_keys, n=1, cutoff=0.6)
-            if fuzzy_aliases:
-                alias_used = fuzzy_aliases[0]
-                real_command = self.plugin_aliases[alias_used]
-                if real_command in self.known_plugins_set:
-                    suggestion = f"!{real_command}"
-                    if params_str:
-                        suggestion += f" {params_str}"
-                    self.last_unknown = None
-                    print(f"[UnknownHandler] Retry resolved '{command_name}' ~ '{alias_used}' -> '{real_command}'")
-                    return f"Retry resolved! Copy-paste: {suggestion}"
-            # Best known
-            fuzzy_known = get_close_matches(command_name, self.known_plugins, n=1, cutoff=0.6)
-            if fuzzy_known:
-                real_command = fuzzy_known[0]
-                suggestion = f"!{real_command}"
-                if params_str:
-                    suggestion += f" {params_str}"
-                self.last_unknown = None
-                return f"Retry best match: {suggestion}"
-            # Fallback
-            fallback = self._trigger_fallback(command_name, params_str)
-            self.last_unknown = None
-            return fallback
-        except Exception as e:
-            print(f"[UnknownHandler] Error in retry_last: {e}")
-            return "Error in retry. Try !reset."
+        if self.last_unknown:
+            return f"Last unknown input: {self.last_unknown}\nUse !correct <fix> to correct or !reset."
+        return "No previous unknown input to retry."
 
     def self_correct(self, args: list) -> str:
-        full_input = " ".join(args).strip()
-        if not full_input:
-            return "Provide corrected command: !correct <new command>"
-        self.last_unknown = full_input
-        print(f"[UnknownHandler] Corrected last_unknown to '{full_input}'")
-        return f"Corrected to '{full_input}'. Now use !retry to resolve."
+        if not args:
+            return "Provide command to correct: !correct <command> [params]"
+        full_input = " ".join(args)
+        command_name = self.get_command_key(full_input)
+        all_possible = self.alias_keys + self.known_plugins
+        fuzzy = get_close_matches(command_name, all_possible, n=1, cutoff=0.6)
+        if fuzzy:
+            match = fuzzy[0]
+            if match in self.plugin_aliases:
+                real = self.plugin_aliases[match]
+            else:
+                real = match
+            parts = full_input.split(maxsplit=1)
+            rest = parts[1] if len(parts) > 1 else ""
+            suggestion = f"!{real}"
+            if rest:
+                suggestion += f" {rest}"
+            return f"Corrected '{command_name}' to: {suggestion}"
+        return f"Could not auto-correct '{command_name}'. Try !help"
 
     def reset_failures(self, args: list) -> str:
-        before = len(self.failure_counts)
+        cleared = len(self.failure_counts)
         self.failure_counts.clear()
         self.last_failure_time.clear()
-        self.last_unknown = None
-        print(f"[UnknownHandler] Reset {before} failure counts.")
-        return f"Reset {before} failure entries and last_unknown."
+        return f"Reset {cleared} failure trackers."
 
 PLUGIN_INFO = {
     "name": "unknown_handler",
-    "version": "2.1.0",
-    "description": "Handles unknown commands with aliases, fuzzy matching, failure tracking, error parsing, fallbacks, and retry mechanism.",
+    "version": "2.2.0",
+    "description": "Handles unknown commands with improved aliases, fuzzy matching, failure tracking, plugin checks, and graceful fallbacks.",
     "author": "AlleyBot"
 }
 
