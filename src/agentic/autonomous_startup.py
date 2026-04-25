@@ -180,8 +180,8 @@ class AutonomousStartup:
             logger.info("🔍 Checking for pending USER_COMMAND goals from previous session...")
             
             # Get work item manager
-            from src.agentic.work_item_manager import get_work_item_manager
-            work_item_manager = get_work_item_manager()
+            from src.agentic.work_item_manager import create_work_item_manager
+            work_item_manager = create_work_item_manager()
             
             # Get all active work items
             active_items = work_item_manager.get_active_work_items(limit=50)

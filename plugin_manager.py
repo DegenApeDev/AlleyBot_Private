@@ -93,7 +93,7 @@ class PluginManager:
                 }
             },
             "content": {
-                "enabled": True,
+                "enabled": False,
                 "config": {
                     "auto_posting": True,
                     "post_interval": 2

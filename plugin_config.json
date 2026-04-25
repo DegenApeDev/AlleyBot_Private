@@ -43,7 +43,7 @@
     }
   },
   "moltbookai": {
-    "enabled": true,
+    "enabled": false,
     "config": {
       "auto_posting": true,
       "auto_browse": true,
