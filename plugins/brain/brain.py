@@ -158,9 +158,9 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
             self._autonomous_brain = None
             print(f"⚠️ BrainPlugin: AutonomousBrain not available, using legacy loop: {e}")
 
-        # Auto-start if configured
-        if self.config.get('auto_start', False):
-            self.start_autonomous()
+        # Auto-start is handled by AutonomousStartup in production mode.
+        # Only start here if explicitly requested via /brain_start command.
+        # Prevents dual brain instances (BrainPlugin thread + AutonomousStartup).
 
         print("🧠 Brain plugin ready")
 

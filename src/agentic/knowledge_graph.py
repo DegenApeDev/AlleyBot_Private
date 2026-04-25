@@ -179,6 +179,14 @@ class KnowledgeGraph:
         """Get relationship by ID"""
         return self.relationships.get(relationship_id)
     
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get knowledge graph statistics"""
+        return {
+            'total_entities': len(self.entities),
+            'total_relationships': len(self.relationships),
+            'domains': list(set(e.domain for e in self.entities.values() if hasattr(e, 'domain'))),
+        }
+
     def get_domain_facts(self, domain: str) -> List[Entity]:
         """Get all facts/entities for a domain"""
         entity_ids = self.domain_index.get(domain, set())
