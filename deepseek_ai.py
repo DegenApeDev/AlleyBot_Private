@@ -18,8 +18,8 @@ class DeepSeekAI:
     def __init__(self):
         self.api_key = os.getenv('DEEPSEEK_API_KEY')
         self.base_url = "https://api.deepseek.com/v1"
-        self.model = "deepseek-chat"
-        self.reasoner_model = "deepseek-reasoner"
+        self.model = "deepseek-v4-flash"
+        self.reasoner_model = "deepseek-v4-pro"
         
         if not self.api_key:
             print("⚠️  DEEPSEEK_API_KEY not found in environment")
