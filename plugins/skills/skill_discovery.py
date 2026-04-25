@@ -80,54 +80,55 @@ class SkillDiscoveryPlugin(AlleyBotPlugin):
         self.full_skills.clear()
         self.skill_by_alias.clear()
 
-        # Prioritize core and debate plugins first
-        plugins_dir = Path(self.project_root) / "plugins"
-        core_plugins = {
-            "core": {
-                "description": "Core AlleyBot plugin - essential commands, configuration, and system utilities.",
-                "aliases": []
-            },
-            "clawbr_debates": {
-                "description": "Clawbr Debates - AI-powered debate simulation, logic, and persuasion skills.",
-                "aliases": ["debates", "debate", "clawbr-debates"]
-            }
-        }
-        for plugin_name, data in core_plugins.items():
-            plugin_path = plugins_dir / plugin_name
-            added = False
-            skill_file = plugin_path / "SKILL.md"
-            if skill_file.exists():
-                try:
-                    frontmatter = self._parse_frontmatter(skill_file)
-                    if frontmatter and frontmatter.get('name') == plugin_name:
-                        metadata = frontmatter.get('metadata', {}).copy()
-                        aliases = metadata.get('aliases', frontmatter.get('aliases', data['aliases']))
-                        aliases = [str(a).strip() for a in aliases] if isinstance(aliases, (list, tuple)) else data['aliases']
-                        metadata['aliases'] = aliases
-                        self.skill_index[plugin_name] = {
-                            'name': plugin_name,
-                            'description': frontmatter.get('description', data['description']),
-                            'path': str(plugin_path),
-                            'metadata': metadata
-                        }
-                        added = True
-                except Exception as e:
-                    print(f"⚠️ Failed to parse plugin skill {plugin_name}: {e}")
-            if not added:
-                metadata = {'aliases': data['aliases']}
-                self.skill_index[plugin_name] = {
-                    'name': plugin_name,
-                    'description': data['description'],
-                    'path': str(plugin_path),
-                    'metadata': metadata
-                }
+        # Discover plugins as skills first
+        plugins_path = Path(self.project_root) / "plugins"
+        if plugins_path.exists():
+            for plugin_dir in sorted(plugins_path.iterdir(), key=lambda p: p.name):
+                if not plugin_dir.is_dir():
+                    continue
+                plugin_name = plugin_dir.name
+                plugin_file = plugin_dir / f"{plugin_name}.py"
+                if not plugin_file.exists():
+                    continue
+                skill_file = plugin_dir / "SKILL.md"
+                fallback_description = f"{plugin_name.replace('_', ' ').title()} - plugin capabilities and commands."
+                short_name = self._generate_short_name(plugin_name)
+                fallback_aliases = [short_name] if short_name != plugin_name else []
+                added = False
+                if skill_file.exists():
+                    try:
+                        frontmatter = self._parse_frontmatter(skill_file)
+                        if frontmatter and frontmatter.get('name') == plugin_name:
+                            metadata = frontmatter.get('metadata', {}).copy()
+                            aliases = metadata.get('aliases', frontmatter.get('aliases', fallback_aliases))
+                            aliases = [str(a).strip() for a in aliases] if isinstance(aliases, (list, tuple)) else fallback_aliases
+                            if short_name != plugin_name and short_name not in aliases:
+                                aliases.append(short_name)
+                            metadata['aliases'] = aliases
+                            self.skill_index[plugin_name] = {
+                                'name': plugin_name,
+                                'description': frontmatter.get('description', fallback_description),
+                                'path': str(plugin_dir),
+                                'metadata': metadata
+                            }
+                            added = True
+                    except Exception as e:
+                        print(f"⚠️ Failed to parse plugin skill {plugin_name}: {e}")
+                if not added:
+                    metadata = {'aliases': fallback_aliases}
+                    self.skill_index[plugin_name] = {
+                        'name': plugin_name,
+                        'description': fallback_description,
+                        'path': str(plugin_dir),
+                        'metadata': metadata
+                    }
 
         # Then scan skills directory
         skills_path = Path(self.project_root) / self.skills_dir
         if not skills_path.exists():
             print(f"⚠️ Skills directory not found: {skills_path}")
         else:
-            for skill_dir in skills_path.iterdir():
+            for skill_dir in sorted(skills_path.iterdir(), key=lambda d: d.name):
                 if not skill_dir.is_dir():
                     continue
                 skill_file = skill_dir / 'SKILL.md'
@@ -161,6 +162,13 @@ class SkillDiscoveryPlugin(AlleyBotPlugin):
                     print(f"⚠️ Alias conflict: '{alias}' already maps to {self.skill_by_alias[alias]}, now {skill_name}")
                 self.skill_by_alias[alias] = skill_name
 
+    def _generate_short_name(self, full_name: str) -> str:
+        parts = full_name.split('_')
+        if len(parts) >= 2:
+            short_parts = parts[:-1] + [parts[-1][0].lower()] if parts[-1] else parts[:-1]
+            return '_'.join(short_parts)
+        return full_name
+
     def _parse_frontmatter(self, skill_file: Path) -> Optional[Dict]:
         """Extract YAML frontmatter from SKILL.md"""
         try:
@@ -175,66 +183,55 @@ class SkillDiscoveryPlugin(AlleyBotPlugin):
             return None
 
     def _load_full_skill(self, skill_name: str) -> Optional[Dict[str, Any]]:
-        """Load full skill content including body (progressive disclosure)"""
-        if skill_name in self.full_skills:
-            return self.full_skills[skill_name]
-
-        if skill_name not in self.skill_index:
+        """Load full skill content"""
+        info = self.skill_index.get(skill_name)
+        if not info:
             return None
-
-        skill_info = self.skill_index[skill_name]
-        skill_path = Path(skill_info['path']) / 'SKILL.md'
-
-        try:
-            if not skill_path.exists():
-                # Fallback for plugins without dedicated SKILL.md file
-                metadata = skill_info['metadata'].copy()
-                frontmatter = {
-                    'name': skill_name,
-                    'description': skill_info['description'],
-                    'metadata': metadata
-                }
-                body = (f"Plugin-based skill without dedicated SKILL.md file.\n\n"
-                        f"Path: {skill_info['path']}\n\n"
-                        f"Metadata:\n{yaml.dump(metadata, default_flow_style=False)}")
-                full_skill = {
-                    'name': skill_name,
-                    'description': skill_info['description'],
-                    'body': body,
-                    'frontmatter': frontmatter,
-                    'path': skill_info['path']
-                }
-            else:
-                content = skill_path.read_text(encoding='utf-8')
+        path = Path(info['path'])
+        skill_file = path / 'SKILL.md'
+        if skill_file.exists():
+            try:
+                content = skill_file.read_text(encoding='utf-8')
+                frontmatter = self._parse_frontmatter(skill_file)
+                if not frontmatter:
+                    return None
                 match = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)$', content, re.DOTALL)
-                if match:
-                    frontmatter_text = match.group(1)
-                    frontmatter = yaml.safe_load(frontmatter_text)
-                    body = match.group(2).strip()
-                else:
+                body = match.group(2).strip() if match else content.strip()
+                full = {
+                    'name': frontmatter.get('name', skill_name),
+                    'description': frontmatter.get('description', info['description']),
+                    'frontmatter': frontmatter,
+                    'body': body,
+                    'path': str(skill_file),
+                }
+                self.full_skills[skill_name] = full
+                return full
+            except Exception as e:
+                print(f"⚠️ Failed to load full skill {skill_name}: {e}")
+                return None
+        else:
+            # Fallback for plugins: preview .py file
+            plugin_file = path / f"{skill_name}.py"
+            if plugin_file.exists():
+                try:
+                    body = plugin_file.read_text(encoding='utf-8')[:2000]
                     frontmatter = {
                         'name': skill_name,
-                        'description': skill_info['description']
+                        'description': info['description'],
+                        'metadata': info['metadata'],
                     }
-                    body = content.strip()
-                # Standardize aliases in metadata
-                metadata = frontmatter.get('metadata', {}).copy()
-                aliases = metadata.get('aliases', frontmatter.get('aliases', []))
-                aliases = [str(a).strip() for a in aliases] if isinstance(aliases, (list, tuple)) else []
-                metadata['aliases'] = aliases
-                frontmatter['metadata'] = metadata
-                full_skill = {
-                    'name': skill_name,
-                    'description': frontmatter.get('description', skill_info['description']),
-                    'body': body,
-                    'frontmatter': frontmatter,
-                    'path': skill_info['path']
-                }
-            self.full_skills[skill_name] = full_skill
-            return full_skill
-        except Exception as e:
-            print(f"⚠️ Failed to load full skill {skill_name}: {e}")
-            return None
+                    full = {
+                        'name': skill_name,
+                        'description': info['description'],
+                        'frontmatter': frontmatter,
+                        'body': body,
+                        'path': str(plugin_file),
+                    }
+                    self.full_skills[skill_name] = full
+                    return full
+                except Exception as e:
+                    print(f"⚠️ Failed to load plugin preview {skill_name}: {e}")
+        return None
 
 
 PLUGIN_INFO = {
