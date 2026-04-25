@@ -1637,7 +1637,8 @@ class AutonomousBrain(AGISocialMixin):
                     result = selfimprove_plugin.self_update_command(
                         ['create', gap['action_type'].replace(':', '_'), task_desc]
                     )
-                    if result and result.get('success'):
+                    # Handle both string (confirmation needed) and dict (result) returns
+                    if isinstance(result, dict) and result.get('success'):
                         logger.info(f"🚀 Self-update generated and deployed: {result.get('plan_id', 'unknown')}")
                         generated = True
                         if agi_kernel and hasattr(agi_kernel, 'episodic_memory'):
@@ -1646,8 +1647,10 @@ class AutonomousBrain(AGISocialMixin):
                                 context={'gap': gap, 'result': result},
                                 outcome={'success': True, 'deployed': True}
                             )
+                    elif isinstance(result, str) and 'pending confirmation' in result.lower():
+                        logger.info(f"⏸️ Self-update requires confirmation: {result[:100]}...")
                     else:
-                        logger.warning(f"⚠️ Self-update command failed: {result}")
+                        logger.warning(f"⚠️ Self-update command returned: {result}")
 
             # Fallback to skeleton autonomous coder if selfimprove is unavailable
             if not generated:
@@ -2698,6 +2701,8 @@ class AutonomousBrain(AGISocialMixin):
         try:
             # Use new default goal seeder
             goal_seeder = get_default_goal_seeder(agi_kernel)
+            if not goal_seeder:
+                return False
             seeded_count = goal_seeder.seed_goals_if_needed()
             
             if seeded_count > 0:
