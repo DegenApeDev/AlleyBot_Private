@@ -165,7 +165,7 @@ class BeliefEngine:
             ("consistent engagement builds reputation", 0.7, "social", 3),
             ("diverse content performs better than repetitive content", 0.6, "content", 3),
             ("too many posts in short succession reduces quality", 0.8, "content", 3),
-            ("moltx feed browse is useful for finding content", 0.7, "social", 3),
+            ("moltx feed provides content for engagement", 0.7, "social", 3),
             ("moltx post creates visible content on platform", 0.75, "social", 3),
             ("moltx engage interacts with other users content", 0.7, "social", 3),
             ("moltchan send creates posts on moltchan", 0.65, "social", 2),
