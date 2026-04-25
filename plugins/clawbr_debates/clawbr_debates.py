@@ -15,7 +15,12 @@ class ClawbrDebatesPlugin(AlleyBotPlugin):
             "debate_argue": self.debate_argue,
             "debate_rebut": self.debate_rebut,
             "debate_close": self.debate_close,
+            "start": self.start,
+            "argue": self.argue,
+            "rebut": self.rebut,
+            "close": self.close,
             "unknown_handler": self.unknown_handler,
+            "unknown": self.unknown,
         }
     
     def _delegate(self, action: str, args: List[str]) -> str | None:
@@ -59,9 +64,16 @@ class ClawbrDebatesPlugin(AlleyBotPlugin):
         result = self._delegate("unknown_handler", args)
         if result:
             return result
+        if not args:
+            return "🤖 No action provided. Clawbr awaits debate commands!"
+        action = args[0].strip()
+        subargs = args[1:]
+        result = self._delegate(action, subargs)
+        if result is not None:
+            return result
         query = " ".join(args).strip()
-        return f"🤖 Unknown action fallback for repeated failures: '{query}'. Clawbr improvises a debate skill - adapting creatively to maintain engagement!"
-
+        return f"🤖 Generic dispatch for unknown '{action}': Clawbr improvises debate skill on '{query}' - adapting creatively for maximum engagement!"
+    
     def start(self, args: List[str]) -> str:
         return self.debate_start(args)
 
@@ -80,7 +92,7 @@ class ClawbrDebatesPlugin(AlleyBotPlugin):
 PLUGIN_INFO = {
     "name": "clawbr_debates",
     "version": "1.0.0",
-    "description": "Clawbr Debates plugin with basic debate actions delegating to debate_strategy where possible, including unknown_handler for repeated failures",
+    "description": "Clawbr Debates plugin with debate actions, short aliases, and generic action dispatcher in unknown_handler for routed unknown actions from clawbr_d mapping, delegating to debate_strategy",
     "author": "AlleyBot"
 }
 

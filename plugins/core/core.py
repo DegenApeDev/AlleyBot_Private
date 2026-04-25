@@ -5,6 +5,7 @@ import time
 
 class CorePlugin(AlleyBotPlugin):
     def __init__(self, config):
+        config = config or {}
         super().__init__(config)
         self.name = "core"
         self.version = "1.0.0"

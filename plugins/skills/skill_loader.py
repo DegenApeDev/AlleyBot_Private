@@ -26,8 +26,9 @@ class SkillLoaderMixin:
         self.command_aliases: Dict[str, str] = {}
         if not hasattr(self, 'commands'):
             self.commands: Dict[str, Callable[[List[str]], str]] = {}
-        self.load_skill('core')
-        self.load_skill('unknown_handler')
+        priority_skills = ['core', 'debate', 'unknown_handler']
+        for skill_name in priority_skills:
+            self.load_skill(skill_name)
 
     def load_skill(self, name: str) -> Optional[AlleyBotPlugin]:
         if name in self.skills:
