@@ -4,6 +4,8 @@ Action Router - Unified action execution pipeline for AGI Kernel
 This is the SINGLE entry point for all actions in AlleyBot.
 Every action flows through here to ensure:
 - AGI Kernel validation
+- Belief prediction and outcome recording
+- SelfModel capability tracking and calibration
 - SyMod mathematical verification
 - Episodic memory recording
 - Learning from outcomes
@@ -20,6 +22,7 @@ import inspect
 from src.agentic.action_logger import get_action_logger
 from src.agentic.planning import get_plan_manager
 from src.agentic.alley_kernel import ModelProvider
+from src.agentic.cognitive_integration import get_cognitive
 
 
 from src.agentic.contracts import (
@@ -83,6 +86,7 @@ class ActionRouter:
         self.plugins = plugin_manager
         self.execution_history = []
         self.plan_manager = get_plan_manager()
+        self.cognitive = get_cognitive()
         
         # Moltx Rate Limiting: Engage-First Gate State
         # Tracks engagement actions per session to prevent 429 errors
@@ -1069,7 +1073,7 @@ class ActionRouter:
             except Exception as e:
                 print(f"⚠️ FairMind validation error (non-critical): {e}")
         
-        # Step 2: Apply episodic learning modulation
+# Step 2: Apply episodic learning modulation
         executed_stages.add('episodic_modulation')
         modulated_action = action_spec
         if hasattr(self.agi, 'behavior_modulator'):
@@ -1089,6 +1093,22 @@ class ActionRouter:
             if modulated_action.get('episodic_insights'):
                 for insight in modulated_action['episodic_insights']:
                     print(insight)
+
+        # Step 2.5: Belief prediction — predict outcome before acting
+        executed_stages.add('belief_prediction')
+        action_domain = action_spec.get('plugin', 'general')
+        action_type = action_spec.get('action_type', 'unknown')
+        belief_prediction = self.cognitive.predict_action_outcome(
+            action=f"{action_domain}:{action_type}",
+            domain=action_domain,
+        )
+        modulated_action['_belief_prediction'] = belief_prediction
+        
+        if not belief_prediction.get('should_attempt', True):
+            print(f"⚠️ SelfModel advises against {action_domain}/{action_type}: {belief_prediction.get('attempt_reason', 'unknown')}")
+        
+        if belief_prediction.get('should_wait', False):
+            print(f"⏳ BeliefEngine suggests gathering more data: {belief_prediction.get('wait_reason', 'unknown')}")
 
         # Get validation profile early - needed for both Synergy and SyMod validation
         validation_profile = self._get_validation_profile(modulated_action)
@@ -1227,6 +1247,22 @@ class ActionRouter:
             # Step 6: Reflect and learn through the unified AGI pathway
             executed_stages.add('reflect_and_learn')
             await self._reflect_on_outcome(modulated_action, result, validation, prediction_evaluation)
+            
+            # Step 6.5: Record outcome in BeliefEngine + SelfModel
+            belief_pred = modulated_action.get('_belief_prediction', {})
+            if belief_pred:
+                try:
+                    self.cognitive.record_action_outcome(
+                        action=f"{action_domain}:{action_type}",
+                        domain=action_domain,
+                        predicted_confidence=belief_pred.get('predicted_success', 0.5),
+                        actual_success=result.get('success', False),
+                        context=str(action_spec.get('params', {}))[:200],
+                        outcome_description=result.get('data', {}).get('result', '')[:200] if result.get('success') else result.get('error', '')[:200],
+                    )
+                except Exception as e:
+                    print(f"⚠️ Cognitive outcome recording failed: {e}")
+            
             result['outcome_record'] = self._build_outcome_record(
                 modulated_action,
                 result,
