@@ -290,3 +290,37 @@ def reason(prompt: str, **kwargs) -> Optional[str]:
 def generate_code(prompt: str, **kwargs) -> Optional[str]:
     """Convenience function for code generation"""
     return get_llm_router().chat(prompt, model='grok-code', **kwargs)
+
+
+# 8.7: Graceful degradation - belief-driven fallback when LLMs fail
+def get_belief_based_response(prompt: str) -> str:
+    """
+    Fallback when all LLM models fail - use belief-driven heuristics.
+    This ensures the agent can still respond using its trained beliefs.
+    """
+    logger = logging.getLogger(__name__)
+    logger.warning("⚠️ LLM failed - using belief-based heuristic fallback")
+    
+    try:
+        from src.agentic.belief_engine import get_belief_engine
+        be = get_belief_engine()
+        
+        # Extract key terms from prompt
+        words = prompt.lower().split()
+        relevant_beliefs = []
+        
+        for word in words:
+            if len(word) > 4:
+                matches = be.find_relevant_beliefs(word, domain='general')
+                relevant_beliefs.extend(matches[:2])
+        
+        if relevant_beliefs:
+            # Return highest confidence belief-based response
+            best = max(relevant_beliefs, key=lambda b: b.confidence)
+            return f"[Belief-based fallback] {best.proposition} (confidence: {best.confidence:.0%})"
+        else:
+            return "[Belief-based fallback] Insufficient training data to respond intelligently."
+    
+    except Exception as e:
+        logger.error(f"Belief fallback also failed: {e}")
+        return "[System Error] Both LLM and belief systems failed. Manual intervention required."
