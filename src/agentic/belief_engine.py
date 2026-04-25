@@ -108,20 +108,34 @@ class BeliefEngine:
 
     def _init_core_beliefs(self):
         defaults = [
-            ("posting on moltx generates engagement", 0.6, "social"),
-            ("replying to trending topics increases visibility", 0.7, "social"),
-            ("market analysis requires multiple data points", 0.8, "analysis"),
-            ("trading during high volatility is risky", 0.75, "market"),
-            ("consistent engagement builds reputation", 0.7, "social"),
-            ("diverse content performs better than repetitive content", 0.6, "content"),
-            ("too many posts in short succession reduces quality", 0.8, "content"),
-            ("checking wallet balances regularly detects issues early", 0.9, "security"),
+            # Social engagement
+            ("posting on moltx generates engagement", 0.6, "social", 3),
+            ("replying to trending topics increases visibility", 0.7, "social", 3),
+            ("consistent engagement builds reputation", 0.7, "social", 3),
+            ("diverse content performs better than repetitive content", 0.6, "content", 3),
+            ("too many posts in short succession reduces quality", 0.8, "content", 3),
+            ("moltx feed browse is useful for finding content", 0.7, "social", 3),
+            ("moltx post creates visible content on platform", 0.75, "social", 3),
+            ("moltx engage interacts with other users content", 0.7, "social", 3),
+            ("moltchan send creates posts on moltchan", 0.65, "social", 2),
+            ("moltchan engage interacts with moltchan threads", 0.6, "social", 2),
+            # Analysis
+            ("market analysis requires multiple data points", 0.8, "analysis", 3),
+            # Market
+            ("trading during high volatility is risky", 0.75, "market", 3),
+            ("price checks provide market awareness", 0.7, "market", 2),
+            # Security
+            ("checking wallet balances regularly detects issues early", 0.9, "security", 3),
+            # Self-improvement
+            ("skill gaps identified from repeated failures should be addressed", 0.8, "self_improvement", 3),
+            ("learning from errors improves future performance", 0.85, "self_improvement", 3),
         ]
-        for prop, conf, domain in defaults:
+        for prop, conf, domain, count in defaults:
             key = self._hash(prop)
             if key not in self.beliefs:
                 self.beliefs[key] = Belief(
-                    proposition=prop, confidence=conf, domain=domain, source="seed"
+                    proposition=prop, confidence=conf, domain=domain, source="seed",
+                    prediction_count=count, correct_predictions=count
                 )
 
     @staticmethod
@@ -229,7 +243,14 @@ class BeliefEngine:
         return result
 
     def find_relevant_beliefs(self, query: str, domain: str = "general") -> List[Belief]:
-        query_words = set(query.lower().split())
+        # Normalize query: split compound tokens like "moltx:feed_browse" and "social:post"
+        query_words = set()
+        for word in query.lower().split():
+            # Split on colon, slash, underscore, dot
+            for sub in word.replace(':', ' ').replace('/', ' ').replace('_', ' ').replace('.', ' ').split():
+                if len(sub) >= 2:
+                    query_words.add(sub)
+
         scored = []
 
         for belief in self.beliefs.values():
@@ -258,9 +279,8 @@ class BeliefEngine:
             return True, f"No prior experience with '{action}'. Gather information first."
 
         most_reliable = max(relevant, key=lambda b: b.prediction_count)
-        if most_reliable.prediction_count < 3:
-            return True, f"Only {most_reliable.prediction_count} experiences with this. Need more data."
 
+        # Only suggest waiting for historically bad actions (low confidence with significant data)
         if most_reliable.confidence < 0.35 and most_reliable.prediction_count >= 5:
             return True, f"Historically low success ({most_reliable.confidence:.0%}). Avoid or change approach."
 
