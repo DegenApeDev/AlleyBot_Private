@@ -3596,7 +3596,7 @@ class AutonomousBrain(AGISocialMixin):
                 result = None
                 if agi_kernel and hasattr(agi_kernel, 'action_router') and agi_kernel.action_router:
                     try:
-                        result = await agi_kernel.action_router.execute(action_spec)
+                        result = await agi_kernel.action_router.route_action(action_spec)
                     except Exception as e:
                         logger.warning(f"Plan step execution failed: {e}")
                         result = {'success': False, 'error': str(e)}
