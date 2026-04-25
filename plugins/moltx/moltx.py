@@ -22,6 +22,7 @@ from plugins.moltx.moltx_symod_interface import (
     symod_cycle_command,
     symod_config_command
 )
+from plugins.moltx.moltx_protocol import MoltxProtocol
 
 class MoltxPlugin(
     MoltxSocialMixin,
@@ -45,6 +46,9 @@ class MoltxPlugin(
         # Engagement buffer tracking
         self._last_engagement_build = 0
         self._ENGAGEMENT_BUILD_INTERVAL = 1800  # 30 minutes
+        
+        # MoltX Protocol (skill.md)
+        self.protocol = MoltxProtocol(self)
         
         # SyMod interface is lazy-loaded on first command use
 
@@ -84,6 +88,13 @@ class MoltxPlugin(
         if self.initialized:
             print("🔄 Starting engagement buffer builder...")
             self._build_engagement_buffer()
+            
+            # Run MoltX Protocol (First Boot or Engagement Engine)
+            print("📋 Running MoltX protocol per skill.md...")
+            if not self.protocol._has_done_first_boot:
+                self.protocol.run_first_boot_protocol()
+            else:
+                self.protocol.run_engagement_engine()
 
         # Ensure X handle is set on profile metadata
         if self.initialized:
