@@ -1569,7 +1569,22 @@ class AutonomousBrain(AGISocialMixin):
         return opportunities
     
     async def _phase_skill_gap_analysis(self, observations, agi_kernel):
-        """THINK sub-phase — detect capability gaps and auto-build skills."""
+        """THINK sub-phase — detect capability gaps and auto-build skills.
+        
+        Runs with a cooldown: only every 50 cycles after an initial 10-cycle
+        warmup. Prevents skill generation on startup when episodic memory
+        may contain stale or malformed entries.
+        """
+        cycle_count = self.stats.get('cycles_completed', 0)
+        
+        # Don't run skill gap analysis in the first 10 cycles (warmup)
+        if cycle_count < 10:
+            return
+        
+        # Only run skill gap analysis every 50 cycles (cooldown)
+        if cycle_count % 50 != 0:
+            return
+        
         # Phase 1.1: Auto-enable self_improvement domain when 3+ needs_new_skill judgments exist
         if agi_kernel and hasattr(agi_kernel, 'work_item_manager'):
             try:
@@ -1609,6 +1624,11 @@ class AutonomousBrain(AGISocialMixin):
                 logger.warning(f"⚠️ Auto skill building error: {e}")
         
         skill_gaps = await self._detect_skill_gaps(agi_kernel)
+        if not skill_gaps:
+            return
+        
+        # Filter out gaps with unknown/generic action types — they're not actionable
+        skill_gaps = [g for g in skill_gaps if g.get('action_type', 'unknown') not in ('unknown', 'none', '')]
         if not skill_gaps:
             return
         

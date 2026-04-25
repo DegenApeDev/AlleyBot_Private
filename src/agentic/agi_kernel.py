@@ -573,9 +573,9 @@ class AGIKernel:
             goal_seeder = get_default_goal_seeder(self)
             seeded_count = goal_seeder.seed_goals_if_needed()
             if seeded_count > 0:
-                print(f"🌱 Seeded {seeded_count} default goals for autonomous operation")
+                logger.info(f"🌱 Seeded {seeded_count} default goals for autonomous operation")
         except Exception as e:
-            print(f"⚠️ Default goal seeding failed: {e}")
+            logger.warning(f"Default goal seeding skipped (will retry in brain cycle): {e}")
         
         print("🧠 AGI Kernel fully operational - autonomous thinking + self-healing + intelligent context + smart replies + goal generation + content strategy + world state + goal stack enabled")
     

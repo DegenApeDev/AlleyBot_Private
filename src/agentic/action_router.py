@@ -1111,7 +1111,14 @@ class ActionRouter:
             logger.warning(f"⚠️ SelfModel advises against {action_domain}/{action_type}: {belief_prediction.get('attempt_reason', 'unknown')}")
         
         if belief_prediction.get('should_wait', False):
-            logger.info(f"⏳ BeliefEngine suggests gathering more data: {belief_prediction.get('wait_reason', 'unknown')}")
+            wait_reason = belief_prediction.get('wait_reason', 'unknown')
+            logger.info(f"⏳ BeliefEngine suggests gathering more data: {wait_reason}")
+            
+            # Significantly reduce confidence for unknown/novel actions
+            # This prevents them from being selected while still allowing them if necessary
+            if 'No prior experience' in wait_reason:
+                modulated_action['confidence'] = max(0.1, modulated_action.get('confidence', 0.5) * 0.2)
+                logger.info(f"   Confidence reduced to {modulated_action['confidence']:.2f} for novel action")
 
         # Get validation profile early - needed for both Synergy and SyMod validation
         validation_profile = self._get_validation_profile(modulated_action)

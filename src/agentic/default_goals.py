@@ -270,15 +270,23 @@ class DefaultGoalSeeder:
             logger.warning("Could not resolve GoalManager v2 for seeding")
             return 0
         
-        # Check existing active goals in SQLite
-        from src.agentic.goal_manager import GoalStatus, Goal, GoalPriority
-        active_goals = gm_v2.get_goals(status=GoalStatus.ACTIVE, limit=20)
+        try:
+            active_goals = gm_v2.get_goals(status=GoalStatus.ACTIVE, limit=20)
+        except Exception as e:
+            logger.warning(f"GoalManager query failed during seeding: {e}")
+            return 0
+        
         if len(active_goals) >= 3:
             logger.debug(f"Already have {len(active_goals)} active goals, skipping seed")
             return 0
         
         # Also check if default goals already exist (any status)
-        all_goals = gm_v2.get_goals(limit=50)
+        try:
+            all_goals = gm_v2.get_goals(limit=50)
+        except Exception as e:
+            logger.warning(f"GoalManager query failed during dedup check: {e}")
+            return 0
+        
         existing_ids = {g.id for g in all_goals}
         
         goals = self.get_default_goals()
@@ -323,11 +331,13 @@ class DefaultGoalSeeder:
                 )
                 
                 if gm_v2.add_goal(goal):
-                    seeded_count += 1
-                    logger.info(f"🌱 Seeded default goal: {goal_spec['title']}")
-                
-            except Exception as e:
-                logger.error(f"Failed to seed goal {goal_id}: {e}")
+                        seeded_count += 1
+                        logger.info(f"🌱 Seeded default goal: {goal_spec['title']}")
+                    else:
+                        logger.debug(f"Goal already exists or add failed: {goal_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to seed goal {goal_id}: {e}")
         
         if seeded_count > 0:
             logger.info(f"🌱 Seeded {seeded_count} default goals → GoalManager v2 (SQLite)")
