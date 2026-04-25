@@ -586,28 +586,16 @@ result = {skill_name}(...)
             # Bridge to plugin-based self-update system for actual plugin creation
             if skill_name.endswith('_plugin') or 'plugin' in skill_name.lower():
                 try:
-                    # Import and call the plugin-based self-update system
-                    import sys
-                    import os
-                    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'plugins', 'selfimprove'))
-                    from autonomous_coder import AutonomousCoderMixin
-                    
-                    # Create self-update task description
-                    task_desc = f"Create {skill_name} plugin: {capability_description}"
-                    
-                    # Call the plugin-based self-update system
-                    print(f"🤖 Triggering plugin-based self-update for: {skill_name}")
-                    
-                    # Create an instance of the autonomous coder mixin
-                    class BridgeCoder(AutonomousCoderMixin):
-                        def __init__(self):
-                            self._pending_self_updates = {}
-                    
-                    bridge = BridgeCoder()
-                    
-                    # Call the self-update command
-                    result = bridge.self_update_command(task_desc.split())
-                    print(f"📋 Plugin-based self-update result: {result}")
+                    from src.core.plugin_manager import get_plugin_manager
+                    pm = get_plugin_manager()
+                    selfimprove = pm.get_plugin('selfimprove') if pm else None
+
+                    if selfimprove and hasattr(selfimprove, 'self_update_command'):
+                        task_desc = f"create {skill_name} {capability_description}"
+                        result = selfimprove.self_update_command(task_desc.split())
+                        print(f"📋 Plugin-based self-update result: {result}")
+                    else:
+                        print(f"ℹ️  Selfimprove plugin not available, skill registered but not hot-loaded")
                     
                 except Exception as e:
                     print(f"⚠️  Failed to bridge to plugin system: {e}")

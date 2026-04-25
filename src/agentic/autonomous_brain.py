@@ -1621,49 +1621,72 @@ class AutonomousBrain(AGISocialMixin):
             return
         
         gap = max(skill_gaps, key=lambda g: g['priority'])
-        if gap['priority'] < 7 or gap['type'] != 'repeated_failure':
+        if gap['priority'] < 5:
             return
         
         logger.info(f"🤖 Auto-generating skill for gap: {gap['description']}")
         try:
-            from src.agentic.autonomous_coder import SkillSpecification, AutonomousCoder
-            
-            spec = SkillSpecification(
-                id=f"fix_{gap['action_type'].replace(':', '_')}_{int(datetime.now().timestamp())}",
-                name=f"Fix {gap['action_type']}",
-                description=gap['description'],
-                category='fix',
-                file_structure={
-                    '__init__.py': 'Package initialization',
-                    'client.py': 'Main skill client',
-                    'actions.py': 'Action handlers'
-                },
-                dependencies=[],
-                evidence=gap.get('error_patterns', [])
-            )
-            
-            coder = AutonomousCoder()
-            skill = coder.generate_skill(spec)
-            
-            if skill.status == 'generated':
-                logger.info(f"✅ Generated skill: {skill.skill_name}")
-                test_result = selfimprove_plugin.test_code_in_sandbox(
-                    code=open(skill.files_created[0]).read() if skill.files_created else "",
-                    test_code=None
+            generated = False
+
+            # Prefer selfimprove plugin's full autonomous coder (has AI generation + sandbox + hot-load)
+            if hasattr(selfimprove_plugin, '_generate_code_with_ai'):
+                task_desc = f"Create a skill to handle: {gap['description']}. "
+                if gap.get('error_patterns'):
+                    task_desc += f"Must fix these errors: {', '.join(gap['error_patterns'][:3])}"
+
+                if hasattr(selfimprove_plugin, 'self_update_command'):
+                    result = selfimprove_plugin.self_update_command(
+                        ['create', gap['action_type'].replace(':', '_'), task_desc]
+                    )
+                    if result and result.get('success'):
+                        logger.info(f"🚀 Self-update generated and deployed: {result.get('plan_id', 'unknown')}")
+                        generated = True
+                        if agi_kernel and hasattr(agi_kernel, 'episodic_memory'):
+                            agi_kernel.episodic_memory.record_episode(
+                                action_type='skill_generation',
+                                context={'gap': gap, 'result': result},
+                                outcome={'success': True, 'deployed': True}
+                            )
+                    else:
+                        logger.warning(f"⚠️ Self-update command failed: {result}")
+
+            # Fallback to skeleton autonomous coder if selfimprove is unavailable
+            if not generated:
+                from src.agentic.autonomous_coder import SkillSpecification, AutonomousCoder
+
+                spec = SkillSpecification(
+                    id=f"fix_{gap['action_type'].replace(':', '_')}_{int(datetime.now().timestamp())}",
+                    name=f"Fix {gap['action_type']}",
+                    description=gap['description'],
+                    category='fix',
+                    file_structure={
+                        '__init__.py': 'Package initialization',
+                        'client.py': 'Main skill client',
+                        'actions.py': 'Action handlers'
+                    },
+                    dependencies=[],
+                    evidence=gap.get('error_patterns', [])
                 )
-                if test_result['success']:
-                    coder.deploy_skill(skill)
-                    logger.info(f"🚀 Deployed skill: {skill.skill_name}")
-                    if agi_kernel and hasattr(agi_kernel, 'episodic_memory'):
-                        agi_kernel.episodic_memory.record_episode(
-                            action_type='skill_generation',
-                            context={'gap': gap, 'skill': skill.skill_name},
-                            outcome={'success': True, 'deployed': True}
-                        )
+
+                coder = AutonomousCoder()
+                skill = coder.generate_skill(spec)
+
+                if skill.status == 'generated' and skill.files_created:
+                    logger.info(f"✅ Generated skill: {skill.skill_name}")
+                    code_to_test = open(skill.files_created[0]).read()
+                    test_result = selfimprove_plugin.test_code_in_sandbox(
+                        code=code_to_test,
+                        test_code=None
+                    )
+                    if test_result['success']:
+                        coder.deploy_skill(skill)
+                        logger.info(f"🚀 Deployed skill: {skill.skill_name}")
+                    else:
+                        logger.warning(f"⚠️ Skill failed sandbox test: {test_result.get('error', 'Unknown error')}")
+                elif skill.status == 'generated' and not skill.files_created:
+                    logger.warning(f"⚠️ Skill generated but no files created")
                 else:
-                    logger.warning(f"⚠️ Skill failed sandbox test: {test_result.get('error', 'Unknown error')}")
-            else:
-                logger.warning(f"⚠️ Skill generation failed: {skill.errors}")
+                    logger.warning(f"⚠️ Skill generation failed: {skill.errors}")
         except Exception as e:
             logger.warning(f"⚠️ Autonomous coding error: {e}")
             import traceback

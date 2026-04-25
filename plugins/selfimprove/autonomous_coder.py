@@ -257,12 +257,21 @@ class AutonomousCoderMixin:
                 print(f"  ℹ️  Plugin '{plugin_name}' already loaded, skipping hot-load")
                 continue
             try:
-                plugin_manager.load_plugin(
-                    plugin_name,
-                    {'config': {}, 'enabled': True},
-                    self.api,
-                    self.core,
-                )
+                # Support both old (4-arg) and new (2-arg) PluginManager signatures
+                import inspect
+                sig = inspect.signature(plugin_manager.load_plugin)
+                if len(sig.parameters) >= 4:
+                    plugin_manager.load_plugin(
+                        plugin_name,
+                        {'config': {}, 'enabled': True},
+                        self.api,
+                        self.core,
+                    )
+                else:
+                    plugin_manager.load_plugin(
+                        plugin_name,
+                        {'config': {}, 'enabled': True},
+                    )
                 print(f"  🔌 Hot-loaded plugin: {plugin_name}")
 
                 # Register new commands with intent classifier so they're

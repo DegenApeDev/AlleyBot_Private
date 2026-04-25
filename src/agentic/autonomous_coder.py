@@ -458,6 +458,19 @@ class TestSkill:
             skill.status = 'deployed'
             self.generated_skills[skill.spec_id] = skill
             
+            # Hot-reload the skill into the plugin system
+            try:
+                skill_dir = Path(skill.skill_path)
+                if skill_dir.exists() and skill.files_created:
+                    # Try to find and load via plugin manager
+                    from src.core.plugin_manager import get_plugin_manager
+                    pm = get_plugin_manager()
+                    if pm and hasattr(pm, 'reload_plugin'):
+                        pm.reload_plugin(skill.spec_id)
+                        logger.info(f"🔀 Hot-reloaded skill plugin: {skill.skill_name}")
+            except Exception as re:
+                logger.warning(f"⚠️ Hot-reload failed (skill available on restart): {re}")
+            
             logger.info(f"🚀 Deployed skill: {skill.skill_name} at {skill.skill_path}")
             logger.info(f"   Files: {len(skill.files_created)}")
             

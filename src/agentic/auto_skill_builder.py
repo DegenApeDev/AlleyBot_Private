@@ -229,7 +229,7 @@ Required APIs: {', '.join(proposal.required_apis)}
             
             # Use autonomous coder to generate
             if hasattr(self.autonomous_coder, '_generate_code_with_ai'):
-                code = await self.autonomous_coder._generate_code_with_ai(
+                code = self.autonomous_coder._generate_code_with_ai(
                     task_description,
                     context={'spec': spec, 'platform': proposal.platform}
                 )

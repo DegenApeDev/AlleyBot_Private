@@ -3,13 +3,13 @@
 Autonomous Skill Generation Workflow
 Integrates with enhanced autonomous system for self-improvement
 """
-import json
-import time
+import logging
 from datetime import datetime
 from typing import Dict, List, Optional
-from skill_generator import SkillGenerator
-from autonomous_coder import AutonomousCoder
-from comprehensive_logger import logger, ActivityType, LogLevel
+from src.agentic.skill_generator import SkillGenerator
+from src.agentic.autonomous_coder import AutonomousCoder
+
+logger = logging.getLogger(__name__)
 
 class AutonomousSkillWorkflow:
     """Autonomous skill generation and improvement workflow"""
@@ -108,11 +108,7 @@ class AutonomousSkillWorkflow:
                         ideas.append(idea)
                         
         except Exception as e:
-            logger.log_error(
-                error_type="trend_analysis_failed",
-                error_message=str(e),
-                context={"source": "platform_trends"}
-            )
+            logger.error(f"Trend analysis failed: {e}")
         
         return ideas
     
@@ -155,11 +151,7 @@ class AutonomousSkillWorkflow:
                 ideas.append(idea)
                 
         except Exception as e:
-            logger.log_error(
-                error_type="gap_analysis_failed",
-                error_message=str(e),
-                context={"source": "performance_gaps"}
-            )
+            logger.error(f"Gap analysis failed: {e}")
         
         return ideas
     
@@ -194,11 +186,7 @@ class AutonomousSkillWorkflow:
             })
             
         except Exception as e:
-            logger.log_error(
-                error_type="community_analysis_failed",
-                error_message=str(e),
-                context={"source": "community_requests"}
-            )
+            logger.error(f"Community analysis failed: {e}")
         
         return ideas
     
@@ -221,11 +209,7 @@ class AutonomousSkillWorkflow:
                 })
                 
         except Exception as e:
-            logger.log_error(
-                error_type="technical_research_failed",
-                error_message=str(e),
-                context={"source": "technical_opportunities"}
-            )
+            logger.error(f"Technical research failed: {e}")
         
         return ideas
     
@@ -245,11 +229,7 @@ class AutonomousSkillWorkflow:
             })
             
         except Exception as e:
-            logger.log_error(
-                error_type="market_analysis_failed",
-                error_message=str(e),
-                context={"source": "market_trends"}
-            )
+            logger.error(f"Market analysis failed: {e}")
         
         return ideas
     
@@ -290,22 +270,27 @@ class AutonomousSkillWorkflow:
             skill_spec = self._generate_skill_specification(top_idea)
             
             # Generate code using autonomous coder
-            code_result = self.autonomous_coder.generate_code(
-                task=skill_spec['task'],
-                context=skill_spec['context']
+            from src.agentic.autonomous_coder import SkillSpecification
+            spec = SkillSpecification(
+                id=f"skill_{int(datetime.now().timestamp())}",
+                name=top_idea.get('topic', 'unnamed_skill'),
+                description=skill_spec['task'],
+                category=skill_spec['context'].get('type', 'enhancement'),
+                file_structure={
+                    '__init__.py': 'Package initialization',
+                    'client.py': 'Main skill client',
+                    'actions.py': 'Action handlers'
+                },
+                dependencies=skill_spec['context'].get('required_apis', []),
+                evidence=[]
             )
-            
-            if code_result.get('status') == 'success':
+            code_result = self.autonomous_coder.generate_skill(spec)
+            success = hasattr(code_result, 'status') and code_result.status == 'generated'
+
+            if success:
                 # Log skill development
-                logger.log_coding_activity(
-                    action="autonomous_skill_development",
-                    details={
-                        "idea_source": top_idea['source'],
-                        "topic": top_idea['topic'],
-                        "skill_id": code_result.get('draft_id'),
-                        "confidence": top_idea.get('confidence', 0.5)
-                    },
-                    success=True
+                logger.info(
+                    f"Autonomous skill development: {top_idea['source']} - {top_idea['topic']}"
                 )
                 
                 return {
@@ -316,20 +301,12 @@ class AutonomousSkillWorkflow:
                     'timestamp': datetime.now().isoformat()
                 }
             else:
-                logger.log_error(
-                    error_type="skill_development_failed",
-                    error_message=code_result.get('error', 'Unknown error'),
-                    context={"idea": top_idea}
-                )
+                logger.error(f"Skill development failed: {code_result.errors if hasattr(code_result, 'errors') else 'Unknown error'}")
                 
                 return None
                 
         except Exception as e:
-            logger.log_error(
-                error_type="skill_development_error",
-                error_message=str(e),
-                context={"idea": top_idea}
-            )
+            logger.error(f"Skill development error: {e}")
             
             return None
     
