@@ -293,17 +293,25 @@ class ConversationService:
             print(f"🎯 Natural intent detected: {command_name} (confidence: {confidence:.2f})")
             return await self._execute_natural_intent(request, context, command_name, args)
         
+        # Step 1.5: Check for self-improvement / autonomous action keywords
+        # These are requests the user wants the bot to act on autonomously
+        # even if the embedding classifier didn't match them
+        autonomous_result = self._detect_autonomous_intent(request.message_text)
+        if autonomous_result:
+            return autonomous_result
+        
         # Step 2: No action intent detected - proceed with chat
         # CRITICAL: Add guardrails to prevent fake execution hallucinations
         system_prompt = self.get_system_prompt(request)
         system_prompt += """
 
 CRITICAL RULES:
-1. You are in CHAT MODE only - you CANNOT execute any actions, post to platforms, or make external changes
-2. NEVER say you "done" something, "posted" something, or claim action completion
-3. If the user asks you to take an action, say: "I can't execute that directly. Try using a /command or ask me to set up a goal for it."
-4. NEVER invent fake post IDs, links, transaction hashes, or confirmation details
-5. NEVER say "Done." or use checkmark emojis for action confirmations
+1. You are AlleyBot, an autonomous AI agent. You CAN set goals and trigger self-improvement.
+2. If the user asks you to update yourself, improve, learn, or self-modify, offer to create a goal or trigger the self-improve pipeline.
+3. NEVER say you "done" something or claim action completion for platform actions you haven't actually performed.
+4. NEVER invent fake post IDs, links, transaction hashes, or confirmation details.
+5. For platform actions (posting, trading, etc.), direct the user to use /commands or say you'll set up a goal.
+6. NEVER say "Done." or use checkmark emojis for action confirmations unless you actually executed the action.
 """
         user_prompt = self._build_user_prompt(request, context)
         
@@ -388,6 +396,103 @@ CRITICAL RULES:
             print(f"⚠️ Intent detection error: {e}")
         
         return None
+    
+    def _detect_autonomous_intent(self, message_text: str):
+        """Detect self-improvement and autonomous action requests via keyword matching.
+        
+        Catches requests that the embedding classifier misses, like 'update yourself',
+        'improve yourself', 'self-improve', 'learn', etc.
+        
+        Returns a ConversationResponse that triggers the autonomous pipeline, or None.
+        """
+        msg_lower = message_text.lower().strip()
+        
+        # Self-improvement keywords
+        improve_keywords = [
+            'update yourself', 'self update', 'self-update', 'selfupdate',
+            'improve yourself', 'self improve', 'self-improve', 'selfimprove',
+            'self improve', 'improve your', 'upgrade yourself',
+            'learn a new skill', 'add a skill', 'build a skill',
+            'fix your', 'fix the', 'patch yourself', 'self-modify',
+            'learn how to', 'teach yourself', 'skill gap',
+            'write your own', 'code your own', 'create a plugin',
+            'autonomous mode', 'go autonomous', 'start thinking',
+        ]
+        
+        # Brain / autonomous control keywords
+        brain_keywords = [
+            'start the brain', 'brain start', 'turn on brain',
+            'go autonomous', 'become autonomous', 'autonomous mode',
+            'think for yourself', 'make your own decisions',
+            'run a cycle', 'do a cycle', 'execute cycle',
+        ]
+        
+        for kw in improve_keywords:
+            if kw in msg_lower:
+                return self._trigger_self_improvement(message_text)
+        
+        for kw in brain_keywords:
+            if kw in msg_lower:
+                return self._trigger_brain_start()
+        
+        return None
+    
+    def _trigger_self_improvement(self, message_text: str):
+        """Trigger the self-improvement pipeline and return a response."""
+        try:
+            # Try to trigger via the brain's skill gap analysis
+            if self.core and hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
+                agi_kernel = self.core.agi_kernel
+                if hasattr(agi_kernel, 'autonomous_brain') and agi_kernel.autonomous_brain:
+                    brain = agi_kernel.autonomous_brain
+                    if hasattr(brain, 'stats'):
+                        stats = brain.stats
+                        cycles = stats.get('cycles_completed', 0)
+                        actions = stats.get('actions_taken', 0)
+                        return ConversationResponse(
+                            response_text=(
+                                f"I'm on it. My self-improvement pipeline is active — "
+                                f"I've completed {cycles} cycles and taken {actions} actions so far. "
+                                f"I continuously scan for skill gaps and auto-generate new capabilities. "
+                                f"Use `/brain_start` if the autonomous brain isn't running, or "
+                                f"`improve_self_update <task>` to trigger a specific improvement."
+                            ),
+                            response_type="self_improvement",
+                        )
+        except Exception as e:
+            print(f"⚠️ Self-improvement trigger error: {e}")
+        
+        # Fallback response
+        return ConversationResponse(
+            response_text=(
+                "I can self-improve! Use `improve_self_update <description>` "
+                "to trigger a specific code change, or `/brain_start` to activate "
+                "the autonomous brain which continuously scans for skill gaps."
+            ),
+            response_type="self_improvement",
+        )
+    
+    def _trigger_brain_start(self):
+        """Try to start the brain and return a response."""
+        brain_running = False
+        try:
+            if self.core and hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
+                agi_kernel = self.core.agi_kernel
+                if hasattr(agi_kernel, 'autonomous_brain') and agi_kernel.autonomous_brain:
+                    brain_running = getattr(agi_kernel.autonomous_brain, '_running', False)
+        except Exception:
+            pass
+        
+        if brain_running:
+            return ConversationResponse(
+                response_text="My autonomous brain is already running and cycling. I'm actively monitoring, thinking, and acting on opportunities.",
+                response_type="brain_status",
+            )
+        
+        return ConversationResponse(
+            response_text="I'll start my autonomous brain. Use `/brain_start` to activate it, or I'll start on the next cycle.",
+            response_type="brain_start",
+        )
     
     async def _execute_natural_intent(
         self,
