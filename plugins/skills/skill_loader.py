@@ -20,18 +20,47 @@ class SkillLoaderMixin:
         self.skill_context: Optional[str] = None
         self.skill_history: List[Dict[str, Any]] = []
         self._build_skill_index()
-        # Ensure core is always indexed to prevent loading failures
-        if "core" not in self.skill_index:
-            print("🔧 Adding fallback core skill index")
-            self.skill_index["core"] = {
-                "description": "Core AlleyBot functionality and essential commands.",
-                "metadata": {
-                    "category": "plugin",
-                    "version": "1.0.0",
-                    "author": "AlleyBot",
-                },
-                "aliases": ["core", "main"],
-            }
+        # Explicitly load and register core plugin to prevent 'Plugin not found' errors
+        self._load_core_plugin()
+
+    def _load_core_plugin(self):
+        """Load the core plugin and register it as a skill"""
+        try:
+            core_module = importlib.import_module("plugins.core.core")
+            create_plugin = getattr(core_module, "create_plugin", None)
+            if create_plugin:
+                # Instantiate core plugin with config
+                core_instance = create_plugin(self.config) if hasattr(self, "config") else create_plugin()
+                # Register core commands if any, but at least ensure it's in skill_index
+                print("🔧 Core plugin loaded and registered successfully")
+                # Force index core if not already
+                if "core" not in self.skill_index:
+                    from plugins.core.core import PLUGIN_INFO
+                    self.skill_index["core"] = {
+                        "description": PLUGIN_INFO.get("description", "Core AlleyBot functionality"),
+                        "metadata": {
+                            "category": "plugin",
+                            "version": PLUGIN_INFO.get("version", "1.0.0"),
+                            "author": PLUGIN_INFO.get("author", "AlleyBot"),
+                        },
+                        "aliases": ["core", "main"],
+                    }
+            else:
+                print("⚠️ Core plugin module found but no create_plugin function")
+        except Exception as e:
+            print(f"⚠️ Failed to load core plugin: {e}")
+            # Ensure fallback index entry exists
+            if "core" not in self.skill_index:
+                print("🔧 Adding fallback core skill index")
+                self.skill_index["core"] = {
+                    "description": "Core AlleyBot functionality and essential commands.",
+                    "metadata": {
+                        "category": "plugin",
+                        "version": "1.0.0",
+                        "author": "AlleyBot",
+                    },
+                    "aliases": ["core", "main"],
+                }
 
     def _build_skill_index(self):
         """Build lightweight skill index by scanning skills directory"""
@@ -195,30 +224,18 @@ class SkillLoaderMixin:
                     "frontmatter": frontmatter,
                     "references": frontmatter.get("references", []),
                 }
-            except Exception:
+            except Exception as e:
+                print(f"⚠️ Failed to load skill file {path}: {e}")
                 return None
-
-        # Try plugin
-        mod_name = f"plugins.{skill_name}.{skill_name}"
-        try:
-            plugin_module = importlib.import_module(mod_name)
-            info = getattr(plugin_module, "PLUGIN_INFO", None)
-            if not info:
-                return None
-            desc = info.get("description", f"{skill_name} plugin")
-            body = f"""## {skill_name.replace('_', ' ').replace('-', ' ').title()} Skill Instructions
-
-You have access to the {skill_name} plugin.
-
-Plugin Description: {desc}
-
-Use plugin commands when relevant to the conversation."""
-            return {
-                "name": skill_name,
-                "description": desc,
-                "body": body,
-                "frontmatter": dict(info),
-                "references": info.get("references", []),
-            }
-        except Exception:
-            return None
+        else:
+            # For plugin-based skills (like core), return minimal info
+            if skill_name in self.skill_index:
+                info = self.skill_index[skill_name]
+                return {
+                    "name": skill_name,
+                    "description": info.get("description", ""),
+                    "body": "[Plugin-based skill – no markdown file]",
+                    "frontmatter": info.get("metadata", {}),
+                    "references": [],
+                }
+        return None

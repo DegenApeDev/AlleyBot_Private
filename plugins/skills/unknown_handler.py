@@ -8,7 +8,7 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
     def __init__(self, config):
         super().__init__(config)
         self.name = "unknown_handler"
-        self.version = "1.3.0"
+        self.version = "1.4.0"
         self.plugin_aliases = {
             'clawbr_d': 'clawbr_debates',
             'deb': 'clawbr_debates',
@@ -31,6 +31,7 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
             'search': 'web_search',
             'web': 'web_search',
         }
+        self.alias_keys = list(self.plugin_aliases.keys())
         self.known_plugins = [
             "help",
             "chat",
@@ -70,17 +71,28 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
         params_str = " ".join(args[1:]) if len(args) > 1 else ""
         unknown_input = " ".join(args)
 
-        # Resolve aliases before treating as unknown
+        # Exact alias resolution
         if command_name in self.plugin_aliases:
             real_command = self.plugin_aliases[command_name]
-            # Validate target plugin is known
             if real_command not in self.known_plugins:
                 return f"Alias '{full_command}' points to unknown plugin '{real_command}'. Try '!help'."
             suggestion = f"!{real_command}"
             if params_str:
                 suggestion += f" {params_str}"
-            print(f"[UnknownHandler] Resolved alias '{full_command}' -> '{real_command}'")
+            print(f"[UnknownHandler] Resolved exact alias '{full_command}' -> '{real_command}'")
             return f"'{full_command}' is an alias for '{real_command}'. Try {suggestion}."
+
+        # Fuzzy alias resolution
+        fuzzy_aliases = get_close_matches(command_name, self.alias_keys, n=1, cutoff=0.6)
+        if fuzzy_aliases:
+            alias_used = fuzzy_aliases[0]
+            real_command = self.plugin_aliases[alias_used]
+            if real_command in self.known_plugins:
+                suggestion = f"!{real_command}"
+                if params_str:
+                    suggestion += f" {params_str}"
+                print(f"[UnknownHandler] Fuzzy-resolved '{command_name}' ~ '{alias_used}' -> '{real_command}'")
+                return f"'{full_command}' closely matches alias '{alias_used}' for '{real_command}'. Try {suggestion}."
 
         # Store original
         self.last_unknown = unknown_input
@@ -144,6 +156,35 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
         fallback = f"!core {command_key}"
         return f"Max retries (5) exceeded for '{command_key}'. Counters reset. Fallback to core: {fallback}, or '!chat {command_key}', or '!help'."
 
+    def _attempt_correction(self, input_str: str) -> str:
+        parts = input_str.split(maxsplit=1)
+        command_key = parts[0].strip().lower() if parts else ""
+        params_str = parts[1] if len(parts) > 1 else ""
+        if not command_key:
+            return "Could not auto-correct: empty input."
+
+        # Fuzzy match on known plugins/commands
+        matches = get_close_matches(command_key, self.known_plugins, n=1, cutoff=0.8)
+        if matches:
+            real_plugin = matches[0]
+            suggestion = f"!{real_plugin}"
+            if params_str:
+                suggestion += f" {params_str}"
+            return f"Auto-corrected '{input_str}' to '{suggestion}' (matched '{real_plugin}')."
+
+        # Fuzzy match on aliases
+        alias_matches = get_close_matches(command_key, self.alias_keys, n=1, cutoff=0.75)
+        if alias_matches:
+            alias = alias_matches[0]
+            real_plugin = self.plugin_aliases[alias]
+            if real_plugin in self.known_plugins:
+                suggestion = f"!{real_plugin}"
+                if params_str:
+                    suggestion += f" {params_str}"
+                return f"Auto-corrected '{input_str}' via alias '{alias}' to '{suggestion}'."
+
+        return "Could not auto-correct: no confident matches found."
+
     def retry_last(self, args: list) -> str:
         if not self.last_unknown:
             return "No previous unknown to retry. Use !unknown <cmd> first."
@@ -193,52 +234,24 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
                 self.last_failure_time.pop(command_key, None)
         correction = self._attempt_correction(to_correct)
         if "Could not auto-correct" not in correction:
-            if to_correct == self.last_unknown:
-                self.last_unknown = None
-            return f"Corrected: {correction}"
+            self.last_unknown = None
+            return f"Correction successful: {correction}"
         else:
             current = self.failure_counts.get(command_key, 0)
-            return f"Correction failed: {correction} Failures: {current}/5"
+            return f"Correction failed: still unknown. {correction} Failures now: {current}/5"
 
     def reset_failures(self, args: list) -> str:
-        prev_count = len(self.failure_counts)
+        before_count = len(self.failure_counts)
         self.failure_counts.clear()
         self.last_failure_time.clear()
         self.last_unknown = None
-        print(f"[UnknownHandler] Reset {prev_count} failure counts.")
-        return f"Reset {prev_count} failure counters and last unknown. Fresh start!"
-
-    def _attempt_correction(self, unknown_input: str) -> str:
-        parts = unknown_input.split(maxsplit=1)
-        if not parts:
-            return "Could not auto-correct: no command."
-        command_name = parts[0].strip().lower()
-        params_str = parts[1] if len(parts) > 1 else ""
-        # Fuzzy match on aliases
-        alias_keys = list(self.plugin_aliases.keys())
-        alias_matches = get_close_matches(command_name, alias_keys, n=1, cutoff=0.6)
-        if alias_matches:
-            alias = alias_matches[0]
-            real_command = self.plugin_aliases[alias]
-            if real_command in self.known_plugins:
-                suggestion = f"!{real_command}"
-                if params_str:
-                    suggestion += f" {params_str}"
-                return f"Auto-corrected '{unknown_input}' → {suggestion} (fuzzy alias '{alias}')."
-        # Fuzzy on known plugins directly
-        plugin_matches = get_close_matches(command_name, self.known_plugins, n=1, cutoff=0.7)
-        if plugin_matches:
-            best = plugin_matches[0]
-            suggestion = f"!{best}"
-            if params_str:
-                suggestion += f" {params_str}"
-            return f"Auto-corrected '{unknown_input}' → {suggestion} (fuzzy plugin)."
-        return f"Could not auto-correct '{unknown_input}': no good matches."
+        print(f"[UnknownHandler] Reset {before_count} failure entries.")
+        return f"All failure counters ({before_count}) reset. Cleared last unknown."
 
 PLUGIN_INFO = {
     "name": "unknown_handler",
-    "version": "1.3.0",
-    "description": "Handles unknown commands with aliases, fuzzy matching, retry logic with exponential backoff, corrections, and fallback to core.",
+    "version": "1.4.0",
+    "description": "Expert unknown command handler with fuzzy aliases, suggestions, retries, auto-corrections, and graceful fallbacks.",
     "author": "AlleyBot"
 }
 
