@@ -1,7 +1,7 @@
 # OPENCODE_PLAN.md — Path to AGI
 
 **Created**: April 24, 2026
-**Status**: Phase 1 ✅ Complete
+**Status**: Phase 1 ✅ Complete | Phase 2 ✅ Complete | Phase 3 ✅ Complete
 **Goal**: Transform AlleyBot from a reactive bot into a genuinely autonomous agent that learns, reasons, plans, self-improves, and pursues self-directed goals.
 
 ---
@@ -28,7 +28,9 @@ An AGI agent doesn't just respond to commands. It:
 |-------|-----------|--------|----------|
 | **Belief** | BeliefEngine | Wired in — predict/compare/update loop | 28 seed beliefs, thread-safe |
 | **Self-awareness** | SelfModel | Wired in — calibrated capability tracking, thread-safe | Cold start (1 outcome recorded) |
-| **Planning** | GoalPlanner | Wired in — dependency graphs, rollback, alternatives | Template-only (3 domain templates) |
+| **Planning** | GoalPlanner | Wired in — dependency graphs, rollback, alternatives | LLM decomposition + templates |
+| **Curiosity** | CuriosityDrive | Wired in — info gain scoring, knowledge gaps, novelty | Self-directed goal generation |
+| **Intrinsic Reward** | CuriosityDrive | Wired in — uncertainty reduction tracking | Per-action reward calculation |
 | **Knowledge** | KnowledgeGraph | Wired in — causal extraction, analogical transfer | Minimal data |
 | **Integration** | CognitiveIntegration | Wired in — glues all components together, Telegram wired | Functional |
 | **Reflection** | Cognitive cycle | Wired in — reflect at start/end, deep reviews | Functional |
@@ -171,19 +173,55 @@ All 9 Phase 2 tasks completed. Key changes:
 
 ---
 
+### Phase 3 Completion Notes (April 25, 2026)
+
+All 7 Phase 3 tasks completed. Key changes:
+
+- **3.1** `CuriosityDrive` class in `curiosity.py` — `calculate_information_gain(domain)` scores domains by belief count, confidence uncertainty, and prediction experience. Unknown domains get highest information gain.
+- **3.2** `detect_knowledge_gaps()` finds domains with <5 experienced beliefs (non-seed), capabilities with <10 samples, and completely unexplored domains.
+- **3.3** `generate_curiosity_goals()` creates exploration goals for knowledge gaps; `generate_reflection_goals()` spawns practice goals from SelfModel learning priorities and weakness areas.
+- **3.4** `ActionRecency` tracking and `calculate_novelty_bonus()` — actions not attempted recently score higher novelty (1.0 = never tried, 0.05 = <1hr ago). `get_under_explored_actions()` lists under-explored actions.
+- **3.5** `_calculate_goal_priority()` scores goals using weighted formula: info_gain×0.3 + novelty×0.2 + skill_gap×0.25 + gap_severity×0.15 + source_bonus×0.1. Skill-gap goals get 1.2× multiplier, reflection 1.1×, scheduled 0.8×, external 0.7×.
+- **3.6** `calculate_intrinsic_reward()` computes reward from uncertainty reduction (0.4 weight), novelty (0.2), information gain (0.3), and mastery bonus (0.1). Failed actions still earn exploration bonus.
+- **3.7** `_phase_curiosity_goals()` injected into brain cycle after THINK phase — generates curiosity goals each cycle, reflection-spawned goals every 10 cycles, converts them to GoalPlanner plans and SyModActionProposal objects. Intrinsic reward recording in `_advance_active_plans()`. Curiosity report logged during deep review (every 100 cycles).
+
+- New module: `src/agentic/curiosity.py` (CuriosityDrive, CuriosityGoal, ActionRecency, GoalSource, GoalType, EXPLORATION_TARGETS)
+- CognitiveIntegration now has `curiosity` attribute (CuriosityDrive) with `get_curiosity_goals()`, `generate_reflection_curiosity_goals()`, `detect_knowledge_gaps()`, `calculate_intrinsic_reward()`, `get_curiosity_report()`
+- Brain cycle: `_generate_curiosity_goals()` replaced stub with cognitive-driven implementation
+- 37 new tests in test_phase3_curiosity.py. Total: 97 tests passing.
+
+### Phase 3 Completion Notes (April 25, 2026)
+
+All 7 Phase 3 tasks completed. Key changes:
+
+- **3.1** `CuriosityDrive` class in `curiosity.py` — `calculate_information_gain(domain)` scores domains by belief count, confidence uncertainty, and prediction experience. Unknown domains get highest information gain.
+- **3.2** `detect_knowledge_gaps()` finds domains with <5 experienced beliefs (non-seed), capabilities with <10 samples, and completely unexplored domains.
+- **3.3** `generate_curiosity_goals()` creates exploration goals for knowledge gaps; `generate_reflection_goals()` spawns practice goals from SelfModel learning priorities and weakness areas.
+- **3.4** `ActionRecency` tracking and `calculate_novelty_bonus()` — actions not attempted recently score higher novelty (1.0 = never tried, 0.05 = <1hr ago). `get_under_explored_actions()` lists under-explored actions.
+- **3.5** `_calculate_goal_priority()` scores goals using weighted formula: info_gain×0.3 + novelty×0.2 + skill_gap×0.25 + gap_severity×0.15 + source_bonus×0.1. Skill-gap goals get 1.2× multiplier, reflection 1.1×, scheduled 0.8×, external 0.7×.
+- **3.6** `calculate_intrinsic_reward()` computes reward from uncertainty reduction (0.4 weight), novelty (0.2), information gain (0.3), and mastery bonus (0.1). Failed actions still earn exploration bonus.
+- **3.7** `_phase_curiosity_goals()` injected into brain cycle after THINK phase — generates curiosity goals each cycle, reflection-spawned goals every 10 cycles, converts them to GoalPlanner plans and SyModActionProposal objects. Intrinsic reward recording in `_advance_active_plans()`. Curiosity report logged during deep review (every 100 cycles).
+
+- New module: `src/agentic/curiosity.py` (CuriosityDrive, CuriosityGoal, ActionRecency, GoalSource, GoalType, EXPLORATION_TARGETS)
+- CognitiveIntegration now has `curiosity` attribute (CuriosityDrive) with `get_curiosity_goals()`, `generate_reflection_curiosity_goals()`, `detect_knowledge_gaps()`, `calculate_intrinsic_reward()`, `get_curiosity_report()`
+- Brain cycle: `_generate_curiosity_goals()` replaced stub with cognitive-driven implementation
+- 37 new tests in test_phase3_curiosity.py. Total: 97 tests passing.
+
+---
+
 ### Phase 3: Curiosity and Self-Direction (Week 5-6)
 
 **Goal**: The agent generates its own goals from curiosity, detected knowledge gaps, and intrinsic motivation — not just external triggers.
 
 | # | Task | Effort | Impact | Status |
 |---|------|--------|--------|--------|
-| 3.1 | Implement curiosity drive in CognitiveIntegration — score topics by information gain potential | 4h | HIGH | Pending |
-| 3.2 | Implement knowledge gap detection — identify domains with <5 beliefs or <10 self-model samples | 2h | HIGH | Pending |
-| 3.3 | Add goal spawning from reflection — deep review generates "explore X" goals for weak domains | 3h | HIGH | Pending |
-| 3.4 | Implement novelty-seeking — detect actions not tried recently, add exploration bonus | 3h | MEDIUM | Pending |
-| 3.5 | Add goal priority scoring — curiosity goals vs. skill-gap goals vs. scheduled goals, ranked by expected value | 4h | MEDIUM | Pending |
-| 3.6 | Implement intrinsic reward signal — satisfaction from reducing uncertainty, not just external success | 4h | MEDIUM | Pending |
-| 3.7 | Wire self-directed goals into brain cycle — after THINK phase, inject curiosity goals into proposals | 3h | HIGH | Pending |
+| 3.1 | Implement curiosity drive in CognitiveIntegration — score topics by information gain potential | 4h | HIGH | ✅ Done |
+| 3.2 | Implement knowledge gap detection — identify domains with <5 beliefs or <10 self-model samples | 2h | HIGH | ✅ Done |
+| 3.3 | Add goal spawning from reflection — deep review generates "explore X" goals for weak domains | 3h | HIGH | ✅ Done |
+| 3.4 | Implement novelty-seeking — detect actions not tried recently, add exploration bonus | 3h | MEDIUM | ✅ Done |
+| 3.5 | Add goal priority scoring — curiosity goals vs. skill-gap goals vs. scheduled goals, ranked by expected value | 4h | MEDIUM | ✅ Done |
+| 3.6 | Implement intrinsic reward signal — satisfaction from reducing uncertainty, not just external success | 4h | MEDIUM | ✅ Done |
+| 3.7 | Wire self-directed goals into brain cycle — after THINK phase, inject curiosity goals into proposals | 3h | HIGH | ✅ Done |
 
 **Deliverable**: Agent autonomously generates and pursues knowledge-gathering goals without human direction.
 
@@ -386,8 +424,8 @@ All 9 Phase 2 tasks completed. Key changes:
 | Self-model samples | 1 | 50+ | 500+ | `sum(c['sample_size'] for c in capabilities)` |
 | Plans completed | 0 | 5+ | 50+ | `len([p for p in plans if status == 'completed'])` |
 | Auto-generated plugins | 0 | 0 | 1+ | `len(auto_skill_builder.built_skills)` |
-| Curiosity goals/cycle | 0 | 0 | 0.1+ | Percentage of goals from curiosity vs. external |
-| Test coverage (src/agentic) | ~10% (41 tests) | 20% | 50% | pytest --cov |
+| Curiosity goals/cycle | 0 | 0.1+ | 0.1+ | Percentage of goals from curiosity vs. external |
+| Test coverage (src/agentic) | ~10% (41 tests) | 20% (97 tests) | 50% | pytest --cov |
 | Duat/Synergy references | ~5 (2 in agi_kernel prints, 3 remaining) | <10 | 0 | `grep -r '[Ss]ynergy\|[Dd]uat' src/` |
 | `print()` calls (src/agentic) | ~560 | 400 | 0 | `grep -r 'print(' src/agentic/` count |
 | Brain line count | 3,324 | 3,300 | < 300 | `wc -l autonomous_brain.py` |

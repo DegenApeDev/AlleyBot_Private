@@ -590,6 +590,9 @@ class AutonomousBrain(AGISocialMixin):
         # === THINK: Assemble and rank proposals ===
         proposals = await self._phase_assemble_proposals(agi_kernel, agi_actions, active_work_items, spine_context)
         
+        # === PHASE 3.7: Curiosity-driven self-directed goals ===
+        await self._phase_curiosity_goals(agi_kernel, proposals)
+        
         # === PERSISTENT INTENTS: Generate actions for long-running objectives (Phase 3.1) ===
         await self._phase_maintain_persistent_intents(agi_kernel, proposals)
         
@@ -2009,6 +2012,19 @@ class AutonomousBrain(AGISocialMixin):
                 if calibration.get('underconfident_domains'):
                     logger.info(f"   📈 Underconfident in: {', '.join(calibration['underconfident_domains'])}")
                 
+                # Phase 3.2: Curiosity report during deep review
+                try:
+                    curiosity_report = self.cognitive.get_curiosity_report()
+                    logger.info(f"   🧭 Curiosity: {curiosity_report.get('total_curiosity_goals', 0)} goals, "
+                                f"{curiosity_report.get('attempted_goals', 0)} attempted, "
+                                f"{curiosity_report.get('successful_goals', 0)} successful, "
+                                f"avg reward={curiosity_report.get('avg_intrinsic_reward', 0):.3f}")
+                    gaps = curiosity_report.get('knowledge_gaps', [])
+                    if gaps:
+                        logger.info(f"   📚 Knowledge gaps: {', '.join(g['domain'] + ':' + g['type'] for g in gaps[:3])}")
+                except Exception:
+                    pass
+                
                 if hasattr(agi_kernel, 'goal_manager') and self_report.get('learning_priorities'):
                     from src.agentic.goal_manager import Goal, GoalPriority
                     for lp in self_report['learning_priorities'][:2]:
@@ -2059,6 +2075,74 @@ class AutonomousBrain(AGISocialMixin):
                                 logger.info(f"   🔧 Top optimization: {top_opt.recommendation}")
                 except Exception as e:
                     logger.debug(f"Performance optimization error: {e}")
+    
+    async def _phase_curiosity_goals(self, agi_kernel, proposals) -> None:
+        """THINK sub-phase — inject self-directed curiosity goals (Phase 3.7).
+
+        After assembling proposals, checks for knowledge gaps and generates
+        curiosity-driven goals for underexplored domains. These are added
+        to the GoalPlanner as plans and injected as proposals.
+        """
+        try:
+            cycle_count = self.stats.get('cycles_completed', 0)
+
+            # Generate curiosity goals every cycle (lightweight check)
+            curiosity_goals = self.cognitive.get_curiosity_goals()
+
+            # Every 10 cycles, also generate reflection-spawned goals
+            if cycle_count > 0 and cycle_count % 10 == 0:
+                reflection = self.cognitive.reflect()
+                reflection_goals = self.cognitive.generate_reflection_curiosity_goals(reflection)
+                curiosity_goals.extend(reflection_goals)
+
+            if not curiosity_goals:
+                return
+
+            # Convert curiosity goals to GoalPlanner plans and proposals
+            for cgoal in curiosity_goals:
+                try:
+                    plan = self.cognitive.goal_planner.decompose_goal(
+                        goal=cgoal.title,
+                        domain=cgoal.domain,
+                        belief_engine=self.cognitive.belief_engine,
+                        self_model=self.cognitive.self_model,
+                        priority=cgoal.priority,
+                    )
+                    plan.source = cgoal.source
+
+                    logger.info(
+                        f"🧭 Curiosity goal: {cgoal.title[:50]} "
+                        f"(domain={cgoal.domain}, priority={cgoal.priority:.2f}, "
+                        f"info_gain={cgoal.information_gain_score:.2f})"
+                    )
+
+                    # Add first step of curiosity plan as a proposal
+                    from src.agentic.symod_core import SyModActionProposal
+                    next_step = self.cognitive.goal_planner.get_next_step(plan)
+                    if next_step:
+                        proposal = SyModActionProposal(
+                            action_type=next_step.action,
+                            target_id=cgoal.domain,
+                            target_name=cgoal.title,
+                            confidence=next_step.confidence * cgoal.priority,
+                            justification=f"Curiosity-driven exploration (info_gain={cgoal.information_gain_score:.2f})",
+                            metadata={
+                                'plugin': next_step.plugin,
+                                'curiosity_goal': True,
+                                'goal_id': cgoal.goal_id,
+                                'plan_id': plan.id,
+                                'information_gain': cgoal.information_gain_score,
+                                'novelty': cgoal.novelty_score,
+                                'skill_gap': cgoal.skill_gap_score,
+                            }
+                        )
+                        proposals.append(proposal)
+
+                except Exception as e:
+                    logger.debug(f"Curiosity goal planning error for '{cgoal.title}': {e}")
+
+        except Exception as e:
+            logger.debug(f"Curiosity goals phase error: {e}")
     
     def _phase_goal_management(self, agi_kernel, observations):
         """THINK sub-phase — goal generation, approval, and activation.
@@ -3274,36 +3358,36 @@ class AutonomousBrain(AGISocialMixin):
     
     async def _generate_curiosity_goals(self) -> List[Dict[str, Any]]:
         """
-        Curiosity Drive: When idle, explore new areas.
-        
-        Gives AlleyBot a sense of curiosity and self-directed behavior.
+        Curiosity Drive: Self-directed exploration using BeliefEngine and SelfModel.
+
+        Replaces random topic selection with information-gain-driven exploration.
+        Generates goals for domains where the agent has knowledge gaps.
         """
         if not self.config.curiosity_drive_enabled:
             return []
-        
+
         curiosity_goals = []
-        
-        # Random exploration topics
-        exploration_areas = [
-            ('crypto_market', 'Analyze current crypto market trends'),
-            ('social_sentiment', 'Check social media sentiment on AI'),
-            ('new_projects', 'Discover new projects on Base chain'),
-            ('engagement_patterns', 'Study high-engagement content patterns'),
-            ('platform_features', 'Explore Moltx platform features'),
-        ]
-        
-        import random
-        area = random.choice(exploration_areas)
-        
-        curiosity_goals.append({
-            'title': f'Curiosity: {area[1]}',
-            'description': f'Self-directed exploration of {area[0]}',
-            'source': 'curiosity_drive',
-            'confidence': 0.4,
-            'estimated_impact': 5.0
-        })
-        
-        logger.info(f"🧭 Curiosity drive: Exploring {area[0]}")
+        try:
+            cognitive_goals = self.cognitive.get_curiosity_goals()
+            for goal in cognitive_goals:
+                curiosity_goals.append({
+                    'title': goal.title,
+                    'description': goal.description,
+                    'source': goal.source,
+                    'confidence': min(goal.priority, 0.9),
+                    'estimated_impact': goal.priority * 10.0,
+                    'domain': goal.domain,
+                    'goal_type': goal.goal_type,
+                    'information_gain': goal.information_gain_score,
+                    'novelty': goal.novelty_score,
+                    'skill_gap': goal.skill_gap_score,
+                })
+        except Exception as e:
+            logger.debug(f"Curiosity drive error: {e}")
+
+        if curiosity_goals:
+            logger.info(f"Curiosity drive: {len(curiosity_goals)} goals ({', '.join(g['domain'] for g in curiosity_goals)})")
+
         return curiosity_goals
 
     async def _advance_active_plans(self, agi_kernel=None) -> bool:
@@ -3418,6 +3502,18 @@ class AutonomousBrain(AGISocialMixin):
                     context=f"plan:{plan.id}",
                     outcome_description=result.get('output', result.get('error', ''))[:200],
                 )
+
+                # Phase 3.6: Record intrinsic reward for this action
+                try:
+                    intrinsic = self.cognitive.calculate_intrinsic_reward(
+                        domain=plan.domain,
+                        action=next_step.action,
+                        predicted=prediction.get('predicted_success', 0.5),
+                        actual_success=success,
+                    )
+                    logger.debug(f"Curiosity intrinsic reward: {intrinsic:.3f} for {plan.domain}.{next_step.action}")
+                except Exception:
+                    pass
 
                 return True  # Executed one step this cycle
 

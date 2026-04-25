@@ -19,6 +19,7 @@ from src.agentic.belief_engine import BeliefEngine, get_belief_engine
 from src.agentic.self_model import SelfModel, get_self_model
 from src.agentic.goal_planner import GoalPlanner, get_goal_planner
 from src.agentic.knowledge_graph import get_knowledge_graph
+from src.agentic.curiosity import CuriosityDrive, get_curiosity_drive
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,9 @@ class CognitiveIntegration:
         self.self_model = get_self_model()
         self.goal_planner = get_goal_planner()
         self.knowledge_graph = get_knowledge_graph()
+        self.curiosity = get_curiosity_drive(
+            self.belief_engine, self.self_model, self.goal_planner
+        )
         self.telegram_plugin = telegram_plugin
         self._cycle_count = 0
 
@@ -366,6 +370,35 @@ class CognitiveIntegration:
             return True
         return cap.consecutive_failures >= 2
 
+    # ── Curiosity & Self-Direction (Phase 3) ─────────────────────────
+
+    def get_curiosity_goals(self) -> list:
+        goals = self.curiosity.generate_curiosity_goals()
+        if goals:
+            logger.info(f"Curiosity drive generated {len(goals)} self-directed goals")
+        return goals
+
+    def generate_reflection_curiosity_goals(self, reflection: Dict) -> list:
+        goals = self.curiosity.generate_reflection_goals(reflection)
+        if goals:
+            logger.info(f"Reflection spawned {len(goals)} curiosity goals")
+        return goals
+
+    def detect_knowledge_gaps(self) -> list:
+        return self.curiosity.detect_knowledge_gaps()
+
+    def calculate_intrinsic_reward(self, domain: str, action: str, predicted: float, actual_success: bool) -> float:
+        return self.curiosity.calculate_intrinsic_reward(domain, action, predicted, actual_success)
+
+    def get_curiosity_report(self) -> Dict:
+        report = self.curiosity.get_intrinsic_reward_summary()
+        gaps = self.curiosity.detect_knowledge_gaps()
+        report['knowledge_gaps'] = gaps
+        report['active_curiosity_goals'] = len([
+            g for g in self.curiosity.curiosity_goals.values() if not g.attempted
+        ])
+        return report
+
 
 # Singleton
 _cognitive: Optional[CognitiveIntegration] = None
@@ -377,4 +410,10 @@ def get_cognitive(telegram_plugin=None) -> CognitiveIntegration:
         _cognitive = CognitiveIntegration(telegram_plugin)
     elif telegram_plugin and not _cognitive.telegram_plugin:
         _cognitive.set_telegram(telegram_plugin)
+    else:
+        _cognitive.curiosity.set_engines(
+            _cognitive.belief_engine,
+            _cognitive.self_model,
+            _cognitive.goal_planner,
+        )
     return _cognitive
