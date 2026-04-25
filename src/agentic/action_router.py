@@ -303,7 +303,7 @@ class ActionRouter:
                 if hasattr(self.agi, 'content_intelligence'):
                     content_check = self.agi.content_intelligence.should_post_now(
                         platform=platform,
-                        action_type=action_type
+                        content_type=action_type
                     )
                     if not content_check.get('should_post'):
                         return {
