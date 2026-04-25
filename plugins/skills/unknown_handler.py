@@ -166,78 +166,86 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
             return "Error handling unknown. Try !help or !reset."
 
     def _generate_suggestions(self, unknown_input: str) -> str:
-        lower_input = unknown_input.lower()
-        suggestions = []
-        parts = unknown_input.split()
-        command_lower = parts[0].lower().strip() if parts else ''
-        orig_cmd = parts[0] if parts else ''
-        for alias, real in self.plugin_aliases.items():
-            if (command_lower == alias or
-                command_lower.startswith(alias) or
-                alias.startswith(command_lower)):
-                if real in self.known_plugins:
-                    suggestions.append(f"'{orig_cmd}' -> '!{real}'")
+        command_lower = self.get_command_key(unknown_input)
+        suggs = []
         # Fuzzy aliases
-        fuzzy_aliases = get_close_matches(command_lower, self.alias_keys, n=3, cutoff=0.6)
-        for fa in fuzzy_aliases:
+        fuzzy_a = get_close_matches(command_lower, self.alias_keys, n=3, cutoff=0.6)
+        for fa in fuzzy_a:
             real = self.plugin_aliases[fa]
-            if real in self.known_plugins:
-                suggestions.append(f"!{real}")
+            suggs.append(f"!{real} ({fa})")
         # Fuzzy known
-        fuzzy_known = get_close_matches(command_lower, self.known_plugins, n=3, cutoff=0.6)
-        for fk in fuzzy_known:
-            suggestions.append(f"!{fk}")
-        suggestions = list(set(suggestions))  # dedupe
-        if not suggestions:
-            suggestions = ["!help", "!chat", "!core"]
-        sugg_str = ", ".join(suggestions[:5])
-        if len(suggestions) > 5:
-            sugg_str += " and more..."
-        return f"Try: {sugg_str}"
+        fuzzy_k = get_close_matches(command_lower, self.known_plugins, n=3, cutoff=0.6)
+        for fk in fuzzy_k:
+            suggs.append(f"!{fk}")
+        # Prefix matches
+        for alias in self.alias_keys:
+            if (len(alias) > 2 and
+                (command_lower.startswith(alias) or
+                 alias.startswith(command_lower) or
+                 len(command_lower) >= 3 and command_lower[:3] == alias[:3])):
+                real = self.plugin_aliases[alias]
+                suggs.append(f"!{real} ({alias})")
+        unique_suggs = list(dict.fromkeys(suggs))[:5]
+        if unique_suggs:
+            return "Suggestions: " + " | ".join(unique_suggs) + " | !help"
+        return "Try !help | !chat | !core | !web_search"
 
     def _trigger_fallback(self, command_name: str, params_str: str) -> str:
-        fallback_cmds = []
+        print(f"[UnknownHandler] Fallback triggered for '{command_name}' (5+ failures)")
+        print(f"[UnknownHandler] Failure history for '{command_name}': {self.failure_counts.get(command_name, 0)}")
+        # Self-improve: map to core
+        if command_name not in self.plugin_aliases:
+            self.plugin_aliases[command_name] = "core"
+            self.alias_keys = list(self.plugin_aliases.keys())
+            print(f"[UnknownHandler] Self-improved: added '{command_name}' -> 'core'")
+        suggestion = f"!core {command_name}"
         if params_str:
-            fallback_cmds.append(f"!chat {command_name} {params_str}")
-            fallback_cmds.append(f"!core interpret {command_name} {params_str}")
-        else:
-            fallback_cmds.append(f"!chat {command_name}")
-            fallback_cmds.append(f"!core {command_name}")
-        fallback_cmds.append("!help")
-        fallback_msg = " | ".join(fallback_cmds)
-        print(f"[UnknownHandler] Fallback triggered for '{command_name}': {fallback_msg}")
-        return f"Repeated failures ({self.failure_counts.get(command_name, 0)}+) for '{command_name}'. Better fallbacks: {fallback_msg}"
+            suggestion += f" {params_str}"
+        # Reset count
+        self.failure_counts[command_name] = 0
+        self.last_failure_time.pop(command_name, None)
+        return f"Self-improved after repeated failures: '{command_name}' now aliases 'core'. Try: {suggestion}"
 
     def retry_last(self, args: list) -> str:
-        if self.last_unknown:
-            print(f"[UnknownHandler] Retry last: {self.last_unknown}")
-            return f"Last unknown: {self.last_unknown}\n(Retry manually or !correct <proper command>.)"
-        return "No last unknown to retry."
+        if not self.last_unknown:
+            return "No previous unknown command to retry."
+        cmd = self.get_command_key(self.last_unknown)
+        # Decrement failure count
+        if cmd in self.failure_counts:
+            self.failure_counts[cmd] = max(0, self.failure_counts[cmd] - 1)
+            print(f"[UnknownHandler] Retry: failures for '{cmd}' now {self.failure_counts[cmd]}")
+        # Check if now resolved
+        if cmd in self.plugin_aliases:
+            real = self.plugin_aliases[cmd]
+            parts = self.last_unknown.split(maxsplit=1)
+            params = parts[1] if len(parts) > 1 else ""
+            suggestion = f"!{real}"
+            if params:
+                suggestion += f" {params}"
+            return f"Retrying '{self.last_unknown}' -> resolved to {suggestion}"
+        return f"Retrying last unknown: {self.last_unknown} (failures decremented)"
 
     def self_correct(self, args: list) -> str:
-        full_input = " ".join(args).strip()
+        print(f"[UnknownHandler] Self-correct invoked. Last: {self.last_unknown}")
+        print(f"[UnknownHandler] Failures: {self.failure_counts}")
         if self.last_unknown:
-            last_cmd = self.get_command_key(self.last_unknown)
-            self.failure_counts.pop(last_cmd, None)
-            self.last_failure_time.pop(last_cmd, None)
-            print(f"[UnknownHandler] Self-corrected failures for '{last_cmd}'")
-            if full_input:
-                return f"Failures reset. Try correction: ! {full_input}"
-            return "Failures reset for last unknown. Retry it now!"
-        return "No last unknown to correct. Usage: !correct <your intended command>"
+            cmd = self.get_command_key(self.last_unknown)
+            if cmd in self.failure_counts and self.failure_counts[cmd] >= 3:
+                return f"High failures for '{cmd}': Consider config alias. Try !chat or !core {self.last_unknown}"
+        return "Self-correct: No action needed. Use !retry or !reset."
 
     def reset_failures(self, args: list) -> str:
-        prev_count = len(self.failure_counts)
+        before = len(self.failure_counts)
         self.failure_counts.clear()
         self.last_failure_time.clear()
         self.last_unknown = None
-        print(f"[UnknownHandler] Reset {prev_count} failure entries.")
-        return "All failures, times, and last unknown reset."
+        print(f"[UnknownHandler] Reset {before} failure entries.")
+        return f"Reset {before} tracked failures."
 
 PLUGIN_INFO = {
     "name": "unknown_handler",
     "version": "2.0.0",
-    "description": "Handles unknown commands with alias/abbreviation mapping (e.g., 'clawbr_d'->'clawbr_debates'), fuzzy matching, failure tracking, post-mapping existence checks, and enhanced fallbacks.",
+    "description": "Handles unknown commands with aliases, fuzzy matching, failure tracking, retry logic, and self-improvement via dynamic alias addition.",
     "author": "AlleyBot"
 }
 
