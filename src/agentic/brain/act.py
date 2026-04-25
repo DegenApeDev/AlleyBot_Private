@@ -6,7 +6,7 @@ Contains: _phase_execute_proposals, proposal execution logic
 """
 
 import logging
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 logger = logging.getLogger(__name__)
 
