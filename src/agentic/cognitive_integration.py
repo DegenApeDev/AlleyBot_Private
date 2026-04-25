@@ -398,6 +398,28 @@ class CognitiveIntegration:
             g for g in self.curiosity.curiosity_goals.values() if not g.attempted
         ])
         return report
+    
+    # ── Phase 4.4: Analogical Transfer ────────────────────────────────
+    
+    def find_analogies(self, source_domain: str, target_domain: str) -> List[Dict]:
+        """Phase 4.4: Find analogous strategies from one domain to another."""
+        return self.knowledge_graph.find_analogies(source_domain, target_domain)
+    
+    def apply_transfer_learning(self, novel_situation: str, source_domain: str = None) -> List[Dict]:
+        """Phase 4.4: Transfer knowledge from similar past situations."""
+        return self.knowledge_graph.analogical_transfer(novel_situation, source_domain)
+    
+    # ── Phase 4.6: Belief Conflict Detection ─────────────────────────
+    
+    def detect_belief_conflicts(self, domain: str = None) -> List[Dict]:
+        """Phase 4.6: Find beliefs with strong contradictory evidence."""
+        return self.belief_engine.detect_conflicts(domain)
+    
+    # ── Phase 4.3: Counterfactual Reasoning ─────────────────────────
+    
+    def generate_counterfactuals(self, action: str, domain: str, failed_context: str) -> List[Dict]:
+        """Phase 4.3: Generate 'what if' alternatives after action failure."""
+        return self.belief_engine.generate_counterfactuals(action, domain, failed_context)
 
 
 # Singleton

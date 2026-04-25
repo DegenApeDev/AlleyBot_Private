@@ -1,7 +1,7 @@
 # OPENCODE_PLAN.md — Path to AGI
 
 **Created**: April 24, 2026
-**Status**: Phase 1 ✅ Complete | Phase 2 ✅ Complete | Phase 3 ✅ Complete
+**Status**: Phase 1 ✅ Complete | Phase 2 ✅ Complete | Phase 3 ✅ Complete | Phase 4 ✅ Complete
 **Goal**: Transform AlleyBot from a reactive bot into a genuinely autonomous agent that learns, reasons, plans, self-improves, and pursues self-directed goals.
 
 ---
@@ -209,6 +209,24 @@ All 7 Phase 3 tasks completed. Key changes:
 
 ---
 
+### Phase 4 Completion Notes (April 25, 2026)
+
+All 7 Phase 4 tasks completed. Key changes:
+
+- **4.1** `find_relevant_beliefs_semantic()` in BeliefEngine — uses global SentenceTransformer (`all-MiniLM-L6-v2`) via `src/utils/embedding_model` for vector similarity. Falls back to keyword matching if embeddings unavailable. Uses sklearn cosine_similarity.
+- **4.2** Belief dataclass now has `context_history` (list of {context, outcome, timestamp, confidence_at_time}), `last_outcome`, and `outcome_timestamps`. `_add_context_to_belief()` called in `update_from_outcome()` for both existing and new beliefs.
+- **4.3** `generate_counterfactuals()` — after action failure, finds successful contexts from belief history and suggests alternatives by comparing failed context to successful ones. Returns up to 5 suggestions with similarity scores.
+- **4.4** `find_analogies()` and `apply_transfer_learning()` wired into CognitiveIntegration — wraps KnowledgeGraph's analogical_transfer. Finds structurally similar past situations across domains.
+- **4.5** `recency_decay_confidence` property on Belief — weights recent outcomes more heavily using decay formula: `1.0 / (1.0 + hours_ago/24.0)`. Returns confidence based on recency-weighted outcomes.
+- **4.6** `detect_conflicts()` — finds beliefs with strong contradictory evidence (2+ evidence_for AND 2+ evidence_against). Returns conflict ratio and resolution recommendation.
+- **4.7** Context history now stored on every belief update — each outcome records context, outcome, timestamp, and confidence at time.
+
+- Enhanced Belief dataclass: added `context_history`, `last_outcome`, `outcome_timestamps`, `is_conflicting` property, `recency_decay_confidence` property
+- CognitiveIntegration added: `find_analogies()`, `apply_transfer_learning()`, `detect_belief_conflicts()`, `generate_counterfactuals()`
+- 25 new tests in test_phase4_semantic.py. Total: 122 tests passing.
+
+---
+
 ### Phase 3: Curiosity and Self-Direction (Week 5-6)
 
 **Goal**: The agent generates its own goals from curiosity, detected knowledge gaps, and intrinsic motivation — not just external triggers.
@@ -239,13 +257,13 @@ All 7 Phase 3 tasks completed. Key changes:
 
 | # | Task | Effort | Impact | Status |
 |---|------|--------|--------|--------|
-| 4.1 | Implement embedding-based belief retrieval — replace word-overlap with vector similarity using existing embedding models | 6h | HIGH | Pending |
-| 4.2 | Add episodic context to beliefs — store situational context (what happened, when, why) alongside domain tags | 4h | MEDIUM | Pending |
-| 4.3 | Implement counterfactual reasoning — after action failure, generate "what if" alternatives and evaluate them | 6h | MEDIUM | Pending |
-| 4.4 | Add analogical transfer — when facing a new problem, find structurally similar past situations via KnowledgeGraph | 4h | MEDIUM | Pending |
-| 4.5 | Implement decay-weighted recency — recent outcomes weighted more heavily than old ones | 2h | LOW | Pending |
-| 4.6 | Add belief conflict detection — when new evidence contradicts existing beliefs, flag for review | 3h | MEDIUM | Pending |
-| 4.7 | Wire episodic memory into belief updates — beliefs form from rich episodes, not just success/failure booleans | 4h | HIGH | Pending |
+| 4.1 | Implement embedding-based belief retrieval — replace word-overlap with vector similarity using existing embedding models | 6h | HIGH | ✅ Done |
+| 4.2 | Add episodic context to beliefs — store situational context (what happened, when, why) alongside domain tags | 4h | MEDIUM | ✅ Done |
+| 4.3 | Implement counterfactual reasoning — after action failure, generate "what if" alternatives and evaluate them | 6h | MEDIUM | ✅ Done |
+| 4.4 | Add analogical transfer — when facing a new problem, find structurally similar past situations via KnowledgeGraph | 4h | MEDIUM | ✅ Done |
+| 4.5 | Implement decay-weighted recency — recent outcomes weighted more heavily than old ones | 2h | LOW | ✅ Done |
+| 4.6 | Add belief conflict detection — when new evidence contradicts existing beliefs, flag for review | 3h | MEDIUM | ✅ Done |
+| 4.7 | Wire episodic memory into belief updates — beliefs form from rich episodes, not just success/failure booleans | 4h | HIGH | ✅ Done |
 
 **Deliverable**: Agent retrieves relevant past experiences via semantic similarity, not keyword matching. Can reason about alternatives.
 

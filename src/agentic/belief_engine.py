@@ -11,6 +11,7 @@ This replaces the Duat/Synergy float arithmetic with real Bayesian belief updati
 import json
 import time
 import logging
+logger = logging.getLogger(__name__)
 import threading
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Tuple
@@ -30,6 +31,10 @@ class Belief:
     source: str = "experience"
     domain: str = "general"
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    # Phase 4: Episodic context
+    context_history: List[Dict] = field(default_factory=list)
+    last_outcome: Optional[str] = None
+    outcome_timestamps: List[str] = field(default_factory=list)
 
     @property
     def accuracy(self) -> float:
@@ -50,6 +55,42 @@ class Belief:
         if self.prediction_count < 5:
             return False
         return abs(self.confidence - self.accuracy) < 0.15
+    
+    @property
+    def is_conflicting(self) -> bool:
+        """Phase 4.6: Check if belief has contradictory evidence"""
+        if len(self.evidence_for) >= 2 and len(self.evidence_against) >= 2:
+            return True
+        return False
+    
+    @property
+    def recency_decay_confidence(self) -> float:
+        """Phase 4.5: Decay-weighted confidence - recent outcomes weighted more"""
+        if not self.outcome_timestamps:
+            return self.confidence
+        
+        now = datetime.now()
+        total_weight = 0.0
+        weighted_sum = 0.0
+        
+        for i, ts in enumerate(self.outcome_timestamps):
+            try:
+                ts_dt = datetime.fromisoformat(ts)
+                hours_ago = (now - ts_dt).total_seconds() / 3600
+                # Decay factor: 1.0 for recent, approaches 0.0 for old
+                weight = 1.0 / (1.0 + hours_ago / 24.0)
+                # Most recent evidence has highest index
+                is_success = i < len(self.evidence_for)
+                actual = 1.0 if is_success else 0.0
+                weighted_sum += weight * actual
+                total_weight += weight
+            except (ValueError, TypeError):
+                continue
+        
+        if total_weight == 0:
+            return self.confidence
+        
+        return weighted_sum / total_weight
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -67,6 +108,9 @@ class Belief:
             source=data.get('source', 'experience'),
             domain=data.get('domain', 'general'),
             created_at=data.get('created_at', datetime.now().isoformat()),
+            context_history=data.get('context_history', []),
+            last_outcome=data.get('last_outcome'),
+            outcome_timestamps=data.get('outcome_timestamps', []),
         )
 
 
@@ -239,6 +283,10 @@ class BeliefEngine:
                     belief.prediction_count += 1
                     belief.confidence = max(self.MIN_CONFIDENCE, min(self.MAX_CONFIDENCE, belief.confidence))
                     belief.last_updated = datetime.now().isoformat()
+                    
+                    # Phase 4.2: Add episodic context to belief
+                    self._add_context_to_belief(belief, context, outcome_description or ("success" if actual_success else "failure"))
+                    
                 result['beliefs_updated'] = len(relevant)
             else:
                 new_proposition = f"{action} leads to {'success' if actual_success else 'failure'}"
@@ -246,7 +294,7 @@ class BeliefEngine:
                     new_proposition = f"{context}: {action} leads to {'success' if actual_success else 'failure'}"
 
                 key = self._hash(new_proposition)
-                self.beliefs[key] = Belief(
+                new_belief = Belief(
                     proposition=new_proposition,
                     confidence=0.6 if actual_success else 0.4,
                     prediction_count=1,
@@ -256,6 +304,9 @@ class BeliefEngine:
                     evidence_for=[outcome_description] if actual_success and outcome_description else [],
                     evidence_against=[outcome_description] if not actual_success and outcome_description else [],
                 )
+                # Phase 4.2: Add episodic context to new belief
+                self._add_context_to_belief(new_belief, context, outcome_description or ("success" if actual_success else "failure"))
+                self.beliefs[key] = new_belief
                 result['new_beliefs_created'] = 1
 
             self._save()
@@ -290,6 +341,164 @@ class BeliefEngine:
 
         scored.sort(key=lambda x: x[0], reverse=True)
         return [b for _, b in scored[:10]]
+    
+    # ── Phase 4.1: Embedding-based Semantic Retrieval ─────────────────
+    
+    def find_relevant_beliefs_semantic(self, query: str, domain: str = "general", top_k: int = 10) -> List[Belief]:
+        """Phase 4.1: Semantic similarity using sentence embeddings.
+        
+        Uses global SentenceTransformer for vector similarity.
+        Falls back to keyword matching if embeddings unavailable.
+        """
+        try:
+            from src.utils.embedding_model import get_sentence_transformer
+            model = get_sentence_transformer()
+        except Exception:
+            logger.debug("Embedding model unavailable, using keyword matching")
+            return self.find_relevant_beliefs(query, domain)
+        
+        try:
+            query_embedding = model.encode([query])
+            belief_texts = []
+            belief_list = []
+            
+            for belief in self.beliefs.values():
+                if domain != "general" and belief.domain != "general" and belief.domain != domain:
+                    continue
+                # Include proposition + context for richer embedding
+                context = " ".join(belief.evidence_for[-3:] + belief.evidence_against[-3:])
+                text = f"{belief.proposition} {context}"
+                belief_texts.append(text)
+                belief_list.append(belief)
+            
+            if not belief_texts:
+                return []
+            
+            belief_embeddings = model.encode(belief_texts)
+            
+            from sklearn.metrics.pairwise import cosine_similarity
+            similarities = cosine_similarity(query_embedding, belief_embeddings)[0]
+            
+            scored = []
+            for i, belief in enumerate(belief_list):
+                score = similarities[i]
+                # Boost score based on prediction count (more data = more reliable)
+                boost = (0.5 + 0.5 * belief.prediction_count / max(belief.prediction_count, 10))
+                adjusted_score = score * boost
+                scored.append((adjusted_score, belief))
+            
+            scored.sort(key=lambda x: x[0], reverse=True)
+            return [b for _, b in scored[:top_k]]
+            
+        except ImportError:
+            logger.debug("sklearn not available, using keyword matching")
+            return self.find_relevant_beliefs(query, domain)
+        except Exception as e:
+            logger.debug(f"Semantic retrieval failed, falling back to keyword: {e}")
+            return self.find_relevant_beliefs(query, domain)
+    
+    # ── Phase 4.6: Belief Conflict Detection ────────────────────────
+    
+    def detect_conflicts(self, domain: str = None) -> List[Dict]:
+        """Phase 4.6: Detect beliefs with strong contradictory evidence.
+        
+        Returns list of conflicting beliefs with explanation.
+        """
+        conflicts = []
+        
+        for belief in self.beliefs.values():
+            if domain and belief.domain != domain:
+                continue
+            
+            if not belief.is_conflicting:
+                continue
+            
+            conflict_ratio = len(belief.evidence_against) / max(len(belief.evidence_for), 1)
+            
+            conflicts.append({
+                'belief': belief.proposition,
+                'domain': belief.domain,
+                'confidence': belief.confidence,
+                'evidence_for_count': len(belief.evidence_for),
+                'evidence_against_count': len(belief.evidence_against),
+                'conflict_ratio': conflict_ratio,
+                'recommendation': self._resolve_conflict_recommendation(belief),
+            })
+        
+        conflicts.sort(key=lambda x: x['conflict_ratio'], reverse=True)
+        return conflicts
+    
+    def _resolve_conflict_recommendation(self, belief: Belief) -> str:
+        """Generate recommendation for resolving belief conflict."""
+        if belief.confidence > 0.6:
+            return "Belief strongly held despite conflicts - investigate specific conditions"
+        elif belief.confidence < 0.4:
+            return "Low confidence - consider deprecating or splitting into conditional beliefs"
+        else:
+            return "Moderate conflict - refine with more specific context conditions"
+    
+    # ── Phase 4.3: Counterfactual Reasoning ──────────────────────────
+    
+    def generate_counterfactuals(self, action: str, domain: str, failed_context: str) -> List[Dict]:
+        """Phase 4.3: Generate "what if" alternatives after action failure.
+        
+        When an action fails, this method searches for similar contexts where
+        different approaches succeeded, suggesting alternative actions.
+        """
+        relevant = self.find_relevant_beliefs(action, domain)
+        
+        counterfactuals = []
+        
+        for belief in relevant:
+            # Check if this belief has success evidence in different contexts
+            if not belief.context_history:
+                continue
+            
+            successful_contexts = [
+                entry for entry in belief.context_history
+                if 'success' in entry.get('outcome', '').lower()
+            ]
+            
+            for success_ctx in successful_contexts:
+                # Calculate similarity to failed context
+                failed_words = set(failed_context.lower().split())
+                success_words = set(success_ctx['context'].lower().split())
+                overlap = len(failed_words & success_words)
+                diff_words = failed_words - success_words
+                
+                if overlap > 0 and diff_words:
+                    counterfactuals.append({
+                        'original_action': action,
+                        'suggested_alternative': f"Try with: {', '.join(diff_words)}",
+                        'similar_context': success_ctx['context'],
+                        'similarity_score': overlap / max(len(failed_words | success_words), 1),
+                        'confidence': belief.confidence * 0.8,  # Discount for uncertainty
+                    })
+        
+        counterfactuals.sort(key=lambda x: x['confidence'], reverse=True)
+        return counterfactuals[:5]
+
+    # ── Phase 4.2: Update with Context ────────────────────────────────
+
+    def _add_context_to_belief(self, belief: Belief, context: str, outcome: str):
+        """Phase 4.2: Store situational context in belief."""
+        context_entry = {
+            'context': context[:200],
+            'outcome': outcome[:100],
+            'timestamp': datetime.now().isoformat(),
+            'confidence_at_time': belief.confidence,
+        }
+        
+        belief.context_history.append(context_entry)
+        belief.last_outcome = outcome
+        
+        belief.outcome_timestamps.append(datetime.now().isoformat())
+        
+        # Keep only last 20 context entries
+        if len(belief.context_history) > 20:
+            belief.context_history = belief.context_history[-20:]
+        if len(belief.outcome_timestamps) > 20:
+            belief.outcome_timestamps = belief.outcome_timestamps[-20:]
 
     def should_wait(self, action: str, domain: str = "general") -> Tuple[bool, str]:
         relevant = self.find_relevant_beliefs(action, domain)
