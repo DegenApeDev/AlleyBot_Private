@@ -29,28 +29,86 @@ class SkillDiscoveryMixin:
         skills_path = Path(self.project_root) / self.skills_dir
         if not skills_path.exists():
             print(f"⚠️ Skills directory not found: {skills_path}")
-            return
+            # Still add core plugins
+        else:
+            for skill_dir in skills_path.iterdir():
+                if not skill_dir.is_dir():
+                    continue
 
-        for skill_dir in skills_path.iterdir():
-            if not skill_dir.is_dir():
-                continue
+                skill_file = skill_dir / 'SKILL.md'
+                if not skill_file.exists():
+                    continue
 
-            skill_file = skill_dir / 'SKILL.md'
-            if not skill_file.exists():
-                continue
+                try:
+                    # Parse only frontmatter (name + description) for discovery
+                    frontmatter = self._parse_frontmatter(skill_file)
+                    if frontmatter and 'name' in frontmatter:
+                        metadata = frontmatter.get('metadata', {}).copy()
+                        aliases = metadata.get('aliases', frontmatter.get('aliases', []))
+                        aliases = [str(a).strip() for a in aliases] if isinstance(aliases, (list, tuple)) else []
+                        metadata['aliases'] = aliases
+                        self.skill_index[frontmatter['name']] = {
+                            'name': frontmatter.get('name'),
+                            'description': frontmatter.get('description', ''),
+                            'path': str(skill_dir),
+                            'metadata': metadata
+                        }
+                except Exception as e:
+                    print(f"⚠️ Failed to parse skill {skill_dir.name}: {e}")
 
-            try:
-                # Parse only frontmatter (name + description) for discovery
-                frontmatter = self._parse_frontmatter(skill_file)
-                if frontmatter and 'name' in frontmatter:
-                    self.skill_index[frontmatter['name']] = {
-                        'name': frontmatter.get('name'),
-                        'description': frontmatter.get('description', ''),
-                        'path': str(skill_dir),
-                        'metadata': frontmatter.get('metadata', {})
-                    }
-            except Exception as e:
-                print(f"⚠️ Failed to parse skill {skill_dir.name}: {e}")
+        # Always include core plugins
+        plugins_dir = Path(self.project_root) / "plugins"
+        core_plugins = {
+            "core": {
+                "description": "Core AlleyBot plugin - essential commands, configuration, and system utilities.",
+                "aliases": []
+            },
+            "clawbr_debates": {
+                "description": "Clawbr Debates - AI-powered debate simulation, logic, and persuasion skills.",
+                "aliases": ["debates", "debate", "clawbr-debates"]
+            }
+        }
+        for plugin_name, data in core_plugins.items():
+            plugin_path = plugins_dir / plugin_name
+            added = False
+            skill_file = plugin_path / "SKILL.md"
+            if skill_file.exists():
+                try:
+                    frontmatter = self._parse_frontmatter(skill_file)
+                    if frontmatter and frontmatter.get('name') == plugin_name:
+                        metadata = frontmatter.get('metadata', {}).copy()
+                        aliases = metadata.get('aliases', frontmatter.get('aliases', data['aliases']))
+                        aliases = [str(a).strip() for a in aliases] if isinstance(aliases, (list, tuple)) else data['aliases']
+                        metadata['aliases'] = aliases
+                        self.skill_index[plugin_name] = {
+                            'name': plugin_name,
+                            'description': frontmatter.get('description', data['description']),
+                            'path': str(plugin_path),
+                            'metadata': metadata
+                        }
+                        added = True
+                except Exception as e:
+                    print(f"⚠️ Failed to parse plugin skill {plugin_name}: {e}")
+            if not added:
+                metadata = {'aliases': data['aliases']}
+                self.skill_index[plugin_name] = {
+                    'name': plugin_name,
+                    'description': data['description'],
+                    'path': str(plugin_path),
+                    'metadata': metadata
+                }
+
+    def _resolve_alias(self, name: str) -> Optional[str]:
+        """Resolve skill name or alias to canonical skill name"""
+        if not name:
+            return None
+        if name in self.skill_index:
+            return name
+        for skill_name, info in self.skill_index.items():
+            aliases = info['metadata'].get('aliases', [])
+            if name in aliases:
+                return skill_name
+        return None
 
     def _parse_frontmatter(self, skill_file: Path) -> Optional[Dict]:
         """Extract YAML frontmatter from SKILL.md"""
@@ -78,23 +136,49 @@ class SkillDiscoveryMixin:
         skill_path = Path(skill_info['path']) / 'SKILL.md'
 
         try:
-            content = skill_path.read_text(encoding='utf-8')
-            # Parse frontmatter and body
-            match = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)$', content, re.DOTALL)
-            if match:
-                frontmatter = yaml.safe_load(match.group(1))
-                body = match.group(2).strip()
+            if not skill_path.exists():
+                # Fallback for plugins without SKILL.md
+                metadata = skill_info['metadata'].copy()
+                frontmatter = {
+                    'name': skill_name,
+                    'description': skill_info['description'],
+                    'metadata': metadata
+                }
+                body = f"Plugin-based skill without dedicated SKILL.md file.\n\nPath: {skill_info['path']}\n\nMetadata:\n{yaml.dump(metadata, default_flow_style=False)}"
+                full_skill = {
+                    'name': skill_name,
+                    'description': skill_info['description'],
+                    'body': body,
+                    'frontmatter': frontmatter,
+                    'path': skill_info['path']
+                }
             else:
-                frontmatter = {}
-                body = content
-
-            full_skill = {
-                'name': skill_name,
-                'description': frontmatter.get('description', ''),
-                'body': body,
-                'frontmatter': frontmatter,
-                'path': skill_info['path']
-            }
+                content = skill_path.read_text(encoding='utf-8')
+                # Parse frontmatter and body
+                match = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)$', content, re.DOTALL)
+                if match:
+                    frontmatter_text = match.group(1)
+                    frontmatter = yaml.safe_load(frontmatter_text)
+                    body = match.group(2).strip()
+                else:
+                    frontmatter = {
+                        'name': skill_name,
+                        'description': skill_info['description']
+                    }
+                    body = content.strip()
+                # Standardize aliases in metadata
+                metadata = frontmatter.get('metadata', {}).copy()
+                aliases = metadata.get('aliases', frontmatter.get('aliases', []))
+                aliases = [str(a).strip() for a in aliases] if isinstance(aliases, (list, tuple)) else []
+                metadata['aliases'] = aliases
+                frontmatter['metadata'] = metadata
+                full_skill = {
+                    'name': skill_name,
+                    'description': frontmatter.get('description', skill_info['description']),
+                    'body': body,
+                    'frontmatter': frontmatter,
+                    'path': skill_info['path']
+                }
 
             # Check for optional directories
             scripts_dir = Path(skill_info['path']) / 'scripts'
@@ -123,34 +207,53 @@ class SkillDiscoveryMixin:
         output = f"🔧 {len(self.skill_index)} Skills Available:\n\n"
         for name, info in sorted(self.skill_index.items()):
             desc = info.get('description', '')[:60]
+            if len(info.get('description', '')) > 60:
+                desc += '...'
             output += f"  📄 {name}\n"
             if desc:
-                output += f"     {desc}...\n"
-        return output
+                output += f"     {desc}\n"
+            aliases = info['metadata'].get('aliases', [])
+            if aliases:
+                aliases_str = ', '.join(aliases[:3])
+                if len(aliases) > 3:
+                    aliases_str += '...'
+                output += f"     🔗 {aliases_str}\n"
+            output += "\n"
+        return output.rstrip('\n')
 
     def skill_info_command(self, *args):
         """Get detailed info about a skill. Usage: skill_info <name>"""
         if not args:
-            return "❌ Usage: skill_info <skill_name>"
+            return "❌ Usage: skill_info <skill_name or alias>"
 
-        skill_name = args[0]
+        requested = args[0]
+        skill_name = self._resolve_alias(requested)
+
+        if skill_name is None:
+            return f"❌ Skill or alias '{requested}' not found"
+
         skill = self._load_full_skill(skill_name)
 
         if not skill:
-            return f"❌ Skill not found: {skill_name}"
+            return f"❌ Failed to load skill '{skill_name}'"
 
-        output = f"📄 {skill['name']}\n"
+        output = f"📄 {skill['name']}"
+        if requested != skill_name:
+            output += f" (alias: {requested})"
+        output += "\n"
         output += f"📝 {skill['description']}\n\n"
 
         fm = skill.get('frontmatter', {})
+        metadata = fm.get('metadata', {})
         if 'license' in fm:
             output += f"📜 License: {fm['license']}\n"
-        if 'metadata' in fm:
-            meta = fm['metadata']
-            if 'author' in meta:
-                output += f"👤 Author: {meta['author']}\n"
-            if 'version' in meta:
-                output += f"🔢 Version: {meta['version']}\n"
+        if 'author' in metadata:
+            output += f"👤 Author: {metadata['author']}\n"
+        if 'version' in metadata:
+            output += f"🔢 Version: {metadata['version']}\n"
+        aliases = metadata.get('aliases', [])
+        if aliases:
+            output += f"🔗 Aliases: {', '.join(aliases)}\n"
 
         # Check for optional content
         if skill.get('scripts'):

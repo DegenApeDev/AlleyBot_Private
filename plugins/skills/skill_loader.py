@@ -16,6 +16,10 @@ class SkillLoaderMixin:
         super().__init__(config)
         self.skill_dir: str = os.path.join(os.path.dirname(__file__), "skills")
         self.skill_index: Dict[str, Dict[str, Any]] = {}
+        self.plugin_alias_map: Dict[str, str] = {
+            "clawbr_d": "clawbr_debates",
+            # Add more plugin short aliases to full names as needed
+        }
         self.active_skill: Optional[str] = None
         self.skill_context: Optional[str] = None
         self.skill_history: List[Dict[str, Any]] = []
@@ -31,7 +35,6 @@ class SkillLoaderMixin:
             if create_plugin:
                 # Instantiate core plugin with config
                 core_instance = create_plugin(self.config) if hasattr(self, "config") else create_plugin()
-                # Register core commands if any, but at least ensure it's in skill_index
                 print("🔧 Core plugin loaded and registered successfully")
                 # Force index core if not already
                 if "core" not in self.skill_index:
@@ -167,6 +170,11 @@ class SkillLoaderMixin:
     def _resolve_alias(self, query: str) -> Optional[str]:
         """Resolve skill name or alias to canonical skill name"""
         query_lower = query.lower().strip()
+        # Plugin alias map
+        if query_lower in self.plugin_alias_map:
+            candidate = self.plugin_alias_map[query_lower]
+            if candidate in self.skill_index:
+                return candidate
         # Exact match
         if query in self.skill_index:
             return query
@@ -191,51 +199,31 @@ class SkillLoaderMixin:
 
         # Check core availability during skill loading
         if "core" not in self.skill_index:
-            print(f"⚠️ Core plugin unavailable. Cannot load skill '{skill_name}'.")
-            return None
+            self._load_core_plugin()
 
-        # Load from file
-        path = os.path.join(self.skill_dir, f"{skill_name}.md")
-        if os.path.exists(path):
+        info = self.skill_index[skill_name].copy()
+        skill_file = os.path.join(self.skill_dir, f"{skill_name}.md")
+        if os.path.exists(skill_file):
             try:
-                with open(path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)", content, re.DOTALL | re.MULTILINE)
-                if not match:
-                    return None
-                fm_str = match.group(1)
-                body = match.group(2).strip()
-                frontmatter: Dict[str, Any] = {}
-                try:
-                    import yaml
-                    frontmatter = yaml.safe_load(fm_str) or {}
-                except (ImportError, Exception):
-                    # Fallback parser
-                    for line in fm_str.splitlines():
-                        if ":" in line and not line.strip().startswith("#"):
-                            parts = [x.strip() for x in line.split(":", 1)]
-                            if len(parts) == 2:
-                                frontmatter[parts[0]] = parts[1]
-                desc = frontmatter.get("description", self.skill_index.get(skill_name, {}).get("description", ""))
-                return {
-                    "name": skill_name,
-                    "description": desc,
-                    "body": body,
-                    "frontmatter": frontmatter,
-                    "references": frontmatter.get("references", []),
-                }
+                with open(skill_file, "r", encoding="utf-8") as f:
+                    info["full_content"] = f.read()
             except Exception as e:
-                print(f"⚠️ Failed to load skill file {path}: {e}")
-                return None
+                print(f"⚠️ Error loading {skill_file}: {e}")
         else:
-            # For plugin-based skills (like core), return minimal info
-            if skill_name in self.skill_index:
-                info = self.skill_index[skill_name]
-                return {
-                    "name": skill_name,
-                    "description": info.get("description", ""),
-                    "body": "[Plugin-based skill – no markdown file]",
-                    "frontmatter": info.get("metadata", {}),
-                    "references": [],
-                }
-        return None
+            # Assume plugin and load instance
+            try:
+                mod_name = f"plugins.{skill_name}.{skill_name}"
+                plugin_module = importlib.import_module(mod_name)
+                create_plugin = getattr(plugin_module, "create_plugin", None)
+                if callable(create_plugin):
+                    instance = create_plugin(self.config)
+                    info["instance"] = instance
+                    if hasattr(instance, "get_commands"):
+                        info["commands"] = instance.get_commands()
+                    print(f"🔧 Loaded full plugin skill: {skill_name}")
+                else:
+                    print(f"⚠️ No create_plugin in {mod_name}")
+            except Exception as e:
+                print(f"⚠️ Failed to load full plugin skill {skill_name}: {e}")
+                return None
+        return info
