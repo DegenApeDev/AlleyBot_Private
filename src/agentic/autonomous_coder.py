@@ -496,8 +496,61 @@ _coder_instance: Optional[AutonomousCoder] = None
 
 
 def get_autonomous_coder() -> AutonomousCoder:
-    """Get or create autonomous coder singleton"""
+    """Get or create autonomous coder singleton (template-based fallback)"""
     global _coder_instance
     if _coder_instance is None:
         _coder_instance = AutonomousCoder()
     return _coder_instance
+
+
+def get_best_coder(plugin_manager) -> Optional[Any]:
+    """
+    Get the best available autonomous coder.
+    
+    Priority:
+    1. selfimprove plugin's AI-powered coder (full pipeline with validation + sandbox)
+    2. Template-based fallback coder
+    
+    This provides the same pattern used in autonomous_brain.py for skill gap fixes.
+    """
+    if plugin_manager is None:
+        return get_autonomous_coder()
+    
+    selfimprove = plugin_manager.get_plugin('selfimprove')
+    if selfimprove and hasattr(selfimprove, '_generate_code_with_ai'):
+        return selfimprove
+    
+    return get_autonomous_coder()
+
+
+def generate_skill_with_fallback(plugin_manager, spec: SkillSpecification) -> GeneratedSkill:
+    """
+    Generate skill using best available coder (AI or template fallback).
+    
+    This is the unified entry point for autonomous code generation,
+    matching the pattern in autonomous_brain.py for skill gap fixes.
+    """
+    coder = get_best_coder(plugin_manager)
+    
+    # If using selfimprove, call its AI method
+    if hasattr(coder, '_generate_code_with_ai'):
+        task = f"Create skill: {spec.name}\n\nDescription: {spec.description}\nEvidence: {spec.evidence}"
+        code = coder._generate_code_with_ai(task)
+        if code:
+            # Save to draft_skills and return success
+            from pathlib import Path
+            skill_path = Path('sandbox/draft_skills') / spec.id
+            skill_path.mkdir(parents=True, exist_ok=True)
+            (skill_path / 'skill.py').write_text(code)
+            return GeneratedSkill(
+                spec_id=spec.id,
+                skill_name=spec.name,
+                files_created=[str(skill_path / 'skill.py')],
+                skill_path=str(skill_path),
+                generated_at=datetime.now(),
+                status='generated',
+                errors=[]
+            )
+    
+    # Fallback to template-based coder
+    return coder.generate_skill(spec)

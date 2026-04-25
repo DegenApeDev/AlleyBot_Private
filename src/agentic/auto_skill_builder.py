@@ -51,11 +51,9 @@ class AutoSkillBuilder:
         self.built_skills: List[str] = []
         self.skill_usage: Dict[str, int] = {}
         
-        # Get autonomous coder if available
-        self.autonomous_coder = None
-        selfimprove = plugin_manager.get_plugin('selfimprove')
-        if selfimprove and hasattr(selfimprove, '_generate_code_with_ai'):
-            self.autonomous_coder = selfimprove
+        # Get autonomous coder using unified pattern (same as autonomous_brain.py)
+        from src.agentic.autonomous_coder import get_best_coder
+        self.autonomous_coder = get_best_coder(plugin_manager)
         
         # Get skilldoc manager
         from src.agentic.skilldoc_manager import get_skilldoc_manager
