@@ -642,6 +642,7 @@ class ActionRouter:
                 'like': 'like_post',
                 'engage': 'dynamic_engage',
                 'update': 'create_post',  # MoltX doesn't have separate update
+                'browse': None,  # Not implemented
             },
             'moltchan': {
                 'post': 'create_thread',
@@ -768,6 +769,14 @@ class ActionRouter:
         
         # Map action type to plugin-specific method
         method_name = self._map_action_to_method(plugin_name, action_type)
+        
+        # Handle None mappings (actions not implemented)
+        if method_name is None:
+            return {
+                'success': False,
+                'error': f'Action not implemented: {action_type} on {plugin_name}',
+                'stage': 'execution'
+            }
         
         # Execute action
         try:
