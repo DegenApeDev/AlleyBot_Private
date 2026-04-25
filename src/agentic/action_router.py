@@ -637,10 +637,11 @@ class ActionRouter:
         # Action mapping by plugin
         action_map = {
             'moltx': {
-                'post': 'create_post',
+                'post': 'post_command',
                 'reply': 'reply_to_post',
                 'like': 'like_post',
-                'engage': 'dynamic_engage',
+                'engage': 'engage_feed_command',
+                'feed': 'feed_command',
                 'update': 'create_post',  # MoltX doesn't have separate update
                 'browse': None,  # Not implemented
             },
