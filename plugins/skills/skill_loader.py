@@ -4,6 +4,7 @@ Progressive disclosure: load full skill only when needed
 """
 import re
 import os
+import importlib
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
@@ -28,8 +29,10 @@ class SkillLoaderMixin:
         except Exception:
             pass
 
+        self._index_plugins()
+
         if os.path.exists(self.skill_dir):
-            for filename in os.listdir(self.skill_dir):
+            for filename in sorted(os.listdir(self.skill_dir)):
                 if filename.endswith(".md") and not filename.startswith("."):
                     name = filename[:-3]
                     path = os.path.join(self.skill_dir, filename)
@@ -37,27 +40,41 @@ class SkillLoaderMixin:
                     if info:
                         self.skill_index[name] = info
 
-        self._add_core_if_missing()
-
-    def _add_core_if_missing(self):
-        """Dynamically load 'core' plugin if not found"""
-        if "core" in self.skill_index:
+    def _index_plugins(self):
+        """Index available plugins as skills"""
+        plugins_dir = os.path.dirname(os.path.dirname(__file__))
+        if not os.path.exists(plugins_dir):
             return
-        try:
-            from plugins.core.core import PLUGIN_INFO
-            info: Dict[str, Any] = {
-                "description": PLUGIN_INFO.get("description", "Core plugin provides essential functionality."),
-                "metadata": {
-                    "category": "core",
-                    "version": PLUGIN_INFO.get("version", "1.0.0"),
-                    "author": PLUGIN_INFO.get("author", "AlleyBot"),
-                },
-                "aliases": ["core", "base", "system", "main"],
-            }
-            self.skill_index["core"] = info
-            print("🔧 Dynamically loaded core plugin into skill index")
-        except ImportError:
-            print("⚠️ Core plugin not found - basic core skill not available")
+        for entry in sorted(os.listdir(plugins_dir)):
+            full_path = os.path.join(plugins_dir, entry)
+            if not os.path.isdir(full_path) or entry.startswith(".") or entry == "skills":
+                continue
+            mod_name = f"plugins.{entry}.{entry}"
+            try:
+                plugin_module = importlib.import_module(mod_name)
+                info = getattr(plugin_module, "PLUGIN_INFO", None)
+                if not info:
+                    continue
+                skill_name = entry
+                desc = info.get("description", f"{skill_name} plugin")
+                metadata = {
+                    "category": "plugin",
+                    "version": info.get("version", "1.0.0"),
+                    "author": info.get("author", "AlleyBot"),
+                }
+                aliases = [skill_name]
+                name = info.get("name", "")
+                if name and name != skill_name:
+                    aliases.append(name)
+                aliases.extend(info.get("aliases", []))
+                self.skill_index[skill_name] = {
+                    "description": desc,
+                    "metadata": metadata,
+                    "aliases": aliases,
+                }
+                print(f"🔧 Indexed plugin skill: {skill_name}")
+            except Exception as e:
+                print(f"⚠️ Could not index plugin {entry}: {e}")
 
     def _parse_skill_frontmatter(self, path: str) -> Optional[Dict[str, Any]]:
         """Parse frontmatter for skill index (lightweight)"""
@@ -100,7 +117,7 @@ class SkillLoaderMixin:
 
     def _resolve_alias(self, query: str) -> Optional[str]:
         """Resolve skill name or alias to canonical skill name"""
-        query_lower = query.lower()
+        query_lower = query.lower().strip()
         # Exact match
         if query in self.skill_index:
             return query
@@ -112,7 +129,7 @@ class SkillLoaderMixin:
         for name, info in self.skill_index.items():
             aliases = info.get("aliases", [])
             for alias in aliases:
-                if alias.lower() == query_lower:
+                if str(alias).lower() == query_lower:
                     return name
         return None
 
@@ -123,57 +140,63 @@ class SkillLoaderMixin:
             return None
         skill_name = resolved
 
-        # Special handling for core
-        if skill_name == "core":
-            try:
-                from plugins.core.core import PLUGIN_INFO
-                desc = PLUGIN_INFO.get("description", "Core plugin provides essential commands and functionality.")
-                body = """## Core Skill Instructions
-You have access to core plugin commands and utilities.
-Use commands like !help, !status, and other base functions.
-For specific core commands, refer to plugin documentation."""
-                return {
-                    "name": "core",
-                    "description": desc,
-                    "body": body,
-                    "frontmatter": {"category": "core"},
-                    "references": [],
-                }
-            except ImportError:
-                return None
-
         # Load from file
         path = os.path.join(self.skill_dir, f"{skill_name}.md")
-        if not os.path.exists(path):
-            return None
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
-            match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)", content, re.DOTALL | re.MULTILINE)
-            if not match:
-                return None
-            fm_str = match.group(1)
-            body = match.group(2).strip()
-            frontmatter: Dict[str, Any] = {}
+        if os.path.exists(path):
             try:
-                import yaml
-                frontmatter = yaml.safe_load(fm_str) or {}
-            except (ImportError, Exception):
-                # Fallback parser
-                for line in fm_str.splitlines():
-                    if ":" in line and not line.strip().startswith("#"):
-                        parts = [x.strip() for x in line.split(":", 1)]
-                        if len(parts) == 2:
-                            frontmatter[parts[0]] = parts[1]
-            desc = frontmatter.get("description", self.skill_index.get(skill_name, {}).get("description", ""))
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)", content, re.DOTALL | re.MULTILINE)
+                if not match:
+                    return None
+                fm_str = match.group(1)
+                body = match.group(2).strip()
+                frontmatter: Dict[str, Any] = {}
+                try:
+                    import yaml
+                    frontmatter = yaml.safe_load(fm_str) or {}
+                except (ImportError, Exception):
+                    # Fallback parser
+                    for line in fm_str.splitlines():
+                        if ":" in line and not line.strip().startswith("#"):
+                            parts = [x.strip() for x in line.split(":", 1)]
+                            if len(parts) == 2:
+                                frontmatter[parts[0]] = parts[1]
+                desc = frontmatter.get("description", self.skill_index.get(skill_name, {}).get("description", ""))
+                return {
+                    "name": skill_name,
+                    "description": desc,
+                    "body": body,
+                    "frontmatter": frontmatter,
+                    "references": frontmatter.get("references", []),
+                }
+            except Exception:
+                return None
+
+        # Try plugin
+        mod_name = f"plugins.{skill_name}.{skill_name}"
+        try:
+            plugin_module = importlib.import_module(mod_name)
+            info = getattr(plugin_module, "PLUGIN_INFO", None)
+            if not info:
+                return None
+            desc = info.get("description", "")
+            body = f"""## {skill_name.replace('_', ' ').replace('-', ' ').title()} Skill Instructions
+
+You have access to the {skill_name} plugin.
+
+Plugin Description: {desc}
+
+Use commands from this plugin as needed.
+For available commands: !help {skill_name}"""
             return {
                 "name": skill_name,
                 "description": desc,
                 "body": body,
-                "frontmatter": frontmatter,
-                "references": frontmatter.get("references", []),
+                "frontmatter": {"category": "plugin", "plugin": skill_name},
+                "references": info.get("references", []),
             }
-        except Exception:
+        except (ImportError, AttributeError):
             return None
 
     def find_skill_for_task(self, task_description: str) -> Optional[str]:
@@ -187,40 +210,33 @@ For specific core commands, refer to plugin documentation."""
             return resolved
 
         task_lower = task_description.lower()
+        task_words = set(task_lower.split())
         best_match = None
         best_score = 0
 
-        task_words = set(task_lower.split())
-
         for name, info in self.skill_index.items():
-            desc = info.get("description", "").lower()
-            score = 0
-
-            # Keyword matches in description
-            desc_words = set(desc.split())
-            overlap = task_words & desc_words
-            score += len(overlap)
+            desc_lower = info.get("description", "").lower()
+            desc_words = set(desc_lower.split())
+            score = len(task_words & desc_words)
 
             # Bonus for name matches
-            name_check = name.replace("-", " ")
-            if name_check.lower() in task_lower:
-                score += 5
+            name_check = name.replace("-", " ").replace("_", " ")
+            name_words = set(name_check.lower().split())
+            score += len(task_words & name_words) * 2
 
-            # Category match
-            meta = info.get("metadata", {})
-            category = meta.get("category", "").lower()
-            if category in task_lower:
+            name_lower = name.lower()
+            if name_lower in task_lower:
                 score += 3
 
-            # Alias matches
-            aliases = info.get("aliases", [])
-            for alias in aliases:
-                alias_lower = alias.lower()
-                if alias_lower in task_lower:
-                    score += 6
+            # Prioritize core and plugins
+            category = info.get("metadata", {}).get("category", "")
+            if category == "core":
+                score += 5
+            elif category == "plugin":
+                score += 2
 
             if score > best_score:
                 best_score = score
                 best_match = name
 
-        return best_match if best_score > 0 else None
+        return best_match

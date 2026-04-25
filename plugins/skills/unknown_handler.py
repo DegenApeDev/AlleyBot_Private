@@ -1,17 +1,39 @@
 # plugins/skills/unknown_handler.py
 from plugin_manager import AlleyBotPlugin
 from typing import Dict
+from difflib import get_close_matches
 
 class UnknownHandlerPlugin(AlleyBotPlugin):
     def __init__(self, config):
         super().__init__(config)
         self.name = "unknown_handler"
-        self.version = "1.0.0"
+        self.version = "1.1.0"
         self.plugin_aliases = {
             'clawbr_d': 'clawbr_debates',
             'deb': 'clawbr_debates',
             'd': 'clawbr_debates',
+            'debate': 'clawbr_debates',
+            'debates': 'clawbr_debates',
+            'cb': 'clawbr_debates',
+            'c': 'chat',
+            'ch': 'chat',
+            'chatgpt': 'chat',
+            'gpt': 'chat',
+            'convo': 'chat',
+            'talk': 'chat',
         }
+        self.known_plugins = [
+            "help",
+            "chat",
+            "clawbr_debates",
+            "image_gen",
+            "code_exec",
+            "web_search",
+            "unknown",
+            "retry",
+            "correct",
+            "reset",
+        ]
         self.failure_counts = {}
         self.last_unknown = None
 
@@ -25,6 +47,7 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
             "unknown": self.handle_unknown,
             "retry": self.retry_last,
             "correct": self.self_correct,
+            "reset": self.reset_failures,
         }
 
     def handle_unknown(self, args: list) -> str:
@@ -34,6 +57,7 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
         full_command = args[0]
         command_name = full_command.strip().lower()
         params_str = " ".join(args[1:]) if len(args) > 1 else ""
+        unknown_input = " ".join(args)
 
         # Resolve aliases before treating as unknown
         if command_name in self.plugin_aliases:
@@ -45,20 +69,20 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
             return f"'{full_command}' is an alias for '{real_command}'. Try {suggestion}."
 
         # Store original
-        self.last_unknown = " ".join(args)
+        self.last_unknown = unknown_input
 
         # Track failures per command
         if command_name not in self.failure_counts:
             self.failure_counts[command_name] = 0
         self.failure_counts[command_name] += 1
         current_failures = self.failure_counts[command_name]
-        print(f"[UnknownHandler] Handling unknown action: '{self.last_unknown}'. Failure count for '{command_name}': {current_failures}")
+        print(f"[UnknownHandler] Handling unknown action: '{unknown_input}'. Failure count for '{command_name}': {current_failures}")
 
         if current_failures >= 3:
             return self._trigger_fallback(command_name)
 
-        suggestions = self._generate_suggestions(self.last_unknown)
-        return f"Sorry, '{self.last_unknown}' is unknown to me. {suggestions} Failure #{current_failures}/3 before fallback."
+        suggestions = self._generate_suggestions(unknown_input)
+        return f"Sorry, '{unknown_input}' is unknown. {suggestions} Failure #{current_failures}/3 before fallback."
 
     def _generate_suggestions(self, unknown_input: str) -> str:
         lower_input = unknown_input.lower()
@@ -73,26 +97,32 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
                 command_lower.startswith(alias) or
                 alias.startswith(command_lower)):
                 suggestions.append(f"'{orig_cmd}' might be '{real}'? Try '!{real}'.")
-                break
 
-        if "help" in lower_input:
+        # Keyword-based suggestions
+        if "help" in lower_input or "list" in lower_input:
             suggestions.append("Try '!help' for available commands.")
-        if any(word in lower_input for word in ["chat", "talk"]):
+        if any(word in lower_input for word in ["chat", "talk", "convo"]):
             suggestions.append("Try the 'chat' skill for conversation.")
+
+        # Fuzzy matching on known plugins
+        matches = get_close_matches(command_lower, self.known_plugins, n=3, cutoff=0.6)
+        if matches:
+            sugg = ", ".join(f"!{m}" for m in matches)
+            suggestions.append(f"Similar: {sugg}")
 
         if suggestions:
             return "Suggestions: " + "; ".join(suggestions)
         return "Try '!help' or describe what you need."
 
     def _trigger_fallback(self, command_key: str) -> str:
-        print(f"[UnknownHandler] Repeated failures (max 3 attempts) for '{command_key}' detected. Triggering fallback to core plugin and reset.")
-        self.failure_counts.pop(command_key, None)
+        print(f"[UnknownHandler] Repeated failures (max 3) for '{command_key}'. Triggering fallback and full reset.")
+        self.failure_counts.clear()
         self.last_unknown = None
-        return f"Too many unknown actions for '{command_key}' (max 3 retries exceeded). Resetting context. Fallback to core plugin. How can I assist you now? Try '!help'."
+        return f"Max retries (3) exceeded for '{command_key}'. All counters reset. Fallback to chat. Try '!chat {command_key}' or '!help'."
 
     def retry_last(self, args: list) -> str:
         if not self.last_unknown:
-            return "No previous unknown action to retry."
+            return "No previous unknown to retry. Use !unknown <cmd> first."
         print(f"[UnknownHandler] Retry requested for: '{self.last_unknown}'.")
         last_key = self.get_command_key(self.last_unknown)
         if last_key in self.failure_counts:
@@ -100,23 +130,38 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
             if self.failure_counts[last_key] <= 0:
                 self.failure_counts.pop(last_key)
         correction = self._attempt_correction(self.last_unknown)
-        current = self.failure_counts.get(last_key, 0)
         if "Could not auto-correct" not in correction:
-            return f"Retry with correction: {correction}"
+            self.last_unknown = None
+            return f"Retry corrected: {correction}"
         else:
+            current = self.failure_counts.get(last_key, 0)
             return f"Retry failed: still unknown. {correction} Failures now: {current}/3"
 
     def self_correct(self, args: list) -> str:
-        print("[UnknownHandler] Self-correction mechanism activated.")
-        if not self.last_unknown:
-            return "No recent error to correct. Use after an 'unknown' event."
-        last_key = self.get_command_key(self.last_unknown)
-        if last_key in self.failure_counts:
-            self.failure_counts[last_key] -= 1
-            if self.failure_counts[last_key] <= 0:
-                self.failure_counts.pop(last_key)
-        correction = self._attempt_correction(self.last_unknown)
-        return f"Self-correcting '{self.last_unknown}': {correction}"
+        to_correct = " ".join(args) if args else self.last_unknown
+        if not to_correct:
+            return "Nothing to correct. Use !correct <maybe_cmd> or after !unknown."
+        print(f"[UnknownHandler] Self-correcting: '{to_correct}'.")
+        command_key = self.get_command_key(to_correct)
+        if command_key in self.failure_counts:
+            self.failure_counts[command_key] -= 1
+            if self.failure_counts[command_key] <= 0:
+                self.failure_counts.pop(command_key)
+        correction = self._attempt_correction(to_correct)
+        if "Could not auto-correct" not in correction:
+            if to_correct == self.last_unknown:
+                self.last_unknown = None
+            return f"Corrected: {correction}"
+        else:
+            current = self.failure_counts.get(command_key, 0)
+            return f"Correction failed: {correction} Failures: {current}/3"
+
+    def reset_failures(self, args: list) -> str:
+        prev_count = len(self.failure_counts)
+        self.failure_counts.clear()
+        self.last_unknown = None
+        print(f"[UnknownHandler] Reset {prev_count} failure counts.")
+        return f"Reset {prev_count} failure counters and last unknown. Fresh start!"
 
     def _attempt_correction(self, unknown_input: str) -> str:
         # Check aliases first
@@ -134,24 +179,41 @@ class UnknownHandlerPlugin(AlleyBotPlugin):
                     corrected += f" {params}"
                 return f"Corrected to '{corrected}'. Try {use_cmd}."
 
-        # Simple spell check or intent guess
-        lower_input = unknown_input.lower().strip()
+        # Spell check / intent mappings
+        lower_input = unknown_input.lower()
         corrections = {
             "helo": "hello - use '!chat hello'",
             "helllo": "hello - use '!chat hello'",
             "hi": "hello - use '!chat hi'",
             "bye": "goodbye - use '!chat bye'",
             "goodbye": "goodbye - use '!chat goodbye'",
+            "debate": "clawbr_debates - use '!clawbr_debates <topic>'",
+            "image": "image_gen - use '!image_gen <prompt>'",
+            "code": "code_exec - use '!code_exec <code>'",
+            "search": "web_search - use '!web_search <query>'",
         }
         for key, corr in corrections.items():
             if key in lower_input:
                 return corr
-        return "Could not auto-correct. Please rephrase your request."
+
+        # Fuzzy correction on known plugins
+        command_lower = self.get_command_key(unknown_input)
+        matches = get_close_matches(command_lower, self.known_plugins, n=1, cutoff=0.7)
+        if matches:
+            real = matches[0]
+            parts = unknown_input.split(maxsplit=1)
+            params = parts[1] if len(parts) > 1 else ""
+            use_cmd = f"!{real}"
+            if params:
+                use_cmd += f" {params}"
+            return f"Maybe '{real}'? Try {use_cmd}."
+
+        return "Could not auto-correct. Check spelling or try '!help'."
 
 PLUGIN_INFO = {
     "name": "unknown_handler",
-    "version": "1.0.0",
-    "description": "Handles unknown actions, plugin aliases (e.g., clawbr_d -> clawbr_debates), per-command retry logic (max 3 attempts per command), fallback to core plugin, self-correction, partial suggestions, and dispatching logic to prevent repeated failures across commands.",
+    "version": "1.1.0",
+    "description": "Improved unknown handler with expanded plugin aliases (e.g., 'clawbr_d' -> 'clawbr_debates'), fuzzy matching via difflib, per-command retry logic (max 3 attempts), better error recovery in retry/correct/reset, fallback with full reset, comprehensive suggestions, and auto-correction.",
     "author": "AlleyBot"
 }
 
