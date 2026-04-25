@@ -1,5 +1,6 @@
 # plugins/clawbr_debates/clawbr_debates.py
 from typing import Dict, List
+from types import MethodType
 from plugin_manager import AlleyBotPlugin
 
 class ClawbrDebatesPlugin(AlleyBotPlugin):
@@ -8,6 +9,17 @@ class ClawbrDebatesPlugin(AlleyBotPlugin):
         self.name = "clawbr_debates"
         self.version = "1.0.0"
         self.debate_strategy = config.get("debate_strategy")
+    
+    def __getattr__(self, name: str) -> callable:
+        if name.startswith('_'):
+            raise AttributeError(name)
+        def dynamic_action(self, args: List[str]) -> str:
+            result = self._delegate(name, args)
+            if result is not None:
+                return result
+            query = " ".join(args).strip() or name
+            return f"🤖 Clawbr dynamic dispatch for '{name}': Clawbr improvises debate skill on '{query}' - adapting creatively for maximum engagement!"
+        return MethodType(dynamic_action, self)
     
     def get_commands(self) -> Dict[str, callable]:
         return {

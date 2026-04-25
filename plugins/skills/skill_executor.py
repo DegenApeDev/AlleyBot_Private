@@ -10,17 +10,29 @@ from plugin_manager import AlleyBotPlugin
 
 
 class ActionRouter:
-    def __init__(self, command_executor: Optional[Callable[[str, List[str]], str]] = None):
+    def __init__(
+        self,
+        command_executor: Optional[Callable[[str, List[str]], str]] = None,
+        unknown_handler: Optional[Callable[[str, List[str]], str]] = None,
+    ):
         self.command_executor = command_executor
+        self.unknown_handler = unknown_handler
 
     def _execute_via_plugin(self, command: str, args: List[str]) -> str:
         if callable(self.command_executor):
             try:
-                return self.command_executor(command, args)
+                result = self.command_executor(command, args)
+                return result
             except Exception as e:
-                return f"Error executing plugin command '{command}': {str(e)}"
+                print(f"Plugin execution error for '{command}': {e}")
+                if callable(self.unknown_handler):
+                    return self.unknown_handler(command, args)
+                else:
+                    return f"Error executing plugin command '{command}': {str(e)}"
+        elif callable(self.unknown_handler):
+            return self.unknown_handler(command, args)
         else:
-            return f"[DRY-RUN: execute plugin command '{command}' with args {args}]"
+            return f"[DRY-RUN: would execute plugin command '{command}' with args {args}]"
 
 
 class SkillExecutorPlugin(AlleyBotPlugin):
@@ -29,7 +41,8 @@ class SkillExecutorPlugin(AlleyBotPlugin):
         self.name = "skill_executor"
         self.version = "1.0.0"
         self.command_executor: Optional[Callable[[str, List[str]], str]] = config.get("command_executor")
-        self.action_router = ActionRouter(self.command_executor)
+        self.unknown_handler: Optional[Callable[[str, List[str]], str]] = config.get("unknown_handler")
+        self.action_router = ActionRouter(self.command_executor, self.unknown_handler)
 
     def get_commands(self) -> Dict[str, Callable]:
         return {

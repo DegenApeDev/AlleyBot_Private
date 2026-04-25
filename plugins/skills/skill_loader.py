@@ -26,7 +26,7 @@ class SkillLoaderMixin:
         self.command_aliases: Dict[str, str] = {}
         if not hasattr(self, 'commands'):
             self.commands: Dict[str, Callable[[List[str]], str]] = {}
-        priority_skills = ['core', 'debate', 'unknown_handler']
+        priority_skills = ['core', 'unknown_handler', 'debate']
         for skill_name in priority_skills:
             self.load_skill(skill_name)
 
@@ -74,7 +74,13 @@ class SkillLoaderMixin:
         return current
 
     def get_command_handler(self, cmd: str) -> Optional[Callable[[List[str]], str]]:
-        """Get handler with dynamic alias resolution"""
+        """Get handler with dynamic alias resolution and lazy loading"""
+        resolved_cmd = self.resolve_command_alias(cmd)
+        if resolved_cmd in self.commands:
+            return self.commands[resolved_cmd]
+        # Lazy load the skill corresponding to this command
+        self.load_skill(resolved_cmd)
+        # Re-resolve and check again after potential load and new aliases
         resolved_cmd = self.resolve_command_alias(cmd)
         if resolved_cmd in self.commands:
             return self.commands[resolved_cmd]
