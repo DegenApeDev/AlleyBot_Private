@@ -331,10 +331,10 @@ class DefaultGoalSeeder:
                 )
                 
                 if gm_v2.add_goal(goal):
-                        seeded_count += 1
-                        logger.info(f"🌱 Seeded default goal: {goal_spec['title']}")
-                    else:
-                        logger.debug(f"Goal already exists or add failed: {goal_id}")
+                    seeded_count += 1
+                    logger.info(f"🌱 Seeded default goal: {goal_spec['title']}")
+                else:
+                    logger.debug(f"Goal already exists or add failed: {goal_id}")
                     
                 except Exception as e:
                     logger.error(f"Failed to seed goal {goal_id}: {e}")
