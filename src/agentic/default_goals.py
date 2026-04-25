@@ -9,6 +9,8 @@ from typing import List, Dict, Any
 from datetime import datetime, timedelta
 import logging
 
+from src.agentic.goal_manager import GoalStatus
+
 logger = logging.getLogger(__name__)
 
 
