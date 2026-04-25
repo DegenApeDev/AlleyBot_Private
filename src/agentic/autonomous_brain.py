@@ -57,10 +57,10 @@ class BrainConfig:
     """Configuration for autonomous brain operation"""
     enabled: bool = True
     mode: str = 'normal'  # conservative, normal, aggressive
-    cycle_interval_minutes: int = 30
+    cycle_interval_minutes: int = 10  # 10 min default for proactive behavior
     max_actions_per_hour: int = 50
     min_confidence: float = 0.35
-    require_owner_approval: bool = False  # Always False - AlleyBot decides autonomously
+    require_owner_approval: bool = False  # HITL still active for high-risk via ActionRouter
     
     # Goal Quota System - Enforce minimum productivity
     min_goals_per_hour: int = 3  # MUST complete at least 3 goals per hour
@@ -79,11 +79,11 @@ class BrainConfig:
             'conservative': cls(
                 enabled=True,
                 mode='conservative',
-                cycle_interval_minutes=60,
+                cycle_interval_minutes=30,
                 max_actions_per_hour=20,
                 min_confidence=0.5,
                 require_owner_approval=False,
-                min_goals_per_hour=2,  # Lower quota for conservative
+                min_goals_per_hour=2,
                 goal_quota_strict=True,
                 proactive_goal_generation=True,
                 curiosity_drive_enabled=True
@@ -91,11 +91,11 @@ class BrainConfig:
             'normal': cls(
                 enabled=True,
                 mode='normal',
-                cycle_interval_minutes=30,
+                cycle_interval_minutes=10,
                 max_actions_per_hour=50,
                 min_confidence=0.35,
                 require_owner_approval=False,
-                min_goals_per_hour=3,  # Standard 3 goals/hour
+                min_goals_per_hour=3,
                 goal_quota_strict=True,
                 proactive_goal_generation=True,
                 curiosity_drive_enabled=True
@@ -103,11 +103,11 @@ class BrainConfig:
             'aggressive': cls(
                 enabled=True,
                 mode='aggressive',
-                cycle_interval_minutes=15,
+                cycle_interval_minutes=5,
                 max_actions_per_hour=100,
                 min_confidence=0.25,
                 require_owner_approval=False,
-                min_goals_per_hour=5,  # Higher quota for aggressive
+                min_goals_per_hour=5,
                 goal_quota_strict=True,
                 proactive_goal_generation=True,
                 curiosity_drive_enabled=True,
@@ -2599,24 +2599,20 @@ class AutonomousBrain(AGISocialMixin):
             if hasattr(agi_kernel, 'episodic_memory'):
                 recent_failures = []
                 
-                # Get recent episodes
+                # Get recent failure episodes
                 try:
-                    episodes = agi_kernel.episodic_memory.get_recent_episodes(
+                    recent_failures = agi_kernel.episodic_memory.get_recent_episodes(
                         filters={'outcome': 'failure'},
                         limit=50
                     )
-                    recent_failures = episodes if episodes else []
-                except (AttributeError, TypeError) as e:
-                    logger.warning(f"Episodic memory query failed: {e}, using fallback")
-                    # Fallback: try alternative method
-                    if hasattr(agi_kernel.episodic_memory, 'episodes'):
-                        all_episodes = agi_kernel.episodic_memory.episodes[-50:]
-                        recent_failures = [e for e in all_episodes if e.outcome.get('success') == False]
+                except Exception as e:
+                    logger.warning(f"Episodic memory query failed: {e}")
+                    recent_failures = []
                 
                 # Group failures by action type
                 failure_patterns = {}
                 for episode in recent_failures:
-                    action_type = episode.context.get('action_type', 'unknown')
+                    action_type = episode.action
                     if action_type not in failure_patterns:
                         failure_patterns[action_type] = []
                     failure_patterns[action_type].append(episode)
@@ -2626,7 +2622,7 @@ class AutonomousBrain(AGISocialMixin):
                     if len(failures) >= 3:  # 3+ failures = skill gap
                         error_patterns = []
                         for f in failures:
-                            error = f.outcome.get('error', 'Unknown error')
+                            error = f.outcome
                             if error not in error_patterns:
                                 error_patterns.append(error)
                         

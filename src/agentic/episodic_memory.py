@@ -249,22 +249,77 @@ class EpisodicMemoryStore:
         except Exception as e:
             print(f"⚠️ Failed to load episodic memory: {e}")
     
-    def get_recent_episodes(self, limit: int = 10) -> List[EpisodicMemory]:
+    def get_recent_episodes(self, limit: int = 10, filters: Optional[Dict] = None) -> List[EpisodicMemory]:
         """
-        Get most recent episodic memories.
+        Get most recent episodic memories, optionally filtered.
         
         Args:
             limit: Maximum number of memories to return
+            filters: Optional dict of field:value pairs to filter by.
+                     Supported keys: 'outcome' (str match or 'failure' matches negative valence),
+                     'action' (substring match), 'context' (substring match),
+                     'min_valence' (float), 'max_valence' (float)
         
         Returns:
             List of recent episodic memories, sorted by timestamp (newest first)
         """
+        result = self.memories
+
+        if filters:
+            for key, value in filters.items():
+                if key == 'outcome':
+                    if value == 'failure':
+                        result = [m for m in result if m.emotional_valence < -0.3]
+                    elif value == 'success':
+                        result = [m for m in result if m.emotional_valence > 0.3]
+                    else:
+                        result = [m for m in result if value.lower() in m.outcome.lower()]
+                elif key == 'action':
+                    result = [m for m in result if str(value).lower() in m.action.lower()]
+                elif key == 'context':
+                    result = [m for m in result if str(value).lower() in m.context.lower()]
+                elif key == 'min_valence':
+                    result = [m for m in result if m.emotional_valence >= float(value)]
+                elif key == 'max_valence':
+                    result = [m for m in result if m.emotional_valence <= float(value)]
+
         sorted_memories = sorted(
-            self.memories,
+            result,
             key=lambda m: m.timestamp,
             reverse=True
         )
         return sorted_memories[:limit]
+
+    def record_episode(self, action_type: str = '', context=None, outcome=None,
+                       success: bool = True, emotional_valence: float = None,
+                       behavior_delta: Optional[Dict[str, float]] = None,
+                       trigger_patterns: Optional[List[str]] = None) -> str:
+        """
+        Convenience alias for record() that accepts the legacy episode schema.
+
+        Handles both string and dict values for context/outcome by converting
+        dicts to human-readable strings.
+        """
+        if isinstance(context, dict):
+            context = ', '.join(f'{k}: {v}' for k, v in context.items())
+        if isinstance(outcome, dict):
+            outcome = ', '.join(f'{k}: {v}' for k, v in outcome.items())
+
+        if emotional_valence is None:
+            emotional_valence = 0.5 if success else -0.5
+
+        return self.record(
+            context=context or '',
+            action=action_type,
+            outcome=outcome or '',
+            emotional_valence=emotional_valence,
+            behavior_delta=behavior_delta,
+            trigger_patterns=trigger_patterns,
+        )
+
+    def get_all_memories(self) -> List[EpisodicMemory]:
+        """Return all stored episodic memories."""
+        return list(self.memories)
     
     def get_stats(self) -> Dict:
         """Get statistics about episodic memory"""

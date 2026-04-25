@@ -155,10 +155,17 @@ class EventRunner:
                 topic = event.payload.get('topic', 'AI agents and automation')
                 print(f"📝 Creating post about: {topic}")
                 
-                # DISABLED: Remove repetitive "Autonomous thought" posts from Moltx
-                # Moltx posting is disabled to prevent spam
                 if moltx_available:
-                    print(f"⚠️  Moltx posting disabled - preventing spam")
+                    try:
+                        moltx_plugin = self.core.plugin_manager.plugins['moltx']
+                        post_result = moltx_plugin.create_post(topic=topic)
+                        print(f"✅ Moltx post created: {post_result}")
+                        self.activity_logger.log_activity('post', 'moltx', {
+                            'topic': topic,
+                            'result': str(post_result)[:100]
+                        })
+                    except Exception as e:
+                        print(f"⚠️  Moltx post creation failed: {e}")
                 
             elif task == 'browse_and_engage':
                 # Browse feed and engage

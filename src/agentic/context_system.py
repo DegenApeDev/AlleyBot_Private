@@ -296,10 +296,10 @@ class ContextSystem:
                 episodes = episodic.get_recent_episodes(limit=10)
                 return [
                     {
-                        'action': ep.get('action', 'unknown'),
-                        'timestamp': ep.get('timestamp', ''),
-                        'outcome': ep.get('outcome', {}),
-                        'success': ep.get('outcome', {}).get('success', False)
+                        'action': ep.action,
+                        'timestamp': ep.timestamp.isoformat() if ep.timestamp else '',
+                        'outcome': ep.outcome,
+                        'success': ep.emotional_valence > 0
                     }
                     for ep in episodes
                 ]

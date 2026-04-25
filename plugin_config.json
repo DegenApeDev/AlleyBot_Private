@@ -7,9 +7,9 @@
     }
   },
   "content": {
-    "enabled": false,
+    "enabled": true,
     "config": {
-      "auto_posting": false,
+      "auto_posting": true,
       "post_interval": 2
     }
   },
@@ -45,7 +45,7 @@
   "moltbookai": {
     "enabled": true,
     "config": {
-      "auto_posting": false,
+      "auto_posting": true,
       "auto_browse": true,
       "engagement_enabled": true
     }
@@ -93,7 +93,7 @@
   "selfimprove": {
     "enabled": true,
     "config": {
-      "auto_improve": false,
+      "auto_improve": true,
       "self_improvement": true
     }
   },
@@ -103,7 +103,7 @@
       "auto_engagement": true,
       "debate_seeker": true,
       "auto_like": true,
-      "auto_follow": false,
+      "auto_follow": true,
       "personality": "helpful AI agent",
       "debate_style": "logical"
     }
@@ -117,7 +117,7 @@
         "wss://relay.damus.io",
         "wss://nos.lol"
       ],
-      "auto_engagement": false,
+      "auto_engagement": true,
       "wallet_enabled": true
     }
   },
@@ -125,7 +125,7 @@
     "enabled": true,
     "config": {
       "mcp_server": "npx clawnch-mcp-server",
-      "auto_token_launch": false,
+      "auto_token_launch": true,
       "molten_network_enabled": true,
       "clawnx_enabled": true
     }
@@ -133,8 +133,8 @@
   "brain": {
     "enabled": true,
     "config": {
-      "auto_start": false,
-      "cycle_interval": 300,
+      "auto_start": true,
+      "cycle_interval": 600,
       "telegram_notify": true
     }
   },
@@ -148,7 +148,7 @@
       "port": 7002,
       "host": "0.0.0.0",
       "base_url": "https://tasks.apeshit.fun",
-      "auto_start": false,
+      "auto_start": true,
       "rate_limit_per_minute": 10,
       "rate_limit_per_hour": 100,
       "min_reputation": 0,

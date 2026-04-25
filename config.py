@@ -22,5 +22,11 @@ SOL_WALLET = os.getenv('SOL_WALLET')
 # Base network RPC
 BASE_RPC_URL = os.getenv('BASE_RPC_URL', 'https://mainnet.base.org')
 
+# Autonomous brain configuration
+AUTO_START_BRAIN = os.getenv('AUTO_START_BRAIN', 'true').lower() == 'true'
+BRAIN_MODE = os.getenv('BRAIN_MODE', 'normal')
+BRAIN_AUTO_RESTART = os.getenv('BRAIN_AUTO_RESTART', 'true').lower() == 'true'
+TRADING_ENABLED = os.getenv('TRADING_ENABLED', 'false').lower() == 'true'
+
 # Legacy support
 WALLET_ADDRESS = BTC_WALLET

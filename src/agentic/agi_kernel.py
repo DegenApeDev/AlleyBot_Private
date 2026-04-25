@@ -82,7 +82,7 @@ class AGIKernel:
             'social': {'enabled': True, 'trust_tier': 'medium', 'risk_level': 'medium'},
             'content': {'enabled': True, 'trust_tier': 'medium', 'risk_level': 'medium'},
             'analysis': {'enabled': True, 'trust_tier': 'high', 'risk_level': 'low'},
-            'market': {'enabled': False, 'trust_tier': 'low', 'risk_level': 'high'},
+            'market': {'enabled': True, 'trust_tier': 'medium', 'risk_level': 'high'},
             # BOUNDED SELF-IMPROVEMENT: Enabled with conservative constraints
             # Only allows skill building when:
             # 1. Repeated evidence (2+ failures) shows capability gap
