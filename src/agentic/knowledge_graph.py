@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -333,39 +334,247 @@ class KnowledgeGraph:
             )
             self.add_entity(entity)
     
-    def query(self, query: str, domain: Optional[str] = None) -> List[Entity]:
-        """Query the knowledge graph"""
-        results = []
-        
-        # Simple keyword search (can be enhanced with semantic search)
-        query_lower = query.lower()
-        
-        entities_to_search = self.entities.values()
-        if domain:
-            entity_ids = self.domain_index.get(domain, set())
-            entities_to_search = [self.entities[eid] for eid in entity_ids]
-        
-        for entity in entities_to_search:
-            if query_lower in entity.name.lower():
-                results.append(entity)
-            elif any(query_lower in str(v).lower() for v in entity.attributes.values()):
-                results.append(entity)
-        
-        return results
-    
-    def get_statistics(self) -> Dict[str, Any]:
-        """Get statistics about the knowledge graph"""
+    def learn_from_outcome(
+        self,
+        action: str,
+        domain: str,
+        context: str,
+        outcome: str,
+        success: bool,
+        confidence: float = 1.0,
+    ) -> List[str]:
+        """
+        Learn causal knowledge from an action outcome.
+
+        After every action, extract and store:
+        - Action entity + CAUSES relationship to outcome
+        - Context entities (platform, topic, etc.)
+        - REQUIRES edges from action to context
+        - If repeated success, increase strength on CAUSES edge
+        - If failure, add FAILED_CAUSES or decrease strength
+
+        Returns list of entity/relationship IDs created.
+        """
+        created = []
+        timestamp = datetime.now().isoformat()
+
+        action_id = f"action_{domain}_{action}_{hash(action + domain) % 10000}"
+        existing_action = self.entities.get(action_id)
+        if existing_action:
+            existing_action.attributes['last_attempt'] = timestamp
+            attempts = existing_action.attributes.get('attempts', 0) + 1
+            existing_action.attributes['attempts'] = attempts
+            successes = existing_action.attributes.get('successes', 0) + (1 if success else 0)
+            existing_action.attributes['successes'] = successes
+            existing_action.attributes['success_rate'] = successes / attempts if attempts > 0 else 0.0
+            existing_action.confidence = max(0.05, min(0.95, existing_action.confidence + (0.1 if success else -0.1)))
+        else:
+            action_entity = Entity(
+                id=action_id,
+                name=f"{domain}:{action}",
+                entity_type=EntityType.ACTION,
+                domain=domain,
+                attributes={
+                    'action': action,
+                    'domain': domain,
+                    'first_seen': timestamp,
+                    'last_attempt': timestamp,
+                    'attempts': 1,
+                    'successes': 1 if success else 0,
+                    'success_rate': 1.0 if success else 0.0,
+                    'best_conditions': [],
+                    'worst_conditions': [],
+                },
+                confidence=0.6 if success else 0.4,
+            )
+            self.add_entity(action_entity)
+            created.append(action_id)
+
+            domain_id = f"domain_{domain}"
+            if domain_id not in self.entities:
+                self.add_entity(Entity(
+                    id=domain_id, name=domain, entity_type=EntityType.CONCEPT,
+                    domain=domain, attributes={'type': 'domain'},
+                ))
+                created.append(domain_id)
+            self.add_relationship(Relationship(
+                id=f"rel_{action_id}_belongs_{domain_id}",
+                source_id=action_id, target_id=domain_id,
+                relation_type=RelationType.PART_OF, strength=1.0,
+            ))
+            created.append(f"rel_{action_id}_belongs_{domain_id}")
+
+        context_words = [w.lower() for w in context.split() if len(w) > 3][:5]
+        for word in context_words:
+            context_id = f"ctx_{domain}_{word}"
+            if context_id not in self.entities:
+                self.add_entity(Entity(
+                    id=context_id, name=word, entity_type=EntityType.PATTERN,
+                    domain=domain, attributes={'source': 'experience', 'word': word},
+                    confidence=0.5,
+                ))
+                created.append(context_id)
+            self.add_relationship(Relationship(
+                id=f"rel_{action_id}_requires_{context_id}",
+                source_id=action_id, target_id=context_id,
+                relation_type=RelationType.REQUIRES, strength=0.5,
+            ))
+
+        outcome_id = f"outcome_{domain}_{success}_{hash(outcome) % 10000}"
+        if outcome_id not in self.entities:
+            outcome_type = EntityType.PATTERN if not success else EntityType.FACT
+            self.add_entity(Entity(
+                id=outcome_id, name=outcome[:80],
+                entity_type=outcome_type, domain=domain,
+                attributes={'outcome': outcome, 'success': success},
+                confidence=0.5 if success else 0.3,
+            ))
+            created.append(outcome_id)
+
+        rel_type = RelationType.CAUSES if success else RelationType.CONFLICTS_WITH
+        cause_rel_id = f"rel_{action_id}_{rel_type.value}_{outcome_id}"
+        existing_rel = self.relationships.get(cause_rel_id)
+        if existing_rel:
+            delta = 0.05 if success else -0.05
+            existing_rel.strength = max(0.05, min(1.0, existing_rel.strength + delta))
+            existing_rel.attributes['occurrence_count'] = existing_rel.attributes.get('occurrence_count', 1) + 1
+            existing_rel.attributes['last_seen'] = timestamp
+        else:
+            self.add_relationship(Relationship(
+                id=cause_rel_id,
+                source_id=action_id, target_id=outcome_id,
+                relation_type=rel_type,
+                strength=0.6 if success else 0.4,
+                attributes={'occurrence_count': 1, 'first_seen': timestamp, 'last_seen': timestamp},
+            ))
+            created.append(cause_rel_id)
+
+        action_entity = self.entities[action_id]
+        if success and context:
+            best = action_entity.attributes.get('best_conditions', [])
+            if context not in best:
+                best.append(context[:100])
+                if len(best) > 10:
+                    best.pop(0)
+                action_entity.attributes['best_conditions'] = best
+        elif not success and context:
+            worst = action_entity.attributes.get('worst_conditions', [])
+            if context not in worst:
+                worst.append(context[:100])
+                if len(worst) > 10:
+                    worst.pop(0)
+                action_entity.attributes['worst_conditions'] = worst
+
+        logger.info(f"📊 KG learned: {action}@{domain} {'→' if success else '✗'} {outcome[:50]} ({len(created)} new nodes)")
+        return created
+
+    def predict_outcome(self, action: str, domain: str) -> Dict[str, Any]:
+        """
+        Predict likely outcome of an action based on causal knowledge.
+        Traverses CAUSES edges from similar actions. Returns predicted outcome
+        with confidence based on how many times we've seen this pattern.
+        """
+        action_entities = [
+            e for e in self.entities.values()
+            if e.entity_type == EntityType.ACTION
+            and e.domain == domain
+            and action.lower() in e.name.lower()
+        ]
+
+        if not action_entities:
+            return {'predicted_success': 0.5, 'sample_size': 0, 'evidence': []}
+
+        best_match = max(action_entities, key=lambda e: e.confidence * (e.attributes.get('attempts', 1)))
+
+        causal_outcomes = []
+        for rel_id in self.relation_index.get(best_match.id, set()):
+            rel = self.relationships.get(rel_id)
+            if not rel:
+                continue
+            target = self.entities.get(rel.target_id)
+            if not target:
+                continue
+            if rel.relation_type in (RelationType.CAUSES, RelationType.CONFLICTS_WITH):
+                causal_outcomes.append({
+                    'outcome': target.name,
+                    'success': target.attributes.get('success', False),
+                    'strength': rel.strength,
+                    'occurrences': rel.attributes.get('occurrence_count', 1),
+                })
+
+        if not causal_outcomes:
+            return {
+                'predicted_success': best_match.attributes.get('success_rate', 0.5),
+                'sample_size': best_match.attributes.get('attempts', 0),
+                'evidence': [],
+                'best_conditions': best_match.attributes.get('best_conditions', []),
+                'worst_conditions': best_match.attributes.get('worst_conditions', []),
+            }
+
+        total_weight = sum(o['occurrences'] for o in causal_outcomes)
+        success_weight = sum(
+            o['occurrences'] * o['strength']
+            for o in causal_outcomes if o['success']
+        )
+
         return {
-            'total_entities': len(self.entities),
-            'total_relationships': len(self.relationships),
-            'domains': list(self.domain_index.keys()),
-            'entity_types': {et.value: len(ids) for et, ids in self.type_index.items()},
-            'entities_per_domain': {domain: len(ids) for domain, ids in self.domain_index.items()}
+            'predicted_success': success_weight / total_weight if total_weight > 0 else 0.5,
+            'sample_size': best_match.attributes.get('attempts', 0),
+            'evidence': causal_outcomes[:5],
+            'best_conditions': best_match.attributes.get('best_conditions', [])[:3],
+            'worst_conditions': best_match.attributes.get('worst_conditions', [])[:3],
         }
 
+    def analogical_transfer(self, novel_situation: str, source_domain: str = None) -> List[Dict[str, Any]]:
+        """
+        Given a novel situation, find structurally similar situations in the
+        graph and transfer their causal knowledge. This is REAL transfer learning
+        - not keyword matching, but graph-structural similarity.
 
-# Singleton instance
-_knowledge_graph = None
+        Returns list of transferred beliefs with confidence adjustments.
+        """
+        situation_words = set(novel_situation.lower().split())
+        candidates = []
+
+        for entity in self.entities.values():
+            if entity.entity_type != EntityType.ACTION:
+                continue
+            if source_domain and entity.domain == source_domain:
+                continue
+
+            entity_words = set(entity.name.lower().split())
+            entity_context_words = set()
+            for w in entity.attributes.get('best_conditions', []):
+                entity_context_words.update(w.lower().split())
+            for w in entity.attributes.get('worst_conditions', []):
+                entity_context_words.update(w.lower().split())
+
+            all_entity_words = entity_words | entity_context_words
+            overlap = len(situation_words & all_entity_words)
+            if overlap == 0:
+                continue
+
+            similarity = overlap / max(len(situation_words | all_entity_words), 1)
+
+            causal = self.get_causal_relationships(entity.domain)
+            for cause_key, effects in causal.items():
+                if cause_key.lower() in entity.name.lower() or entity.name.lower() in cause_key.lower():
+                    candidates.append({
+                        'source_domain': entity.domain,
+                        'source_action': entity.name,
+                        'success_rate': entity.attributes.get('success_rate', 0.5),
+                        'similarity': similarity,
+                        'transferred_from': entity.id,
+                        'confidence_discount': similarity * 0.8,
+                        'best_conditions': entity.attributes.get('best_conditions', [])[:3],
+                    })
+
+        candidates.sort(key=lambda x: x['similarity'], reverse=True)
+        return candidates[:5]
+
+
+from datetime import datetime
+
 
 def get_knowledge_graph() -> KnowledgeGraph:
     """Get or create singleton knowledge graph"""

@@ -41,6 +41,9 @@ from src.agentic.goal_manager import get_goal_manager
 from src.agentic.default_goals import get_default_goal_seeder
 from src.agentic.duat_cognition import get_duat_engine
 
+# Cognitive Integration: BeliefEngine, SelfModel, GoalPlanner replace Duat/Synergy numerology
+from src.agentic.cognitive_integration import get_cognitive
+
 # Phase 8-9: Service Integration Layer
 from src.agentic.service_integration import (
     get_integrated_work_item_service,
@@ -148,8 +151,11 @@ class AutonomousBrain(AGISocialMixin):
         self.plugin_manager = plugin_manager
         self.symod = symod or get_symod_manager()
         
-        # Duat Cognition Engine - consciousness state tracking
+        # Duat Cognition Engine - consciousness state tracking (legacy, kept for compatibility)
         self.duat = get_duat_engine()
+        
+        # Cognitive Integration: BeliefEngine + SelfModel + GoalPlanner + KnowledgeGraph
+        self.cognitive = get_cognitive()
         
         # Configuration
         self.config = BrainConfig()
@@ -427,7 +433,16 @@ class AutonomousBrain(AGISocialMixin):
         """Execute one full SENSE-THINK-ACT-REFLECT cycle"""
         logger.info("🔄 === Brain Cycle Start ===")
         
-        # Duat Cognition: Perform reflection at cycle start
+        # Cognitive reflection at cycle start: belief calibration + self-model assessment
+        cognitive_reflection = self.cognitive.reflect()
+        logger.info(
+            f"🧠 Cognitive: {cognitive_reflection.get('overall_assessment', 'unknown')} | "
+            f"Strengths: {len(cognitive_reflection.get('strengths', []))} | "
+            f"Weaknesses: {len(cognitive_reflection.get('weaknesses', []))} | "
+            f"Calibrated: {cognitive_reflection.get('calibration', {}).get('calibrated', 'unknown')}"
+        )
+        
+        # Legacy Duat reflection (kept for compatibility)
         duat_reflection = self.duat.reflection()
         logger.info(f"🜂 Duat State: awareness={duat_reflection['awareness']:.2f}, distortion={duat_reflection['distortion']:.2f}")
         
@@ -612,12 +627,22 @@ class AutonomousBrain(AGISocialMixin):
         # === REFLECT: AGI Social Behaviors ===
         await self._run_agi_social_cycle()
         
-        # Duat Cognition: Purification and renewal at cycle end
+        # Cognitive reflection at cycle end: update beliefs from this cycle's outcomes
+        cognitive_end = self.cognitive.reflect()
+        beliefs = self.cognitive.belief_engine.get_domain_strengths()
+        calibration = self.cognitive.get_belief_calibration()
+        logger.info(
+            f"🧠 Cycle end: {cognitive_end.get('overall_assessment', '?')} | "
+            f"Beliefs: {len(beliefs)} domains | "
+            f"Calibrated: {calibration.get('calibrated', '?')} | "
+            f"Error: {calibration.get('mean_absolute_error', '?')}"
+        )
+
+        # Legacy Duat (kept for compatibility)
         duat_purification = self.duat.purification()
         duat_renewal = self.duat.renewal()
         self.duat.advance_time()
         self.duat.save_state()
-        logger.info(f"🜂 Duat Purification: truth={duat_purification['truth']:.2f}, coherence={duat_renewal['coherence']:.2f}")
 
         if executed == 0:
             # Generate and execute exploratory proposals when idle
@@ -1902,58 +1927,89 @@ class AutonomousBrain(AGISocialMixin):
         self._apply_transfer_learning_bias(proposals)
         self._apply_active_work_item_bias(proposals, active_work_items)
         self._apply_runtime_spine_bias(proposals, spine_context)
+        self._apply_cognitive_bias(proposals)
         proposals = self._prioritize_runtime_spine_proposals(proposals, spine_context)
         logger.info(f"🧠 Generated {len(proposals)} total proposals (AGI learning applied)")
         
         return proposals
     
     async def _phase_periodic_reflection(self, agi_kernel):
-        """THINK sub-phase — periodic meta-cognition and performance analysis.
+        """THINK sub-phase — periodic reflection using real cognitive data.
 
-        Meta-cognition runs every 100 cycles, performance optimization every 50.
+        Uses BeliefEngine calibration and SelfModel capabilities instead of
+        Duat/Synergy float arithmetic. Every 10 cycles: cognitive reflection.
+        Every 50 cycles: performance optimization. Every 100 cycles: deep review.
         """
         cycle_count = self.stats.get('cycles_completed', 0)
         
-        # Meta-cognition reflection (every 100 cycles)
+        # Cognitive reflection (every 10 cycles — lightweight)
+        if cycle_count > 0 and cycle_count % 10 == 0:
+            try:
+                reflection = self.cognitive.reflect()
+                assessment = reflection.get('overall_assessment', 'unknown')
+                strengths = reflection.get('strengths', [])
+                weaknesses = reflection.get('weaknesses', [])
+                learn = reflection.get('learning_priorities', [])
+                rec = reflection.get('recommendation', '')
+                
+                logger.info(f"🧠 Cognitive reflection (cycle {cycle_count}):")
+                logger.info(f"   Assessment: {assessment}")
+                logger.info(f"   Recommendation: {rec}")
+                if strengths:
+                    logger.info(f"   ✅ Strengths: {', '.join(s['domain'] for s in strengths[:3])}")
+                if weaknesses:
+                    logger.info(f"   ⚠️ Weaknesses: {', '.join(w['domain'] + '.' + w['action_type'] for w in weaknesses[:3])}")
+                if learn:
+                    logger.info(f"   📚 Learning priorities: {', '.join(l['domain'] + '.' + l['action_type'] for l in learn[:3])}")
+                    
+                self.learning_priorities = learn
+                self.capability_strengths = strengths
+                self.capability_weaknesses = weaknesses
+                
+            except Exception as e:
+                logger.debug(f"Cognitive reflection error: {e}")
+        
+        # Deep meta-cognition review (every 100 cycles)
         if cycle_count > 0 and cycle_count % 100 == 0:
-            if agi_kernel and hasattr(agi_kernel, 'meta_cognition'):
-                try:
-                    logger.info("🧠 === META-COGNITION REFLECTION ===")
-                    cognitive_state = agi_kernel.meta_cognition.reflect_on_cognitive_state()
-                    
-                    logger.info(f"   Overall Health: {cognitive_state.overall_health:.1%} ({cognitive_state.grade})")
-                    logger.info(f"   Decision Quality: {cognitive_state.decision_quality:.1%}")
-                    logger.info(f"   Goal Alignment: {cognitive_state.goal_alignment:.1%}")
-                    logger.info(f"   Learning Rate: {cognitive_state.learning_rate:.1%}")
-                    logger.info(f"   Ethical Health: {cognitive_state.ethical_health:.1%}")
-                    logger.info(f"   Cognitive Coherence: {cognitive_state.cognitive_coherence:.1%}")
-                    
-                    improvement_goals = agi_kernel.meta_cognition.generate_self_improvement_goals(cognitive_state)
-                    if improvement_goals:
-                        logger.info(f"   💡 {len(improvement_goals)} self-improvement goal(s) generated")
-                        top_goal = max(improvement_goals, key=lambda g: g['priority'])
-                        logger.info(f"   🎯 Top priority: {top_goal['title']}")
-                        
-                        if hasattr(agi_kernel, 'goal_manager'):
-                            from src.agentic.goal_manager import Goal, GoalPriority
-                            new_goal = Goal(
-                                id=f"metacog_{int(datetime.now().timestamp())}",
-                                title=top_goal['title'],
-                                description=top_goal['description'],
-                                category=top_goal['category'],
-                                priority=GoalPriority.HIGH,
-                                impact_score=top_goal['priority'],
-                                effort_estimate='days',
-                                confidence=0.8,
-                                trigger_type='meta_cognition',
-                                evidence=[f"Cognitive health assessment: {cognitive_state.grade}"]
-                            )
+            try:
+                logger.info("🧠 === DEEP COGNITIVE REVIEW ===")
+                calibration = self.cognitive.get_belief_calibration()
+                self_report = self.cognitive.get_self_awareness_report()
+                domain_strengths = self.cognitive.get_domain_strengths()
+                
+                logger.info(f"   Belief calibration: error={calibration.get('mean_absolute_error', '?')}, "
+                             f"calibrated={calibration.get('calibrated', '?')}")
+                logger.info(f"   Domain knowledge: {len(domain_strengths)} domains tracked")
+                logger.info(f"   Self-model: {self_report.get('recommendation', 'no recommendation')}")
+                
+                if calibration.get('overconfident_domains'):
+                    logger.info(f"   ⚠️ Overconfident in: {', '.join(calibration['overconfident_domains'])}")
+                if calibration.get('underconfident_domains'):
+                    logger.info(f"   📈 Underconfident in: {', '.join(calibration['underconfident_domains'])}")
+                
+                if hasattr(agi_kernel, 'goal_manager') and self_report.get('learning_priorities'):
+                    from src.agentic.goal_manager import Goal, GoalPriority
+                    for lp in self_report['learning_priorities'][:2]:
+                        new_goal = Goal(
+                            id=f"cog_learn_{int(datetime.now().timestamp())}_{lp['domain']}",
+                            title=f"Build capability: {lp['domain']}.{lp['action_type']}",
+                            description=f"Low data ({lp['sample_size']} attempts) in {lp['domain']}.{lp['action_type']}. "
+                                        f"Reason: {lp['reason']}. Current success rate: {lp.get('success_rate', 'unknown')}",
+                            category=lp['domain'],
+                            priority=GoalPriority.MEDIUM,
+                            impact_score=0.6,
+                            effort_estimate='hours',
+                            confidence=0.7,
+                            trigger_type='cognitive_reflection',
+                            evidence=[f"Self-model assessment: {lp['reason']}"],
+                        )
+                        try:
                             if await agi_kernel.goal_manager.aadd_goal(new_goal):
-                                logger.info(f"   ✅ Self-improvement goal created: {new_goal.id}")
-                    else:
-                        logger.info("   ✅ Cognitive health is good - no improvements needed")
-                except Exception as e:
-                    logger.debug(f"Meta-cognition reflection error: {e}")
+                                logger.info(f"   ✅ Learning goal created: {new_goal.id}")
+                        except Exception:
+                            pass
+            except Exception as e:
+                logger.debug(f"Deep cognitive review error: {e}")
         
         # Performance optimization (every 50 cycles)
         if cycle_count > 0 and cycle_count % 50 == 0:
@@ -2516,6 +2572,55 @@ class AutonomousBrain(AGISocialMixin):
                 proposal.metadata = {}
             proposal.metadata['spine_context'] = spine_context
             proposal.metadata['spine_bias_applied'] = round(adjustment, 3)
+
+    def _apply_cognitive_bias(self, proposals: List[Any]) -> None:
+        """Apply BeliefEngine + SelfModel confidence adjustments.
+
+        Replaces the old +0.03/+0.05 heuristic biases with real experience-driven
+        confidence from BeliefEngine predictions and SelfModel capability tracking.
+        """
+        if not proposals:
+            return
+
+        for proposal in proposals:
+            metadata = getattr(proposal, 'metadata', None) or {}
+            domain = str(metadata.get('plugin', 'unknown')).lower()
+            action_type = str(getattr(proposal, 'action_type', '') or '').lower()
+            action_key = f"{domain}:{action_type}"
+
+            try:
+                prediction = self.cognitive.predict_action_outcome(action_key, domain)
+                predicted_success = prediction.get('predicted_success', 0.5)
+
+                should_attempt, reason = prediction.get('should_attempt', True), prediction.get('attempt_reason', '')
+                should_wait, wait_reason = prediction.get('should_wait', False), prediction.get('wait_reason', '')
+
+                current_confidence = float(getattr(proposal, 'confidence', 0.5) or 0.5)
+
+                if should_wait:
+                    current_confidence *= 0.6
+                    if not getattr(proposal, 'metadata', None):
+                        proposal.metadata = {}
+                    proposal.metadata['cognitive_wait'] = wait_reason
+
+                if not should_attempt:
+                    current_confidence *= 0.4
+                    if not getattr(proposal, 'metadata', None):
+                        proposal.metadata = {}
+                    proposal.metadata['cognitive_avoid'] = reason
+
+                belief_delta = (predicted_success - 0.5) * 0.3
+                current_confidence = max(0.05, min(0.95, current_confidence + belief_delta))
+
+                proposal.confidence = current_confidence
+
+                if not getattr(proposal, 'metadata', None):
+                    proposal.metadata = {}
+                proposal.metadata['cognitive_prediction'] = round(predicted_success, 3)
+                proposal.metadata['cognitive_bias_applied'] = round(belief_delta, 3)
+
+            except Exception as e:
+                logger.debug(f"Cognitive bias error for {action_key}: {e}")
 
     def _prioritize_runtime_spine_proposals(self, proposals: List[Any], spine_context: Dict[str, Any]) -> List[Any]:
         """Sort proposals so discovered opportunity and executable work outrank idle exploratory behavior."""

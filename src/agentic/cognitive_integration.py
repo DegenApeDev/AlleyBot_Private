@@ -18,6 +18,7 @@ from typing import Dict, List, Optional
 from src.agentic.belief_engine import BeliefEngine, get_belief_engine
 from src.agentic.self_model import SelfModel, get_self_model
 from src.agentic.goal_planner import GoalPlanner, get_goal_planner
+from src.agentic.knowledge_graph import get_knowledge_graph
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class CognitiveIntegration:
         self.belief_engine = get_belief_engine()
         self.self_model = get_self_model()
         self.goal_planner = get_goal_planner()
+        self.knowledge_graph = get_knowledge_graph()
         self.telegram_plugin = telegram_plugin
         self._cycle_count = 0
 
@@ -106,6 +108,18 @@ class CognitiveIntegration:
 
         if not actual_success and self._should_notify_failure(action, domain, cap_result):
             self.notify_failure(action, domain, outcome_description, belief_result)
+
+        try:
+            self.knowledge_graph.learn_from_outcome(
+                action=action,
+                domain=domain,
+                context=context,
+                outcome=outcome_description or ("success" if actual_success else "failure"),
+                success=actual_success,
+                confidence=cap_result.get('capability_confidence', predicted_confidence) if cap_result else predicted_confidence,
+            )
+        except Exception as e:
+            logger.debug(f"Knowledge graph learning failed: {e}")
 
         return {
             'belief_update': belief_result,
