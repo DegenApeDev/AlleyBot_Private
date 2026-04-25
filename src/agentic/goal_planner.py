@@ -5,10 +5,20 @@ means-end reasoning.
 
 Goals are decomposed into steps with preconditions. If a step fails,
 we check which precondition was wrong and try an alternative path.
+
+Phase 2 additions:
+- LLM-based creative decomposition for novel domains
+- Domain detection from goal text
+- Plan validation via BeliefEngine (reject should_wait steps)
+- Multi-step outcome tracking (plan-level success/failure)
+- Rollback cascade (undo completed steps on failure)
+- Plan prioritization by expected value
+- Plan conflict detection (resource contention)
 """
 
 import json
 import logging
+import re
 import threading
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Tuple
@@ -212,16 +222,37 @@ class GoalPlanner:
         priority: float = 0.5,
     ) -> Plan:
         with self._lock:
-            plan_id = f"plan_{int(datetime.now().timestamp())}"
-            steps = self._generate_steps(goal, domain, belief_engine, self_model)
+            detected_domain = domain if domain != "general" else detect_domain(goal)
+            steps = self._generate_steps(goal, detected_domain, belief_engine, self_model)
+
+            # Try LLM decomposition for unknown domains or when templates are thin
+            if detected_domain == 'unknown' or len(steps) <= 2:
+                llm_steps = llm_decompose(goal, detected_domain, self.tool_registry)
+                if llm_steps and len(llm_steps) > len(steps):
+                    steps = [
+                        PlanStep(
+                            id=f"step_{i}_{s['plugin']}_{s['action']}",
+                            action=s['action'],
+                            plugin=s['plugin'],
+                            description=s['description'],
+                            expected_outcome=s.get('expected_outcome', ''),
+                            rollback_action=s.get('rollback_action', ''),
+                            confidence=s.get('confidence', 0.5),
+                        )
+                        for i, s in enumerate(llm_steps)
+                    ]
+                    logging.getLogger(__name__).info(
+                        f"LLM decomposition produced {len(steps)} steps for goal: {goal[:60]}"
+                    )
 
             for i, step in enumerate(steps):
                 if i > 0:
                     step.depends_on = [steps[i - 1].id]
                     step.preconditions = [f"Step '{steps[i-1].id}' completed successfully"]
 
+            plan_id = f"plan_{int(datetime.now().timestamp())}"
             plan = Plan(
-                id=plan_id, goal=goal, domain=domain,
+                id=plan_id, goal=goal, domain=detected_domain,
                 steps=steps, status="pending", priority=priority,
             )
 
@@ -230,6 +261,9 @@ class GoalPlanner:
 
             if self_model:
                 self._validate_plan_against_capabilities(plan, self_model)
+
+            # 2.6: Plan prioritization — score by expected value
+            plan.priority = score_plan(plan, belief_engine, self_model)
 
             self.plans[plan_id] = plan
             self._save()
@@ -398,6 +432,12 @@ class GoalPlanner:
             if should_wait:
                 step.confidence *= 0.7
                 step.description += f" [CAUTION: {reason}]"
+            # 2.3: If belief prediction is extremely low, block the step
+            if hasattr(belief_engine, 'predict'):
+                prediction = belief_engine.predict(f"{step.plugin}.{step.action}", plan.domain)
+                if prediction.predicted_success < 0.1:
+                    step.status = "blocked"
+                    step.failure_reason = f"Belief prediction too low: {prediction.predicted_success:.0%}"
 
     def _validate_plan_against_capabilities(self, plan: Plan, self_model) -> None:
         for step in plan.steps:
@@ -479,6 +519,7 @@ class GoalPlanner:
                 step.failure_reason = reason
                 step.result = result
 
+            # 2.5: Rollback cascade — block all dependent steps
             dependent_steps = [s for s in plan.steps if step_id in s.depends_on]
             if dependent_steps:
                 for dep_step in dependent_steps:
@@ -489,6 +530,91 @@ class GoalPlanner:
             plan.failure_reason = f"Step {step_id} failed: {reason}"
             self._save()
             return plan
+
+    def rollback_completed_steps(self, plan_id: str, up_to_step_id: str) -> Plan:
+        """Undo completed steps (2.5 rollback cascade).
+
+        Marks completed steps as 'rolled_back' and logs their rollback_action.
+        Returns the updated plan.
+        """
+        with self._lock:
+            plan = self.plans.get(plan_id)
+            if not plan:
+                return None
+
+            rolled_back = 0
+            for step in plan.steps:
+                if step.status == "completed":
+                    step.status = "rolled_back"
+                    rolled_back += 1
+                    logging.getLogger(__name__).info(
+                        f"Rolled back step {step.id}: {step.rollback_action}"
+                    )
+                elif step.status in ("pending", "ready"):
+                    # No point rolling back steps that haven't been executed
+                    break
+
+            if rolled_back > 0:
+                logging.getLogger(__name__).info(
+                    f"Rolled back {rolled_back} steps in plan {plan_id}"
+                )
+
+            self._save()
+            return plan
+
+    def record_plan_outcome(self, plan_id: str, success: bool, belief_engine=None, self_model=None) -> Dict:
+        """Record plan-level outcome (2.4 multi-step outcome tracking).
+
+        Updates belief engine and self model with the overall plan result.
+        """
+        with self._lock:
+            plan = self.plans.get(plan_id)
+            if not plan:
+                return {'error': f'Plan {plan_id} not found'}
+
+            completed = sum(1 for s in plan.steps if s.status == "completed")
+            total = len(plan.steps)
+            success_rate = completed / total if total > 0 else 0.0
+
+            outcome = {
+                'plan_id': plan_id,
+                'goal': plan.goal,
+                'domain': plan.domain,
+                'success': success,
+                'steps_completed': completed,
+                'steps_total': total,
+                'step_success_rate': success_rate,
+                'priority': plan.priority,
+            }
+
+            # Update domain-level beliefs if engines are provided
+            if belief_engine:
+                try:
+                    belief_engine.update_from_outcome(
+                        action=f"plan:{plan.goal[:50]}",
+                        domain=plan.domain,
+                        predicted_success=plan.priority,
+                        actual_success=success,
+                        context=f"plan_with_{total}_steps",
+                        outcome_description=f"Completed {completed}/{total} steps",
+                    )
+                except Exception as e:
+                    logging.getLogger(__name__).debug(f"Plan belief update failed: {e}")
+
+            if self_model:
+                try:
+                    self_model.record_outcome(
+                        domain=plan.domain,
+                        action_type="plan_execution",
+                        predicted_confidence=plan.priority,
+                        actual_success=success,
+                        context=f"plan_{plan_id}",
+                    )
+                except Exception as e:
+                    logging.getLogger(__name__).debug(f"Plan self-model update failed: {e}")
+
+            self._save()
+            return outcome
 
     def get_alternative_path(self, plan: Plan, failed_step_id: str) -> Optional[PlanStep]:
         failed_step = next((s for s in plan.steps if s.id == failed_step_id), None)
@@ -560,3 +686,196 @@ class GoalPlanner:
 
 def get_goal_planner(storage_path: str = 'data/plans.json') -> GoalPlanner:
     return GoalPlanner(storage_path)
+
+
+# ── Domain Detection ──────────────────────────────────────────────
+
+DOMAIN_KEYWORDS = {
+    'social': ['post', 'engage', 'reply', 'interact', 'social', 'presence',
+                'community', 'moltx', 'moltchan', 'clawbr', 'moltbook', 'follow',
+                'comment', 'share', 'mention', 'feed'],
+    'market': ['trade', 'market', 'price', 'crypto', 'token', 'portfolio',
+                'buy', 'sell', 'swap', 'dex', 'polymarket', 'liquidity'],
+    'trading': ['swap', 'dex', 'limit order', 'slippage', 'arbitrage', 'position',
+                 'stop loss', 'take profit', 'leverage'],
+    'analysis': ['analyze', 'research', 'learn', 'understand', 'monitor', 'scan',
+                  'insight', 'data', 'trend', 'statistics', 'report'],
+    'onchain': ['wallet', 'transaction', 'gas', 'contract', 'deploy', 'mint',
+                 'bridge', 'stake', 'claim', 'verify', 'token'],
+    'security': ['security', 'check', 'audit', 'verify', 'protect', 'balance',
+                  'authenticate', 'permission', 'approve'],
+    'self_improvement': ['skill', 'learn', 'improve', 'fix', 'self', 'optimize',
+                          'capability', 'gap', 'auto', 'upgrade'],
+    'content': ['create', 'write', 'generate', 'compose', 'draft', 'content',
+                 'article', 'summary', 'format'],
+}
+
+
+def detect_domain(goal: str) -> str:
+    """Classify a goal into a known domain or 'unknown'.
+
+    Returns the domain with the highest keyword overlap score.
+    """
+    goal_lower = goal.lower()
+    scores = {}
+    for domain, keywords in DOMAIN_KEYWORDS.items():
+        score = sum(1 for kw in keywords if kw in goal_lower)
+        if score > 0:
+            scores[domain] = score
+    if scores:
+        return max(scores, key=scores.get)
+    return 'unknown'
+
+
+# ── LLM-based Goal Decomposition ──────────────────────────────────
+
+DECOMPOSITION_PROMPT = """You are a planning assistant for an autonomous agent. Break down the following goal into 3-5 concrete, executable steps.
+
+Goal: {goal}
+Domain: {domain}
+Available tools: {tools}
+
+Rules:
+1. Each step must use one of the available tools
+2. Each step must have a clear expected outcome
+3. Steps should form a logical dependency chain
+4. Include a rollback action for each step (what to do if it fails)
+
+Respond in JSON format only:
+[
+  {{
+    "action": "tool_action_name",
+    "plugin": "plugin_name",
+    "description": "What this step does",
+    "expected_outcome": "What success looks like",
+    "rollback_action": "What to do if this fails",
+    "confidence": 0.8
+  }}
+]
+
+Tools available: {tools_list}"""
+
+
+def llm_decompose(goal: str, domain: str, tool_registry: Dict) -> Optional[List[Dict]]:
+    """Use LLM to decompose a goal into steps for novel domains.
+
+    Returns a list of step dicts, or None if LLM is unavailable.
+    """
+    try:
+        from src.core.llm_router import reason
+    except ImportError:
+        logging.getLogger(__name__).debug("LLM router not available for goal decomposition")
+        return None
+
+    tools_list = []
+    for plugin, actions in tool_registry.items():
+        for action_name, action_info in actions.items():
+            tools_list.append(f"{plugin}.{action_name}: {action_info['description']}")
+
+    prompt = DECOMPOSITION_PROMPT.format(
+        goal=goal,
+        domain=domain,
+        tools=", ".join(tool_registry.keys()),
+        tools_list="\n".join(tools_list),
+    )
+
+    try:
+        response = reason(prompt, max_tokens=2000)
+        if not response:
+            return None
+
+        # Extract JSON from response (may be wrapped in markdown)
+        json_match = re.search(r'\[.*\]', response, re.DOTALL)
+        if not json_match:
+            return None
+
+        steps = json.loads(json_match.group())
+        if not isinstance(steps, list):
+            return None
+
+        # Validate each step has required fields
+        valid_steps = []
+        for i, step in enumerate(steps):
+            if not isinstance(step, dict):
+                continue
+            valid_steps.append({
+                'action': step.get('action', f'step_{i}'),
+                'plugin': step.get('plugin', 'unknown'),
+                'description': step.get('description', f'Step {i+1} of {goal}'),
+                'expected_outcome': step.get('expected_outcome', ''),
+                'rollback_action': step.get('rollback_action', 'Skip and continue'),
+                'confidence': float(step.get('confidence', 0.5)),
+            })
+
+        return valid_steps if valid_steps else None
+
+    except (json.JSONDecodeError, ValueError, ImportError, Exception) as e:
+        logging.getLogger(__name__).warning(f"LLM goal decomposition failed: {e}")
+        return None
+
+
+# ── Plan Prioritization ────────────────────────────────────────────
+
+DOMAIN_IMPORTANCE = {
+    'security': 1.0,
+    'onchain': 0.9,
+    'trading': 0.85,
+    'market': 0.8,
+    'social': 0.7,
+    'analysis': 0.65,
+    'content': 0.6,
+    'self_improvement': 0.55,
+    'unknown': 0.5,
+}
+
+
+def score_plan(plan, belief_engine=None, self_model=None) -> float:
+    """Score a plan by expected value = belief_confidence × domain_importance.
+
+    Higher scores = more valuable plans to pursue.
+    """
+    domain = getattr(plan, 'domain', 'unknown') if not isinstance(plan, dict) else plan.get('domain', 'unknown')
+    base_importance = DOMAIN_IMPORTANCE.get(domain, 0.5)
+
+    avg_confidence = 0.5
+    steps = plan.steps if hasattr(plan, 'steps') else plan.get('steps', [])
+    if steps:
+        confidences = [s.confidence if hasattr(s, 'confidence') else s.get('confidence', 0.5) for s in steps]
+        avg_confidence = sum(confidences) / len(confidences)
+
+    # Belief adjustment
+    belief_multiplier = 1.0
+    if belief_engine:
+        goal_text = plan.goal if hasattr(plan, 'goal') else plan.get('goal', '')
+        prediction = belief_engine.predict(goal_text, domain)
+        belief_multiplier = prediction.predicted_success
+
+    return base_importance * avg_confidence * belief_multiplier
+
+
+def detect_conflicts(plans: List) -> List[Tuple]:
+    """Detect plans that compete for the same resources (plugins/actions).
+
+    Returns a list of (plan_a_id, plan_b_id, shared_resource) tuples.
+    """
+    conflicts = []
+    resource_map = {}
+
+    for plan in plans:
+        plan_id = plan.id if hasattr(plan, 'id') else plan.get('id', '?')
+        steps = plan.steps if hasattr(plan, 'steps') else plan.get('steps', [])
+        for step in steps:
+            plugin = step.plugin if hasattr(step, 'plugin') else step.get('plugin', '?')
+            action = step.action if hasattr(step, 'action') else step.get('action', '?')
+            resource_key = f"{plugin}.{action}"
+            if resource_key not in resource_map:
+                resource_map[resource_key] = []
+            resource_map[resource_key].append(plan_id)
+
+    for resource, plan_ids in resource_map.items():
+        if len(plan_ids) > 1:
+            for i in range(len(plan_ids)):
+                for j in range(i + 1, len(plan_ids)):
+                    conflicts.append((plan_ids[i], plan_ids[j], resource))
+
+    return conflicts

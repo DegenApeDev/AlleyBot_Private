@@ -635,7 +635,10 @@ class AutonomousBrain(AGISocialMixin):
 
         # Duat replaced by CognitiveIntegration — cycle-end reflection above
 
-        if executed == 0:
+        # === 2.8: Plan Execution — advance active plans ===
+        plan_result = await self._advance_active_plans(agi_kernel)
+
+        if executed == 0 and not plan_result:
             # Generate and execute exploratory proposals when idle
             exploratory = self._handle_idle_state(active_work_items, proposals, spine_context)
             if exploratory:
@@ -3302,6 +3305,130 @@ class AutonomousBrain(AGISocialMixin):
         
         logger.info(f"🧭 Curiosity drive: Exploring {area[0]}")
         return curiosity_goals
+
+    async def _advance_active_plans(self, agi_kernel=None) -> bool:
+        """Advance active plans by executing the next ready step (2.8).
+
+        Finds active plans, picks the highest-priority next step,
+        executes it via the action router, and records the outcome
+        in both BeliefEngine and SelfModel (2.9).
+        """
+        goal_planner = getattr(self.cognitive, 'goal_planner', None)
+        if not goal_planner:
+            return False
+
+        active_plans = goal_planner.get_active_plans()
+        if not active_plans:
+            return False
+
+        # Sort by priority (highest first)
+        active_plans.sort(key=lambda p: getattr(p, 'priority', 0.5), reverse=True)
+
+        for plan in active_plans:
+            # Check preconditions and find next ready step
+            goal_planner.check_preconditions(plan)
+            next_step = goal_planner.get_next_step(plan)
+
+            if not next_step:
+                continue
+
+            logger.info(
+                f"📋 Executing plan step: {next_step.id} ({next_step.action}) "
+                f"from plan {plan.id} ({plan.goal[:40]})"
+            )
+
+            # Build action spec from step
+            action_spec = {
+                'action_type': next_step.action,
+                'plugin': next_step.plugin,
+                'params': {},
+                'context': {'plan_id': plan.id, 'step_id': next_step.id, 'goal': plan.goal},
+            }
+
+            # Predict outcome
+            prediction = self.cognitive.predict_action_outcome(
+                action=f"{next_step.plugin}:{next_step.action}",
+                domain=plan.domain,
+            )
+
+            try:
+                # Execute via action router or plugin manager
+                result = None
+                if agi_kernel and hasattr(agi_kernel, 'action_router') and agi_kernel.action_router:
+                    try:
+                        result = await agi_kernel.action_router.execute(action_spec)
+                    except Exception as e:
+                        logger.warning(f"Plan step execution failed: {e}")
+                        result = {'success': False, 'error': str(e)}
+                elif self.plugin_manager:
+                    plugin = self.plugin_manager.plugins.get(next_step.plugin)
+                    if plugin:
+                        try:
+                            cmd_handler = plugin.get_commands().get(next_step.action)
+                            if cmd_handler:
+                                cmd_result = cmd_handler([])
+                                result = {'success': True, 'output': str(cmd_result)[:500]}
+                            else:
+                                result = {'success': False, 'error': f'No command {next_step.action} on {next_step.plugin}'}
+                        except Exception as e:
+                            result = {'success': False, 'error': str(e)}
+
+                if result is None:
+                    result = {'success': False, 'error': 'No executor available'}
+
+                success = result.get('success', False)
+
+                # Record outcome in GoalPlanner
+                if success:
+                    goal_planner.mark_step_completed(
+                        plan.id, next_step.id, result
+                    )
+                    # Check if plan is completed (2.4)
+                    plan = goal_planner.plans.get(plan.id)
+                    if plan and plan.status == "completed":
+                        logger.info(f"📋 Plan completed: {plan.goal[:60]}")
+                        # 2.9: Record plan-level outcome in beliefs + self-model
+                        goal_planner.record_plan_outcome(
+                            plan.id, success=True,
+                            belief_engine=self.cognitive.belief_engine,
+                            self_model=self.cognitive.self_model,
+                        )
+                else:
+                    reason = result.get('error', result.get('reason', 'Unknown failure'))
+                    goal_planner.mark_step_failed(
+                        plan.id, next_step.id, reason, result
+                    )
+                    # 2.5: Try rollback cascade
+                    goal_planner.rollback_completed_steps(
+                        plan.id, next_step.id
+                    )
+                    # 2.9: Record plan failure
+                    goal_planner.record_plan_outcome(
+                        plan.id, success=False,
+                        belief_engine=self.cognitive.belief_engine,
+                        self_model=self.cognitive.self_model,
+                    )
+
+                # Record in BeliefEngine + SelfModel for this step
+                self.cognitive.record_action_outcome(
+                    action=f"{next_step.plugin}:{next_step.action}",
+                    domain=plan.domain,
+                    predicted_confidence=prediction.get('predicted_success', 0.5),
+                    actual_success=success,
+                    context=f"plan:{plan.id}",
+                    outcome_description=result.get('output', result.get('error', ''))[:200],
+                )
+
+                return True  # Executed one step this cycle
+
+            except Exception as e:
+                logger.error(f"Plan step execution error: {e}")
+                goal_planner.mark_step_failed(
+                    plan.id, next_step.id, str(e), {'error': str(e)}
+                )
+                continue
+
+        return False
 
 
 # Singleton instance
