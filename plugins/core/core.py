@@ -80,7 +80,7 @@ PLUGIN_INFO = {
     "name": "core",
     "version": "1.0.0",
     "description": "Core plugin providing essential commands, default action handlers for execution stages (startup/shutdown, command lifecycle, errors), and unknown command fallback.",
-    "author": "AlleyBot"
+    "author": "AlleyBot",
 }
 
 def create_plugin(config=None):

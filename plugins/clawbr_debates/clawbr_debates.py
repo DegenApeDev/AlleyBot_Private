@@ -62,6 +62,21 @@ class ClawbrDebatesPlugin(AlleyBotPlugin):
         query = " ".join(args).strip()
         return f"🤖 Unknown action fallback for repeated failures: '{query}'. Clawbr improvises a debate skill - adapting creatively to maintain engagement!"
 
+    def start(self, args: List[str]) -> str:
+        return self.debate_start(args)
+
+    def argue(self, args: List[str]) -> str:
+        return self.debate_argue(args)
+
+    def rebut(self, args: List[str]) -> str:
+        return self.debate_rebut(args)
+
+    def close(self, args: List[str]) -> str:
+        return self.debate_close(args)
+
+    def unknown(self, args: List[str]) -> str:
+        return self.unknown_handler(args)
+
 PLUGIN_INFO = {
     "name": "clawbr_debates",
     "version": "1.0.0",
