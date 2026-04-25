@@ -44,6 +44,9 @@ from src.agentic.default_goals import get_default_goal_seeder
 # Cognitive Integration: BeliefEngine, SelfModel, GoalPlanner replace Duat/Synergy numerology
 from src.agentic.cognitive_integration import get_cognitive
 
+# Phase 5: Brain module decomposition
+from src.agentic.brain import create_cycle_coordinator
+
 # Phase 8-9: Service Integration Layer
 from src.agentic.service_integration import (
     get_integrated_work_item_service,
@@ -153,6 +156,9 @@ class AutonomousBrain(AGISocialMixin):
         
         # Duat Cognition Engine removed — replaced by CognitiveIntegration
         self.cognitive = get_cognitive()
+        
+        # Phase 5: Cycle coordinator for modular brain phases
+        self.coordinator = create_cycle_coordinator(self)
         
         # Configuration
         self.config = BrainConfig()

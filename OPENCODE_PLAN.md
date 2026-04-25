@@ -1,7 +1,7 @@
 # OPENCODE_PLAN.md — Path to AGI
 
 **Created**: April 24, 2026
-**Status**: Phase 1 ✅ Complete | Phase 2 ✅ Complete | Phase 3 ✅ Complete | Phase 4 ✅ Complete
+**Status**: Phase 1 ✅ Complete | Phase 2 ✅ Complete | Phase 3 ✅ Complete | Phase 4 ✅ Complete | Phase 5 ⚠️ In Progress
 **Goal**: Transform AlleyBot from a reactive bot into a genuinely autonomous agent that learns, reasons, plans, self-improves, and pursues self-directed goals.
 
 ---
@@ -281,16 +281,16 @@ All 7 Phase 4 tasks completed. Key changes:
 
 | # | Task | Effort | Impact | Status |
 |---|------|--------|--------|--------|
-| 5.1 | Extract sense phases into `brain/sense.py` — observation gathering, platform polling | 4h | HIGH | Pending |
-| 5.2 | Extract think phases into `brain/think.py` — goal generation, belief evaluation, planning | 4h | HIGH | Pending |
-| 5.3 | Extract validate phases into `brain/validate.py` — moderation, safety gates, HITL | 3h | HIGH | Pending |
-| 5.4 | Extract act phases into `brain/act.py` — action execution, outcome recording | 3h | HIGH | Pending |
-| 5.5 | Extract learn phases into `brain/learn.py` — reflection, metacognition, belief update | 3h | HIGH | Pending |
-| 5.6 | Extract self-improve into `brain/self_improve.py` — skill gap detection, code generation | 3h | HIGH | Pending |
-| 5.7 | Extract trading into `brain/trading.py` — market analysis, position management | 2h | MEDIUM | Pending |
-| 5.8 | Create `brain/cycle_coordinator.py` — orchestrates phases by importing from extracted modules | 4h | HIGH | Pending |
+| 5.1 | Extract sense phases into `brain/sense.py` — observation gathering, platform polling | 4h | HIGH | ✅ Done |
+| 5.2 | Extract think phases into `brain/think.py` — goal generation, belief evaluation, planning | 4h | HIGH | ✅ Done |
+| 5.3 | Extract validate phases into `brain/validate.py` — moderation, safety gates, HITL | 3h | HIGH | ✅ Done |
+| 5.4 | Extract act phases into `brain/act.py` — action execution, outcome recording | 3h | HIGH | ✅ Done |
+| 5.5 | Extract learn phases into `brain/learn.py` — reflection, metacognition, belief update | 3h | HIGH | ✅ Done |
+| 5.6 | Extract self-improve into `brain/self_improve.py` — skill gap detection, code generation | 3h | HIGH | ✅ Done |
+| 5.7 | Extract trading into `brain/trading.py` — market analysis, position management | 2h | MEDIUM | ✅ Done |
+| 5.8 | Create `brain/cycle_coordinator.py` — orchestrates phases by importing from extracted modules | 4h | HIGH | ✅ Done |
 | 5.9 | Consolidate triple autonomous coder — keep only `plugins/selfimprove/autonomous_coder.py` | 4h | HIGH | Pending |
-| 5.10 | Run full test suite after each extraction — regression check | 2h | HIGH | Pending |
+| 5.10 | Run full test suite after each extraction — regression check | 2h | HIGH | ✅ Done |
 
 **Deliverable**: `autonomous_brain.py` reduced to <300 lines (coordinator only). Each phase module is <400 lines with clear interfaces.
 
