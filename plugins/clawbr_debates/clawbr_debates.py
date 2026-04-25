@@ -35,6 +35,13 @@ class ClawbrDebatesPlugin(AlleyBotPlugin):
             "unknown": self.unknown,
         }
     
+    def execute_action(self, action: str, args: List[str]) -> str:
+        result = self._delegate(action, args)
+        if result is not None:
+            return result
+        query = " ".join(args).strip() or action
+        return f"🤖 Clawbr dynamic dispatch for '{action}': Clawbr improvises debate skill on '{query}' - adapting creatively for maximum engagement!"
+    
     def _delegate(self, action: str, args: List[str]) -> str | None:
         strategy = self.debate_strategy
         if callable(strategy):
