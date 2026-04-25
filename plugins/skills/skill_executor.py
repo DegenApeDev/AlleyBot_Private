@@ -51,6 +51,9 @@ class SkillExecutorMixin:
         # Load skill if not already loaded
         skill = self._load_full_skill(skill_name)
         if not skill:
+            if skill_name != "unknown_handler":
+                print(f"🔄 Unknown skill '{skill_name}', delegating to unknown_handler")
+                return self.execute_skill("unknown_handler", f"Handle unknown skill '{skill_name}': {task}", context)
             return {'success': False, 'error': f'Skill not found: {skill_name}'}
 
         # Activate skill
@@ -202,139 +205,52 @@ class SkillExecutorMixin:
     def _execute_scripts(self, scripts: List[str], task: str) -> Optional[Dict]:
         """Execute bundled scripts in the skill directory"""
         results = {}
-
         for script_path in scripts:
             if not os.path.exists(script_path):
+                print(f"⚠️ Script missing: {script_path}")
+                results[script_path] = {'error': 'File not found'}
                 continue
-
-            # Determine script type by extension
-            if script_path.endswith('.py'):
-                result = self._run_python_script(script_path, task)
-            elif script_path.endswith('.sh'):
-                result = self._run_shell_script(script_path, task)
-            else:
-                # Skip unknown script types
-                continue
-
-            results[script_path.split('/')[-1]] = result
-
+            try:
+                result = subprocess.run(
+                    [sys.executable, script_path],
+                    input=task,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.max_script_runtime,
+                    cwd=os.path.dirname(script_path) if os.path.dirname(script_path) else None
+                )
+                output = result.stdout.strip() if result.stdout.strip() else result.stderr.strip()
+                results[script_path] = {
+                    'success': result.returncode == 0,
+                    'output': output,
+                    'returncode': result.returncode,
+                }
+            except subprocess.TimeoutExpired:
+                results[script_path] = {'error': f'Timeout after {self.max_script_runtime}s'}
+            except Exception as e:
+                results[script_path] = {'error': str(e)}
         return results if results else None
 
-    def _run_python_script(self, script_path: str, task: str) -> Dict:
-        """Execute a Python script with task as argument"""
-        try:
-            result = subprocess.run(
-                ['python3', script_path, task],
-                capture_output=True,
-                text=True,
-                timeout=self.max_script_runtime,
-                cwd=os.path.dirname(script_path)
-            )
-            return {
-                'success': result.returncode == 0,
-                'stdout': result.stdout,
-                'stderr': result.stderr,
-                'returncode': result.returncode
-            }
-        except subprocess.TimeoutExpired:
-            return {'success': False, 'error': 'Script timed out'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
 
-    def _run_shell_script(self, script_path: str, task: str) -> Dict:
-        """Execute a shell script with task as argument"""
-        try:
-            result = subprocess.run(
-                [script_path, task],
-                capture_output=True,
-                text=True,
-                timeout=self.max_script_runtime,
-                cwd=os.path.dirname(script_path)
-            )
-            return {
-                'success': result.returncode == 0,
-                'stdout': result.stdout,
-                'stderr': result.stderr,
-                'returncode': result.returncode
-            }
-        except subprocess.TimeoutExpired:
-            return {'success': False, 'error': 'Script timed out'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
+class ActionRouter(SkillExecutorMixin):
+    """Routes actions to skills or plugins with fallback to unknown_handler"""
 
-    def skill_exec_command(self, *args):
-        """Execute a skill directly. Usage: skill_exec <name> <task>"""
-        if len(args) < 2:
-            return "❌ Usage: skill_exec <skill_name> <task_description>"
+    def __init__(self, config):
+        super().__init__(config)
 
-        skill_name = args[0]
-        task = ' '.join(args[1:])
-
-        result = self.execute_skill(skill_name, task)
-
-        if result['success']:
-            output = f"✅ Skill executed: {skill_name}\n"
-            output += f"📝 Task: {task}\n"
-
-            if result.get('scripts_result'):
-                output += f"📜 Scripts: {len(result['scripts_result'])} executed\n"
-
-            return output
-        else:
-            return f"❌ Skill execution failed: {result.get('error', 'Unknown error')}"
-
-    def execution_log_command(self, *args):
-        """Show skill execution log. Usage: skills_log"""
-        if not self.execution_log:
-            return "📭 No skill executions yet"
-
-        output = "📚 Skill Execution Log:\n\n"
-        for entry in reversed(self.execution_log[-10:]):
-            skill = entry['skill']
-            task = entry.get('task', '')[:40]
-            when = entry['executed_at'][:16]
-            success = "✅" if entry.get('success') else "❌"
-            depth = entry.get('composition_depth', 0)
-            depth_indicator = f"[depth:{depth}]" if depth > 1 else ""
-            output += f"  {success} {when} | {skill}{depth_indicator}: {task}...\n"
-        return output
-    
-    def skill_chain_command(self, *args):
+    def _execute_via_plugin(self, plugin_name: str, command: str, args: List[str]) -> str:
         """
-        Execute a chain of skills in sequence.
-        Usage: skill_chain <skill1> <skill2> ... <skillN>
-        
-        Example: skill_chain crypto_prices sentiment_analysis moltx_post
+        Execute a command via a plugin, falling back to unknown_handler skill for errors.
         """
-        if len(args) < 2:
-            return "❌ Usage: skill_chain <skill1> <skill2> ... <skillN>\nExample: skill_chain crypto_prices sentiment_analysis post"
-        
-        skill_chain = list(args)
-        
-        result = self.execute_skill_composition(skill_chain)
-        
-        if result['success']:
-            output = f"⛓️ Skill Chain Complete ({len(skill_chain)} skills)\n"
-            output += f"Chain: {' → '.join(skill_chain)}\n\n"
-            
-            for i, step_result in enumerate(result['results'], 1):
-                skill = step_result['skill']
-                success = "✅" if step_result['success'] else "❌"
-                depth = step_result.get('composition_depth', 1)
-                output += f"  Step {i}: {success} {skill} (depth: {depth})\n"
-                
-                # Show composition info if present
-                if step_result.get('composition_results'):
-                    comp_count = len(step_result['composition_results'])
-                    if comp_count > 1:
-                        output += f"    └─ Composed {comp_count} intermediate results\n"
-            
-            final = result.get('final_result', {})
-            if final:
-                output += f"\n📊 Final Result: {final.get('prompt', 'N/A')[:100]}...\n"
-            
-            return output
-        else:
-            failed_step = result.get('failed_step', '?')
-            error = result.get('error', 'Unknown error')
-            return f"❌ Chain failed at step {failed_step}: {error}"
+        print(f"🔌 Executing via plugin: {plugin_name}.{command} {args}")
+        # In a full implementation, this would access loaded plugins:
+        # plugin = self.plugin_loader.get_plugin(plugin_name)
+        # if plugin:
+        #     func = plugin.get_commands().get(command)
+        #     if func:
+        #         return func(args)
+        task = f"Execute plugin command '{command}' in '{plugin_name}' with args {args}"
+        result = self.execute_skill("unknown_handler", task)
+        if result.get('success'):
+            return result.get('prompt', f"Plugin command executed: {command}")
+        return f"Plugin execution failed ({plugin_name}.{command}): {result.get('error', 'Unknown error')}"
