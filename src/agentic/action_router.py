@@ -644,6 +644,13 @@ class ActionRouter:
                 'update': 'create_post',  # MoltX doesn't have separate update
                 'browse': None,  # Not implemented
             },
+            'polymarket': {
+                'scan': None,  # Not implemented
+                'bet': None,  # Not implemented
+            },
+            'base_wallet_balance': {
+                'query': None,  # Not implemented
+            },
             'moltchan': {
                 'post': 'create_thread',
                 'reply': 'reply_to_thread',
