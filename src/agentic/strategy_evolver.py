@@ -712,6 +712,109 @@ class StrategyEvolver:
             result[stype] = strategies
         
         return result
+    
+    # 7.4: Meta-learning - learn which strategies work in which conditions
+    def get_meta_learned_conditions(self) -> Dict[str, Any]:
+        """
+        Get meta-learned associations between conditions and strategies.
+        Returns which conditions favor which strategies.
+        """
+        meta_learned = {
+            'time_of_day': {},
+            'day_of_week': {},
+            'platform': {},
+            'domain_context': {}
+        }
+        
+        try:
+            with sqlite3.connect(self.DB_PATH) as conn:
+                conn.row_factory = sqlite3.Row
+                
+                # Analyze time-of-day performance
+                for row in conn.execute('''
+                    SELECT strategy_id, 
+                           strftime('%H', timestamp) as hour,
+                           AVG(success) as avg_success
+                    FROM strategy_outcomes
+                    GROUP BY strategy_id, hour
+                ''').fetchall():
+                    if row['avg_success'] is not None:
+                        strategy = self._load_strategy(row['strategy_id'])
+                        if strategy:
+                            meta_learned['time_of_day'].setdefault(row['hour'], []).append({
+                                'strategy': strategy.name,
+                                'success_rate': row['avg_success']
+                            })
+                
+                # Analyze day-of-week performance
+                for row in conn.execute('''
+                    SELECT strategy_id,
+                           strftime('%w', timestamp) as dow,
+                           AVG(success) as avg_success
+                    FROM strategy_outcomes
+                    GROUP BY strategy_id, dow
+                ''').fetchall():
+                    if row['avg_success'] is not None:
+                        strategy = self._load_strategy(row['strategy_id'])
+                        if strategy:
+                            meta_learned['day_of_week'].setdefault(row['dow'], []).append({
+                                'strategy': strategy.name,
+                                'success_rate': row['avg_success']
+                            })
+        
+        except Exception as e:
+            logger.debug(f"Meta-learning query error: {e}")
+        
+        return meta_learned
+    
+    def get_best_strategy_for_condition(self, condition_type: str, condition_value: str) -> Optional[Strategy]:
+        """
+        Get the best performing strategy for a given condition.
+        Used to select strategies based on context.
+        """
+        meta = self.get_meta_learned_conditions()
+        condition_data = meta.get(condition_type, {}).get(condition_value, [])
+        
+        if not condition_data:
+            return None
+        
+        # Return highest success rate for this condition
+        best = max(condition_data, key=lambda x: x['success_rate'])
+        
+        # Find the strategy object
+        for strategy in self.strategies.values():
+            if strategy.name == best['strategy']:
+                return strategy
+        
+        return None
+    
+    def recommend_strategy(self, context: Dict) -> Optional[Strategy]:
+        """
+        Recommend a strategy based on current context.
+        Uses meta-learned condition->strategy mappings.
+        """
+        from datetime import datetime
+        
+        current_hour = datetime.now().strftime('%H')
+        current_dow = datetime.now().strftime('%w')
+        
+        # Try time-based recommendation first
+        best = self.get_best_strategy_for_condition('time_of_day', current_hour)
+        if best and best.fitness_score >= 0.5:
+            return best
+        
+        # Try day-of-week
+        best = self.get_best_strategy_for_condition('day_of_week', current_dow)
+        if best and best.fitness_score >= 0.5:
+            return best
+        
+        # Fall back to overall best
+        ranked = self.get_strategies_ranked()
+        for stype in StrategyType:
+            if ranked.get(stype):
+                return ranked[stype][0]
+        
+        return None
 
 
 # Singleton instance

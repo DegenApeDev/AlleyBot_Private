@@ -1984,6 +1984,79 @@ class AutonomousBrain(AGISocialMixin):
         
         return proposals
     
+    # 7.6: Adversarial self-critique - challenge own beliefs
+    async def _adversarial_self_critique(self, agi_kernel) -> List[Dict]:
+        """
+        Periodically challenge own beliefs, look for disconfirming evidence.
+        Called every 1000 cycles as part of adversarial reflection.
+        """
+        findings = []
+        
+        try:
+            # Get all beliefs
+            from src.agentic.belief_engine import get_belief_engine
+            be = get_belief_engine()
+            if not be:
+                return findings
+            
+            beliefs = list(be.beliefs.values())
+            
+            # Check for high-confidence beliefs with weak evidence
+            for belief in beliefs:
+                if belief.confidence > 0.7 and belief.prediction_count < 3:
+                    findings.append({
+                        'belief': belief.proposition,
+                        'challenge': 'High confidence but few predictions - overconfident?',
+                        'confidence': belief.confidence,
+                        'predictions': belief.prediction_count,
+                        'strength': 'low_data'
+                    })
+                
+                # Check for beliefs with more negative evidence than positive
+                if len(belief.evidence_against) > len(belief.evidence_for) * 2:
+                    findings.append({
+                        'belief': belief.proposition,
+                        'challenge': f'More failures ({len(belief.evidence_against)}) than successes',
+                        'confidence': belief.confidence,
+                        'strength': 'conflicting_evidence'
+                    })
+                
+                # Check for old beliefs that may be stale
+                if belief.last_validated:
+                    from datetime import datetime
+                    try:
+                        last_val = datetime.fromisoformat(belief.last_validated)
+                        age_days = (datetime.now() - last_val).days
+                        if age_days > 30 and belief.confidence > 0.6:
+                            findings.append({
+                                'belief': belief.proposition,
+                                'challenge': f'Old belief ({age_days} days) may be stale',
+                                'confidence': belief.confidence,
+                                'age_days': age_days,
+                                'strength': 'stale'
+                            })
+                    except Exception:
+                        pass
+            
+            # Check SelfModel for overconfident domains
+            try:
+                from src.agentic.self_model import get_self_model
+                sm = get_self_model()
+                overconfident = sm.get_overconfident_domains()
+                for dom in overconfident:
+                    findings.append({
+                        'belief': f'High confidence in {dom}',
+                        'challenge': 'SelfModel detects overconfidence - predictions exceed actual success',
+                        'strength': 'calibration_error'
+                    })
+            except Exception:
+                pass
+            
+        except Exception as e:
+            logger.debug(f"Adversarial critique error: {e}")
+        
+        return findings
+    
     async def _phase_periodic_reflection(self, agi_kernel):
         """THINK sub-phase — periodic reflection using real cognitive data.
 
@@ -2074,6 +2147,39 @@ class AutonomousBrain(AGISocialMixin):
                             pass
             except Exception as e:
                 logger.debug(f"Deep cognitive review error: {e}")
+        
+        # 7.5: Reflection depth control - adversarial every 1000 cycles
+        if cycle_count > 0 and cycle_count % 1000 == 0:
+            try:
+                logger.info("🧠 === ADVERSARIAL SELF-CRITIQUE (1000 cycles) ===")
+                # Challenge own beliefs - look for disconfirming evidence
+                adversarial_findings = await self._adversarial_self_critique(agi_kernel)
+                
+                if adversarial_findings:
+                    logger.info(f"   🔍 Found {len(adversarial_findings)} beliefs to challenge")
+                    for finding in adversarial_findings[:5]:
+                        logger.info(f"   ⚠️ {finding['belief'][:60]}... => {finding['challenge']}")
+                else:
+                    logger.info(f"   ✅ No significant belief challenges found")
+                
+                # Store findings in beliefs
+                try:
+                    from src.agentic.belief_engine import get_belief_engine
+                    be = get_belief_engine()
+                    if be and adversarial_findings:
+                        for f in adversarial_findings[:3]:
+                            be.add_belief(
+                                predicate=f"adversarial_challenge_{f['belief'][:30]}",
+                                confidence=0.7,
+                                domain="metacognition",
+                                evidence=[f"Challenge: {f['challenge']}", f"Strength: {f.get('strength', 'unknown')}"],
+                                source="adversarial_reflection"
+                            )
+                except Exception:
+                    pass
+                    
+            except Exception as e:
+                logger.debug(f"Adversarial self-critique error: {e}")
         
         # Performance optimization (every 50 cycles)
         if cycle_count > 0 and cycle_count % 50 == 0:
