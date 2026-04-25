@@ -573,8 +573,8 @@ class KnowledgeGraph:
         return candidates[:5]
 
 
-from datetime import datetime
-
+# Singleton instance
+_knowledge_graph = None
 
 def get_knowledge_graph() -> KnowledgeGraph:
     """Get or create singleton knowledge graph"""
