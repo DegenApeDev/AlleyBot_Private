@@ -97,7 +97,30 @@ class ConversationService:
         # Track conversation sessions
         self._conversation_sessions: Dict[str, List[Dict]] = {}
         
+        # Load persisted conversation history
+        self._load_conversation_history()
+        
         print("✅ Conversation Service initialized - unified conversational authority")
+    
+    def _load_conversation_history(self):
+        """Load conversation history from persistent memory"""
+        if self.core:
+            try:
+                saved = self.core.get_memory('conversation_service_history')
+                if saved:
+                    self._conversation_sessions = saved
+                    total_msgs = sum(len(v) for v in self._conversation_sessions.values())
+                    print(f"📝 Loaded conversation history: {len(self._conversation_sessions)} sessions, {total_msgs} messages")
+            except Exception as e:
+                print(f"⚠️ Failed to load conversation history: {e}")
+    
+    def _save_conversation_history(self):
+        """Save conversation history to persistent memory"""
+        if self.core:
+            try:
+                self.core.save_memory('conversation_service_history', self._conversation_sessions)
+            except Exception as e:
+                print(f"⚠️ Failed to save conversation history: {e}")
     
     # ------------------------------------------------------------------
     # Public API
@@ -902,6 +925,9 @@ CRITICAL RULES:
         
         # Trim to last 20 messages
         self._conversation_sessions[conv_id] = self._conversation_sessions[conv_id][-20:]
+        
+        # Persist to memory
+        self._save_conversation_history()
     
     async def _record_conversation(
         self,
