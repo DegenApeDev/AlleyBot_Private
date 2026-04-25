@@ -246,11 +246,10 @@ async def setup_hermes_tools_integration(alleybot_core):
         if hasattr(alleybot_core, 'agi_kernel') and alleybot_core.agi_kernel:
             original_router = alleybot_core.agi_kernel.action_router
             
-            # Create enhanced router
+            # Create enhanced router (ActionRouter only takes agi_kernel and plugin_manager)
             enhanced_router = HermesToolsActionRouter(
                 alleybot_core.agi_kernel,
                 alleybot_core.plugin_manager,
-                alleybot_core.llm_router
             )
             
             # Copy existing actions
