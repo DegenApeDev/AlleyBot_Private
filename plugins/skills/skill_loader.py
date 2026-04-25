@@ -82,10 +82,18 @@ class SkillLoaderMixin:
             description = frontmatter.get("description", "")
             metadata = dict(frontmatter)
             metadata.pop("description", None)
+            # Normalize aliases to list
+            aliases_raw = frontmatter.get("aliases", [])
+            if isinstance(aliases_raw, str):
+                aliases = [a.strip() for a in aliases_raw.split(",") if a.strip()]
+            elif isinstance(aliases_raw, list):
+                aliases = aliases_raw
+            else:
+                aliases = []
             return {
                 "description": description,
                 "metadata": metadata,
-                "aliases": frontmatter.get("aliases", []),
+                "aliases": aliases,
             }
         except Exception:
             return None
@@ -173,6 +181,11 @@ For specific core commands, refer to plugin documentation."""
         if not self.skill_index:
             return None
 
+        # Direct alias resolution
+        resolved = self._resolve_alias(task_description.strip())
+        if resolved:
+            return resolved
+
         task_lower = task_description.lower()
         best_match = None
         best_score = 0
@@ -199,91 +212,15 @@ For specific core commands, refer to plugin documentation."""
             if category in task_lower:
                 score += 3
 
-            # Alias matches (integrated resolution)
+            # Alias matches
             aliases = info.get("aliases", [])
             for alias in aliases:
                 alias_lower = alias.lower()
                 if alias_lower in task_lower:
                     score += 6
-                alias_words = set(alias_lower.split())
-                overlap_alias = task_words & alias_words
-                score += len(overlap_alias)
 
             if score > best_score:
                 best_score = score
                 best_match = name
 
-        # Threshold for decent match
-        if best_score >= 2:
-            return best_match
-        return None
-
-    def activate_skill(self, skill_name: str) -> Optional[str]:
-        """Load full skill and prepare for execution"""
-        skill = self._load_full_skill(skill_name)
-        if not skill:
-            return None
-
-        resolved_name = self._resolve_alias(skill_name)
-        self.active_skill = resolved_name
-        self.skill_context = skill["body"]
-
-        # Record activation
-        self.skill_history.append(
-            {
-                "skill": resolved_name,
-                "activated_at": datetime.now().isoformat(),
-                "description": skill["description"],
-            }
-        )
-
-        print(f"🔧 Skill activated: {resolved_name}")
-        return self.skill_context
-
-    def deactivate_skill(self):
-        """Clear active skill"""
-        if self.active_skill:
-            print(f"🔧 Skill deactivated: {self.active_skill}")
-        self.active_skill = None
-        self.skill_context = None
-
-    def get_skill_prompt(self, skill_name: str) -> Optional[str]:
-        """Get the skill body formatted for AI prompt injection"""
-        skill = self._load_full_skill(skill_name)
-        if not skill:
-            return None
-
-        # Format skill context for AI
-        fm = skill.get("frontmatter", {})
-        prompt = f"""# Skill: {skill['name']}
-
-{skill['description']}
-
-## Instructions
-{skill['body']}
-"""
-
-        # Add references if available
-        if skill.get("references"):
-            prompt += "\n## References\n"
-            for ref_path in skill["references"][:3]:  # Limit to 3
-                try:
-                    with open(ref_path, "r", encoding="utf-8") as f:
-                        ref_content = f.read()[:500]  # Limit content
-                    prompt += f"\n### {os.path.basename(ref_path)}\n{ref_content}\n"
-                except Exception:
-                    pass
-
-        return prompt
-
-    def skill_history_command(self, *args) -> str:
-        """Show recent skill activations. Usage: skills_history"""
-        if not self.skill_history:
-            return "📭 No skills activated yet"
-
-        output = "📚 Skill Activation History:\n\n"
-        for entry in reversed(self.skill_history[-10:]):
-            skill = entry["skill"]
-            when = entry["activated_at"][:16]  # Trim to datetime
-            output += f"  {when} - {skill}\n"
-        return output
+        return best_match if best_score > 0 else None

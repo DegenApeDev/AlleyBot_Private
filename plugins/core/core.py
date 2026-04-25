@@ -13,6 +13,10 @@ class CorePlugin(AlleyBotPlugin):
             "help": self.cmd_help,
             "ping": self.cmd_ping,
             "status": self.cmd_status,
+        }
+    
+    def get_actions(self) -> Dict[str, callable]:
+        return {
             "unknown_handler": self.cmd_unknown_handler,
         }
     
