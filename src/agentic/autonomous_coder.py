@@ -474,9 +474,6 @@ class TestSkill:
             logger.info(f"🚀 Deployed skill: {skill.skill_name} at {skill.skill_path}")
             logger.info(f"   Files: {len(skill.files_created)}")
             
-            # TODO: In future, could hot-reload the skill into the plugin system
-            # For now, skills will be loaded on next restart
-            
             return True
             
         except Exception as e:

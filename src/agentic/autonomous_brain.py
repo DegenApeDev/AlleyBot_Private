@@ -15,6 +15,7 @@ import asyncio
 import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
+from pathlib import Path
 from dataclasses import dataclass
 import os
 
@@ -1617,11 +1618,9 @@ class AutonomousBrain(AGISocialMixin):
         
         logger.info(f"🔍 Detected {len(skill_gaps)} skill gaps")
         selfimprove_plugin = self.plugin_manager.get_plugin('selfimprove') if self.plugin_manager else None
-        if not selfimprove_plugin:
-            return
         
         gap = max(skill_gaps, key=lambda g: g['priority'])
-        if gap['priority'] < 5:
+        if gap['priority'] < 4:
             return
         
         logger.info(f"🤖 Auto-generating skill for gap: {gap['description']}")
@@ -1673,16 +1672,20 @@ class AutonomousBrain(AGISocialMixin):
 
                 if skill.status == 'generated' and skill.files_created:
                     logger.info(f"✅ Generated skill: {skill.skill_name}")
-                    code_to_test = open(skill.files_created[0]).read()
-                    test_result = selfimprove_plugin.test_code_in_sandbox(
-                        code=code_to_test,
-                        test_code=None
-                    )
-                    if test_result['success']:
-                        coder.deploy_skill(skill)
-                        logger.info(f"🚀 Deployed skill: {skill.skill_name}")
+                    code_to_test = Path(skill.files_created[0]).read_text()
+                    if selfimprove_plugin and hasattr(selfimprove_plugin, 'test_code_in_sandbox'):
+                        test_result = selfimprove_plugin.test_code_in_sandbox(
+                            code=code_to_test,
+                            test_code=None
+                        )
+                        if test_result['success']:
+                            coder.deploy_skill(skill)
+                            logger.info(f"🚀 Deployed skill: {skill.skill_name}")
+                        else:
+                            logger.warning(f"⚠️ Skill failed sandbox test: {test_result.get('error', 'Unknown error')}")
                     else:
-                        logger.warning(f"⚠️ Skill failed sandbox test: {test_result.get('error', 'Unknown error')}")
+                        coder.deploy_skill(skill)
+                        logger.info(f"🚀 Deployed skill (no sandbox available): {skill.skill_name}")
                 elif skill.status == 'generated' and not skill.files_created:
                     logger.warning(f"⚠️ Skill generated but no files created")
                 else:

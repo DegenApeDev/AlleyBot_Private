@@ -6,7 +6,7 @@ Integrates with enhanced autonomous system for self-improvement
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional
-from src.agentic.skill_generator import SkillGenerator
+from src.agentic.skill_generator import DynamicSkillGenerator as SkillGenerator
 from src.agentic.autonomous_coder import AutonomousCoder
 
 logger = logging.getLogger(__name__)
@@ -352,7 +352,7 @@ class AutonomousSkillWorkflow:
         skill_result = self.develop_top_skill(ideas)
         
         if skill_result:
-            print(f"✅ Developed skill: {skill_result['code_result'].get('draft_id', 'unknown')}")
+            print(f"✅ Developed skill: {skill_result['code_result'].skill_name}")
             
             # Add to queue for human approval
             self.skill_queue.append(skill_result)
@@ -361,7 +361,7 @@ class AutonomousSkillWorkflow:
                 'status': 'success',
                 'ideas_generated': len(ideas),
                 'skill_developed': True,
-                'skill_id': skill_result['code_result'].get('draft_id'),
+                'skill_id': skill_result['code_result'].spec_id,
                 'queue_size': len(self.skill_queue),
                 'timestamp': datetime.now().isoformat()
             }
@@ -381,7 +381,7 @@ class AutonomousSkillWorkflow:
             'queue_size': len(self.skill_queue),
             'pending_skills': [
                 {
-                    'skill_id': skill['code_result'].get('draft_id'),
+                    'skill_id': skill['code_result'].spec_id,
                     'topic': skill['idea']['topic'],
                     'source': skill['idea']['source'],
                     'timestamp': skill['timestamp']
