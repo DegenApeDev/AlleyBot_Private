@@ -56,6 +56,22 @@ class ActionRouter(SkillExecutorMixin):
         super().__init__(config)
         self._loaded_plugins: Dict[str, AlleyBotPlugin] = {}
 
+    def unknown_handler(self, plugin_name: str, command_name: str, args: List[str], *, plugin: Optional[AlleyBotPlugin] = None, commands: Optional[Dict[str, callable]] = None) -> str:
+        """Fallback handler for unknown plugin actions."""
+        msg = f"Unknown action '{plugin_name}:{command_name}'"
+        if commands is not None:
+            avail = [cmd for cmd in commands if callable(commands[cmd])]
+            if avail:
+                msg += f"\nAvailable commands in '{plugin_name}': {', '.join(avail)}"
+        if plugin_name not in self._loaded_plugins:
+            msg += "\nPlugin not available (not found or failed to load)."
+        else:
+            avail_plugins = sorted(self._loaded_plugins.keys())
+            if avail_plugins:
+                msg += f"\nLoaded plugins: {', '.join(avail_plugins)}"
+        print(f"Falling back to unknown_handler for {plugin_name}:{command_name} {args}")
+        return msg
+
     def _execute_via_plugin(self, plugin_name: str, command_name: str, args: List[str]) -> str:
         """Dynamically execute a plugin command with loading and error recovery."""
         print(f"Routing to plugin: {plugin_name}:{command_name} {args}")
@@ -65,30 +81,25 @@ class ActionRouter(SkillExecutorMixin):
                 module = importlib.import_module(module_path)
                 create_fn = getattr(module, "create_plugin", None)
                 if not callable(create_fn):
-                    return f"Plugin '{plugin_name}' missing create_plugin function."
+                    return self.unknown_handler(plugin_name, command_name, args)
                 plugin_instance = create_fn(self.config)
                 if not isinstance(plugin_instance, AlleyBotPlugin):
-                    return f"Plugin '{plugin_name}' did not return an AlleyBotPlugin instance."
+                    return self.unknown_handler(plugin_name, command_name, args)
                 self._loaded_plugins[plugin_name] = plugin_instance
                 print(f"Loaded plugin: {plugin_name}")
             except ImportError:
-                error_msg = f"Plugin '{plugin_name}' not found. Ensure plugins/{plugin_name}/{plugin_name}.py exists."
-                print(error_msg)
-                return error_msg
+                print(f"Plugin '{plugin_name}' not found. Ensure plugins/{plugin_name}/{plugin_name}.py exists.")
+                return self.unknown_handler(plugin_name, command_name, args)
             except Exception as e:
-                error_msg = f"Failed to load plugin '{plugin_name}': {str(e)}"
-                print(error_msg)
-                traceback.print_exc()
-                return error_msg
+                print(f"Failed to load plugin '{plugin_name}': {str(e)}")
+                return self.unknown_handler(plugin_name, command_name, args)
 
         plugin = self._loaded_plugins[plugin_name]
-        commands = plugin.get_commands()
-        command_fn = commands.get(command_name)
-        if not callable(command_fn):
-            available = list(commands.keys())
-            return f"Command '{command_name}' not found in '{plugin_name}'. Available: {', '.join(available)}"
-
         try:
+            commands = plugin.get_commands()
+            command_fn = commands.get(command_name)
+            if command_fn is None or not callable(command_fn):
+                return self.unknown_handler(plugin_name, command_name, args, plugin=plugin, commands=commands)
             result = command_fn(args)
             return str(result) if result is not None else "Command executed successfully (no output)."
         except Exception as e:

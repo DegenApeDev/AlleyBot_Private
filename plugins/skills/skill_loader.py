@@ -20,6 +20,18 @@ class SkillLoaderMixin:
         self.skill_context: Optional[str] = None
         self.skill_history: List[Dict[str, Any]] = []
         self._build_skill_index()
+        # Ensure core is always indexed to prevent loading failures
+        if "core" not in self.skill_index:
+            print("🔧 Adding fallback core skill index")
+            self.skill_index["core"] = {
+                "description": "Core AlleyBot functionality and essential commands.",
+                "metadata": {
+                    "category": "plugin",
+                    "version": "1.0.0",
+                    "author": "AlleyBot",
+                },
+                "aliases": ["core", "main"],
+            }
 
     def _build_skill_index(self):
         """Build lightweight skill index by scanning skills directory"""
@@ -193,21 +205,20 @@ class SkillLoaderMixin:
             info = getattr(plugin_module, "PLUGIN_INFO", None)
             if not info:
                 return None
-            desc = info.get("description", "")
+            desc = info.get("description", f"{skill_name} plugin")
             body = f"""## {skill_name.replace('_', ' ').replace('-', ' ').title()} Skill Instructions
 
 You have access to the {skill_name} plugin.
 
 Plugin Description: {desc}
 
-Use commands from this plugin as needed.
-For available commands: !help {skill_name}"""
+Use plugin commands when relevant to the conversation."""
             return {
                 "name": skill_name,
                 "description": desc,
                 "body": body,
-                "frontmatter": {"category": "plugin", "plugin": skill_name},
+                "frontmatter": dict(info),
                 "references": info.get("references", []),
             }
-        except (ImportError, AttributeError):
+        except Exception:
             return None
