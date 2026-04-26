@@ -286,7 +286,7 @@ class DefaultGoalSeeder:
         try:
             all_goals = gm_v2.get_goals(limit=50)
         except Exception as e:
-            logger.warning(f"GoalManager query failed during dedup check: {e}")
+            logger.debug(f"GoalManager query failed during dedup check: {e}")
             return 0
         
         existing_ids = {g.id for g in all_goals}
