@@ -786,9 +786,8 @@ class ActionRouter:
         
         plugin = self.plugins.get_plugin(plugin_name)
         if not plugin:
-            # Debug: list available plugins
             available = list(self.plugins.plugins.keys()) if hasattr(self.plugins, 'plugins') else []
-            print(f"⚠️ Plugin '{plugin_name}' not found. Available: {available}")
+            logger.warning(f"Plugin '{plugin_name}' not found. Available: {available}")
             return {
                 'success': False,
                 'error': f'Plugin not found: {plugin_name}. Available: {available}',

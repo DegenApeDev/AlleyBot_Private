@@ -283,7 +283,7 @@ class GoalPlanner:
             steps = [
                 PlanStep(
                     id=f"step_observe_{domain}",
-                    action="browse", plugin="moltx",
+                    action="feed", plugin="moltx",
                     description=f"Browse {domain} platform to understand current context",
                     expected_outcome="Current context and trending topics identified",
                     rollback_action="Skip observation, proceed with general knowledge",
@@ -361,7 +361,7 @@ class GoalPlanner:
             steps = [
                 PlanStep(
                     id="step_gather_data",
-                    action="browse", plugin="moltx",
+                    action="feed", plugin="moltx",
                     description="Gather data from relevant platforms",
                     expected_outcome="Data collected from multiple sources",
                     rollback_action="Use available cached data",
@@ -402,7 +402,7 @@ class GoalPlanner:
             else:
                 steps.append(PlanStep(
                     id="step_generic_observe",
-                    action="browse", plugin="moltx",
+                    action="feed", plugin="moltx",
                     description="Observe current state across platforms",
                     expected_outcome="Current awareness of platform activity",
                     rollback_action="Use cached observations",
