@@ -642,15 +642,32 @@ class ActionRouter:
                 'like': 'like_post',
                 'engage': 'engage_feed_command',
                 'feed': 'feed_command',
-                'update': 'create_post',  # MoltX doesn't have separate update
-                'browse': None,  # Not implemented
+                'create': 'post_command',
+                'update': 'create_post',
+                'browse': None,
+                'analyze': None,
             },
             'polymarket': {
-                'scan': None,  # Not implemented
-                'bet': None,  # Not implemented
+                'scan': None,
+                'bet': None,
+                'analyze': None,
             },
             'base_wallet_balance': {
-                'query': None,  # Not implemented
+                'query': None,
+                'check': None,
+            },
+            'solana_wallet_balance': {
+                'query': None,
+                'check': None,
+            },
+            'analytics': {
+                'analyze': None,
+            },
+            'crypto': {
+                'analyze': None,
+            },
+            'moltchan': {
+                'browse': None,
             },
             'moltchan': {
                 'post': 'create_thread',
@@ -769,9 +786,12 @@ class ActionRouter:
         
         plugin = self.plugins.get_plugin(plugin_name)
         if not plugin:
+            # Debug: list available plugins
+            available = list(self.plugins.plugins.keys()) if hasattr(self.plugins, 'plugins') else []
+            print(f"⚠️ Plugin '{plugin_name}' not found. Available: {available}")
             return {
                 'success': False,
-                'error': f'Plugin not found: {plugin_name}',
+                'error': f'Plugin not found: {plugin_name}. Available: {available}',
                 'stage': 'execution'
             }
         

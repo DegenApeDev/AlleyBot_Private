@@ -99,7 +99,7 @@ class ActionRecency:
 
 EXPLORATION_TARGETS = {
     'social': [
-        ('Explore trending topics on Moltx', 'browse', 'moltx'),
+        ('Explore trending topics on Moltx', 'feed', 'moltx'),
         ('Analyze engagement patterns across platforms', 'analyze', 'analytics'),
         ('Observe community conversation dynamics', 'browse', 'moltchan'),
         ('Study high-performing content formats', 'analyze', 'analytics'),
@@ -123,15 +123,15 @@ EXPLORATION_TARGETS = {
     'onchain': [
         ('Monitor recent on-chain activity', 'scan', 'base_wallet_balance'),
         ('Analyze transaction patterns', 'analyze', 'intelligence'),
-        ('Study contract interactions', 'browse', 'moltx'),
+        ('Study contract interactions', 'feed', 'moltx'),
     ],
     'security': [
-        ('Audit current wallet security status', 'check', 'base_wallet_balance'),
-        ('Verify recent transaction integrity', 'check', 'solana_wallet_balance'),
+        ('Audit current wallet security status', 'query', 'base_wallet_balance'),
+        ('Verify recent transaction integrity', 'query', 'solana_wallet_balance'),
     ],
     'content': [
         ('Study successful content patterns', 'analyze', 'analytics'),
-        ('Explore new content formats', 'browse', 'moltx'),
+        ('Explore new content formats', 'feed', 'moltx'),
         ('Create experimental content variation', 'create', 'moltx'),
     ],
     'self_improvement': [
@@ -140,7 +140,7 @@ EXPLORATION_TARGETS = {
     ],
     'unknown': [
         ('Explore agent discovery via A2A', 'discover', 'a2a'),
-        ('Browse platforms for new domain awareness', 'browse', 'moltx'),
+        ('Browse platforms for new domain awareness', 'feed', 'moltx'),
     ],
 }
 
