@@ -194,26 +194,32 @@ class PluginManager:
             # Initialize plugin
             plugin_config_dict = plugin_config.get('config') or {}
             plugin = plugin_class(plugin_config_dict)
-            plugin.initialize(api, core)
+            try:
+                plugin.initialize(api, core)
+            except Exception as init_err:
+                import traceback
+                traceback.print_exc()
+                print(f"⚠️ Plugin {plugin_name} initialized with errors: {init_err}")
             
-            # Register plugin
+            # Register plugin even if initialize had partial failures
             self.plugins[plugin_name] = plugin
             
             # Register tasks, commands, and endpoints
-            self.tasks.update(plugin.get_tasks())
-            self.commands.update(plugin.get_commands())
-            self.endpoints.update(plugin.get_endpoints())
+            try:
+                self.tasks.update(plugin.get_tasks() or {})
+                self.commands.update(plugin.get_commands() or {})
+                self.endpoints.update(plugin.get_endpoints() or {})
+            except Exception as reg_err:
+                print(f"⚠️ Plugin {plugin_name} registration partial failure: {reg_err}")
             
             print(f"✅ Loaded plugin: {plugin_name}")
             
         except ImportError as e:
             print(f"❌ Failed to import plugin {plugin_name}: {e}")
         except Exception as e:
-            try:
-                error_str = str(e)
-            except:
-                error_str = "Exception details unavailable"
-            print(f"❌ Failed to load plugin {plugin_name}: {error_str}")
+            import traceback
+            traceback.print_exc()
+            print(f"❌ Failed to load plugin {plugin_name}: {e}")
     
     def unload_plugin(self, plugin_name: str):
         """Unload a specific plugin"""

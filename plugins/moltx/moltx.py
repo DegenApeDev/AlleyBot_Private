@@ -55,55 +55,69 @@ class MoltxPlugin(
     def initialize(self, api, core):
         """Initialize Moltx plugin"""
         super().initialize(api, core)
-        self._init_api_connection()
+        try:
+            self._init_api_connection()
+        except Exception as e:
+            print(f"⚠️ Moltx API connection init failed: {e}")
 
-        # API key recovery via X tweet verification (first boot protocol step)
-        if not self.initialized and hasattr(self.core, 'config'):
-            tweet_url = self.core.config.get('MOLTX_VERIFICATION_TWEET_URL')
-            if tweet_url:
-                print(f"🔑 Attempting API key recovery via X tweet: {tweet_url}")
-                recovery_result = self.claim_agent(tweet_url)
-                print(f"Recovery result: {recovery_result}")
-                # Re-init after potential key set
-                self._init_api_connection()
+        try:
+            if not self.initialized and hasattr(self.core, 'config'):
+                tweet_url = self.core.config.get('MOLTX_VERIFICATION_TWEET_URL')
+                if tweet_url:
+                    print(f"🔑 Attempting API key recovery via X tweet: {tweet_url}")
+                    recovery_result = self.claim_agent(tweet_url)
+                    print(f"Recovery result: {recovery_result}")
+                    self._init_api_connection()
+        except Exception as e:
+            print(f"⚠️ Moltx API key recovery failed: {e}")
 
-        # First boot protocol
-        if not self.agent_id:
-            self.perform_first_boot()
+        try:
+            if not self.agent_id:
+                self.perform_first_boot()
+        except Exception as e:
+            print(f"⚠️ Moltx first boot failed: {e}")
 
-        # EVM wallet linking (mandatory for write operations per v0.22.1)
-        self._init_wallet()
-        if self.initialized and not self.evm_wallet_linked:
-            print(f"🔌 Attempting EVM wallet auto-link for @{self.agent_name}...")
-            link_result = self.auto_link_wallet()
-            if not link_result:
-                print(f"⚠️  Wallet auto-link failed - you can retry with /moltx_link_wallet")
+        try:
+            self._init_wallet()
+        except Exception as e:
+            print(f"⚠️ Moltx wallet init failed: {e}")
 
-        # Heartbeat protocol
-        if self.initialized and hasattr(self, 'send_heartbeat'):
-            self.send_heartbeat()
-            print("❤️ Heartbeat sent on init")
+        try:
+            if self.initialized and not self.evm_wallet_linked:
+                print(f"🔌 Attempting EVM wallet auto-link for @{self.agent_name}...")
+                link_result = self.auto_link_wallet()
+                if not link_result:
+                    print(f"⚠️ Wallet auto-link failed - you can retry with /moltx_link_wallet")
+        except Exception as e:
+            print(f"⚠️ Moltx wallet linking failed: {e}")
+
+        try:
+            if self.initialized and hasattr(self, 'send_heartbeat'):
+                self.send_heartbeat()
+                print("❤️ Heartbeat sent on init")
+        except Exception as e:
+            print(f"⚠️ Moltx heartbeat failed: {e}")
         
-        # Start engagement buffer builder
-        if self.initialized:
-            print("🔄 Starting engagement buffer builder...")
-            self._build_engagement_buffer()
-            
-            # Run MoltX Protocol (First Boot or Engagement Engine)
-            print("📋 Running MoltX protocol per skill.md...")
-            if not self.protocol._has_done_first_boot:
-                self.protocol.run_first_boot_protocol()
-            else:
-                self.protocol.run_engagement_engine()
+        try:
+            if self.initialized:
+                print("🔄 Starting engagement buffer builder...")
+                self._build_engagement_buffer()
+                
+                print("📋 Running MoltX protocol per skill.md...")
+                if not self.protocol._has_done_first_boot:
+                    self.protocol.run_first_boot_protocol()
+                else:
+                    self.protocol.run_engagement_engine()
+        except Exception as e:
+            print(f"⚠️ Moltx engagement/protocol init failed: {e}")
 
-        # Ensure X handle is set on profile metadata
-        if self.initialized:
-            try:
+        try:
+            if self.initialized:
                 x_handle = self.core.config.get('moltx_x_handle', 'degenapedev')
                 if hasattr(self, 'set_x_handle'):
                     self.set_x_handle(x_handle)
-            except Exception as e:
-                print(f"⚠️  Could not set X handle: {e}")
+        except Exception as e:
+            print(f"⚠️ Could not set X handle: {e}")
 
     def perform_first_boot(self):
         """First boot protocol: register, setup profile, wallet, heartbeat"""
