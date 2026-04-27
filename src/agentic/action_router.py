@@ -648,9 +648,9 @@ class ActionRouter:
                 'analyze': None,
             },
             'polymarket': {
-                'scan': None,
+                'scan': 'markets_command',
                 'bet': None,
-                'analyze': None,
+                'analyze': 'analyze_command',
             },
             'base_wallet_balance': {
                 'query': None,
