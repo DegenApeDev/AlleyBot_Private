@@ -653,23 +653,30 @@ class ActionRouter:
                 'analyze': 'analyze_command',
             },
             'base_wallet_balance': {
-                'query': None,
-                'check': None,
+                'query': 'wallet_summary_command',
+                'check': 'balance_command',
             },
             'solana_wallet_balance': {
-                'query': None,
-                'check': None,
+                'query': 'solana_wallet_summary_command',
+                'check': 'solana_balance_command',
             },
             'analytics': {
-                'analyze': None,
+                'analyze': 'show_stats',
             },
             'crypto': {
-                'analyze': None,
+                'analyze': 'multi_price_command',
+                'scan': 'trending_command',
+            },
+            'intelligence': {
+                'analyze': 'analyze_engagement',
+            },
+            'mcp': {
+                'research': 'research_command',
+                'search': 'search_command',
+                'analyze': 'analyze_command',
             },
             'moltchan': {
-                'browse': None,
-            },
-            'moltchan': {
+                'browse': 'browse_boards_command',
                 'post': 'create_thread',
                 'reply': 'reply_to_thread',
                 'update': 'create_thread',
@@ -678,15 +685,17 @@ class ActionRouter:
                 'post': 'create_post',
                 'reply': 'add_comment',
                 'comment': 'add_comment',
+                'feed': 'feed_command',
             },
             'moltbookai': {
                 'post': 'create_post',
                 'update': 'create_post',
             },
             'clawbr': {
-                'post': 'create_post',
-                'reply': 'add_comment',
+                'post': 'clawbr_post_command',
+                'reply': 'clawbr_reply_command',
                 'debate': 'create_debate',
+                'feed': 'clawbr_feed_command',
             },
             'a2a': {
                 'discover': 'discover_agents',
