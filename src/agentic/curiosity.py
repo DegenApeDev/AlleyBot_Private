@@ -121,7 +121,7 @@ EXPLORATION_TARGETS = {
         ('Analyze cross-platform data patterns', 'analyze', 'analytics'),
     ],
     'onchain': [
-        ('Monitor recent on-chain activity', 'scan', 'base_wallet_balance'),
+        ('Monitor recent on-chain activity', 'query', 'base_wallet_balance'),
         ('Analyze transaction patterns', 'analyze', 'intelligence'),
         ('Study contract interactions', 'feed', 'moltx'),
     ],

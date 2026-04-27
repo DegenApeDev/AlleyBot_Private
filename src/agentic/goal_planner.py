@@ -115,65 +115,40 @@ TOOL_REGISTRY = {
     'moltx': {
         'post': {'description': 'Create a post on Moltx', 'confidence_base': 0.7, 'requires': ['topic']},
         'reply': {'description': 'Reply to a post on Moltx', 'confidence_base': 0.75, 'requires': ['post_id', 'content']},
-        'browse': {'description': 'Browse Moltx feed', 'confidence_base': 0.9, 'requires': []},
+        'feed': {'description': 'Read Moltx feed', 'confidence_base': 0.9, 'requires': []},
         'engage': {'description': 'Engage with Moltx content', 'confidence_base': 0.8, 'requires': ['post_id']},
-        'analyze': {'description': 'Analyze Moltx trends', 'confidence_base': 0.85, 'requires': []},
+        'like': {'description': 'Like a post on Moltx', 'confidence_base': 0.95, 'requires': ['post_id']},
     },
     'moltchan': {
         'post': {'description': 'Post on Moltchan', 'confidence_base': 0.7, 'requires': ['board', 'content']},
         'browse': {'description': 'Browse Moltchan boards', 'confidence_base': 0.9, 'requires': []},
-        'engage': {'description': 'Engage on Moltchan', 'confidence_base': 0.75, 'requires': ['thread_id']},
+        'reply': {'description': 'Reply on Moltchan', 'confidence_base': 0.75, 'requires': ['thread_id', 'content']},
     },
     'clawbr': {
         'post': {'description': 'Post on Clawbr', 'confidence_base': 0.7, 'requires': ['content']},
+        'reply': {'description': 'Reply on Clawbr', 'confidence_base': 0.75, 'requires': ['post_id', 'content']},
         'debate': {'description': 'Start or join a debate on Clawbr', 'confidence_base': 0.65, 'requires': ['topic']},
-        'engage': {'description': 'Engage on Clawbr', 'confidence_base': 0.8, 'requires': []},
-    },
-    'moltbookai': {
-        'post': {'description': 'Post on MoltBook', 'confidence_base': 0.7, 'requires': ['content']},
-        'browse': {'description': 'Browse MoltBook', 'confidence_base': 0.9, 'requires': []},
+        'feed': {'description': 'Read Clawbr feed', 'confidence_base': 0.9, 'requires': []},
     },
     'polymarket': {
         'analyze': {'description': 'Analyze Polymarket markets', 'confidence_base': 0.8, 'requires': []},
-        'trade': {'description': 'Execute a trade on Polymarket', 'confidence_base': 0.5, 'requires': ['market_id', 'direction', 'amount']},
         'scan': {'description': 'Scan for market opportunities', 'confidence_base': 0.85, 'requires': []},
     },
     'crypto': {
         'analyze': {'description': 'Analyze crypto market data', 'confidence_base': 0.8, 'requires': []},
-        'price_check': {'description': 'Check crypto prices', 'confidence_base': 0.95, 'requires': ['token']},
+        'scan': {'description': 'Check trending crypto', 'confidence_base': 0.95, 'requires': []},
     },
     'analytics': {
         'analyze': {'description': 'Run analytics', 'confidence_base': 0.85, 'requires': []},
     },
     'a2a': {
         'discover': {'description': 'Discover other agents via A2A', 'confidence_base': 0.85, 'requires': []},
-        'query': {'description': 'Query agent capabilities via A2A', 'confidence_base': 0.8, 'requires': ['agent_id']},
-    },
-    'selfimprove': {
-        'analyze': {'description': 'Analyze capability gaps', 'confidence_base': 0.75, 'requires': []},
-        'discover': {'description': 'Discover new skills', 'confidence_base': 0.6, 'requires': []},
     },
     'intelligence': {
         'analyze': {'description': 'Analyze intelligence data', 'confidence_base': 0.85, 'requires': []},
-        'query': {'description': 'Query information', 'confidence_base': 0.8, 'requires': ['query']},
     },
     'mcp': {
-        'research': {'description': 'Research via MCP', 'confidence_base': 0.75, 'requires': ['query']},
-    },
-    'engagement': {
-        'engage': {'description': 'Cross-platform engagement', 'confidence_base': 0.7, 'requires': []},
-        'coordinate': {'description': 'Coordinate engagement strategy', 'confidence_base': 0.65, 'requires': []},
-    },
-    'base_wallet_balance': {
-        'check': {'description': 'Check Base wallet balance', 'confidence_base': 0.95, 'requires': []},
-        'query': {'description': 'Query Base wallet info', 'confidence_base': 0.9, 'requires': []},
-    },
-    'solana_wallet_balance': {
-        'check': {'description': 'Check Solana wallet balance', 'confidence_base': 0.95, 'requires': []},
-        'query': {'description': 'Query Solana wallet info', 'confidence_base': 0.9, 'requires': []},
-    },
-    'clawchess': {
-        'play': {'description': 'Play chess', 'confidence_base': 0.6, 'requires': []},
+        'research': {'description': 'Research a topic via MCP', 'confidence_base': 0.8, 'requires': ['topic']},
     },
 }
 
@@ -200,7 +175,7 @@ class GoalPlanner:
             from src.agentic.action_router import ActionRouter
             return ActionRouter.is_action_valid(plugin, action)
         except Exception:
-            return True  # fail open
+            return False  # fail closed — don't plan actions we can't verify
 
     def get_available_tools(self, domain: str = None) -> Dict:
         if domain and domain in self.tool_registry:

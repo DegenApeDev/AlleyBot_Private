@@ -3393,14 +3393,14 @@ class AutonomousBrain(AGISocialMixin):
                         'confidence': 0.9
                     })
             
-            # Emergency Goal 2: Self-diagnostic
+            # Emergency Goal 2: Quick feed check
             emergency_goals.append({
-                'title': 'Emergency: System Health Check',
-                'description': 'Run internal diagnostics and report status',
-                'action_type': 'self_diagnostic',
-                'plugin': 'brain',
+                'title': 'Emergency: Quick Moltx Feed Check',
+                'description': 'Quickly check Moltx feed for trending topics',
+                'action_type': 'feed',
+                'plugin': 'moltx',
                 'priority': 7,
-                'estimated_duration': '3 min',
+                'estimated_duration': '2 min',
                 'confidence': 0.95
             })
             
