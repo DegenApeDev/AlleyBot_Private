@@ -77,6 +77,109 @@ class ActionRouter:
         'reflect_and_learn',
     )
     
+    # Action capability map: plugin -> {action_type -> method_name or None}
+    ACTION_MAP = {
+        'moltx': {
+            'post': 'post_command',
+            'reply': 'reply_to_post',
+            'like': 'like_post',
+            'engage': 'engage_feed_command',
+            'feed': 'feed_command',
+            'create': 'post_command',
+            'update': 'create_post',
+            'browse': None,
+            'analyze': None,
+        },
+        'polymarket': {
+            'scan': 'markets_command',
+            'bet': None,
+            'analyze': 'analyze_command',
+        },
+        'base_wallet_balance': {
+            'query': 'wallet_summary_command',
+            'check': 'balance_command',
+        },
+        'solana_wallet_balance': {
+            'query': 'solana_wallet_summary_command',
+            'check': 'solana_balance_command',
+        },
+        'analytics': {
+            'analyze': 'show_stats',
+        },
+        'crypto': {
+            'analyze': 'multi_price_command',
+            'scan': 'trending_command',
+        },
+        'intelligence': {
+            'analyze': 'analyze_engagement',
+        },
+        'mcp': {
+            'research': 'research_command',
+            'search': 'search_command',
+            'analyze': 'analyze_command',
+        },
+        'moltchan': {
+            'browse': 'browse_boards_command',
+            'post': 'create_thread',
+            'reply': 'reply_to_thread',
+            'update': 'create_thread',
+        },
+        'moltbook': {
+            'post': 'create_post',
+            'reply': 'add_comment',
+            'comment': 'add_comment',
+            'feed': 'feed_command',
+        },
+        'moltbookai': {
+            'post': 'create_post',
+            'update': 'create_post',
+        },
+        'clawbr': {
+            'post': 'clawbr_post_command',
+            'reply': 'clawbr_reply_command',
+            'debate': 'create_debate',
+            'feed': 'clawbr_feed_command',
+        },
+        'a2a': {
+            'discover': 'discover_agents',
+            'connect': 'connect_to_agent',
+        },
+    }
+
+    @classmethod
+    def get_capabilities(cls) -> Dict[str, set]:
+        """Return what actions are implementable/not. Useful for planners to avoid dead ends.
+
+        Returns:
+            {'valid': {('plugin', 'action'), ...}, 'invalid': {('plugin', 'action'), ...}}
+        """
+        valid = set()
+        invalid = set()
+        for plugin, actions in cls.ACTION_MAP.items():
+            for action, method in actions.items():
+                pair = (plugin, action)
+                if method is not None:
+                    valid.add(pair)
+                else:
+                    invalid.add(pair)
+        return {'valid': valid, 'invalid': invalid}
+
+    @classmethod
+    def is_action_valid(cls, plugin: str, action_type: str) -> bool:
+        """Check if a specific plugin/action combo is implemented."""
+        plugin_actions = cls.ACTION_MAP.get(plugin, {})
+        method = plugin_actions.get(action_type)
+        return method is not None
+
+    @classmethod
+    def get_valid_actions(cls, plugin: Optional[str] = None) -> List[tuple]:
+        """Get all valid (plugin, action) pairs, optionally filtered by plugin."""
+        caps = cls.get_capabilities()
+        pairs = list(caps['valid'])
+        if plugin:
+            pairs = [p for p in pairs if p[0] == plugin]
+        return pairs
+
     def __init__(self, agi_kernel, plugin_manager):
         """
         Initialize action router.
@@ -634,77 +737,8 @@ class ActionRouter:
         Returns:
             Plugin-specific method name
         """
-        # Action mapping by plugin
-        action_map = {
-            'moltx': {
-                'post': 'post_command',
-                'reply': 'reply_to_post',
-                'like': 'like_post',
-                'engage': 'engage_feed_command',
-                'feed': 'feed_command',
-                'create': 'post_command',
-                'update': 'create_post',
-                'browse': None,
-                'analyze': None,
-            },
-            'polymarket': {
-                'scan': 'markets_command',
-                'bet': None,
-                'analyze': 'analyze_command',
-            },
-            'base_wallet_balance': {
-                'query': 'wallet_summary_command',
-                'check': 'balance_command',
-            },
-            'solana_wallet_balance': {
-                'query': 'solana_wallet_summary_command',
-                'check': 'solana_balance_command',
-            },
-            'analytics': {
-                'analyze': 'show_stats',
-            },
-            'crypto': {
-                'analyze': 'multi_price_command',
-                'scan': 'trending_command',
-            },
-            'intelligence': {
-                'analyze': 'analyze_engagement',
-            },
-            'mcp': {
-                'research': 'research_command',
-                'search': 'search_command',
-                'analyze': 'analyze_command',
-            },
-            'moltchan': {
-                'browse': 'browse_boards_command',
-                'post': 'create_thread',
-                'reply': 'reply_to_thread',
-                'update': 'create_thread',
-            },
-            'moltbook': {
-                'post': 'create_post',
-                'reply': 'add_comment',
-                'comment': 'add_comment',
-                'feed': 'feed_command',
-            },
-            'moltbookai': {
-                'post': 'create_post',
-                'update': 'create_post',
-            },
-            'clawbr': {
-                'post': 'clawbr_post_command',
-                'reply': 'clawbr_reply_command',
-                'debate': 'create_debate',
-                'feed': 'clawbr_feed_command',
-            },
-            'a2a': {
-                'discover': 'discover_agents',
-                'connect': 'connect_to_agent',
-            },
-        }
-        
         # Get plugin-specific mapping
-        plugin_actions = action_map.get(plugin_name, {})
+        plugin_actions = self.ACTION_MAP.get(plugin_name, {})
         
         # Return mapped method or original action_type as fallback
         return plugin_actions.get(action_type, action_type)
@@ -808,9 +842,24 @@ class ActionRouter:
         
         # Handle None mappings (actions not implemented)
         if method_name is None:
+            # Record as hard failure so planner learns immediately
+            action_domain = action_spec.get('plugin', plugin_name)
+            error_msg = f'Action not implemented: {action_type} on {plugin_name}'
+            try:
+                if self.cognitive:
+                    self.cognitive.record_action_outcome(
+                        action=f"{action_domain}:{action_type}",
+                        domain=action_domain,
+                        predicted_confidence=0.0,
+                        actual_success=False,
+                        context=str(params)[:200],
+                        outcome_description=error_msg,
+                    )
+            except Exception:
+                pass
             return {
                 'success': False,
-                'error': f'Action not implemented: {action_type} on {plugin_name}',
+                'error': error_msg,
                 'stage': 'execution'
             }
         

@@ -55,6 +55,11 @@ class PluginManager:
         # Tracks asyncio.Task objects created via AsyncPluginMixin.create_task()
         # plugin_name -> list[asyncio.Task]
         self._async_tasks: Dict[str, List] = {}
+        # Plugin health tracking for self-healing
+        self._plugin_health: Dict[str, bool] = {}  # name -> is_healthy
+        self._plugin_config_cache: Dict[str, tuple] = {}  # name -> (config, api, core) for retry
+        self._retry_count: Dict[str, int] = {}
+        self._max_retries = 3
     
     def load_plugins(self, config_file: str, api, core):
         """Load all enabled plugins from configuration"""
@@ -194,12 +199,17 @@ class PluginManager:
             # Initialize plugin
             plugin_config_dict = plugin_config.get('config') or {}
             plugin = plugin_class(plugin_config_dict)
+            self._plugin_health[plugin_name] = False
             try:
                 plugin.initialize(api, core)
+                self._plugin_health[plugin_name] = True
             except Exception as init_err:
                 import traceback
                 traceback.print_exc()
                 print(f"⚠️ Plugin {plugin_name} initialized with errors: {init_err}")
+                # Cache for retry
+                self._plugin_config_cache[plugin_name] = (plugin_config, api, core)
+                self._retry_count[plugin_name] = self._retry_count.get(plugin_name, 0) + 1
             
             # Register plugin even if initialize had partial failures
             self.plugins[plugin_name] = plugin
@@ -295,6 +305,44 @@ class PluginManager:
     def list_plugins(self) -> Dict[str, Dict[str, Any]]:
         """List all loaded plugins with their info"""
         return {name: self.get_plugin_info(name) for name in self.plugins.keys()}
+    
+    def get_plugin_health(self, plugin_name: str) -> bool:
+        """Check if a plugin is healthy (initialized successfully)."""
+        return self._plugin_health.get(plugin_name, False)
+    
+    def retry_degraded_plugins(self) -> List[str]:
+        """Retry loading plugins that failed to initialize.
+        
+        Returns:
+            List of plugin names that were successfully retried.
+        """
+        recovered = []
+        for plugin_name in list(self._plugin_config_cache.keys()):
+            if self._retry_count.get(plugin_name, 0) > self._max_retries:
+                print(f"⏭️ Plugin {plugin_name} exceeded max retries ({self._max_retries})")
+                continue
+            if self._plugin_health.get(plugin_name, False):
+                continue  # Already healthy
+            
+            plugin = self.plugins.get(plugin_name)
+            if not plugin:
+                continue
+            
+            plugin_config, api, core = self._plugin_config_cache[plugin_name]
+            print(f"🔄 Retrying plugin: {plugin_name} (attempt {self._retry_count.get(plugin_name, 0)})...")
+            try:
+                plugin.initialize(api, core)
+                self._plugin_health[plugin_name] = True
+                recovered.append(plugin_name)
+                print(f"✅ Plugin {plugin_name} recovered on retry")
+                # Clean up retry state
+                del self._plugin_config_cache[plugin_name]
+                self._retry_count[plugin_name] = 0
+            except Exception as e:
+                self._retry_count[plugin_name] = self._retry_count.get(plugin_name, 0) + 1
+                print(f"⚠️ Plugin {plugin_name} retry failed: {e}")
+        
+        return recovered
     
     async def start_all_background(self) -> None:
         """Call start_background() on every plugin that implements AsyncPluginMixin.

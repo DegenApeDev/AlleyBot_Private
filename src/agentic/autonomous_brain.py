@@ -445,6 +445,15 @@ class AutonomousBrain(AGISocialMixin):
             f"Calibrated: {cognitive_reflection.get('calibration', {}).get('calibrated', 'unknown')}"
         )
         
+        # Self-healing: Retry degraded plugins every cycle
+        if self.core and hasattr(self.core, 'plugin_manager'):
+            try:
+                recovered = self.core.plugin_manager.retry_degraded_plugins()
+                if recovered:
+                    logger.info(f"🔧 Plugin self-heal: {', '.join(recovered)} recovered")
+            except Exception as e:
+                logger.debug(f"Plugin retry error: {e}")
+        
         # Duat replaced by CognitiveIntegration — reflection is above
         
         active_work_items: List[Dict[str, Any]] = []
@@ -2252,6 +2261,10 @@ class AutonomousBrain(AGISocialMixin):
                     from src.agentic.symod_core import SyModActionProposal
                     next_step = self.cognitive.goal_planner.get_next_step(plan)
                     if next_step:
+                        # Skip if action/plugin not implemented
+                        if not self._is_action_implemented(next_step.plugin, next_step.action):
+                            logger.info(f"⏭️ Skipping curiosity proposal: {next_step.action} on {next_step.plugin} (not implemented)")
+                            continue
                         proposal = SyModActionProposal(
                             action_type=next_step.action,
                             target_id=cgoal.domain,
@@ -2275,6 +2288,14 @@ class AutonomousBrain(AGISocialMixin):
 
         except Exception as e:
             logger.debug(f"Curiosity goals phase error: {e}")
+
+    def _is_action_implemented(self, plugin: str, action: str) -> bool:
+        """Check if a plugin/action combo has a real implementation (not None)."""
+        try:
+            from src.agentic.action_router import ActionRouter
+            return ActionRouter.is_action_valid(plugin, action)
+        except Exception:
+            return True  # fail open
     
     def _phase_goal_management(self, agi_kernel, observations):
         """THINK sub-phase — goal generation, approval, and activation.

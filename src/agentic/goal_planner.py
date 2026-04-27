@@ -193,6 +193,15 @@ class GoalPlanner:
         self.tool_registry = TOOL_REGISTRY
         self._load()
 
+    @staticmethod
+    def _is_action_implemented(plugin: str, action: str) -> bool:
+        """Check if a plugin/action combo has a real implementation."""
+        try:
+            from src.agentic.action_router import ActionRouter
+            return ActionRouter.is_action_valid(plugin, action)
+        except Exception:
+            return True  # fail open
+
     def get_available_tools(self, domain: str = None) -> Dict:
         if domain and domain in self.tool_registry:
             return {domain: self.tool_registry[domain]}
@@ -224,6 +233,15 @@ class GoalPlanner:
         with self._lock:
             detected_domain = domain if domain != "general" else detect_domain(goal)
             steps = self._generate_steps(goal, detected_domain, belief_engine, self_model)
+
+            # Filter out steps with unimplemented action/plugin combos
+            valid_steps = []
+            for step in steps:
+                if self._is_action_implemented(step.plugin, step.action):
+                    valid_steps.append(step)
+                else:
+                    logger.info(f"⏭️ Skipping plan step '{step.id}': {step.action} on {step.plugin} not implemented")
+            steps = valid_steps
 
             # Try LLM decomposition for unknown domains or when templates are thin
             if detected_domain == 'unknown' or len(steps) <= 2:
