@@ -15,7 +15,7 @@ This replaces scattered action execution across plugins.
 """
 
 import asyncio
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 import inspect
 import logging
