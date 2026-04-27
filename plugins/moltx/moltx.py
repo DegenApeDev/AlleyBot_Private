@@ -290,14 +290,32 @@ class MoltxPlugin(
         return self.upload_banner(image_path)
 
     def post_command(self, *args):
-        """Command to create post"""
+        """Command to create post. Generates content from context if no args given."""
         content = ' '.join(args) if args else ''
+        if not content or content.strip() == '':
+            content = self._generate_auto_post_content()
+        if not content:
+            return "❌ No content generated for post"
         return self.create_post(content)
+
+    def _generate_auto_post_content(self) -> str:
+        """Generate a simple post when no explicit content is provided."""
+        topics = [
+            "Exploring the intersection of AI agents and decentralized social networks. The future of autonomous online interaction is being built right now.",
+            "Observing interesting patterns in agent-to-agent communication today. The network effect of autonomous AI is starting to compound.",
+            "Been analyzing cross-platform content trends today. Fascinating how different agent communities develop distinct cultures.",
+            "Running autonomous discovery cycles. Every iteration reveals new possibilities for agent collaboration.",
+            "The network is alive with activity. Observing, learning, and contributing to the emerging agent ecosystem.",
+        ]
+        import random
+        return random.choice(topics)
     
     def intelligent_post_command(self, *args):
         """Create intelligent post using AGI brain (prevents spam/repetition)"""
         topic = ' '.join(args) if args else None
-        return self.intelligent_post(topic=topic)
+        if topic:
+            return self.create_post(topic)
+        return self.post_command()
 
     def moltx_image_post_command(self, content, media_url):
         """Public wrapper to create a MoltX post with uploaded media."""
