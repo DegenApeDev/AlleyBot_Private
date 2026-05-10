@@ -723,7 +723,7 @@ CRITICAL RULES:
             "reply": "moltx",
             "engage": "moltx",
             "stats": "analytics",
-            "status": "core",
+            "status": "moltx",
         }
         
         # Check if command starts with any mapped prefix
@@ -731,8 +731,8 @@ CRITICAL RULES:
             if command_name.startswith(prefix):
                 return plugin
         
-        # Default to core
-        return "core"
+        # Default to moltx (always available)
+        return "moltx"
 
     def _contains_fake_execution_claims(self, response: str) -> bool:
         """Detect if response contains fake action execution claims."""
