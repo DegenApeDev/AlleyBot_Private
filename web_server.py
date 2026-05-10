@@ -32,6 +32,7 @@ class DashboardServer:
         self.app.router.add_get("/api/stats", self.api_stats)
         self.app.router.add_get("/api/chess", self.api_chess_status)
         self.app.router.add_get("/api/debates", self.api_debate_status)
+        self.app.router.add_get("/api/chain", self.api_chain_status)
         self.app.router.add_get("/ws", self.websocket_handler)
         
         # WebSocket connections for live updates
@@ -265,6 +266,22 @@ class DashboardServer:
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
 
+    async def api_chain_status(self, request):
+        """Chain observer status API"""
+        try:
+            onchain = self.core.plugin_manager.plugins.get('onchain')
+            if not onchain:
+                return web.json_response({"status": "Plugin not loaded"})
+            
+            summary = onchain.get_chain_summary() if hasattr(onchain, 'get_chain_summary') else "No summary available"
+            
+            return web.json_response({
+                "status": "Active",
+                "summary": summary,
+            })
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
     async def api_stats(self, request):
         """Comprehensive stats from all AlleyBot systems"""
         try:
@@ -272,12 +289,13 @@ class DashboardServer:
                 'timestamp': time.time(),
                 'uptime': time.time() - getattr(self.core, '_start_time', time.time()),
                 'agi_kernel': self._get_agi_kernel_stats(),
-                'skills': self._get_skill_stats(),
-                'a2a': self._get_a2a_stats(),
-                'platforms': self._get_platform_stats(),
-                'memory': self._get_memory_stats(),
                 'goals': self._get_goal_stats(),
+                'platforms': self._get_platform_stats(),
+                'chain': self._get_chain_stats(),
                 'system': self._get_system_health(),
+                'skills': {},
+                'a2a': {},
+                'memory': {},
             }
             return web.json_response(stats)
         except Exception as e:
@@ -287,7 +305,7 @@ class DashboardServer:
             return web.json_response({"error": str(e)}, status=500)
 
     def _get_agi_kernel_stats(self) -> Dict[str, Any]:
-        """Get AGI Kernel statistics"""
+        """Get AGI Kernel statistics from real sources"""
         stats = {
             'cycles_run': 0,
             'decisions_made': 0,
@@ -300,199 +318,42 @@ class DashboardServer:
         }
         
         try:
-            if hasattr(self.core, 'agi_kernel'):
+            # Get brain stats from AutonomousBrain
+            brain_plugin = self.core.plugin_manager.plugins.get('brain')
+            if brain_plugin and hasattr(brain_plugin, '_autonomous_brain'):
+                brain = brain_plugin._autonomous_brain
+                s = getattr(brain, 'stats', {})
+                stats['cycles_run'] = s.get('cycles_completed', 0)
+                stats['actions_executed'] = s.get('actions_taken', 0)
+                stats['errors_detected'] = s.get('errors', 0)
+            
+            # Get action router stats
+            if hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
                 agi = self.core.agi_kernel
-                
-                # Decision system stats
-                if hasattr(agi, 'decision_system') and agi.decision_system:
-                    ds = agi.decision_system
-                    stats['decisions_made'] = getattr(ds, 'decisions_made', 0)
-                    stats['success_rate'] = getattr(ds, 'success_rate', 0)
-                
-                # Action router stats
                 if hasattr(agi, 'action_router') and agi.action_router:
                     ar = agi.action_router
-                    stats['actions_executed'] = getattr(ar, 'actions_executed', 0)
+                    if hasattr(ar, 'execution_history'):
+                        stats['decisions_made'] = len(ar.execution_history)
+                        successes = sum(1 for h in ar.execution_history if h.get('success'))
+                        total = len(ar.execution_history)
+                        if total > 0:
+                            stats['success_rate'] = round(successes / total * 100, 1)
                 
-                # Error monitor stats
-                if hasattr(agi, 'error_monitor') and agi.error_monitor:
-                    em = agi.error_monitor
-                    stats['errors_detected'] = getattr(em, 'errors_detected', 0)
-                    stats['errors_fixed'] = getattr(em, 'errors_fixed', 0)
-                
-                # Context system stats
-                if hasattr(agi, 'context_system') and agi.context_system:
-                    cs = agi.context_system
-                    stats['contexts_gathered'] = getattr(cs, 'contexts_gathered', 0)
-                
-                # Reply system stats
-                if hasattr(agi, 'reply_system') and agi.reply_system:
-                    rs = agi.reply_system
-                    stats['replies_generated'] = getattr(rs, 'replies_generated', 0)
-        
+                # Get outcome learner stats
+                if hasattr(agi, 'outcome_learner') and agi.outcome_learner:
+                    ol = agi.outcome_learner
+                    if hasattr(ol, 'performance_by_action'):
+                        total_success = sum(s['success'] for s in ol.performance_by_action.values())
+                        total_actions = sum(s['total'] for s in ol.performance_by_action.values())
+                        if total_actions > 0:
+                            stats['contexts_gathered'] = total_actions
         except Exception as e:
             print(f"Error getting AGI kernel stats: {e}")
         
         return stats
 
-    def _get_skill_stats(self) -> Dict[str, Any]:
-        """Get skill discovery statistics"""
-        stats = {
-            'total_skills': 0,
-            'oasf_skills': 0,
-            'a2a_skills': 0,
-            'discovered_skills': 0,
-            'skills_by_category': {},
-        }
-        
-        try:
-            # Try to get from analytics plugin
-            analytics = self.core.plugin_manager.plugins.get('analytics')
-            if analytics and hasattr(analytics, 'agent_card_generator'):
-                gen = analytics.agent_card_generator
-                
-                # Get agent card
-                card = gen.generate()
-                
-                # Count OASF skills
-                if 'services' in card and len(card['services']) > 0:
-                    oasf_service = card['services'][0]
-                    stats['oasf_skills'] = len(oasf_service.get('skills', []))
-                
-                # Count A2A skills
-                if 'services' in card and len(card['services']) > 1:
-                    a2a_service = card['services'][1]
-                    stats['a2a_skills'] = len(a2a_service.get('a2aSkills', []))
-                
-                # Get discovered skills from skill scanner
-                if hasattr(gen, 'skill_scanner'):
-                    scanner = gen.skill_scanner
-                    discovered = scanner.scan_skills()
-                    stats['discovered_skills'] = len(discovered)
-                    
-                    # Count by category
-                    for skill in discovered:
-                        category = skill.get('category', 'unknown')
-                        stats['skills_by_category'][category] = stats['skills_by_category'].get(category, 0) + 1
-                
-                stats['total_skills'] = stats['oasf_skills'] + stats['a2a_skills']
-        
-        except Exception as e:
-            print(f"Error getting skill stats: {e}")
-        
-        return stats
-
-    def _get_a2a_stats(self) -> Dict[str, Any]:
-        """Get A2A protocol statistics"""
-        stats = {
-            'agent_id': 22899,
-            'tasks_available': 0,
-            'tasks_completed': 0,
-            'revenue_generated': 0,
-            'attestations_created': 0,
-            'agent_card_status': 'unknown',
-        }
-        
-        try:
-            a2a = self.core.plugin_manager.plugins.get('a2a')
-            if a2a:
-                # Get available tasks
-                if hasattr(a2a, 'list_available_tasks'):
-                    tasks = a2a.list_available_tasks()
-                    stats['tasks_available'] = len(tasks)
-                
-                # Get agent card status
-                stats['agent_card_status'] = 'active'
-            
-            # Get attestations
-            try:
-                import json
-                from pathlib import Path
-                registry_path = Path(__file__).parent / 'data' / 'erc8004_registry.json'
-                if registry_path.exists():
-                    with open(registry_path, 'r') as f:
-                        attestations = json.load(f)
-                        stats['attestations_created'] = len(attestations)
-            except Exception as e:
-                print(f"Error loading attestations: {e}")
-        
-        except Exception as e:
-            print(f"Error getting A2A stats: {e}")
-        
-        return stats
-
-    def _get_platform_stats(self) -> Dict[str, Any]:
-        """Get platform activity statistics"""
-        stats = {
-            'moltx': {'posts': 0, 'engagement': 0},
-            'clawbr': {'debates': 0, 'elo': 0},
-            'moltroad': {'activity': 0},
-            'clawchess': {'games': 0, 'rating': 0},
-        }
-        
-        try:
-            # MoltX stats
-            moltx = self.core.plugin_manager.plugins.get('moltx')
-            if moltx:
-                # Try to get post count from memory
-                moltx_stats = self.core.get_memory('moltx_stats') or {}
-                stats['moltx']['posts'] = moltx_stats.get('total_posts', 0)
-                stats['moltx']['engagement'] = moltx_stats.get('total_engagement', 0)
-            
-            # Clawbr stats
-            clawbr = self.core.plugin_manager.plugins.get('clawbr')
-            if clawbr:
-                my_debates = clawbr.get_my_debates()
-                if my_debates.get('success'):
-                    stats['clawbr']['debates'] = len(my_debates.get('debates', []))
-            
-            # ClawChess stats
-            clawchess = self.core.plugin_manager.plugins.get('clawchess')
-            if clawchess:
-                chess_status = clawchess.get_chess_status()
-                stats['clawchess']['rating'] = chess_status.get('elo', 0)
-                stats['clawchess']['games'] = chess_status.get('games_played', 0)
-        
-        except Exception as e:
-            print(f"Error getting platform stats: {e}")
-        
-        return stats
-
-    def _get_memory_stats(self) -> Dict[str, Any]:
-        """Get memory and learning statistics"""
-        stats = {
-            'total_memories': 0,
-            'episodic_memories': 0,
-            'world_facts': 0,
-            'learning_events': 0,
-        }
-        
-        try:
-            if hasattr(self.core, 'agi_kernel'):
-                agi = self.core.agi_kernel
-                
-                # Unified memory stats
-                if hasattr(agi, 'unified_memory'):
-                    um = agi.unified_memory
-                    # Try to count memories
-                    if hasattr(um, 'count'):
-                        stats['total_memories'] = um.count()
-                
-                # Episodic memory stats
-                if hasattr(agi, 'episodic_memory'):
-                    em = agi.episodic_memory
-                    if hasattr(em, 'count'):
-                        stats['episodic_memories'] = em.count()
-                    elif hasattr(em, 'memories'):
-                        stats['episodic_memories'] = len(em.memories)
-        
-        except Exception as e:
-            print(f"Error getting memory stats: {e}")
-        
-        return stats
-
     def _get_goal_stats(self) -> Dict[str, Any]:
-        """Get autonomous goal statistics"""
+        """Get goal statistics from the brain and goal manager"""
         stats = {
             'goals_generated': 0,
             'goals_active': 0,
@@ -501,20 +362,59 @@ class DashboardServer:
         }
         
         try:
-            if hasattr(self.core, 'agi_kernel') and hasattr(self.core.agi_kernel, 'goal_generator'):
-                gg = self.core.agi_kernel.goal_generator
-                
-                # Try to get goal stats
-                stats['goals_generated'] = getattr(gg, 'goals_generated', 0)
-                stats['goals_active'] = getattr(gg, 'goals_active', 0)
-                stats['goals_completed'] = getattr(gg, 'goals_completed', 0)
-                
-                if stats['goals_generated'] > 0:
-                    stats['goal_success_rate'] = int((stats['goals_completed'] / stats['goals_generated']) * 100)
-        
+            brain_plugin = self.core.plugin_manager.plugins.get('brain')
+            if brain_plugin and hasattr(brain_plugin, '_autonomous_brain'):
+                brain = brain_plugin._autonomous_brain
+                s = getattr(brain, 'stats', {})
+                stats['goals_completed'] = s.get('goals_completed_total', 0)
+                stats['goals_active'] = s.get('goals_completed_total', 0) + s.get('goals_failed_total', 0)
+            
+            # Get from goal manager
+            if hasattr(self.core, 'agi_kernel') and self.core.agi_kernel:
+                agi = self.core.agi_kernel
+                if hasattr(agi, 'goal_manager') and agi.goal_manager:
+                    gm = agi.goal_manager
+                    if hasattr(gm, 'get_goals'):
+                        all_goals = gm.get_goals(limit=100)
+                        stats['goals_generated'] = len(all_goals)
+                        stats['goals_active'] = len([g for g in all_goals if hasattr(g, 'status') and g.status in ('ACTIVE', 'APPROVED')])
+                        stats['goals_completed'] = len([g for g in all_goals if hasattr(g, 'status') and g.status == 'COMPLETED'])
+                        total = stats['goals_active'] + stats['goals_completed']
+                        if total > 0:
+                            stats['goal_success_rate'] = round(stats['goals_completed'] / total * 100, 1)
         except Exception as e:
             print(f"Error getting goal stats: {e}")
         
+        return stats
+
+    def _get_chain_stats(self) -> Dict[str, Any]:
+        """Get chain observer statistics"""
+        stats = {
+            'base_tx_observed': 0,
+            'apechain_tx_observed': 0,
+            'high_value_txs': 0,
+            'top_patterns': [],
+        }
+        try:
+            onchain = self.core.plugin_manager.plugins.get('onchain')
+            if onchain and hasattr(onchain, 'get_chain_observations'):
+                obs = onchain.get_chain_observations()
+                stats['high_value_txs'] = len(obs)
+                # Count per chain
+                base_count = sum(1 for o in obs if o.get('chain') == 'base')
+                ape_count = sum(1 for o in obs if o.get('chain') == 'apechain')
+                stats['base_tx_observed'] = base_count
+                stats['apechain_tx_observed'] = ape_count
+                
+                # Get patterns from memory
+                patterns = self.core.get_memory('chain_observer_patterns') or {}
+                summary = patterns.get('summary', {})
+                for chain_key in ('base', 'apechain'):
+                    if chain_key in summary:
+                        top = summary[chain_key].get('top_patterns', [])
+                        stats['top_patterns'].extend(top)
+        except Exception as e:
+            print(f"Error getting chain stats: {e}")
         return stats
 
     def _get_system_health(self) -> Dict[str, Any]:
