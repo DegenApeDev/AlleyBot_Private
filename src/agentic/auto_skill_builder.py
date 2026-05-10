@@ -15,6 +15,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
+from src.agentic.autonomous_coder import SkillSpecification
 
 logger = logging.getLogger(__name__)
 
@@ -206,43 +207,43 @@ class AutoSkillBuilder:
         }
     
     async def _build_skill_with_ai(self, proposal: SkillProposal, spec: Dict) -> Dict:
-        """Build skill using AI code generation"""
+        """Build skill using AutonomousCoder's structured generation pipeline."""
         try:
-            # Create task description for AI
-            task_description = f"""
-Create a new skill for {proposal.platform} platform:
+            # Convert proposal to SkillSpecification
+            specification = SkillSpecification(
+                id=f"{proposal.platform}_{proposal.name}_{int(datetime.now().timestamp())}",
+                name=proposal.name,
+                description=proposal.description,
+                category=proposal.platform,
+                file_structure={
+                    '__init__.py': f'Plugin entry point for {proposal.name}',
+                    'client.py': f'Client for {proposal.description}',
+                    'actions.py': f'Action handlers for {proposal.name}',
+                    'models.py': f'Data models for {proposal.name}',
+                },
+                dependencies=proposal.required_apis,
+                evidence=[proposal.reason, f"Example: {proposal.example_use_case}"]
+            )
 
-Name: {proposal.name}
-Description: {proposal.description}
-Reason: {proposal.reason}
+            # Generate skill code
+            skill = self.autonomous_coder.generate_skill(specification)
+            if skill.status == 'failed':
+                return {'success': False, 'error': f"Generation failed: {skill.errors}"}
 
-The skill should:
-1. Integrate with {proposal.platform} plugin
-2. Handle the following use case: {proposal.example_use_case}
-3. Follow AlleyBot's plugin architecture
-4. Include error handling and logging
+            logger.info(f"✅ Skill code generated: {skill.skill_name} ({len(skill.files_created)} files)")
 
-Required APIs: {', '.join(proposal.required_apis)}
-"""
-            
-            # Use autonomous coder to generate
-            if hasattr(self.autonomous_coder, '_generate_code_with_ai'):
-                code = self.autonomous_coder._generate_code_with_ai(
-                    task_description,
-                    context={'spec': spec, 'platform': proposal.platform}
-                )
-                
-                if code:
-                    # Save skill file
-                    skill_file = self._save_skill_file(proposal.name, code, spec)
-                    return {
-                        'success': True,
-                        'file': skill_file,
-                        'code': code
-                    }
-            
-            return {'success': False, 'error': 'Code generation failed'}
-        
+            # Deploy to hot-load into the system
+            deployed = self.autonomous_coder.deploy_skill(skill)
+            if not deployed:
+                return {'success': False, 'error': 'Skill generated but deployment failed'}
+
+            return {
+                'success': True,
+                'skill_name': skill.skill_name,
+                'files': skill.files_created,
+                'path': skill.skill_path,
+            }
+
         except Exception as e:
             logger.error(f"❌ AI skill building error: {e}")
             return {'success': False, 'error': str(e)}
