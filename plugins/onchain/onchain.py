@@ -16,9 +16,10 @@ from plugins.onchain.web3_provider import Web3Provider, ALLEYBOT_TOKEN, WEB3_AVA
 from plugins.onchain.token_tracker import TokenTrackerMixin, KNOWN_TOKENS
 from plugins.onchain.tx_monitor import TxMonitorMixin
 from plugins.onchain.onchain_actions import OnChainActionsMixin
+from plugins.onchain.chain_observer import ChainObserverMixin
 
 
-class OnChainPlugin(TokenTrackerMixin, TxMonitorMixin, OnChainActionsMixin, AlleyBotPlugin):
+class OnChainPlugin(TokenTrackerMixin, TxMonitorMixin, OnChainActionsMixin, ChainObserverMixin, AlleyBotPlugin):
     """On-chain capabilities plugin for Base network"""
 
     def __init__(self, config):
@@ -45,6 +46,7 @@ class OnChainPlugin(TokenTrackerMixin, TxMonitorMixin, OnChainActionsMixin, Alle
             self._init_token_tracker()
             self._init_tx_monitor()
             self._init_onchain_actions()
+            self._init_chain_observer()
 
             # Auto-track AlleyBot token
             if 'ALYBOT' not in self.tracked_tokens:
@@ -197,6 +199,7 @@ class OnChainPlugin(TokenTrackerMixin, TxMonitorMixin, OnChainActionsMixin, Alle
             'onchain_heartbeat': self.onchain_heartbeat,
             'onchain_tip': self.tip_command,
             'onchain_tipstats': self.tipstats_command,
+            'chain_summary': self.get_chain_summary,
         }
 
     def get_endpoints(self):

@@ -878,6 +878,24 @@ class AutonomousBrain(AGISocialMixin):
             except Exception as e:
                 logger.error(f"❌ Failed to gather from Moltbit: {e}")
         
+        # === CHAIN OBSERVATIONS (Base + Apechain mempool/block watching) ===
+        onchain = self.plugin_manager.get_plugin('onchain') if self.plugin_manager else None
+        if onchain and hasattr(onchain, 'poll_chains'):
+            try:
+                chain_obs = onchain.poll_chains()
+                for co in chain_obs:
+                    obs = SyModObservation(
+                        observation_type='chain_transaction',
+                        source_plugin='onchain',
+                        data=co,
+                        importance=0.6 if co.get('value_eth', 0) >= 1.0 else 0.3,
+                    )
+                    observations.append(obs)
+                if chain_obs:
+                    logger.info(f"⛓️ Gathered {len(chain_obs)} chain observations")
+            except Exception as e:
+                logger.debug(f"Chain observation error: {e}")
+        
         return observations
 
     async def _feed_observations_to_world_state(self, observations: List[SyModObservation]) -> None:
