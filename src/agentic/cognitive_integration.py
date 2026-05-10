@@ -365,6 +365,9 @@ class CognitiveIntegration:
         return action_root in notify_actions or domain in notify_domains
 
     def _should_notify_failure(self, action: str, domain: str, cap_result: Dict) -> bool:
+        # Don't notify for low-confidence exploratory actions (curiosity)
+        if cap_result.get('confidence', 1.0) < 0.6:
+            return False
         cap = self.self_model.capabilities.get(f"{domain}:{action}")
         if not cap:
             return True

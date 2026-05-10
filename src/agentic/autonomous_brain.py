@@ -1752,26 +1752,24 @@ class AutonomousBrain(AGISocialMixin):
                 
                 if action:
                     # Create proposal for this intent-driven action
-                    intent_proposal = {
-                        'plugin': self._map_intent_action_to_plugin(action['action_type']),
-                        'action_type': action['action_type'],
-                        'params': {
+                    from src.agentic.symod_core import SyModActionProposal
+                    intent_proposal = SyModActionProposal(
+                        action_type=action['action_type'],
+                        target_id=intent.id,
+                        target_name=intent.objective[:50],
+                        content=action.get('description', ''),
+                        justification=f"Advance persistent intent: {intent.objective[:60]}...",
+                        confidence=0.7,
+                        metadata={
+                            'plugin': self._map_intent_action_to_plugin(action['action_type']),
                             'intent_id': intent.id,
                             'intent_objective': intent.objective,
                             'step_description': action['description'],
-                        },
-                        'context': {
                             'source': 'persistent_intent',
-                            'intent_id': intent.id,
                             'intent_priority': intent.priority,
                             'progress_percent': intent.progress_percent,
-                            'goal_description': f"Advance intent: {intent.objective[:50]}...",
-                            'impact': 'medium',
-                            'risk_level': 'low',
                         },
-                        'confidence': 0.7,
-                        'description': action['description'],
-                    }
+                    )
                     
                     proposals.append(intent_proposal)
                     logger.info(f"   📋 Intent action queued: {action['description'][:50]}...")
@@ -1792,9 +1790,10 @@ class AutonomousBrain(AGISocialMixin):
             'create_post': 'moltx',
             'engage': 'moltx',
             'analyze': 'analytics',
-            'execute_skill': 'selfimprove',
+            'scan': 'crypto',
+            'feed': 'moltx',
         }
-        return mapping.get(action_type, 'core')
+        return mapping.get(action_type, 'moltx')
     
     async def _phase_cross_domain_synthesis_and_planning(
         self,
@@ -2295,7 +2294,7 @@ class AutonomousBrain(AGISocialMixin):
             from src.agentic.action_router import ActionRouter
             return ActionRouter.is_action_valid(plugin, action)
         except Exception:
-            return True  # fail open
+            return False  # fail closed — don't risk unknown actions
     
     def _phase_goal_management(self, agi_kernel, observations):
         """THINK sub-phase — goal generation, approval, and activation.
