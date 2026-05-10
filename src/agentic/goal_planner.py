@@ -166,6 +166,8 @@ class GoalPlanner:
         self._lock = threading.RLock()
         self.plans: Dict[str, Plan] = {}
         self.tool_registry = TOOL_REGISTRY
+        self._domain_plan_stats: Dict[str, Dict] = {}  # domain -> {total, failed, last_blocked}
+        self._domain_blocklist: set = set()  # domains blocked due to low success
         self._load()
 
     @staticmethod
@@ -242,6 +244,22 @@ class GoalPlanner:
                 if i > 0:
                     step.depends_on = [steps[i - 1].id]
                     step.preconditions = [f"Step '{steps[i-1].id}' completed successfully"]
+
+            # Block domain if previous plans in this domain kept failing
+            if detected_domain in self._domain_blocklist and steps:
+                stats = self._domain_plan_stats.get(detected_domain, {})
+                logger.info(f"⛔ Domain '{detected_domain}' blocked ({stats.get('failed', 0)}/{stats.get('total', 0)} failed). Not creating new plan.")
+                # Return minimal safe plan — just observe
+                steps = [
+                    PlanStep(
+                        id=f"step_observe_{detected_domain}",
+                        action="feed", plugin="moltx",
+                        description=f"Fallback: observe {detected_domain} instead of planning",
+                        expected_outcome="General awareness without active planning",
+                        rollback_action="Idle",
+                        confidence=0.5,
+                    )
+                ]
 
             plan_id = f"plan_{int(datetime.now().timestamp())}"
             plan = Plan(
@@ -514,6 +532,18 @@ class GoalPlanner:
                 step.status = "failed"
                 step.failure_reason = reason
                 step.result = result
+
+            # Track domain-level failure
+            if plan.domain not in self._domain_plan_stats:
+                self._domain_plan_stats[plan.domain] = {'total': 0, 'failed': 0}
+            self._domain_plan_stats[plan.domain]['total'] += 1
+            self._domain_plan_stats[plan.domain]['failed'] += 1
+
+            # Block domain if failure rate > 60% after 5+ plans
+            stats = self._domain_plan_stats[plan.domain]
+            if stats['total'] >= 5 and (stats['failed'] / stats['total']) > 0.6:
+                self._domain_blocklist.add(plan.domain)
+                logger.warning(f"⛔ Domain '{plan.domain}' blocked: {stats['failed']}/{stats['total']} plans failed")
 
             # 2.5: Rollback cascade — block all dependent steps
             dependent_steps = [s for s in plan.steps if step_id in s.depends_on]

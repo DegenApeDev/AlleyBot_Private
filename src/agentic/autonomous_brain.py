@@ -69,8 +69,8 @@ class BrainConfig:
     require_owner_approval: bool = False  # HITL still active for high-risk via ActionRouter
     
     # Goal Quota System - Enforce minimum productivity
-    min_goals_per_hour: int = 3  # MUST complete at least 3 goals per hour
-    goal_quota_strict: bool = True  # If True, creates emergency goals to meet quota
+    min_goals_per_hour: int = 3
+    goal_quota_strict: bool = False  # disabled — emergency goals create busywork, not value
     goal_quality_threshold: float = 0.6  # Minimum quality score for goals to count
     
     # Proactive Goal Generation
@@ -2284,6 +2284,8 @@ class AutonomousBrain(AGISocialMixin):
                         # Skip if action/plugin not implemented
                         if not self._is_action_implemented(next_step.plugin, next_step.action):
                             logger.info(f"⏭️ Skipping curiosity proposal: {next_step.action} on {next_step.plugin} (not implemented)")
+                            if hasattr(self.cognitive, 'curiosity') and hasattr(self.cognitive.curiosity, 'mark_target_blocked'):
+                                self.cognitive.curiosity.mark_target_blocked(cgoal.domain, next_step.action, next_step.plugin)
                             continue
                         proposal = SyModActionProposal(
                             action_type=next_step.action,

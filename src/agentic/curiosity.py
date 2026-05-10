@@ -172,6 +172,7 @@ class CuriosityDrive:
         self.curiosity_goals: Dict[str, CuriosityGoal] = {}
         self.intrinsic_rewards: Dict[str, List[float]] = defaultdict(list)
         self._goal_counter = 0
+        self._blocked_targets: set = set()  # (domain, action, plugin) combos to skip
 
     def set_engines(self, belief_engine, self_model, goal_planner):
         self.belief_engine = belief_engine
@@ -623,18 +624,30 @@ class CuriosityDrive:
         avg_gap = sum(1.0 - (cap.sample_size / self.KNOWLEDGE_GAP_THRESHOLD_SAMPLES) for cap in domain_caps) / len(domain_caps)
         return max(0.1, min(1.0, avg_gap))
 
+    def mark_target_blocked(self, domain: str, action: str, plugin: str) -> None:
+        """Mark an exploration target as blocked — won't be suggested again."""
+        self._blocked_targets.add((domain, action, plugin))
+
     def _pick_exploration_target(self, domain: str, gap: Dict) -> Dict:
         targets = EXPLORATION_TARGETS.get(domain, EXPLORATION_TARGETS.get('unknown', []))
 
-        if targets:
+        # Filter out previously blocked targets
+        available = [
+            t for t in targets
+            if (domain, t[1], t[2]) not in self._blocked_targets
+        ]
+        if not available:
+            available = targets  # fallback to all targets if all blocked
+
+        if available:
             import random
-            attempts = {t[1] for t in targets if f"{domain}:{t[1]}" in self.action_recency}
-            untried = [t for t in targets if t[1] not in attempts]
+            attempts = {t[1] for t in available if f"{domain}:{t[1]}" in self.action_recency}
+            untried = [t for t in available if t[1] not in attempts]
             if untried:
                 chosen = random.choice(untried)
             else:
                 least_recent = min(
-                    targets,
+                    available,
                     key=lambda t: self.action_recency.get(f"{domain}:{t[1]}", ActionRecency(action_key="")).recency_hours()
                     if f"{domain}:{t[1]}" in self.action_recency else float('inf')
                 )
@@ -648,7 +661,7 @@ class CuriosityDrive:
 
         return {
             'title': f'Explore {domain} domain',
-            'action': 'browse',
+            'action': 'feed',
             'plugin': 'moltx',
         }
 
