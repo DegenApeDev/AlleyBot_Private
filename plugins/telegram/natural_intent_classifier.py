@@ -16,6 +16,19 @@ class NaturalIntentClassifier:
     No hardcoded examples - learns from command names and docstrings.
     """
     
+    # Phrases that indicate casual chat, not command execution
+    CHAT_ONLY_PATTERNS = [
+        r'\b(what do you think|how are you|what\'?s up|tell me about|do you know)\b',
+        r'\b(I think|in my opinion|what about|how about|why is|why does)\b',
+        r'\b(interesting|cool|nice|wow|really|seriously|honestly)\s*\b',
+        r'\byeah\b.*\b(but|and|so)\b',
+        r'^\b(yes|no|maybe|sure|okay|ok|k|yeah|nah|yep|nope)\b\s*$',
+        r'\byou (think|believe|feel|reckon|know)\b',
+        r'\b(remember|recall|forgot|forget)\b',
+        r'\bis it (good|bad|worth|possible|safe)\b',
+        r'\bwhat (color|size|kind|type|brand)\b',
+    ]
+
     def __init__(self, model_name: str = 'all-MiniLM-L6-v2'):
         """
         Initialize the classifier with a sentence transformer model.
@@ -26,7 +39,8 @@ class NaturalIntentClassifier:
         self.model = self._get_sentence_model()
         self.command_embeddings = {}  # command_name -> embedding
         self.command_metadata = {}  # command_name -> {doc, semantic_tags}
-        self.similarity_threshold = 0.45  # Lower threshold for more natural matching
+        self.similarity_threshold = 0.55  # Higher threshold for more accurate matching
+        self.high_confidence_threshold = 0.75  # Above this, execute immediately
         
     def _get_sentence_model(self):
         """Get shared sentence transformer model"""
@@ -160,6 +174,11 @@ class NaturalIntentClassifier:
         if not self.command_embeddings:
             return None
         
+        # Skip classification for casual chat patterns
+        for pattern in self.CHAT_ONLY_PATTERNS:
+            if re.search(pattern, user_input, re.IGNORECASE):
+                return None
+        
         # Encode user input
         user_embedding = self.model.encode([user_input])[0]
         
@@ -181,6 +200,10 @@ class NaturalIntentClassifier:
             return (best_cmd, best_score)
         
         return None
+    
+    def is_high_confidence(self, score: float) -> bool:
+        """Check if a confidence score is high enough for automatic execution."""
+        return score >= self.high_confidence_threshold
     
     def get_top_matches(self, user_input: str, top_k: int = 3) -> List[Tuple[str, float]]:
         """

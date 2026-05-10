@@ -314,7 +314,18 @@ class ConversationService:
         if intent_result:
             command_name, confidence, args = intent_result
             print(f"🎯 Natural intent detected: {command_name} (confidence: {confidence:.2f})")
-            return await self._execute_natural_intent(request, context, command_name, args)
+            # Only auto-execute high-confidence intents
+            from plugins.telegram.natural_intent_classifier import get_natural_intent_classifier
+            classifier = get_natural_intent_classifier()
+            if classifier.is_high_confidence(confidence):
+                return await self._execute_natural_intent(request, context, command_name, args)
+            else:
+                # Medium confidence — ask user to confirm
+                return ConversationResponse(
+                    response_text=f"I think you want me to *{command_name.replace('_', ' ')}*? Just confirming before I do anything. Say yes or /{command_name} to execute.",
+                    response_type="confirmation_request",
+                    identity_validated=True,
+                )
         
         # Step 1.5: Check for self-improvement / autonomous action keywords
         # These are requests the user wants the bot to act on autonomously
