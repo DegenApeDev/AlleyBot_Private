@@ -808,8 +808,19 @@ CRITICAL RULES:
         request: ConversationRequest,
         context: ConversationContext,
     ) -> str:
-        """Build user-facing prompt with full context."""
+        """Build user-facing prompt with full context including conversation history."""
         prompt_parts = []
+        
+        # Add conversation history (last 10 exchanges)
+        if context.conversation_history:
+            history_lines = []
+            for entry in context.conversation_history[-10:]:
+                role = entry.get('role', 'user')
+                content = entry.get('content', '')
+                if content:
+                    history_lines.append(f"{role}: {content}")
+            if history_lines:
+                prompt_parts.append("Recent conversation:\n" + "\n".join(history_lines))
         
         # Add active work context if available
         if context.active_work_items:
