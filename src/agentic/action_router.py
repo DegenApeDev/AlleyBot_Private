@@ -144,6 +144,11 @@ class ActionRouter:
             'discover': 'discover_agents',
             'connect': 'connect_to_agent',
         },
+        'selfimprove': {
+            'improve_self_update': 'self_update_command',
+            'improve_self_update_confirm': 'self_update_confirm_command',
+            'build_skill': 'self_update_command',
+        },
     }
 
     @classmethod

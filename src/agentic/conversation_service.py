@@ -724,6 +724,8 @@ CRITICAL RULES:
             "engage": "moltx",
             "stats": "analytics",
             "status": "moltx",
+            "improve": "selfimprove",
+            "build": "selfimprove",
         }
         
         # Check if command starts with any mapped prefix
