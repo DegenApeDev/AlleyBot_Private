@@ -1635,6 +1635,9 @@ class AutonomousBrain(AGISocialMixin):
                 built_count = await self.auto_skill_builder.auto_build_simple_skills(max_skills=1)
                 if built_count > 0:
                     logger.info(f"🔨 Auto-built {built_count} new skill(s)")
+                    # Reload skill executor so new skills are immediately available
+                    if agi_kernel and hasattr(agi_kernel, 'skill_executor') and agi_kernel.skill_executor:
+                        agi_kernel.skill_executor.reload_skills()
             except Exception as e:
                 logger.warning(f"⚠️ Auto skill building error: {e}")
         

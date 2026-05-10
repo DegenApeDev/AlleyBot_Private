@@ -423,14 +423,17 @@ class GoalPlanner:
                 f"{step.plugin}.{step.action}", plan.domain
             )
             if should_wait:
-                step.confidence *= 0.7
+                step.confidence *= 0.5
                 step.description += f" [CAUTION: {reason}]"
-            # 2.3: If belief prediction is extremely low, block the step
+            # 2.3: If belief prediction is low, block the step
             if hasattr(belief_engine, 'predict'):
                 prediction = belief_engine.predict(f"{step.plugin}.{step.action}", plan.domain)
-                if prediction.predicted_success < 0.1:
+                if prediction.predicted_success < 0.3:
                     step.status = "blocked"
                     step.failure_reason = f"Belief prediction too low: {prediction.predicted_success:.0%}"
+                elif prediction.predicted_success < 0.5:
+                    step.confidence *= 0.6
+                    step.description += f" [LOW CONFIDENCE: {prediction.predicted_success:.0%}]"
 
     def _validate_plan_against_capabilities(self, plan: Plan, self_model) -> None:
         for step in plan.steps:

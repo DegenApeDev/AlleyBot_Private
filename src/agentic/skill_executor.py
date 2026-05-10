@@ -55,7 +55,7 @@ class SkillExecutor:
                 continue
             if skill_path.name.startswith('_'):
                 continue
-            if skill_path.name in ['dynamic', 'imported', 'auto_acquired']:
+            if skill_path.name in ['dynamic', 'imported']:
                 continue
             
             try:

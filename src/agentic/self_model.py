@@ -173,16 +173,16 @@ class SelfModel:
         key = f"{domain}:{action_type}"
         cap = self.capabilities.get(key)
 
-        if not cap or cap.sample_size < 3:
+        if not cap or cap.sample_size < 2:
             return True, f"No strong signal yet ({cap.sample_size if cap else 0} attempts). Worth trying."
 
-        if cap.consecutive_failures >= 5:
-            return False, f"5 consecutive failures in {domain}.{action_type}. Stop and rethink."
+        if cap.consecutive_failures >= 2:
+            return False, f"{cap.consecutive_failures} consecutive failures in {domain}.{action_type}. Stop and rethink."
 
-        if cap.success_rate < 0.2 and cap.sample_size >= 10:
-            return False, f"Very low success rate ({cap.success_rate:.0%}) over {cap.sample_size} attempts. Avoid."
+        if cap.success_rate < 0.3 and cap.sample_size >= 4:
+            return False, f"Low success rate ({cap.success_rate:.0%}) over {cap.sample_size} attempts. Avoid."
 
-        if cap.is_overconfident and cap.sample_size >= 10:
+        if cap.is_overconfident and cap.sample_size >= 4:
             return True, f"Proceed cautiously — historically overconfident in {domain} (predicted {cap.avg_predicted_confidence:.0%}, actual {cap.avg_actual_success:.0%})."
 
         return True, f"Success rate {cap.success_rate:.0%} over {cap.sample_size} attempts. Trend: {cap.recent_trend}."
