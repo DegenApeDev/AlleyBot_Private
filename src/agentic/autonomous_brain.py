@@ -90,7 +90,7 @@ class BrainConfig:
                 min_confidence=0.5,
                 require_owner_approval=False,
                 min_goals_per_hour=2,
-                goal_quota_strict=True,
+                goal_quota_strict=False,
                 proactive_goal_generation=True,
                 curiosity_drive_enabled=True
             ),
@@ -102,7 +102,7 @@ class BrainConfig:
                 min_confidence=0.35,
                 require_owner_approval=False,
                 min_goals_per_hour=3,
-                goal_quota_strict=True,
+                goal_quota_strict=False,
                 proactive_goal_generation=True,
                 curiosity_drive_enabled=True
             ),
@@ -114,7 +114,7 @@ class BrainConfig:
                 min_confidence=0.25,
                 require_owner_approval=False,
                 min_goals_per_hour=5,
-                goal_quota_strict=True,
+                goal_quota_strict=False,
                 proactive_goal_generation=True,
                 curiosity_drive_enabled=True,
                 opportunity_detection=True

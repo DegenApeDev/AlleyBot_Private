@@ -96,11 +96,15 @@ class GrokAI:
             }
             # Copy other params if present
             if 'max_tokens' in data:
-                converted['max_tokens'] = data['max_tokens']
+                converted['max_output_tokens'] = data['max_tokens']  # /responses uses max_output_tokens
             if 'temperature' in data:
                 converted['temperature'] = data['temperature']
             if 'top_p' in data:
                 converted['top_p'] = data['top_p']
+            if 'presence_penalty' in data:
+                converted['presence_penalty'] = data['presence_penalty']
+            if 'frequency_penalty' in data:
+                converted['frequency_penalty'] = data['frequency_penalty']
             data = converted
         
         max_retries = 3
