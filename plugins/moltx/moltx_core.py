@@ -123,16 +123,18 @@ class MoltxCoreMixin(SkillDetectionMixin):
     def _parse_json_response(self, response) -> dict:
         """Parse JSON response, handling multi-object responses from the API."""
         import json as _json
+        text = response.text
         try:
-            return response.json()
+            return _json.loads(text)
         except _json.JSONDecodeError as e:
-            # Check if it's multi-object (NDJSON-style) — take only the first
+            # Handle multi-object JSON (NDJSON-style) — use first object only
             if 'Extra data' in str(e):
-                text = response.text
                 decoder = _json.JSONDecoder()
-                obj, _ = decoder.raw_decode(text)
+                obj, idx = decoder.raw_decode(text)
                 return obj
-            raise
+            # Handle truncated responses or unexpected content
+            print(f"⚠️ MoltX JSON parse error: {e}")
+            return {'success': False, 'error': f'JSON parse error: {e}'}
 
     def _make_request(self, method, endpoint, data=None, params=None, files=None, anon=False, max_retries=3):
         """Make authenticated request to Moltx API with retry logic and rate limiting"""
