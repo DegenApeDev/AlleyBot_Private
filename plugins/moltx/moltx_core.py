@@ -120,6 +120,20 @@ class MoltxCoreMixin(SkillDetectionMixin):
         except Exception as e:
             print(f"❌ Error saving Moltx credentials: {e}")
     
+    def _parse_json_response(self, response) -> dict:
+        """Parse JSON response, handling multi-object responses from the API."""
+        import json as _json
+        try:
+            return response.json()
+        except _json.JSONDecodeError as e:
+            # Check if it's multi-object (NDJSON-style) — take only the first
+            if 'Extra data' in str(e):
+                text = response.text
+                decoder = _json.JSONDecoder()
+                obj, _ = decoder.raw_decode(text)
+                return obj
+            raise
+
     def _make_request(self, method, endpoint, data=None, params=None, files=None, anon=False, max_retries=3):
         """Make authenticated request to Moltx API with retry logic and rate limiting"""
         # Apply rate limiting to prevent 429 errors
@@ -156,7 +170,7 @@ class MoltxCoreMixin(SkillDetectionMixin):
                     retry_count += 1
                     delay = base_delay * (2 ** (retry_count - 1))
                     try:
-                        error_body = response.json()
+                        error_body = self._parse_json_response(response)
                         error_msg = error_body.get('error', 'Server temporarily unavailable')
                     except:
                         error_msg = 'Server temporarily unavailable'
@@ -166,7 +180,7 @@ class MoltxCoreMixin(SkillDetectionMixin):
                     continue
                 
                 response.raise_for_status()
-                result = response.json()
+                result = self._parse_json_response(response)
                 
                 # Check for platform-pushed skill update events
                 self._check_for_skill_event('moltx', result)
@@ -416,7 +430,7 @@ class MoltxCoreMixin(SkillDetectionMixin):
                     files=files
                 )
                 response.raise_for_status()
-                result = response.json()
+                result = self._parse_json_response(response)
                 if result and result.get('success'):
                     banner_url = result.get('data', {}).get('banner_url')
                     print(f"✅ Banner uploaded: {banner_url}")
