@@ -209,7 +209,7 @@ class BeliefEngine:
 
     def predict(self, action_description: str, domain: str = "general") -> Prediction:
         with self._lock:
-            relevant = self.find_relevant_beliefs(action_description, domain)
+            relevant = self.find_relevant_beliefs_semantic(action_description, domain)
             if not relevant:
                 return Prediction(
                     action=action_description,
@@ -265,7 +265,7 @@ class BeliefEngine:
                 'new_beliefs_created': 0,
             }
 
-            relevant = self.find_relevant_beliefs(action, domain)
+            relevant = self.find_relevant_beliefs_semantic(action, domain)
 
             if relevant:
                 for belief in relevant:
@@ -505,7 +505,7 @@ class BeliefEngine:
             belief.outcome_timestamps = belief.outcome_timestamps[-20:]
 
     def should_wait(self, action: str, domain: str = "general") -> Tuple[bool, str]:
-        relevant = self.find_relevant_beliefs(action, domain)
+        relevant = self.find_relevant_beliefs_semantic(action, domain)
 
         if not relevant:
             return True, f"No prior experience with '{action}'. Gather information first."
@@ -519,7 +519,7 @@ class BeliefEngine:
         return False, ""
 
     def explain_failure(self, action: str, domain: str = "general") -> List[str]:
-        relevant = self.find_relevant_beliefs(action, domain)
+        relevant = self.find_relevant_beliefs_semantic(action, domain)
         explanations = []
 
         for belief in relevant:

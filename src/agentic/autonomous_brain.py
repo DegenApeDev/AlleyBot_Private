@@ -577,6 +577,11 @@ class AutonomousBrain(AGISocialMixin):
         # === GOAL MANAGEMENT: generation, approval, activation ===
         next_action = self._phase_goal_management(agi_kernel, observations)
 
+        # === MEMORY-FIRST THINKING: Query semantic memory before LLM ===
+        memory_proposals = await self._phase_memory_driven_thinking(observations, agi_kernel)
+        if memory_proposals:
+            logger.info(f"🧠 Memory-driven proposals: {len(memory_proposals)} (from semantic recall)")
+
         # === AGI ORCHESTRATION: Run full AGI cycle analysis ===
         agi_actions = await self._run_agi_orchestration_cycle()
         logger.info(f"🎭 AGI Orchestrator: {len(agi_actions)} actions generated")
@@ -603,7 +608,7 @@ class AutonomousBrain(AGISocialMixin):
         await self._phase_periodic_reflection(agi_kernel)
         
         # === THINK: Assemble and rank proposals ===
-        proposals = await self._phase_assemble_proposals(agi_kernel, agi_actions, active_work_items, spine_context)
+        proposals = await self._phase_assemble_proposals(agi_kernel, agi_actions, active_work_items, spine_context, memory_proposals)
         
         # === PHASE 3.7: Curiosity-driven self-directed goals ===
         await self._phase_curiosity_goals(agi_kernel, proposals)
@@ -1144,11 +1149,16 @@ class AutonomousBrain(AGISocialMixin):
         return 'low'
 
     def _recall_memory_signals(self, proposal: Any) -> Dict[str, Any]:
-        """Collect lightweight read-only recall signals for proposal shaping."""
+        """Collect lightweight read-only recall signals for proposal shaping.
+        
+        Uses semantic embedding search (sentence transformers) as primary retrieval,
+        falls back to keyword-based episodic memory recall.
+        """
         signals = {
             'relevant_memory_count': 0,
             'recent_negative_memory_count': 0,
             'entity_context_found': False,
+            'semantic_memory_score': 0.0,
         }
 
         if not self.agi_kernel:
@@ -1160,18 +1170,42 @@ class AutonomousBrain(AGISocialMixin):
             str(getattr(proposal, 'justification', '') or ''),
         ]).strip()
 
-        episodic_memory = getattr(self.agi_kernel, 'episodic_memory', None)
-        if episodic_memory and memory_query and hasattr(episodic_memory, 'recall_relevant'):
+        # PRIMARY: Semantic vector search via SQLiteMemorySystem
+        sqlite_memory = getattr(self.agi_kernel, 'memory', None) or getattr(self.agi_kernel, 'sqlite_memory', None)
+        if sqlite_memory and memory_query and hasattr(sqlite_memory, 'search_memories'):
             try:
-                recalled = episodic_memory.recall_relevant(memory_query, k=3) or []
-                signals['relevant_memory_count'] = len(recalled)
-                negative_memories = [
-                    memory for memory in recalled
-                    if float(getattr(memory, 'emotional_valence', 0.0) or 0.0) < -0.2
-                ]
-                signals['recent_negative_memory_count'] = len(negative_memories)
+                semantic_results = sqlite_memory.search_memories(
+                    query=memory_query,
+                    k=5,
+                    min_relevance=0.3
+                )
+                if semantic_results:
+                    signals['relevant_memory_count'] = len(semantic_results)
+                    signals['semantic_memory_score'] = max(
+                        r['relevance_score'] for r in semantic_results
+                    )
+                    negative_memories = [
+                        r for r in semantic_results
+                        if float(r.get('relevance_score', 0.0)) < 0.4
+                    ]
+                    signals['recent_negative_memory_count'] = len(negative_memories)
             except Exception as e:
-                logger.debug(f"Could not recall episodic memory for proposal ranking: {e}")
+                logger.debug(f"Could not search semantic memory: {e}")
+
+        # SECONDARY: Episodic keyword-based recall
+        if signals['relevant_memory_count'] == 0:
+            episodic_memory = getattr(self.agi_kernel, 'episodic_memory', None)
+            if episodic_memory and memory_query and hasattr(episodic_memory, 'recall_relevant'):
+                try:
+                    recalled = episodic_memory.recall_relevant(memory_query, k=3) or []
+                    signals['relevant_memory_count'] = len(recalled)
+                    negative_memories = [
+                        memory for memory in recalled
+                        if float(getattr(memory, 'emotional_valence', 0.0) or 0.0) < -0.2
+                    ]
+                    signals['recent_negative_memory_count'] = len(negative_memories)
+                except Exception as e:
+                    logger.debug(f"Could not recall episodic memory for proposal ranking: {e}")
 
         unified_memory = getattr(self.agi_kernel, 'unified_memory', None)
         target_name = str(getattr(proposal, 'target_name', '') or '')
@@ -1233,12 +1267,18 @@ class AutonomousBrain(AGISocialMixin):
                     adjustment -= 0.05
 
             memory_signals = self._recall_memory_signals(proposal)
-            if memory_signals['relevant_memory_count'] >= 2:
+            if memory_signals['semantic_memory_score'] >= 0.7:
+                adjustment += 0.10
+            elif memory_signals['semantic_memory_score'] >= 0.5:
+                adjustment += 0.06
+            elif memory_signals['relevant_memory_count'] >= 2:
+                adjustment += 0.04
+            elif memory_signals['relevant_memory_count'] >= 1:
                 adjustment += 0.02
             if memory_signals['recent_negative_memory_count'] >= 1:
-                adjustment -= 0.04
+                adjustment -= 0.08
             if memory_signals['entity_context_found']:
-                adjustment += 0.015
+                adjustment += 0.04
 
             if adjustment != 0.0:
                 proposal.confidence = max(0.0, min(current_confidence + adjustment, 0.95))
@@ -1933,11 +1973,131 @@ class AutonomousBrain(AGISocialMixin):
             'trending_topics': trending[:3],
         }
     
-    async def _phase_assemble_proposals(self, agi_kernel, agi_actions, active_work_items, spine_context):
+    async def _phase_memory_driven_thinking(self, observations: List, agi_kernel=None) -> List:
+        """Memory-First Thinking: Query semantic memory to generate action proposals.
+        
+        Before calling any LLM, retrieve semantically similar past experiences
+        from memory and use them to seed action proposals with confidence based
+        on what worked/failed before.
+        """
+        from src.agentic.symod_core import SyModActionProposal
+
+        memory_proposals = []
+
+        if not observations:
+            return memory_proposals
+
+        # Build a memory query from current observations
+        obs_texts = []
+        for obs in observations:
+            data = getattr(obs, 'data', obs) if isinstance(obs, dict) else getattr(obs, 'data', {})
+            if isinstance(data, dict):
+                content = data.get('content', '') or data.get('description', '') or ''
+                if content:
+                    obs_texts.append(content)
+
+        if not obs_texts:
+            return memory_proposals
+
+        memory_query = " ".join(obs_texts[:5])[:500]
+
+        # Query semantic memory via SQLiteMemorySystem
+        sqlite_memory = None
+        if agi_kernel:
+            sqlite_memory = getattr(agi_kernel, 'memory', None) or getattr(agi_kernel, 'sqlite_memory', None)
+        if not sqlite_memory and hasattr(self, 'agi_kernel') and self.agi_kernel:
+            sqlite_memory = getattr(self.agi_kernel, 'memory', None) or getattr(self.agi_kernel, 'sqlite_memory', None)
+
+        if not sqlite_memory or not hasattr(sqlite_memory, 'search_memories'):
+            return memory_proposals
+
+        try:
+            similar_memories = sqlite_memory.search_memories(
+                query=memory_query,
+                k=5,
+                min_relevance=0.35
+            )
+        except Exception as e:
+            logger.debug(f"Memory-driven thinking semantic search failed: {e}")
+            return memory_proposals
+
+        if not similar_memories:
+            return memory_proposals
+
+        # Ask BeliefEngine what it thinks about these memory-driven actions
+        belief_engine = None
+        if hasattr(self, 'cognitive') and self.cognitive:
+            belief_engine = getattr(self.cognitive, 'belief_engine', None)
+
+        seen_actions = set()
+
+        for mem in similar_memories:
+            meta = mem.get('metadata', {}) or {}
+            content = mem.get('content', '') or ''
+            relevance = mem.get('relevance_score', 0.0)
+            memory_type = mem.get('memory_type', 'interaction')
+
+            # Determine what action type this memory suggests
+            suggested_action = meta.get('action_type', '') or meta.get('plugin', '') or ''
+            plugin_name = meta.get('plugin', '')
+            if not plugin_name:
+                # Try to infer from memory type
+                if 'post' in content.lower() or 'content' in memory_type:
+                    plugin_name = 'moltx'
+                    suggested_action = 'post'
+                elif 'reply' in content.lower() or 'comment' in memory_type:
+                    plugin_name = 'clawbr'
+                    suggested_action = 'reply'
+                elif 'trade' in content.lower() or memory_type == 'on_chain_event':
+                    plugin_name = 'onchain'
+                    suggested_action = 'analyze'
+                else:
+                    plugin_name = 'general'
+                    suggested_action = 'engage'
+
+            if not suggested_action:
+                suggested_action = 'engage'
+
+            action_key = f"{plugin_name}:{suggested_action}"
+            if action_key in seen_actions:
+                continue
+            seen_actions.add(action_key)
+
+            # Use BeliefEngine for confidence if available
+            base_confidence = 0.4 + (relevance * 0.3)
+            if belief_engine and hasattr(belief_engine, 'predict'):
+                try:
+                    prediction = belief_engine.predict(suggested_action, plugin_name)
+                    if prediction.relevant_beliefs:
+                        base_confidence = max(base_confidence, prediction.predicted_success * 0.8)
+                except Exception:
+                    pass
+
+            justification = f"Memory suggests: {'; '.join(content.split('.')[:2])}" if content else f"From similar past {memory_type}"
+
+            proposal = SyModActionProposal(
+                action_type=suggested_action,
+                target_name=meta.get('target_name', '') or meta.get('author', '') or '',
+                confidence=min(base_confidence, 0.9),
+                justification=justification,
+                metadata={
+                    'plugin': plugin_name,
+                    'memory_driven': True,
+                    'memory_id': mem.get('id', ''),
+                    'memory_relevance': round(relevance, 3),
+                    'source_memory': 'semantic',
+                    'origin': 'memory_first',
+                }
+            )
+            memory_proposals.append(proposal)
+
+        return memory_proposals
+
+    async def _phase_assemble_proposals(self, agi_kernel, agi_actions, active_work_items, spine_context, memory_proposals=None):
         """THINK phase — assemble, enrich, and rank all action proposals.
         
-        Combines SyMod proposals, AGI orchestrator actions, and goal-driven actions,
-        then applies learning biases to produce the final ranked list.
+        Combines memory-driven proposals, SyMod proposals, AGI orchestrator actions,
+        and goal-driven actions, then applies learning biases to produce the final ranked list.
         """
         # Get goal-driven action from active autonomous goals
         goal_driven_action = None
@@ -1980,6 +2140,10 @@ class AutonomousBrain(AGISocialMixin):
         # Combine SyMod + AGI proposals
         proposals = await self._get_proposals()
         proposals.extend(agi_actions)
+
+        # PREPEND memory-driven proposals so they get first consideration
+        if memory_proposals:
+            proposals = memory_proposals + proposals
         
         # Inject goal-driven action as high-priority proposal
         if goal_driven_action:
@@ -2890,7 +3054,7 @@ class AutonomousBrain(AGISocialMixin):
                         proposal.metadata = {}
                     proposal.metadata['cognitive_avoid'] = reason
 
-                belief_delta = (predicted_success - 0.5) * 0.3
+                belief_delta = (predicted_success - 0.5) * 0.5
                 current_confidence = max(0.05, min(0.95, current_confidence + belief_delta))
 
                 proposal.confidence = current_confidence
