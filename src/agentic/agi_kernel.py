@@ -11,55 +11,49 @@ Makes AlleyBot actually use its AGI capabilities.
 """
 
 import asyncio
+import logging
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
 
-from .unified_memory import UnifiedMemory, create_unified_memory
-from .episodic_memory import EpisodicMemoryStore, BehaviorModulator, create_episodic_memory
-from .autonomous_goals import AutonomousGoalManager, create_autonomous_goal_manager
-from .meta_learning import MetaLearningEngine, AdaptiveLearner, create_adaptive_learner
-from .self_reflection import SelfReflectionEngine, ReflectionScheduler, create_reflection_engine
-from .symod_core import SyModCoreManager, get_symod_manager
-from .decision_system import DecisionSystem, create_decision_system
-from .action_router import ActionRouter, create_action_router
-from .error_monitor import ErrorMonitor, create_error_monitor
-from .context_system import ContextSystem, create_context_system
-from .reply_system import ReplySystem, create_reply_system
-from .goal_generator import SecureGoalGenerator, create_goal_generator
-from .content_strategy import ContentStrategySystem, create_content_strategy
-from .world_state_bridge import WorldStateBridge, create_world_state_bridge
-from .goal_stack import GoalStackBridge, create_goal_stack
+logger = logging.getLogger(__name__)
+
+from .unified_memory import create_unified_memory
+from .episodic_memory import BehaviorModulator, create_episodic_memory
+from .autonomous_goals import create_autonomous_goal_manager
+from .meta_learning import MetaLearningEngine, AdaptiveLearner
+from .self_reflection import ReflectionScheduler, create_reflection_engine
+from .symod_core import get_symod_manager
+from .decision_system import create_decision_system
+from .action_router import create_action_router
+from .error_monitor import create_error_monitor
+from .context_system import create_context_system
+from .reply_system import create_reply_system
+from .goal_generator import create_goal_generator
+from .content_strategy import create_content_strategy
+from .world_state_bridge import create_world_state_bridge
+from .goal_stack import create_goal_stack
 from .planning import get_plan_manager
-from .work_item_manager import WorkItemManager, create_work_item_manager
 from .default_goals import get_default_goal_seeder
-from .command_registry import GlobalCommandRegistry, create_command_registry
-from .cross_plugin_orchestrator import CrossPluginOrchestrator, create_cross_plugin_orchestrator
-from .domain_autonomy_manager import DomainAutonomyManager, create_domain_autonomy_manager
+from .command_registry import create_command_registry
+from .cross_plugin_orchestrator import create_cross_plugin_orchestrator
+from .domain_autonomy_manager import create_domain_autonomy_manager
 from .action_logger import get_action_logger
 from .alley_kernel import (
-    CognitiveLoop,
     SynergyGate,
     ActionRegistry,
     PathProtection,
     CostTracker,
-    SkillRegistry,
-    HooksRegistry,
     create_builtin_skills,
     create_default_hooks,
 )
 from .alley_kernel.autonomous_engine import (
-    AutonomousCognitiveEngine,
     create_autonomous_engine,
 )
 from .event_bus import (
-    CognitiveEventBus,
-    EventBusMixin,
     EventType,
     EventPriority,
     get_event_bus,
 )
 from .engine_integration import (
-    EngineIntegrationManager,
     integrate_all_engines,
 )
 from .cognitive_integration import get_cognitive
@@ -695,6 +689,7 @@ class AGIKernel:
         
         if action:
             print(f"🧠 AGI decided: {action.get('id')} ({action.get('decision_method', 'unknown')})")
+            success = action.get('success', True)
             # Publish decision to event bus for horizontal engines
             if self.event_bus:
                 self.event_bus.publish_simple(
@@ -1507,8 +1502,7 @@ class AGIKernel:
         created_at = work_item.get('created_at')
         if created_at:
             try:
-                from datetime import datetime, timedelta
-                import json
+                from datetime import datetime
                 if isinstance(created_at, str):
                     created_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
                 else:
@@ -1765,7 +1759,6 @@ class AGIKernel:
                 interval_minutes
             )
         
-        import asyncio
         asyncio.create_task(self.reflection_scheduler.start())
         print(f"🧠 Periodic reflection started (every {interval_minutes}min)")
     

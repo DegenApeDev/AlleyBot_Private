@@ -13,12 +13,14 @@ to user commands, it:
 This transforms AlleyBot from a command executor to a self-directed agent.
 """
 
-import json
+import logging
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
-from dataclasses import dataclass, asdict
+from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 
 class GoalOrigin(Enum):
@@ -182,7 +184,7 @@ class OpportunityDetector:
                         opportunities.append({
                             'type': 'relationship_maintenance',
                             'description': f"User {user.get('username')} hasn't been engaged in {days_since} days",
-                            'suggested_action': f"Reply to their content or send appreciation",
+                            'suggested_action': "Reply to their content or send appreciation",
                             'expected_impact': interaction_count * 2,  # Value of relationship
                             'urgency': 6,
                             'target_user': user.get('user_id')
@@ -410,22 +412,7 @@ class GoalGenerator:
                     "Record interaction"
                 ]
         
-        return AutonomousGoal(
-            id=goal_id,
-            description=opp['description'],
-            origin=origin,
-            detected_opportunity=opp['description'],
-            evidence={'opportunity_data': opp},
-            action_plan=action_plan,
-            expected_outcome=f"{opp['expected_impact']:.1f} engagement points",
-            success_criteria=[
-                f"Achieve {opp['expected_impact'] * 0.8:.1f} impact",
-                "Complete all action steps"
-            ],
-            priority_score=min(10, opp.get('expected_impact', 5) / 10),
-            urgency=opp.get('urgency', 5),
-            impact=opp.get('expected_impact', 5)
-        )
+        return action_plan
 
 
 class AutonomousGoalManager:

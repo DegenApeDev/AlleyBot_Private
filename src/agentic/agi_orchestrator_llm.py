@@ -6,8 +6,11 @@ This allows the AGI cycle to use reasoning models for dynamic decision-making.
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict, TYPE_CHECKING
 from datetime import datetime
+
+if TYPE_CHECKING:
+    from src.agentic.agi_orchestrator import PhaseResult
 
 logger = logging.getLogger(__name__)
 

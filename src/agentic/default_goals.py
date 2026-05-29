@@ -6,10 +6,9 @@ Without goals, AlleyBot has nothing to do. This seeds meaningful objectives.
 """
 
 from typing import List, Dict, Any
-from datetime import datetime, timedelta
 import logging
 
-from src.agentic.goal_manager import GoalStatus
+from src.agentic.goal_manager import GoalStatus, GoalPriority, Goal
 
 logger = logging.getLogger(__name__)
 

@@ -15,7 +15,10 @@ Key Features:
 
 import datetime
 import json
+import logging
 from typing import Dict, Any, Optional, List, Tuple
+
+logger = logging.getLogger(__name__)
 
 from src.agentic.action_logger import get_action_logger
 from src.agentic.capability_registry import get_capability_registry
@@ -363,7 +366,7 @@ class DecisionSystem:
         print(f"🎯 Checking {len(active_goals)} active goals for workflow requirements")
         
         if active_goals and self.agi and hasattr(self.agi, 'orchestrator'):
-            print(f"✅ Orchestrator available, checking goals...")
+            print("✅ Orchestrator available, checking goals...")
             for goal in active_goals[:1]:  # Check top priority goal
                 workflow_req = self.detect_workflow_requirement(goal, context)
                 if workflow_req:
@@ -377,9 +380,9 @@ class DecisionSystem:
                         'requires_orchestrator': True
                     }
         elif not active_goals:
-            print(f"⚠️ No active goals in context")
+            print("⚠️ No active goals in context")
         elif not self.agi or not hasattr(self.agi, 'orchestrator'):
-            print(f"⚠️ Orchestrator not available")
+            print("⚠️ Orchestrator not available")
         
         # PHASE 1: Goal-driven action selection (AGI behavior)
         decision_context = self._build_decision_context(context)
@@ -754,7 +757,7 @@ class DecisionSystem:
                 'requires_orchestrator': True
             }
         
-        print(f"❌ No workflow detected for this goal")
+        print("❌ No workflow detected for this goal")
         return None
     
     def _filter_bounded_self_improvement_actions(self, available: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

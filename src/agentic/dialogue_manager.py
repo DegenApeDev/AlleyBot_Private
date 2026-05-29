@@ -19,6 +19,7 @@ Integration:
 - Coordinates with DecisionSystem for actions
 """
 
+import re
 import logging
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
@@ -353,7 +354,7 @@ class DialogueManager:
         summary = self.memory.get_conversation_summary()
         
         lines = [
-            f"📊 Conversation Summary:",
+            "📊 Conversation Summary:",
             f"Turns: {summary['turn_count']}",
             f"Duration: {summary.get('duration_seconds', 0):.0f}s",
             f"Current Topic: {summary.get('current_topic', 'None')}",

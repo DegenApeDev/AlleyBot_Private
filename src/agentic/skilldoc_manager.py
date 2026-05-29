@@ -2,10 +2,12 @@
 SkillDocManager - Manages skill.md documentation for all Molt platforms
 Downloads, caches, and periodically checks for updates
 """
-import os
 import hashlib
 import asyncio
-from datetime import datetime, timedelta
+import logging
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
 from pathlib import Path
 from typing import Dict, Optional, List, Any
 import aiohttp
