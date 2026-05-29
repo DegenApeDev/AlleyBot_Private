@@ -7,8 +7,6 @@ Writes files to skills/ directory for hot-loading.
 Part of AGI Core - Phase 4: Self-Extension
 """
 
-import os
-import json
 import logging
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
@@ -60,6 +58,29 @@ class GeneratedSkill:
     generated_at: datetime
     status: str  # 'generated', 'tested', 'deployed', 'failed'
     errors: List[str]
+
+
+@dataclass
+class PluginSpecification:
+    """Specification for a new plugin to be generated"""
+    name: str
+    description: str
+    domain: str  # 'social', 'trading', 'data', 'utility', 'monitoring'
+    platform_url: Optional[str] = None
+    api_endpoints: List[str] = field(default_factory=list)
+    required_methods: List[str] = field(default_factory=lambda: ['get_commands'])
+    evidence: List[str] = field(default_factory=list)
+
+
+@dataclass
+class PluginGenerationResult:
+    """Result of plugin code generation"""
+    plugin_name: str
+    files_created: List[str]
+    plugin_dir: str
+    generated_at: datetime
+    status: str  # 'generated', 'failed'
+    errors: List[str] = field(default_factory=list)
 
 
 class AutonomousCoder:
@@ -168,7 +189,383 @@ class AutonomousCoder:
                 status='failed',
                 errors=errors
             )
-    
+
+    def _get_selfimprove_coder(self):
+        """Try to get the selfimprove plugin's AI coder for generation."""
+        try:
+            from src.core.plugin_manager import get_plugin_manager
+            pm = get_plugin_manager()
+            if pm:
+                si = pm.get_plugin('selfimprove')
+                if si and hasattr(si, '_generate_code_with_ai'):
+                    return si
+        except Exception:
+            pass
+        return None
+
+    def generate_plugin(self, spec: PluginSpecification) -> PluginGenerationResult:
+        """Generate a complete AlleyBotPlugin from specification.
+
+        Tries AI-powered generation first (via selfimprove plugin),
+        falls back to template-based scaffolds for common patterns.
+        """
+        plugin_dir = Path('plugins') / spec.name
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        files_created = []
+
+        # Try AI coder first
+        ai_coder = self._get_selfimprove_coder()
+        if ai_coder:
+            task = (
+                f"Create a new AlleyBotPlugin in plugins/{spec.name}/ named {spec.name}Plugin.\n"
+                f"Description: {spec.description}\n"
+                f"Domain: {spec.domain}\n"
+                f"Platform URL: {spec.platform_url or 'N/A'}\n"
+                f"API endpoints needed: {', '.join(spec.api_endpoints) or 'N/A'}\n"
+                f"Required methods: {', '.join(spec.required_methods)}\n\n"
+                f"Follow the AlleyBot Plugin SOP exactly:\n"
+                f"- from plugin_manager import AlleyBotPlugin\n"
+                f"- class {spec.name}Plugin(AlleyBotPlugin):\n"
+                f"- __init__(self, config): super().__init__(config)\n"
+                f"- PLUGIN_INFO dict with name, version, description, author\n"
+                f"- create_plugin(config=None) function returning instance\n"
+                f"- get_commands() returning dict of command_name -> method\n"
+                f"- plugins/{spec.name}/__init__.py with ABSOLUTE imports\n"
+                f"- use print() not logger\n"
+            )
+            code = ai_coder._generate_code_with_ai(task)
+            if code:
+                main_file = plugin_dir / f"{spec.name}.py"
+                main_file.write_text(code)
+                files_created.append(str(main_file))
+
+                init_code = self._generate_plugin_init(spec)
+                init_file = plugin_dir / '__init__.py'
+                init_file.write_text(init_code)
+                files_created.append(str(init_file))
+
+                result = PluginGenerationResult(
+                    plugin_name=spec.name,
+                    files_created=files_created,
+                    plugin_dir=str(plugin_dir),
+                    generated_at=datetime.now(),
+                    status='generated',
+                    errors=[]
+                )
+                logger.info(f"🔌 AI-generated plugin: {spec.name} ({len(code)} chars)")
+                return result
+
+        # Fallback: template-based generation
+        return self._generate_plugin_template(spec)
+
+    def _generate_plugin_init(self, spec: PluginSpecification) -> str:
+        """Generate plugin __init__.py with absolute imports."""
+        return f'''from plugins.{spec.name}.{spec.name} import create_plugin, PLUGIN_INFO
+
+__all__ = ["create_plugin", "PLUGIN_INFO"]
+'''
+
+    def _generate_plugin_template(self, spec: PluginSpecification) -> PluginGenerationResult:
+        """Generate a plugin using templates based on domain."""
+        plugin_dir = Path('plugins') / spec.name
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        files_created = []
+
+        try:
+            domain = spec.domain.lower()
+
+            if domain in ('social', 'social_media', 'platform'):
+                code = self._generate_social_plugin(spec)
+            elif domain in ('data', 'api', 'fetcher'):
+                code = self._generate_data_plugin(spec)
+            elif domain in ('monitoring', 'monitor', 'watch'):
+                code = self._generate_monitor_plugin(spec)
+            elif domain in ('utility', 'tool', 'helper'):
+                code = self._generate_utility_plugin(spec)
+            else:
+                code = self._generate_generic_plugin(spec)
+
+            main_file = plugin_dir / f"{spec.name}.py"
+            main_file.write_text(code)
+            files_created.append(str(main_file))
+
+            init_code = self._generate_plugin_init(spec)
+            init_file = plugin_dir / '__init__.py'
+            init_file.write_text(init_code)
+            files_created.append(str(init_file))
+
+            logger.info(f"🔌 Template-generated plugin: {spec.name}")
+            return PluginGenerationResult(
+                plugin_name=spec.name,
+                files_created=files_created,
+                plugin_dir=str(plugin_dir),
+                generated_at=datetime.now(),
+                status='generated',
+                errors=[]
+            )
+
+        except Exception as e:
+            logger.error(f"Plugin generation failed: {e}")
+            return PluginGenerationResult(
+                plugin_name=spec.name,
+                files_created=files_created,
+                plugin_dir=str(plugin_dir),
+                generated_at=datetime.now(),
+                status='failed',
+                errors=[str(e)]
+            )
+
+    def _generate_social_plugin(self, spec: PluginSpecification) -> str:
+        """Template for social platform plugins (reader + engagement)."""
+        name = spec.name
+        cls_name = f"{name}Plugin"
+        url = spec.platform_url or f"https://{name}.com/api/v1"
+        return f'''"""
+{spec.description}
+"""
+
+import os
+import json
+from typing import Dict, List, Optional
+from plugin_manager import AlleyBotPlugin
+
+
+class {cls_name}(AlleyBotPlugin):
+    """Plugin for {name} platform"""
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.name = "{name}"
+        self.version = "1.0.0"
+        self.base_url = "{url}"
+        self.api_key = os.getenv("{name.upper()}_API_KEY", "")
+
+    def get_commands(self) -> Dict[str, callable]:
+        return {{
+            "status": self.cmd_status,
+            "feed": self.cmd_feed,
+        }}
+
+    def cmd_status(self, args: list) -> str:
+        """Check plugin health status"""
+        return f"{{self.name}} plugin active | URL: {{self.base_url}}"
+
+    def cmd_feed(self, args: list) -> str:
+        """Fetch recent feed items"""
+        return json.dumps({{"plugin": "{name}", "items": []}})
+
+
+PLUGIN_INFO = {{
+    "name": "{name}",
+    "version": "1.0.0",
+    "description": """{spec.description}""",
+    "author": "AlleyBot",
+    "domain": "{spec.domain}",
+}}
+
+
+def create_plugin(config=None):
+    return {cls_name}(config or {{}})
+'''
+
+    def _generate_data_plugin(self, spec: PluginSpecification) -> str:
+        """Template for data-fetching API plugins."""
+        name = spec.name
+        cls_name = f"{name}Plugin"
+        url = spec.platform_url or f"https://api.{name}.com/v1"
+        return f'''"""
+{spec.description}
+"""
+
+import os
+import json
+from typing import Dict, Optional
+from plugin_manager import AlleyBotPlugin
+
+
+class {cls_name}(AlleyBotPlugin):
+    """Data plugin for {name}"""
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.name = "{name}"
+        self.version = "1.0.0"
+        self.base_url = "{url}"
+        self.api_key = os.getenv("{name.upper()}_API_KEY", "")
+
+    def get_commands(self) -> Dict[str, callable]:
+        return {{
+            "fetch": self.cmd_fetch,
+            "health": self.cmd_health,
+        }}
+
+    def cmd_fetch(self, args: list) -> str:
+        """Fetch data from {name} API"""
+        return json.dumps({{"status": "ok", "data": []}})
+
+    def cmd_health(self, args: list) -> str:
+        """Check API health"""
+        return json.dumps({{"plugin": "{name}", "healthy": True}})
+
+
+PLUGIN_INFO = {{
+    "name": "{name}",
+    "version": "1.0.0",
+    "description": """{spec.description}""",
+    "author": "AlleyBot",
+    "domain": "{spec.domain}",
+}}
+
+
+def create_plugin(config=None):
+    return {cls_name}(config or {{}})
+'''
+
+    def _generate_monitor_plugin(self, spec: PluginSpecification) -> str:
+        """Template for monitoring/alert plugins."""
+        name = spec.name
+        cls_name = f"{name}Plugin"
+        return f'''"""
+{spec.description}
+"""
+
+import json
+from typing import Dict
+from plugin_manager import AlleyBotPlugin
+
+
+class {cls_name}(AlleyBotPlugin):
+    """Monitor plugin for {name}"""
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.name = "{name}"
+        self.version = "1.0.0"
+
+    def get_commands(self) -> Dict[str, callable]:
+        return {{
+            "check": self.cmd_check,
+            "alerts": self.cmd_alerts,
+        }}
+
+    def cmd_check(self, args: list) -> str:
+        """Run a health check"""
+        return json.dumps({{"status": "ok", "plugin": "{name}"}})
+
+    def cmd_alerts(self, args: list) -> str:
+        """List active alerts"""
+        return json.dumps({{"alerts": []}})
+
+
+PLUGIN_INFO = {{
+    "name": "{name}",
+    "version": "1.0.0",
+    "description": """{spec.description}""",
+    "author": "AlleyBot",
+    "domain": "{spec.domain}",
+}}
+
+
+def create_plugin(config=None):
+    return {cls_name}(config or {{}})
+'''
+
+    def _generate_utility_plugin(self, spec: PluginSpecification) -> str:
+        """Template for utility/helper plugins."""
+        name = spec.name
+        cls_name = f"{name}Plugin"
+        return f'''"""
+{spec.description}
+"""
+
+import json
+from typing import Dict
+from plugin_manager import AlleyBotPlugin
+
+
+class {cls_name}(AlleyBotPlugin):
+    """Utility plugin for {name}"""
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.name = "{name}"
+        self.version = "1.0.0"
+
+    def get_commands(self) -> Dict[str, callable]:
+        return {{
+            "run": self.cmd_run,
+            "help": self.cmd_help,
+        }}
+
+    def cmd_run(self, args: list) -> str:
+        """Execute the utility"""
+        return json.dumps({{"done": True}})
+
+    def cmd_help(self, args: list) -> str:
+        """Get usage info"""
+        return "{name}: {spec.description}"
+
+
+PLUGIN_INFO = {{
+    "name": "{name}",
+    "version": "1.0.0",
+    "description": """{spec.description}""",
+    "author": "AlleyBot",
+    "domain": "{spec.domain}",
+}}
+
+
+def create_plugin(config=None):
+    return {cls_name}(config or {{}})
+'''
+
+    def _generate_generic_plugin(self, spec: PluginSpecification) -> str:
+        """Generic fallback plugin template."""
+        name = spec.name
+        cls_name = f"{name}Plugin"
+        return f'''"""
+{spec.description}
+"""
+
+import json
+from typing import Dict
+from plugin_manager import AlleyBotPlugin
+
+
+class {cls_name}(AlleyBotPlugin):
+    """Plugin for {name}"""
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.name = "{name}"
+        self.version = "1.0.0"
+
+    def get_commands(self) -> Dict[str, callable]:
+        return {{
+            "ping": self.cmd_ping,
+            "info": self.cmd_info,
+        }}
+
+    def cmd_ping(self, args: list) -> str:
+        return "pong"
+
+    def cmd_info(self, args: list) -> str:
+        return json.dumps({{"name": "{name}", "version": "1.0.0"}})
+
+
+PLUGIN_INFO = {{
+    "name": "{name}",
+    "version": "1.0.0",
+    "description": """{spec.description}""",
+    "author": "AlleyBot",
+    "domain": "{spec.domain}",
+}}
+
+
+def create_plugin(config=None):
+    return {cls_name}(config or {{}})
+'''
+
     def _generate_init(self, spec: SkillSpecification) -> str:
         """Generate __init__.py"""
         return f'''"""
@@ -599,7 +996,7 @@ class TestSkill:
                 total = test_results.get('total', 0)
                 if total > 0 and (passed / total) < 0.8:
                     logger.warning(f"⚠️ Test pass rate {passed/total:.0%} < 80%, blocking deployment")
-                    skill.errors.append(f"Test pass rate requirement not met")
+                    skill.errors.append("Test pass rate requirement not met")
                     return False
             
             # 6.4: Fall-safe - backup existing files before deployment

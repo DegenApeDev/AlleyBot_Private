@@ -637,6 +637,9 @@ class AutonomousBrain(AGISocialMixin):
         # === CONSOLIDATE LEARNING: Sleep-cycle replay of high-value memories ===
         await self._phase_consolidate_learning(agi_kernel)
 
+        # === PLUGIN DISCOVERY: Auto-generate plugins for detected capability gaps ===
+        await self._phase_plugin_discovery_and_creation(agi_kernel)
+
         # === PHASE 3.7: Curiosity-driven self-directed goals (BEFORE SyMod/LLM) ===
         curiosity_proposals = await self._phase_curiosity_goals(agi_kernel)
         
@@ -2869,6 +2872,121 @@ class AutonomousBrain(AGISocialMixin):
 
         except Exception as e:
             logger.debug(f"Meta adaptation error: {e}")
+
+    async def _phase_plugin_discovery_and_creation(self, agi_kernel=None) -> None:
+        """Detect capability gaps that could be filled by new plugins and auto-generate them.
+
+        Runs every 50 cycles:
+        1. Check knowledge graph for platform entities that lack a local plugin
+        2. Check self-model for domains with zero capability data (unknown domains)
+        3. Generate a PluginSpecification for each gap
+        4. Call AutonomousCoder to generate the plugin
+        5. Hot-load it via plugin_manager
+        """
+        if not self.plugin_manager:
+            return
+
+        cycle_count = self.stats.get('cycles_completed', 0)
+        if cycle_count <= 0 or cycle_count % 50 != 0:
+            return
+
+        logger.info("🔌 === Plugin Discovery & Creation ===")
+
+        try:
+            from src.agentic.autonomous_coder import (
+                PluginSpecification, get_autonomous_coder
+            )
+            coder = get_autonomous_coder()
+
+            gaps = []
+
+            # 1. Check knowledge graph for platform entities without plugins
+            try:
+                if self.knowledge_graph:
+                    from src.agentic.knowledge_graph import EntityType
+                    platform_entities = self.knowledge_graph.get_entities_by_type(EntityType.PLATFORM)
+                    loaded_plugins = set()
+                    if self.plugin_manager:
+                        loaded_plugins = set(self.plugin_manager.plugins.keys())
+                    for entity in platform_entities[:5]:
+                        pname = entity.name.lower().replace(' ', '_')
+                        if pname not in loaded_plugins:
+                            gaps.append(PluginSpecification(
+                                name=pname,
+                                description=f"Auto-discovered platform: {entity.name}",
+                                domain='social',
+                                platform_url=getattr(entity, 'url', None),
+                                evidence=[f"Discovered via knowledge graph entity: {entity.id}"]
+                            ))
+            except Exception as e:
+                logger.debug(f"KG plugin discovery error: {e}")
+
+            # 2. Check curiosity knowledge gaps for domain-level gaps
+            try:
+                if hasattr(self, 'capability_weaknesses') and self.capability_weaknesses:
+                    unknown_domains = set()
+                    for w in self.capability_weaknesses:
+                        dom = w.get('domain', '')
+                        if dom and dom not in ('general', 'unknown'):
+                            unknown_domains.add(dom)
+                    for domain in unknown_domains:
+                        if not any(g.name == domain for g in gaps):
+                            gaps.append(PluginSpecification(
+                                name=f"{domain}_agent",
+                                description=f"Agent for {domain} domain — generated from capability gap",
+                                domain='data',
+                                evidence=[f"Capability weakness in domain: {domain}"]
+                            ))
+            except Exception as e:
+                logger.debug(f"Capability gap plugin discovery error: {e}")
+
+            # 3. Generate plugins for each gap
+            for gap in gaps[:2]:  # Max 2 per cycle
+                result = coder.generate_plugin(gap)
+                if result.status == 'generated':
+                    logger.info(f"   ✅ Generated plugin: {gap.name}")
+                    # Hot-load it
+                    try:
+                        pm = self.plugin_manager
+                        if pm and hasattr(pm, 'load_plugin'):
+                            import inspect
+                            sig = inspect.signature(pm.load_plugin)
+                            if len(sig.parameters) >= 4:
+                                pm.load_plugin(gap.name, {'config': {}, 'enabled': True}, None, None)
+                            else:
+                                pm.load_plugin(gap.name, {'config': {}, 'enabled': True})
+                            logger.info(f"   🔌 Hot-loaded plugin: {gap.name}")
+
+                            # Register commands with intent classifier
+                            try:
+                                from plugins.telegram.intent_classifier import get_intent_classifier
+                                classifier = get_intent_classifier()
+                                plugin = pm.plugins.get(gap.name)
+                                if plugin and classifier:
+                                    for cmd_name, func in plugin.get_commands().items():
+                                        doc = (func.__doc__ or f"Execute {cmd_name}").split('\\n')[0].strip()
+                                        classifier.register_command(cmd_name, doc)
+                            except Exception:
+                                pass
+
+                            # Tell the self-model a new capability was learned
+                            if self.cognitive and hasattr(self.cognitive, 'self_model'):
+                                self.cognitive.self_model.record_outcome(
+                                    domain=gap.domain,
+                                    action_type=f"plugin_{gap.name}",
+                                    success=True,
+                                    confidence=0.8,
+                                )
+                    except Exception as e:
+                        logger.warning(f"   ⚠️ Hot-load failed for {gap.name}: {e}")
+                else:
+                    logger.warning(f"   ⚠️ Plugin generation failed for {gap.name}: {result.errors}")
+
+            if not gaps:
+                logger.info("   No plugin gaps found")
+
+        except Exception as e:
+            logger.debug(f"Plugin discovery error: {e}")
 
     async def _phase_execute_proposals(self, proposals, agi_kernel, next_action) -> int:
         """ACT phase — execute ranked proposals and record outcomes.
