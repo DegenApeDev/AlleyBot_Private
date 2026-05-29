@@ -12,23 +12,23 @@ Part of AGI Core - Phase 1: Self-Reflection System
 """
 
 import asyncio
+import json
 import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from pathlib import Path
 from dataclasses import dataclass
-import os
 
-from src.agentic.action_logger import ActionLogger, ActionRecord
+from src.agentic.action_logger import ActionLogger
 from src.agentic.symod_core import get_symod_manager, SyModObservation
 from src.agentic.skilldoc_manager import get_skilldoc_manager
 from src.agentic.agi_social_mixin import AGISocialMixin
 from src.agentic.agi_orchestrator import get_agi_orchestrator
-from src.agentic.moltx_agi_integration import gather_moltx_service_insights, execute_moltx_suggested_actions
+from src.agentic.moltx_agi_integration import gather_moltx_service_insights
 from src.agentic.cross_platform_intel import get_cross_platform_intelligence
 from src.agentic.opportunity_monitor import get_opportunity_monitor
 from src.agentic.outcome_learner import get_outcome_learner
-from src.agentic.trading_observations import gather_trading_observations, get_trading_summary
+from src.agentic.trading_observations import gather_trading_observations
 
 # New AGI Foundation Systems
 from src.agentic.unified_reasoner import get_unified_reasoner
@@ -53,7 +53,7 @@ from src.agentic.service_integration import (
     get_integrated_notification_service,
     get_integrated_memory_service,
 )
-from src.agentic.contracts import WorkItemState, NotificationPriority
+from src.agentic.contracts import NotificationPriority
 
 logger = logging.getLogger(__name__)
 
@@ -1825,7 +1825,7 @@ class AutonomousBrain(AGISocialMixin):
                         coder.deploy_skill(skill)
                         logger.info(f"🚀 Deployed skill (no sandbox available): {skill.skill_name}")
                 elif skill.status == 'generated' and not skill.files_created:
-                    logger.warning(f"⚠️ Skill generated but no files created")
+                    logger.warning("⚠️ Skill generated but no files created")
                 else:
                     logger.warning(f"⚠️ Skill generation failed: {skill.errors}")
         except Exception as e:
@@ -2403,7 +2403,7 @@ class AutonomousBrain(AGISocialMixin):
                     for finding in adversarial_findings[:5]:
                         logger.info(f"   ⚠️ {finding['belief'][:60]}... => {finding['challenge']}")
                 else:
-                    logger.info(f"   ✅ No significant belief challenges found")
+                    logger.info("   ✅ No significant belief challenges found")
                 
                 # Store findings in beliefs
                 try:
