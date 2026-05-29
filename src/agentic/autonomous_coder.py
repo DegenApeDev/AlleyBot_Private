@@ -384,7 +384,110 @@ def safe_get(data: dict, key: str, default: Any = None) -> Any:
 '''
     
     def _generate_generic(self, spec: SkillSpecification, description: str) -> str:
-        """Generate generic file"""
+        """Generate generic file with meaningful scaffold based on description keywords."""
+        desc_lower = description.lower()
+
+        if 'api' in desc_lower or 'endpoint' in desc_lower or 'client' in desc_lower:
+            return f'''"""
+{description}
+
+Part of {spec.name}
+"""
+
+import logging
+from typing import Dict, Any, Optional
+from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ApiConfig:
+    base_url: str = ""
+    api_key: Optional[str] = None
+    timeout: int = 30
+
+
+class ApiClient:
+    """API client for {spec.name}"""
+
+    def __init__(self, config: Optional[ApiConfig] = None):
+        self.config = config or ApiConfig()
+
+    async def request(self, method: str, path: str, **kwargs) -> Dict[str, Any]:
+        """Make API request"""
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                url = f"{{self.config.base_url}}{{path}}"
+                async with session.request(method, url, **kwargs) as resp:
+                    return await resp.json()
+        except Exception as e:
+            logger.error(f"API request failed: {{e}}")
+            return {{"success": False, "error": str(e)}}
+
+    async def health_check(self) -> bool:
+        """Check if API is reachable"""
+        try:
+            result = await self.request("GET", "/health")
+            return result.get("status") == "ok"
+        except Exception:
+            return False
+'''
+
+        if 'handler' in desc_lower or 'command' in desc_lower or 'processor' in desc_lower:
+            return f'''"""
+{description}
+
+Part of {spec.name}
+"""
+
+import logging
+from typing import Dict, Any, Callable
+from enum import Enum
+
+logger = logging.getLogger(__name__)
+
+
+class Command(Enum):
+    """Available commands for this handler"""
+    PROCESS = "process"
+    VALIDATE = "validate"
+    ANALYZE = "analyze"
+
+
+class CommandHandler:
+    """Command handler for {spec.name}"""
+
+    def __init__(self):
+        self._handlers: Dict[Command, Callable] = {{
+            Command.PROCESS: self._handle_process,
+            Command.VALIDATE: self._handle_validate,
+            Command.ANALYZE: self._handle_analyze,
+        }}
+
+    def execute(self, command: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a command by name"""
+        try:
+            cmd = Command(command)
+            handler = self._handlers.get(cmd)
+            if not handler:
+                return {{"success": False, "error": f"Unknown command: {{command}}"}}
+            return handler(params)
+        except (ValueError, KeyError):
+            return {{"success": False, "error": f"Invalid command: {{command}}"}}
+
+    def _handle_process(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        return {{"success": True, "action": "processed"}}
+
+    def _handle_validate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        return {{"success": True, "valid": True}}
+
+    def _handle_analyze(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        return {{"success": True, "insights": []}}
+'''
+
+        # Default: generate a data processing scaffold
         return f'''"""
 {description}
 
@@ -392,12 +495,41 @@ Part of {spec.name}
 """
 
 import logging
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
 
-# TODO: Implement this module
-# Based on specification: {spec.description}
+@dataclass
+class ProcessorConfig:
+    enabled: bool = True
+    max_retries: int = 3
+    timeout_seconds: int = 30
+
+
+class DataProcessor:
+    """Main processor for {spec.name}"""
+
+    def __init__(self, config: Optional[ProcessorConfig] = None):
+        self.config = config or ProcessorConfig()
+
+    def process(self, data: Any, **options) -> Dict[str, Any]:
+        """Process input data with given options"""
+        try:
+            result = self._transform(data, options)
+            return {{"success": True, "result": result}}
+        except Exception as e:
+            logger.error(f"Processing failed: {{e}}")
+            return {{"success": False, "error": str(e)}}
+
+    def validate(self, data: Any) -> bool:
+        """Validate input data"""
+        return data is not None
+
+    def _transform(self, data: Any, options: Dict) -> Any:
+        """Apply transformations based on options"""
+        return data
 '''
     
     def _generate_tests(self, spec: SkillSpecification) -> str:

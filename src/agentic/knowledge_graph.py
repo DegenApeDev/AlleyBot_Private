@@ -67,35 +67,35 @@ class Relationship:
 class KnowledgeGraph:
     """
     Unified Knowledge Graph - Single representation of all knowledge
-    
+
     Stores:
     - Entities (concepts, agents, platforms, tokens, etc)
     - Relationships (is_a, similar_to, causes, etc)
     - Domain facts
     - Cross-domain connections
-    
+
     Enables:
     - Cross-domain reasoning
     - Knowledge transfer
     - Analogical reasoning
     - Causal reasoning
     """
-    
+
     def __init__(self):
         """Initialize knowledge graph"""
         self.entities: Dict[str, Entity] = {}
         self.relationships: Dict[str, Relationship] = {}
-        
+
         # Indexes for fast lookup
         self.domain_index: Dict[str, Set[str]] = defaultdict(set)  # domain -> entity_ids
         self.type_index: Dict[EntityType, Set[str]] = defaultdict(set)  # type -> entity_ids
         self.relation_index: Dict[str, Set[str]] = defaultdict(set)  # entity_id -> relationship_ids
-        
+
         # Initialize with core concepts
         self._init_core_concepts()
-        
+
         logger.info("✅ Knowledge Graph initialized")
-    
+
     def _init_core_concepts(self):
         """Initialize core concepts that span all domains"""
         # Strategy concept
@@ -109,7 +109,7 @@ class KnowledgeGraph:
                 'applies_to': ['chess', 'trading', 'social', 'planning']
             }
         ))
-        
+
         # Timing concept
         self.add_entity(Entity(
             id="concept_timing",
@@ -121,7 +121,7 @@ class KnowledgeGraph:
                 'applies_to': ['chess', 'trading', 'social', 'planning']
             }
         ))
-        
+
         # Pattern concept
         self.add_entity(Entity(
             id="concept_pattern",
@@ -133,7 +133,7 @@ class KnowledgeGraph:
                 'applies_to': ['chess', 'trading', 'social', 'learning']
             }
         ))
-        
+
         # Risk concept
         self.add_entity(Entity(
             id="concept_risk",
@@ -145,40 +145,40 @@ class KnowledgeGraph:
                 'applies_to': ['trading', 'social', 'planning']
             }
         ))
-        
+
         logger.info(f"✅ Initialized {len(self.entities)} core concepts")
-    
+
     def add_entity(self, entity: Entity) -> str:
         """Add entity to knowledge graph"""
         self.entities[entity.id] = entity
-        
+
         # Update indexes
         self.domain_index[entity.domain].add(entity.id)
         self.type_index[entity.entity_type].add(entity.id)
-        
+
         logger.debug(f"Added entity: {entity.name} ({entity.entity_type.value})")
         return entity.id
-    
+
     def add_relationship(self, relationship: Relationship) -> str:
         """Add relationship to knowledge graph"""
         self.relationships[relationship.id] = relationship
-        
+
         # Update indexes
         self.relation_index[relationship.source_id].add(relationship.id)
         if relationship.bidirectional:
             self.relation_index[relationship.target_id].add(relationship.id)
-        
+
         logger.debug(f"Added relationship: {relationship.id} ({relationship.relation_type.value})")
         return relationship.id
-    
+
     def get_entity(self, entity_id: str) -> Optional[Entity]:
         """Get entity by ID"""
         return self.entities.get(entity_id)
-    
+
     def get_relationship(self, relationship_id: str) -> Optional[Relationship]:
         """Get relationship by ID"""
         return self.relationships.get(relationship_id)
-    
+
     def get_statistics(self) -> Dict[str, Any]:
         """Get knowledge graph statistics"""
         return {
@@ -191,41 +191,41 @@ class KnowledgeGraph:
         """Get all facts/entities for a domain"""
         entity_ids = self.domain_index.get(domain, set())
         return [self.entities[eid] for eid in entity_ids]
-    
+
     def get_entities_by_type(self, entity_type: EntityType) -> List[Entity]:
         """Get all entities of a specific type"""
         entity_ids = self.type_index.get(entity_type, set())
         return [self.entities[eid] for eid in entity_ids]
-    
+
     def get_related_entities(self, entity_id: str, relation_type: Optional[RelationType] = None) -> List[Tuple[Entity, Relationship]]:
         """Get entities related to given entity"""
         related = []
-        
+
         relationship_ids = self.relation_index.get(entity_id, set())
         for rel_id in relationship_ids:
             rel = self.relationships[rel_id]
-            
+
             # Filter by relation type if specified
             if relation_type and rel.relation_type != relation_type:
                 continue
-            
+
             # Get target entity
             target_id = rel.target_id if rel.source_id == entity_id else rel.source_id
             target = self.entities.get(target_id)
-            
+
             if target:
                 related.append((target, rel))
-        
+
         return related
-    
+
     def find_analogies(self, source_domain: str, target_domain: str) -> List[Dict[str, Any]]:
         """Find analogous concepts between domains"""
         analogies = []
-        
+
         # Get entities from both domains
         source_entities = self.get_domain_facts(source_domain)
         target_entities = self.get_domain_facts(target_domain)
-        
+
         # Find similar concepts
         for source_ent in source_entities:
             for target_ent in target_entities:
@@ -237,76 +237,76 @@ class KnowledgeGraph:
                         'similarity': self._calculate_similarity(source_ent, target_ent),
                         'shared_concept': self._get_shared_concept(source_ent, target_ent)
                     })
-        
+
         # Sort by similarity
         analogies.sort(key=lambda x: x['similarity'], reverse=True)
-        
+
         return analogies
-    
+
     def _share_concept(self, entity1: Entity, entity2: Entity) -> bool:
         """Check if two entities share a common concept"""
         # Get related concepts for both entities
         concepts1 = self._get_related_concepts(entity1.id)
         concepts2 = self._get_related_concepts(entity2.id)
-        
+
         # Check for overlap
         return bool(concepts1.intersection(concepts2))
-    
+
     def _get_related_concepts(self, entity_id: str) -> Set[str]:
         """Get all concepts related to an entity"""
         concepts = set()
-        
+
         related = self.get_related_entities(entity_id)
         for entity, rel in related:
             if entity.entity_type == EntityType.CONCEPT:
                 concepts.add(entity.id)
-        
+
         return concepts
-    
+
     def _calculate_similarity(self, entity1: Entity, entity2: Entity) -> float:
         """Calculate similarity between two entities"""
         # Simple similarity based on shared concepts
         concepts1 = self._get_related_concepts(entity1.id)
         concepts2 = self._get_related_concepts(entity2.id)
-        
+
         if not concepts1 or not concepts2:
             return 0.0
-        
+
         # Jaccard similarity
         intersection = len(concepts1.intersection(concepts2))
         union = len(concepts1.union(concepts2))
-        
+
         return intersection / union if union > 0 else 0.0
-    
+
     def _get_shared_concept(self, entity1: Entity, entity2: Entity) -> Optional[str]:
         """Get the strongest shared concept between entities"""
         concepts1 = self._get_related_concepts(entity1.id)
         concepts2 = self._get_related_concepts(entity2.id)
-        
+
         shared = concepts1.intersection(concepts2)
-        
+
         if shared:
             # Return first shared concept (can be enhanced with ranking)
             return list(shared)[0]
-        
+
         return None
-    
+
     def get_causal_relationships(self, domain: str) -> Dict[str, List[str]]:
         """Get causal relationships in a domain"""
         causal_map = defaultdict(list)
-        
+
         # Get domain entities
         domain_entities = self.get_domain_facts(domain)
-        
+
         for entity in domain_entities:
             # Find causal relationships
             related = self.get_related_entities(entity.id, RelationType.CAUSES)
-            
+
             for target, rel in related:
                 causal_map[entity.name].append(target.name)
-        
+
         return dict(causal_map)
-    
+
     def get_social_context(self, domain: str) -> Dict[str, Any]:
         """Get social context for a domain"""
         context = {
@@ -315,10 +315,10 @@ class KnowledgeGraph:
             'relationships': [],
             'patterns': []
         }
-        
+
         # Get social entities
         domain_entities = self.get_domain_facts(domain)
-        
+
         for entity in domain_entities:
             if entity.entity_type == EntityType.AGENT:
                 context['agents'].append(entity.name)
@@ -326,9 +326,9 @@ class KnowledgeGraph:
                 context['platforms'].append(entity.name)
             elif entity.entity_type == EntityType.PATTERN:
                 context['patterns'].append(entity.name)
-        
+
         return context
-    
+
     def add_domain_knowledge(self, domain: str, knowledge: Dict[str, Any]):
         """Add knowledge from a specific domain"""
         for key, value in knowledge.items():
@@ -341,7 +341,88 @@ class KnowledgeGraph:
                 attributes={'value': value}
             )
             self.add_entity(entity)
-    
+
+    def seed_from_beliefs(self, belief_engine) -> int:
+        """Seed the knowledge graph from existing BeliefEngine beliefs.
+
+        Converts every belief into a knowledge graph entity with relationships
+        based on the belief's proposition, domain, and evidence.
+        Returns count of entities created.
+        """
+        created = 0
+        if not belief_engine or not hasattr(belief_engine, 'beliefs'):
+            return 0
+
+        for key, belief in belief_engine.beliefs.items():
+            entity_id = f"belief_{key}"
+            if entity_id in self.entities:
+                continue
+
+            etype = EntityType.CONCEPT
+            if belief.domain in ('moltx', 'clawbr', 'telegram'):
+                etype = EntityType.ACTION
+            elif belief.source == 'seed':
+                etype = EntityType.FACT
+
+            self.add_entity(Entity(
+                id=entity_id,
+                name=f"{belief.domain}:{belief.proposition[:80]}",
+                entity_type=etype,
+                domain=belief.domain,
+                attributes={
+                    'confidence': belief.confidence,
+                    'prediction_count': belief.prediction_count,
+                    'correct_predictions': belief.correct_predictions,
+                    'source': belief.source,
+                    'evidence_for_count': len(belief.evidence_for),
+                    'evidence_against_count': len(belief.evidence_against),
+                },
+                confidence=belief.confidence,
+            ))
+            created += 1
+
+            # Link belief to its domain
+            domain_id = f"domain_{belief.domain}"
+            if domain_id not in self.entities:
+                self.add_entity(Entity(
+                    id=domain_id, name=belief.domain,
+                    entity_type=EntityType.CONCEPT,
+                    domain=belief.domain,
+                    attributes={'type': 'domain'},
+                ))
+            self.add_relationship(Relationship(
+                id=f"rel_{entity_id}_in_{domain_id}",
+                source_id=entity_id, target_id=domain_id,
+                relation_type=RelationType.PART_OF, strength=belief.confidence,
+            ))
+
+        if created:
+            logger.info(f"📊 Knowledge graph seeded with {created} entities from beliefs")
+        return created
+
+    def seed_from_plugin_list(self, plugin_manager) -> int:
+        """Seed platform and agent entities from loaded plugins."""
+        created = 0
+        if not plugin_manager or not hasattr(plugin_manager, 'plugins'):
+            return 0
+
+        for name in plugin_manager.plugins:
+            entity_id = f"plugin_{name}"
+            if entity_id in self.entities:
+                continue
+
+            self.add_entity(Entity(
+                id=entity_id, name=name,
+                entity_type=EntityType.PLATFORM,
+                domain=name,
+                attributes={'type': 'plugin', 'loaded': True},
+            ))
+            created += 1
+
+        if created:
+            logger.info(f"📊 Knowledge graph seeded with {created} platform entities")
+        return created
+
     def learn_from_outcome(
         self,
         action: str,

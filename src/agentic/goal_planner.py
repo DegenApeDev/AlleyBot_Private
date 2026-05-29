@@ -782,16 +782,70 @@ Respond in JSON format only:
 Tools available: {tools_list}"""
 
 
+def _fallback_decompose(goal: str, domain: str, tool_registry: Dict) -> List[Dict]:
+    """Simple keyword-based fallback when LLM decomposition fails.
+
+    Generates a basic 3-step plan: research → analyze → act.
+    """
+    goal_lower = goal.lower()
+    steps = []
+
+    # Step 1: Research/gather information
+    research_verbs = ['browse', 'scan', 'check', 'get_feed', 'trending_check']
+    research_plugin = 'moltx'
+    for verb in research_verbs:
+        for plugin_name, actions in tool_registry.items():
+            if verb in actions:
+                research_plugin = plugin_name
+                break
+    steps.append({
+        'action': 'feed_browse' if 'trend' not in goal_lower else 'trending_check',
+        'plugin': research_plugin,
+        'description': f'Gather information about: {goal[:60]}',
+        'expected_outcome': 'Raw data collected',
+        'rollback_action': 'Skip and try different source',
+        'confidence': 0.6,
+    })
+
+    # Step 2: Analyze
+    steps.append({
+        'action': 'analyze',
+        'plugin': 'analytics' if 'analytics' in tool_registry else research_plugin,
+        'description': f'Analyze gathered data for: {goal[:60]}',
+        'expected_outcome': 'Insights and patterns identified',
+        'rollback_action': 'Log failure and continue',
+        'confidence': 0.5,
+    })
+
+    # Step 3: Act/Engage
+    action_type = 'post' if any(w in goal_lower for w in ['post', 'share', 'announce']) else \
+                  'engage' if any(w in goal_lower for w in ['engage', 'reply', 'comment']) else \
+                  'report' if any(w in goal_lower for w in ['report', 'summarize']) else \
+                  'practice'
+    steps.append({
+        'action': action_type,
+        'plugin': domain if domain in tool_registry else research_plugin,
+        'description': f'Execute action based on analysis: {goal[:60]}',
+        'expected_outcome': 'Goal advanced through execution',
+        'rollback_action': 'Undo action if possible, log otherwise',
+        'confidence': 0.4,
+    })
+
+    return steps
+
+
 def llm_decompose(goal: str, domain: str, tool_registry: Dict) -> Optional[List[Dict]]:
     """Use LLM to decompose a goal into steps for novel domains.
 
-    Returns a list of step dicts, or None if LLM is unavailable.
+    Retries up to 3 times with exponential backoff on failure.
+    Falls back to template-based decomposition if all retries fail.
+    Returns a list of step dicts, or the fallback plan if LLM unavailable.
     """
     try:
         from src.core.llm_router import reason
     except ImportError:
-        logging.getLogger(__name__).debug("LLM router not available for goal decomposition")
-        return None
+        logging.getLogger(__name__).debug("LLM router not available for goal decomposition, using fallback")
+        return _fallback_decompose(goal, domain, tool_registry)
 
     tools_list = []
     for plugin, actions in tool_registry.items():
@@ -805,39 +859,71 @@ def llm_decompose(goal: str, domain: str, tool_registry: Dict) -> Optional[List[
         tools_list="\n".join(tools_list),
     )
 
-    try:
-        response = reason(prompt, max_tokens=2000)
-        if not response:
-            return None
+    import time
+    max_retries = 3
+    last_error = None
 
-        # Extract JSON from response (may be wrapped in markdown)
-        json_match = re.search(r'\[.*\]', response, re.DOTALL)
-        if not json_match:
-            return None
+    for attempt in range(max_retries):
+        try:
+            response = reason(prompt, max_tokens=2000)
+            if not response:
+                if attempt < max_retries - 1:
+                    backoff = 2 ** attempt
+                    logging.getLogger(__name__).debug(f"LLM decompose empty response, retry {attempt+1}/{max_retries} in {backoff}s")
+                    time.sleep(backoff)
+                    continue
+                break
 
-        steps = json.loads(json_match.group())
-        if not isinstance(steps, list):
-            return None
+            json_match = re.search(r'\[.*\]', response, re.DOTALL)
+            if not json_match:
+                if attempt < max_retries - 1:
+                    backoff = 2 ** attempt
+                    logging.getLogger(__name__).debug(f"LLM decompose no JSON, retry {attempt+1}/{max_retries} in {backoff}s")
+                    time.sleep(backoff)
+                    continue
+                break
 
-        # Validate each step has required fields
-        valid_steps = []
-        for i, step in enumerate(steps):
-            if not isinstance(step, dict):
+            steps = json.loads(json_match.group())
+            if not isinstance(steps, list):
                 continue
-            valid_steps.append({
-                'action': step.get('action', f'step_{i}'),
-                'plugin': step.get('plugin', 'unknown'),
-                'description': step.get('description', f'Step {i+1} of {goal}'),
-                'expected_outcome': step.get('expected_outcome', ''),
-                'rollback_action': step.get('rollback_action', 'Skip and continue'),
-                'confidence': float(step.get('confidence', 0.5)),
-            })
 
-        return valid_steps if valid_steps else None
+            valid_steps = []
+            for i, step in enumerate(steps):
+                if not isinstance(step, dict):
+                    continue
+                valid_steps.append({
+                    'action': step.get('action', f'step_{i}'),
+                    'plugin': step.get('plugin', 'unknown'),
+                    'description': step.get('description', f'Step {i+1} of {goal}'),
+                    'expected_outcome': step.get('expected_outcome', ''),
+                    'rollback_action': step.get('rollback_action', 'Skip and continue'),
+                    'confidence': float(step.get('confidence', 0.5)),
+                })
 
-    except (json.JSONDecodeError, ValueError, ImportError, Exception) as e:
-        logging.getLogger(__name__).warning(f"LLM goal decomposition failed: {e}")
-        return None
+            if valid_steps:
+                return valid_steps
+
+        except (json.JSONDecodeError, ValueError) as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                backoff = 2 ** attempt
+                logging.getLogger(__name__).debug(f"LLM decompose parse error, retry {attempt+1}/{max_retries} in {backoff}s: {e}")
+                time.sleep(backoff)
+                continue
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                backoff = 2 ** attempt
+                time.sleep(backoff)
+                continue
+            break
+
+    if last_error:
+        logging.getLogger(__name__).warning(f"LLM goal decomposition failed after {max_retries} retries: {last_error}, using fallback")
+    else:
+        logging.getLogger(__name__).debug(f"LLM decomposition unavailable, using fallback for: {goal[:50]}")
+
+    return _fallback_decompose(goal, domain, tool_registry)
 
 
 # ── Plan Prioritization ────────────────────────────────────────────

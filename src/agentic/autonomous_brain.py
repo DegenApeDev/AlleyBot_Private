@@ -213,6 +213,16 @@ class AutonomousBrain(AGISocialMixin):
         
         # AGI Foundation Systems (85% AGI)
         self.knowledge_graph = get_knowledge_graph()
+        # Seed knowledge graph from existing beliefs and plugins
+        try:
+            if hasattr(self, 'cognitive') and self.cognitive:
+                belief_engine = getattr(self.cognitive, 'belief_engine', None)
+                if belief_engine:
+                    self.knowledge_graph.seed_from_beliefs(belief_engine)
+            if self.plugin_manager:
+                self.knowledge_graph.seed_from_plugin_list(self.plugin_manager)
+        except Exception as e:
+            logger.debug(f"Knowledge graph seeding failed: {e}")
         self.symbolic_engine = get_symbolic_engine()
         self.unified_reasoner = get_unified_reasoner(
             knowledge_graph=self.knowledge_graph,
@@ -607,14 +617,14 @@ class AutonomousBrain(AGISocialMixin):
         # === PERIODIC REFLECTION: Meta-cognition + performance optimization ===
         await self._phase_periodic_reflection(agi_kernel)
         
-        # === THINK: Assemble and rank proposals ===
-        proposals = await self._phase_assemble_proposals(agi_kernel, agi_actions, active_work_items, spine_context, memory_proposals)
-        
-        # === PHASE 3.7: Curiosity-driven self-directed goals ===
-        await self._phase_curiosity_goals(agi_kernel, proposals)
+        # === PHASE 3.7: Curiosity-driven self-directed goals (BEFORE SyMod/LLM) ===
+        curiosity_proposals = await self._phase_curiosity_goals(agi_kernel)
         
         # === PERSISTENT INTENTS: Generate actions for long-running objectives (Phase 3.1) ===
-        await self._phase_maintain_persistent_intents(agi_kernel, proposals)
+        intent_proposals = await self._phase_maintain_persistent_intents(agi_kernel)
+
+        # === THINK: Assemble and rank proposals ===
+        proposals = await self._phase_assemble_proposals(agi_kernel, agi_actions, active_work_items, spine_context, memory_proposals, curiosity_proposals, intent_proposals)
         
         # === CROSS-DOMAIN SYNTHESIS & STRATEGIC PLANNING (Phase 4.1-4.2) ===
         await self._phase_cross_domain_synthesis_and_planning(agi_kernel, observations, proposals)
@@ -1823,12 +1833,14 @@ class AutonomousBrain(AGISocialMixin):
             import traceback
             logger.debug(traceback.format_exc())
     
-    async def _phase_maintain_persistent_intents(self, agi_kernel, proposals):
+    async def _phase_maintain_persistent_intents(self, agi_kernel) -> List:
         """Phase 3.1 — Check persistent intents and generate advancement actions.
         
         Unlike goals (discrete outcomes), intents are long-running objectives
         that generate multiple actions over days/weeks.
+        Returns intent proposals to be included in the main proposal list.
         """
+        intent_proposals = []
         from src.agentic.persistent_intent import get_persistent_intent_manager
         
         try:
@@ -1836,16 +1848,14 @@ class AutonomousBrain(AGISocialMixin):
             ready_intents = intent_mgr.get_ready_intents()
             
             if not ready_intents:
-                return
+                return intent_proposals
             
             logger.info(f"🎯 {len(ready_intents)} persistent intents ready for action")
             
-            for intent in ready_intents[:2]:  # Top 2 ready intents
-                # Generate action to advance intent
+            for intent in ready_intents[:2]:
                 action = intent_mgr.generate_action_for_intent(intent)
                 
                 if action:
-                    # Create proposal for this intent-driven action
                     from src.agentic.symod_core import SyModActionProposal
                     intent_proposal = SyModActionProposal(
                         action_type=action['action_type'],
@@ -1865,18 +1875,19 @@ class AutonomousBrain(AGISocialMixin):
                         },
                     )
                     
-                    proposals.append(intent_proposal)
+                    intent_proposals.append(intent_proposal)
                     logger.info(f"   📋 Intent action queued: {action['description'][:50]}...")
                     
-                    # Record that we're attempting this action
                     intent_mgr.record_intent_action(
                         intent_id=intent.id,
                         action_description=action['description'],
-                        success=False  # Will update to True if actually executed
+                        success=False
                     )
         
         except Exception as e:
             logger.debug(f"Persistent intent processing error: {e}")
+
+        return intent_proposals
     
     def _map_intent_action_to_plugin(self, action_type: str) -> str:
         """Map intent action types to appropriate plugins."""
@@ -2126,11 +2137,11 @@ class AutonomousBrain(AGISocialMixin):
 
         return memory_proposals
 
-    async def _phase_assemble_proposals(self, agi_kernel, agi_actions, active_work_items, spine_context, memory_proposals=None):
+    async def _phase_assemble_proposals(self, agi_kernel, agi_actions, active_work_items, spine_context, memory_proposals=None, curiosity_proposals=None, intent_proposals=None):
         """THINK phase — assemble, enrich, and rank all action proposals.
         
-        Combines memory-driven proposals, SyMod proposals, AGI orchestrator actions,
-        and goal-driven actions, then applies learning biases to produce the final ranked list.
+        Priority order: curiosity > persistent intents > memory-driven > goal-driven > SyMod > AGI
+        Curiosity and intents come first so self-directed exploration outranks reactive work.
         """
         # Get goal-driven action from active autonomous goals
         goal_driven_action = None
@@ -2174,7 +2185,13 @@ class AutonomousBrain(AGISocialMixin):
         proposals = await self._get_proposals()
         proposals.extend(agi_actions)
 
-        # PREPEND memory-driven proposals so they get first consideration
+        # PREPEND curiosity proposals (self-directed exploration > reactive work)
+        if curiosity_proposals:
+            proposals = curiosity_proposals + proposals
+        # THEN persistent intents (long-running objectives)
+        if intent_proposals:
+            proposals = intent_proposals + proposals
+        # THEN memory-driven proposals (semantic recall)
         if memory_proposals:
             proposals = memory_proposals + proposals
         
@@ -2434,29 +2451,27 @@ class AutonomousBrain(AGISocialMixin):
                 except Exception as e:
                     logger.debug(f"Performance optimization error: {e}")
     
-    async def _phase_curiosity_goals(self, agi_kernel, proposals) -> None:
-        """THINK sub-phase — inject self-directed curiosity goals (Phase 3.7).
+    async def _phase_curiosity_goals(self, agi_kernel) -> List:
+        """THINK phase — generate curiosity-driven proposals before SyMod/LLM.
 
-        After assembling proposals, checks for knowledge gaps and generates
-        curiosity-driven goals for underexplored domains. These are added
-        to the GoalPlanner as plans and injected as proposals.
+        Checks for knowledge gaps and generates self-directed exploration proposals.
+        These run BEFORE the main proposal assembly so they can outrank work items.
+        Returns a list of curiosity proposals to prepend.
         """
+        curiosity_proposals = []
         try:
             cycle_count = self.stats.get('cycles_completed', 0)
 
-            # Generate curiosity goals every cycle (lightweight check)
             curiosity_goals = self.cognitive.get_curiosity_goals()
 
-            # Every 10 cycles, also generate reflection-spawned goals
             if cycle_count > 0 and cycle_count % 10 == 0:
                 reflection = self.cognitive.reflect()
                 reflection_goals = self.cognitive.generate_reflection_curiosity_goals(reflection)
                 curiosity_goals.extend(reflection_goals)
 
             if not curiosity_goals:
-                return
+                return curiosity_proposals
 
-            # Convert curiosity goals to GoalPlanner plans and proposals
             for cgoal in curiosity_goals:
                 try:
                     plan = self.cognitive.goal_planner.decompose_goal(
@@ -2474,11 +2489,9 @@ class AutonomousBrain(AGISocialMixin):
                         f"info_gain={cgoal.information_gain_score:.2f})"
                     )
 
-                    # Add first step of curiosity plan as a proposal
                     from src.agentic.symod_core import SyModActionProposal
                     next_step = self.cognitive.goal_planner.get_next_step(plan)
                     if next_step:
-                        # Skip if action/plugin not implemented
                         if not self._is_action_implemented(next_step.plugin, next_step.action):
                             logger.info(f"⏭️ Skipping curiosity proposal: {next_step.action} on {next_step.plugin} (not implemented)")
                             if hasattr(self.cognitive, 'curiosity') and hasattr(self.cognitive.curiosity, 'mark_target_blocked'):
@@ -2500,13 +2513,17 @@ class AutonomousBrain(AGISocialMixin):
                                 'skill_gap': cgoal.skill_gap_score,
                             }
                         )
-                        proposals.append(proposal)
+                        curiosity_proposals.append(proposal)
 
                 except Exception as e:
                     logger.debug(f"Curiosity goal planning error for '{cgoal.title}': {e}")
 
         except Exception as e:
             logger.debug(f"Curiosity goals phase error: {e}")
+
+        if curiosity_proposals:
+            logger.info(f"🧭 Generated {len(curiosity_proposals)} curiosity-driven proposals (before SyMod)")
+        return curiosity_proposals
 
     def _is_action_implemented(self, plugin: str, action: str) -> bool:
         """Check if a plugin/action combo has a real implementation (not None)."""
@@ -3832,11 +3849,11 @@ class AutonomousBrain(AGISocialMixin):
         return curiosity_goals
 
     async def _advance_active_plans(self, agi_kernel=None) -> bool:
-        """Advance active plans by executing the next ready step (2.8).
+        """Advance active plans by executing multiple ready steps per cycle (2.8).
 
-        Finds active plans, picks the highest-priority next step,
-        executes it via the action router, and records the outcome
-        in both BeliefEngine and SelfModel (2.9).
+        Finds active plans, picks the highest-priority ready steps from each,
+        executes them via the action router, and records outcomes.
+        Executes up to 3 steps per cycle to accelerate multi-step plans.
         """
         goal_planner = getattr(self.cognitive, 'goal_planner', None)
         if not goal_planner:
@@ -3846,11 +3863,15 @@ class AutonomousBrain(AGISocialMixin):
         if not active_plans:
             return False
 
-        # Sort by priority (highest first)
         active_plans.sort(key=lambda p: getattr(p, 'priority', 0.5), reverse=True)
 
+        executed = 0
+        max_per_cycle = 3
+
         for plan in active_plans:
-            # Check preconditions and find next ready step
+            if executed >= max_per_cycle:
+                break
+
             goal_planner.check_preconditions(plan)
             next_step = goal_planner.get_next_step(plan)
 
@@ -3862,7 +3883,6 @@ class AutonomousBrain(AGISocialMixin):
                 f"from plan {plan.id} ({plan.goal[:40]})"
             )
 
-            # Build action spec from step
             action_spec = {
                 'action_type': next_step.action,
                 'plugin': next_step.plugin,
@@ -3870,14 +3890,12 @@ class AutonomousBrain(AGISocialMixin):
                 'context': {'plan_id': plan.id, 'step_id': next_step.id, 'goal': plan.goal},
             }
 
-            # Predict outcome
             prediction = self.cognitive.predict_action_outcome(
                 action=f"{next_step.plugin}:{next_step.action}",
                 domain=plan.domain,
             )
 
             try:
-                # Execute via action router or plugin manager
                 result = None
                 if agi_kernel and hasattr(agi_kernel, 'action_router') and agi_kernel.action_router:
                     try:
@@ -3903,38 +3921,27 @@ class AutonomousBrain(AGISocialMixin):
 
                 success = result.get('success', False)
 
-                # Record outcome in GoalPlanner
                 if success:
-                    goal_planner.mark_step_completed(
-                        plan.id, next_step.id, result
-                    )
-                    # Check if plan is completed (2.4)
+                    goal_planner.mark_step_completed(plan.id, next_step.id, result)
                     plan = goal_planner.plans.get(plan.id)
                     if plan and plan.status == "completed":
                         logger.info(f"📋 Plan completed: {plan.goal[:60]}")
-                        # 2.9: Record plan-level outcome in beliefs + self-model
                         goal_planner.record_plan_outcome(
                             plan.id, success=True,
                             belief_engine=self.cognitive.belief_engine,
                             self_model=self.cognitive.self_model,
                         )
+                        executed += 1
                 else:
                     reason = result.get('error', result.get('reason', 'Unknown failure'))
-                    goal_planner.mark_step_failed(
-                        plan.id, next_step.id, reason, result
-                    )
-                    # 2.5: Try rollback cascade
-                    goal_planner.rollback_completed_steps(
-                        plan.id, next_step.id
-                    )
-                    # 2.9: Record plan failure
+                    goal_planner.mark_step_failed(plan.id, next_step.id, reason, result)
+                    goal_planner.rollback_completed_steps(plan.id, next_step.id)
                     goal_planner.record_plan_outcome(
                         plan.id, success=False,
                         belief_engine=self.cognitive.belief_engine,
                         self_model=self.cognitive.self_model,
                     )
 
-                # Record in BeliefEngine + SelfModel for this step
                 self.cognitive.record_action_outcome(
                     action=f"{next_step.plugin}:{next_step.action}",
                     domain=plan.domain,
@@ -3944,7 +3951,6 @@ class AutonomousBrain(AGISocialMixin):
                     outcome_description=result.get('output', result.get('error', ''))[:200],
                 )
 
-                # Phase 3.6: Record intrinsic reward for this action
                 try:
                     intrinsic = self.cognitive.calculate_intrinsic_reward(
                         domain=plan.domain,
@@ -3956,7 +3962,7 @@ class AutonomousBrain(AGISocialMixin):
                 except Exception:
                     pass
 
-                return True  # Executed one step this cycle
+                executed += 1
 
             except Exception as e:
                 logger.error(f"Plan step execution error: {e}")
@@ -3964,6 +3970,10 @@ class AutonomousBrain(AGISocialMixin):
                     plan.id, next_step.id, str(e), {'error': str(e)}
                 )
                 continue
+
+        if executed > 0:
+            logger.info(f"📋 Advanced {executed} plan steps this cycle (max: {max_per_cycle})")
+        return executed > 0
 
         return False
 
