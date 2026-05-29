@@ -49,8 +49,9 @@ wallets/
 *.keystore
 *.mnemonic
 
-# Test files and temporary data
-test_*.py
+# Test artifacts and temporary data
+/test_*.py
+sandbox/
 *.tmp
 *.temp
 *.bak

@@ -82,7 +82,10 @@ class ErrorRecoverySystem:
             logger.warning(f"🔌 Circuit breaker TRIPPED for {component} (5+ failures)")
 
             # Reset after 5 minutes
-            asyncio.create_task(self._reset_circuit_breaker(component, delay=300))
+            try:
+                asyncio.create_task(self._reset_circuit_breaker(component, delay=300))
+            except RuntimeError:
+                pass  # No running event loop — rely on manual reset
 
     async def _reset_circuit_breaker(self, component: str, delay: int):
         """Reset circuit breaker after delay"""

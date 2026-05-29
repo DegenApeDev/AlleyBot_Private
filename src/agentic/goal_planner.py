@@ -19,6 +19,8 @@ Phase 2 additions:
 import json
 import logging
 import re
+
+logger = logging.getLogger(__name__)
 import threading
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Tuple
