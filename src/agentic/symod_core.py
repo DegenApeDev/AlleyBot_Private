@@ -32,7 +32,8 @@ class SyModObservation:
     source_plugin: str     # Which plugin submitted this
     data: Dict[str, Any]   # Plugin-specific data
     timestamp: datetime = field(default_factory=datetime.now)
-    symod_metrics: Dict = field(default_factory=dict)  # Populated by SyMod
+    symod_metrics: Dict = field(default_factory=dict)
+    importance: float = 0.5  # Attentional priority (0.0 low, 1.0 critical)  # Populated by SyMod
 
 
 @dataclass

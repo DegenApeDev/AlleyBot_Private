@@ -656,6 +656,116 @@ class GoalHierarchy:
             logger.error(f"❌ Failed to load goals: {e}")
 
 
+    def detect_conflicts(self) -> List[Dict[str, Any]]:
+        """Detect conflicts between active goals.
+
+        Checks for:
+        1. Same-domain competition (multiple ACTIVE goals in same domain)
+        2. Priority inversion (LOW priority blocks HIGH priority via dependency)
+        3. Resource contention (too many concurrent ACTIVE goals)
+
+        Returns a list of conflict dicts with type, severity, and involved goal IDs.
+        """
+        conflicts = []
+
+        try:
+            active = self.get_active_goals()
+
+            # 1. Same-domain competition
+            domain_active: Dict[str, List[Goal]] = {}
+            for g in active:
+                domain_active.setdefault(g.domain, []).append(g)
+            for domain, goals in domain_active.items():
+                if len(goals) > 2:
+                    conflicts.append({
+                        "type": "domain_competition",
+                        "severity": "medium",
+                        "domain": domain,
+                        "goal_ids": [g.id for g in goals],
+                        "description": f"{len(goals)} active goals in domain '{domain}'"
+                    })
+
+            # 2. Priority inversion: LOW-priority goal blocking a HIGH/CRITICAL goal
+            for g in active:
+                for req_id in g.requires:
+                    req = self.get_goal(req_id)
+                    if req and req.status == GoalStatus.ACTIVE:
+                        if self._priority_score(req.priority) < self._priority_score(g.priority):
+                            conflicts.append({
+                                "type": "priority_inversion",
+                                "severity": "high",
+                                "blocked_goal_id": g.id,
+                                "blocking_goal_id": req.id,
+                                "description": f"'{req.title}' (blocking) has lower priority than '{g.title}'"
+                            })
+
+            # 3. Too many concurrent active goals
+            if len(active) > 5:
+                conflicts.append({
+                    "type": "resource_contention",
+                    "severity": "low",
+                    "goal_count": len(active),
+                    "goal_ids": [g.id for g in active],
+                    "description": f"{len(active)} active goals — consider pausing some"
+                })
+
+        except Exception as e:
+            logger.debug(f"Conflict detection error: {e}")
+
+        return conflicts
+
+    def resolve_conflicts(self, conflicts: List[Dict[str, Any]]) -> List[str]:
+        """Resolve a list of goal conflicts automatically.
+
+        Resolution strategies:
+        - domain_competition: pause lowest-priority goals in domain
+        - priority_inversion: pause the blocking LOW priority goal
+        - resource_contention: pause lowest-priority active goals over limit
+
+        Returns list of goal IDs that were paused.
+        """
+        paused = []
+
+        for conflict in conflicts:
+            try:
+                if conflict["type"] == "domain_competition":
+                    goal_ids = conflict.get("goal_ids", [])
+                    goals_with_priority = sorted(
+                        [(self.get_goal(gid), gid) for gid in goal_ids if self.get_goal(gid)],
+                        key=lambda x: self._priority_score(x[0].priority) if x[0] else 0
+                    )
+                    # Pause the 2 lowest-priority goals in the domain
+                    for goal, gid in goals_with_priority[:2]:
+                        if goal and goal.status == GoalStatus.ACTIVE:
+                            self.update_goal(gid, {"status": GoalStatus.PAUSED})
+                            paused.append(gid)
+                            logger.info(f"⏸️ Paused '{goal.title}' to resolve domain competition")
+
+                elif conflict["type"] == "priority_inversion":
+                    blocking_id = conflict.get("blocking_goal_id")
+                    blocking = self.get_goal(blocking_id)
+                    if blocking and blocking.status == GoalStatus.ACTIVE:
+                        self.update_goal(blocking_id, {"status": GoalStatus.PAUSED})
+                        paused.append(blocking_id)
+                        logger.info(f"⏸️ Paused '{blocking.title}' to resolve priority inversion")
+
+                elif conflict["type"] == "resource_contention":
+                    goal_ids = conflict.get("goal_ids", [])
+                    active_goals = [(self.get_goal(gid), gid) for gid in goal_ids if self.get_goal(gid)]
+                    active_goals.sort(key=lambda x: self._priority_score(x[0].priority) if x[0] else 0)
+                    # Pause the lowest-priority goals down to 5
+                    while len(active_goals) > 5:
+                        goal, gid = active_goals.pop(0)
+                        if goal and goal.status == GoalStatus.ACTIVE:
+                            self.update_goal(gid, {"status": GoalStatus.PAUSED})
+                            paused.append(gid)
+                            logger.info(f"⏸️ Paused '{goal.title}' to resolve resource contention")
+
+            except Exception as e:
+                logger.debug(f"Conflict resolution error: {e}")
+
+        return paused
+
 # Singleton instance
 _goal_hierarchy = None
 

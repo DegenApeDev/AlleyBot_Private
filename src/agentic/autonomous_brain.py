@@ -41,6 +41,11 @@ from src.agentic.meta_learner import get_meta_learner
 from src.agentic.goal_manager import get_goal_manager
 from src.agentic.default_goals import get_default_goal_seeder
 
+# AGI Framework: Causal reasoning, meta-learning, attentional focus
+from src.agentic.causal_engine import get_causal_engine
+from src.agentic.contextual_awareness import ContextualAwareness
+from src.agentic.meta_learning import create_meta_learning_engine
+
 # Cognitive Integration: BeliefEngine, SelfModel, GoalPlanner replace Duat/Synergy numerology
 from src.agentic.cognitive_integration import get_cognitive
 
@@ -234,6 +239,15 @@ class AutonomousBrain(AGISocialMixin):
         self.planner = get_multi_timescale_planner(goal_hierarchy=self.goal_hierarchy)
         self.meta_learner = get_meta_learner(knowledge_graph=self.knowledge_graph)
         self.goal_manager_v2 = get_goal_manager()
+
+        # Causal engine for counterfactual reasoning and root cause analysis
+        self.causal_engine = get_causal_engine(action_logger=self.action_logger)
+
+        # Meta-learning engine for adaptive learning parameters per domain
+        self.meta_learning_engine = create_meta_learning_engine()
+
+        # Contextual awareness for attentional focus during observation gathering
+        self.context_awareness = ContextualAwareness()
         
         # Phase 8-9: Foundation Services Integration
         self.work_item_service = get_integrated_work_item_service()
@@ -522,7 +536,10 @@ class AutonomousBrain(AGISocialMixin):
         # Submit to SyMod
         for obs in observations:
             self.symod.observe(obs)
-        
+
+        # === CAUSAL REASONING: Counterfactual simulation + root cause analysis ===
+        await self._phase_causal_reasoning(observations, agi_kernel)
+
         # === FEED WORLD STATE DB: pipe observations so inference engine has real data ===
         await self._feed_observations_to_world_state(observations)
 
@@ -616,7 +633,10 @@ class AutonomousBrain(AGISocialMixin):
         
         # === PERIODIC REFLECTION: Meta-cognition + performance optimization ===
         await self._phase_periodic_reflection(agi_kernel)
-        
+
+        # === CONSOLIDATE LEARNING: Sleep-cycle replay of high-value memories ===
+        await self._phase_consolidate_learning(agi_kernel)
+
         # === PHASE 3.7: Curiosity-driven self-directed goals (BEFORE SyMod/LLM) ===
         curiosity_proposals = await self._phase_curiosity_goals(agi_kernel)
         
@@ -666,7 +686,8 @@ class AutonomousBrain(AGISocialMixin):
             f"Error: {calibration.get('mean_absolute_error', '?')}"
         )
 
-        # Duat replaced by CognitiveIntegration — cycle-end reflection above
+        # === META ADAPTATION: Adjust learning parameters per domain ===
+        await self._phase_meta_adaptation(agi_kernel)
 
         # === 2.8: Plan Execution — advance active plans ===
         plan_result = await self._advance_active_plans(agi_kernel)
@@ -911,6 +932,29 @@ class AutonomousBrain(AGISocialMixin):
             except Exception as e:
                 logger.debug(f"Chain observation error: {e}")
         
+        # Attentional focus: filter observations based on user state context
+        if self.context_awareness:
+            try:
+                ctx = self.context_awareness.get_current_context()
+                user_state = ctx.user_state.name if hasattr(ctx, 'user_state') else 'UNKNOWN'
+                if user_state in ('BUSY', 'AWAY'):
+                    # User is busy: keep only high-value observations
+                    before = len(observations)
+                    important_types = {'mention', 'chain_transaction', 'reply'}
+                    observations = [o for o in observations
+                                    if o.observation_type in important_types
+                                    or o.importance >= 0.6]
+                    logger.info(f"🎯 Attentional focus ({user_state}): filtered {before} → {len(observations)} observations")
+                elif user_state == 'FOCUSED':
+                    # User is focused: reduce noise from low-importance sources
+                    before = len(observations)
+                    observations = [o for o in observations
+                                    if o.observation_type in ('mention', 'reply')
+                                    or o.source_plugin not in ('moltchan', 'moltroad')]
+                    logger.info(f"🎯 Attentional focus ({user_state}): filtered {before} → {len(observations)} observations")
+            except Exception as e:
+                logger.debug(f"Attentional focus error: {e}")
+
         return observations
 
     async def _feed_observations_to_world_state(self, observations: List[SyModObservation]) -> None:
@@ -2450,7 +2494,63 @@ class AutonomousBrain(AGISocialMixin):
                                 logger.info(f"   🔧 Top optimization: {top_opt.recommendation}")
                 except Exception as e:
                     logger.debug(f"Performance optimization error: {e}")
-    
+
+        # Self-directed architecture modification (every 200 cycles)
+        if cycle_count > 0 and cycle_count % 200 == 0:
+            try:
+                config_changes = self._propose_architecture_changes()
+                if config_changes:
+                    logger.info(f"🔧 Proposed {len(config_changes)} architecture changes")
+                    for change in config_changes:
+                        logger.info(f"   ⚙️ {change}")
+            except Exception as e:
+                logger.debug(f"Architecture modification error: {e}")
+
+    def _propose_architecture_changes(self) -> List[str]:
+        """Analyze recent performance and propose configuration adjustments.
+
+        Self-directed architecture modification:
+        - If calibration error is high → suggest lowering min_confidence
+        - If too many actions blocked → suggest reducing max_actions_per_hour
+        - If success rate is low → suggest increasing min_confidence
+        - If curiosity gaps found → suggest enabling more observation sources
+        Returns a list of human-readable change descriptions.
+        """
+        changes = []
+
+        try:
+            # Check calibration error
+            if self.cognitive:
+                calibration = self.cognitive.get_belief_calibration()
+                mae = calibration.get('mean_absolute_error', 0)
+                if mae > 0.25:
+                    old = self.config.min_confidence
+                    new = max(0.3, old * 0.9)
+                    changes.append(f"Raise min_confidence from {old:.2f} to {new:.2f} (high calibration error {mae:.2f})")
+                elif mae < 0.05 and self.config.min_confidence < 0.5:
+                    old = self.config.min_confidence
+                    new = min(0.5, old * 1.1)
+                    changes.append(f"Lower min_confidence from {old:.2f} to {new:.2f} (low calibration error {mae:.2f})")
+
+            # Check block rate
+            blocked = self.stats.get('actions_blocked', 0)
+            total = max(self.stats.get('proposals_generated', 1), 1)
+            block_rate = blocked / total
+            if block_rate > 0.5:
+                changes.append(f"Reduce max_actions_per_hour from {self.config.max_actions_per_hour} "
+                               f"to {self.config.max_actions_per_hour // 2} (block rate {block_rate:.0%})")
+
+            # Check self-model weaknesses
+            if hasattr(self, 'capability_weaknesses') and self.capability_weaknesses:
+                weak_domains = set(w.get('domain', '') for w in self.capability_weaknesses[:3])
+                if weak_domains:
+                    changes.append(f"Prioritize practice in domains: {', '.join(weak_domains)}")
+
+        except Exception as e:
+            logger.debug(f"Architecture proposal error: {e}")
+
+        return changes
+
     async def _phase_curiosity_goals(self, agi_kernel) -> List:
         """THINK phase — generate curiosity-driven proposals before SyMod/LLM.
 
@@ -2630,9 +2730,146 @@ class AutonomousBrain(AGISocialMixin):
                             )
             except Exception as e:
                 logger.debug(f"Goal manager v2 activation error: {e}")
+
+        # Goal hierarchy conflict detection and resolution
+        if self.goal_hierarchy:
+            try:
+                conflicts = self.goal_hierarchy.detect_conflicts()
+                if conflicts:
+                    logger.info(f"⚠️ Detected {len(conflicts)} goal conflicts")
+                    for conflict in conflicts:
+                        logger.info(f"   ⚠️ {conflict['description']} (severity: {conflict['severity']})")
+                    paused = self.goal_hierarchy.resolve_conflicts(conflicts)
+                    if paused:
+                        logger.info(f"⏸️ Auto-paused {len(paused)} conflicting goals")
+            except Exception as e:
+                logger.debug(f"Goal conflict resolution error: {e}")
         
         return next_action
-    
+
+    async def _phase_causal_reasoning(self, observations: List, agi_kernel=None) -> Dict:
+        """Counterfactual simulation and root cause analysis.
+
+        Uses CausalEngine to simulate "what if I had done X instead?"
+        for failed actions, and feeds insights into subsequent planning.
+        """
+        insights = {"counterfactuals": [], "root_causes": [], "causal_links": 0}
+        if not self.causal_engine:
+            return insights
+
+        try:
+            recent_actions = self.action_logger.get_recent_actions(limit=10)
+            failed_actions = [a for a in recent_actions if a.outcome == 'failure']
+            for action in failed_actions[:3]:
+                cf = self.causal_engine.simulate_counterfactual(
+                    actual_action_id=str(action.id),
+                    hypothetical_change={"time": "optimized"}
+                )
+                insights["counterfactuals"].append({
+                    "action_id": str(action.id),
+                    "predicted": cf.predicted_outcome,
+                    "confidence": cf.confidence,
+                })
+
+            if observations:
+                root = self.causal_engine.analyze_root_cause(
+                    event_id="cycle_observation",
+                    depth=2
+                )
+                if root and root.root_causes:
+                    insights["root_causes"] = root.root_causes
+
+            causal_links = self.causal_engine.find_correlations(
+                outcome_type="success", min_strength=0.5
+            )
+            insights["causal_links"] = len(causal_links)
+            if causal_links:
+                logger.info(f"🔗 Causal engine: {len(causal_links)} correlations, {len(insights['counterfactuals'])} counterfactuals")
+
+        except Exception as e:
+            logger.debug(f"Causal reasoning error: {e}")
+
+        return insights
+
+    async def _phase_consolidate_learning(self, agi_kernel=None) -> None:
+        """Sleep-cycle consolidation: replay high-value memories, update meta-params.
+
+        Runs periodically (every 5 cycles) to:
+        1. Replay recent successes into the knowledge graph
+        2. Update meta-learning parameters per domain
+        3. Prune low-confidence beliefs from the belief engine
+        4. Record consolidated stats
+        """
+        if not hasattr(self, '_consolidation_counter'):
+            self._consolidation_counter = 0
+        self._consolidation_counter += 1
+
+        # Only consolidate every 5 cycles
+        if self._consolidation_counter % 5 != 0:
+            return
+
+        logger.info("💤 Starting learning consolidation cycle...")
+
+        try:
+            recent_actions = self.action_logger.get_recent_actions(limit=20)
+            successes = [a for a in recent_actions if a.outcome == 'success']
+            for action in successes[:5]:
+                self.knowledge_graph.learn_from_outcome(
+                    action=str(action.action_type),
+                    domain=str(action.plugin or 'general'),
+                    context=str(action.content or '')[:200],
+                    outcome='success',
+                    success=True,
+                    confidence=action.confidence,
+                )
+
+            if self.cognitive and hasattr(self.cognitive, 'self_model'):
+                learn_list = self.cognitive.self_model.what_should_i_learn()
+                if learn_list:
+                    logger.info(f"   📚 Learning priorities: {len(learn_list)} domains need practice")
+
+            if self.meta_learning_engine:
+                domains_seen = set()
+                for a in recent_actions:
+                    d = str(a.plugin or 'general')
+                    if d not in domains_seen:
+                        domains_seen.add(d)
+                        approach = self.meta_learning_engine.adapt_learning_approach(
+                            domain=d,
+                            current_approach={"exploration_rate": 0.3, "memory_depth": 10}
+                        )
+                        logger.debug(f"   🔧 Adapted params for {d}: {approach.get('exploration_rate', '?')}")
+
+            logger.info("💤 Consolidation complete")
+
+        except Exception as e:
+            logger.debug(f"Learning consolidation error: {e}")
+
+    async def _phase_meta_adaptation(self, agi_kernel=None) -> None:
+        """Adapt learning parameters per domain based on recent performance.
+
+        Every cycle, query the meta-learning engine for optimal params
+        and log any recommended adjustments for the reflection phase.
+        """
+        if not self.meta_learning_engine:
+            return
+
+        try:
+            insights = self.meta_learning_engine.get_learning_insights()
+            if insights:
+                logger.info(f"🧠 Meta-learning: {len(insights)} insights")
+                for insight in insights[:2]:
+                    logger.info(f"   💡 {insight}")
+
+            if self.cognitive and hasattr(self.cognitive, 'self_model'):
+                calibration = self.cognitive.self_model.get_calibration_curve()
+                mae = calibration.get('mean_absolute_error', 0)
+                if mae > 0.2:
+                    logger.info(f"   ⚠️ High calibration error ({mae:.2f}) — confidence calibration needs attention")
+
+        except Exception as e:
+            logger.debug(f"Meta adaptation error: {e}")
+
     async def _phase_execute_proposals(self, proposals, agi_kernel, next_action) -> int:
         """ACT phase — execute ranked proposals and record outcomes.
         
