@@ -253,6 +253,31 @@ class CuriosityDrive:
                         'action_type': cap.action_type,
                         'description': f"Only {cap.sample_size} samples for {cap.domain}.{cap.action_type} (target: {self.KNOWLEDGE_GAP_THRESHOLD_SAMPLES})",
                     })
+                # Capability weakness: low success rate or consecutive failures
+                if cap.sample_size >= 3 and cap.success_rate < 0.35:
+                    gaps.append({
+                        'domain': cap.domain,
+                        'type': 'capability_weakness',
+                        'severity': max(0.3, 1.0 - cap.success_rate),
+                        'current_samples': cap.sample_size,
+                        'target_samples': max(10, cap.sample_size * 2),
+                        'action_type': cap.action_type,
+                        'success_rate': cap.success_rate,
+                        'consecutive_failures': cap.consecutive_failures,
+                        'description': f"Weak at {cap.domain}.{cap.action_type} ({cap.success_rate:.0%} success over {cap.sample_size} attempts)",
+                    })
+                if cap.consecutive_failures >= 2 and cap.sample_size >= 3:
+                    gaps.append({
+                        'domain': cap.domain,
+                        'type': 'consecutive_failures',
+                        'severity': min(1.0, 0.3 + (cap.consecutive_failures * 0.15)),
+                        'current_samples': cap.sample_size,
+                        'target_samples': max(10, cap.sample_size * 2),
+                        'action_type': cap.action_type,
+                        'success_rate': cap.success_rate,
+                        'consecutive_failures': cap.consecutive_failures,
+                        'description': f"{cap.consecutive_failures} consecutive failures in {cap.domain}.{cap.action_type} — need to rethink approach",
+                    })
 
         covered_domains = set(g['domain'] for g in gaps)
         all_domains = set(EXPLORATION_TARGETS.keys())

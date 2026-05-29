@@ -1219,11 +1219,22 @@ class AutonomousBrain(AGISocialMixin):
         return signals
 
     def _apply_memory_shaped_ranking(self, proposals: List[Any]) -> None:
-        """Lightly adjust proposal confidence using recent routed outcomes and expected value."""
+        """Adjust proposal confidence using routed outcomes, action logger performance data, and semantic memory."""
         if not proposals:
             return
 
         recent_outcomes = self._get_recent_routed_outcomes()
+
+        # Pull ActionLogger performance data for richer per-action statistics
+        action_perf = {}
+        if hasattr(self, 'action_logger') and self.action_logger:
+            try:
+                if hasattr(self.action_logger, 'get_action_performance_summary'):
+                    perf_data = self.action_logger.get_action_performance_summary(hours=72, limit=50)
+                    if perf_data:
+                        action_perf = perf_data
+            except Exception as e:
+                logger.debug(f"Could not get action performance data: {e}")
 
         for proposal in proposals:
             metadata = getattr(proposal, 'metadata', None) or {}
@@ -1246,6 +1257,13 @@ class AutonomousBrain(AGISocialMixin):
                 ]
                 average_mismatch = sum(mismatch_values) / len(mismatch_values)
 
+            # Richer stats from ActionLogger
+            perf_key = f"{plugin_name}:{action_type}"
+            perf_record = action_perf.get(perf_key) or action_perf.get(action_type)
+            calibration_bias = perf_record.get('calibration_bias') if perf_record else None
+            high_mismatch_rate = perf_record.get('high_mismatch_rate', 0.0) if perf_record else 0.0
+            logger_success_rate = perf_record.get('success_rate') if perf_record else None
+
             predicted_value = self._estimate_predicted_value(proposal)
             adjustment = 0.0
 
@@ -1259,12 +1277,27 @@ class AutonomousBrain(AGISocialMixin):
                     adjustment += 0.05
                 elif success_rate <= 0.25:
                     adjustment -= 0.06
+            elif logger_success_rate is not None:
+                if logger_success_rate >= 0.75:
+                    adjustment += 0.03
+                elif logger_success_rate <= 0.25:
+                    adjustment -= 0.04
 
             if average_mismatch is not None:
                 if average_mismatch <= 0.25:
                     adjustment += 0.03
                 elif average_mismatch >= 0.65:
                     adjustment -= 0.05
+
+            # Calibration bias correction from ActionLogger
+            if calibration_bias == 'overconfident':
+                adjustment -= 0.04
+            elif calibration_bias == 'underconfident':
+                adjustment += 0.03
+
+            # High mismatch rate reduces confidence (agent can't predict itself)
+            if high_mismatch_rate > 0.3:
+                adjustment -= 0.03
 
             memory_signals = self._recall_memory_signals(proposal)
             if memory_signals['semantic_memory_score'] >= 0.7:
@@ -3451,13 +3484,58 @@ class AutonomousBrain(AGISocialMixin):
                         metadata={'plugin': 'onchain', 'trigger': 'idle_exploration', 'safe': True, 'category': 'market', 'domain_autonomy': 'market'}
                     ))
         
-        # === CATEGORY 6: SELF-IMPROVEMENT (Only if bounded evidence exists) ===
-        # Skip internal plugin actions - no 'internal' plugin exists
-        # These require capability_gap evidence from work items
-        
-        # Skip world_state_refresh - no 'internal' plugin exists
-        # Brain handles its own state refresh internally
-        
+        # === CATEGORY 6: SELF-IMPROVEMENT — Practice what the agent is bad at ===
+        if cycle_count % 3 == 0:
+            try:
+                learn_priorities = []
+                if hasattr(self, 'cognitive') and self.cognitive:
+                    self_model = getattr(self.cognitive, 'self_model', None)
+                    if self_model and hasattr(self_model, 'what_should_i_learn'):
+                        learn_priorities = self_model.what_should_i_learn() or []
+                    if self_model and hasattr(self_model, 'what_should_i_avoid'):
+                        avoid_list = self_model.what_should_i_avoid() or []
+                        for item in avoid_list[:2]:
+                            learn_priorities.append({
+                                'domain': item.get('domain', 'unknown'),
+                                'action_type': item.get('action_type', 'unknown'),
+                                'reason': 'needs_practice',
+                                'sample_size': item.get('sample_size', 0),
+                                'success_rate': item.get('success_rate', 0.0),
+                                'priority': 'high',
+                            })
+
+                if learn_priorities:
+                    seen_domains = set()
+                    for item in learn_priorities[:3]:
+                        domain = item.get('domain', 'unknown')
+                        action_type = item.get('action_type', 'practice')
+                        reason = item.get('reason', '')
+                        sample_size = item.get('sample_size', 0)
+
+                        if domain in seen_domains:
+                            continue
+                        seen_domains.add(domain)
+
+                        base_confidence = 0.45 if reason == 'needs_practice' else 0.40
+                        exploratory_proposals.append(SyModActionProposal(
+                            action_type=action_type,
+                            target_id=None,
+                            target_name=f"practice_{domain}",
+                            confidence=base_confidence,
+                            justification=f"Self-improvement: practicing {domain}/{action_type} ({reason}, {sample_size} samples)",
+                            metadata={
+                                'plugin': domain,
+                                'trigger': 'idle_exploration',
+                                'safe': True,
+                                'category': 'self_improve',
+                                'self_model_driven': True,
+                                'learning_reason': reason,
+                            }
+                        ))
+                    logger.info(f"📚 Self-model: {len(learn_priorities)} learning priorities found, generated practice proposals")
+            except Exception as e:
+                logger.debug(f"Self-model learning priorities error: {e}")
+
         logger.info(f"🚀 Generated {len(exploratory_proposals)} diverse exploratory proposals (cycle: {cycle_count})")
         
         return exploratory_proposals
