@@ -266,7 +266,7 @@ class FastMCPPlugin(AlleyBotPlugin):
             # For AlphaVantage, we need to modify the query
             if 'alphavantage' in url.lower():
                 # Use a generic search function
-                search_url = f"https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={query}&apikey=S0SBNUA265JM6B5I"
+                search_url = f"https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={query}&apikey={os.getenv('ALPHAVANTAGE_API_KEY', '')}"
                 
                 async with httpx.AsyncClient() as client:
                     response = await client.get(search_url)
@@ -288,7 +288,7 @@ class FastMCPPlugin(AlleyBotPlugin):
             
             if 'alphavantage' in server_info['url'].lower():
                 # Get stock quote
-                quote_url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol.upper()}&apikey=S0SBNUA265JM6B5I"
+                quote_url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol.upper()}&apikey={os.getenv('ALPHAVANTAGE_API_KEY', '')}"
                 
                 async with httpx.AsyncClient() as client:
                     response = await client.get(quote_url)

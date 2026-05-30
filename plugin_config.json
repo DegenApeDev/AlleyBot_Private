@@ -67,7 +67,7 @@
       "research_cache_size": 50,
       "servers": {
         "alphavantage": {
-          "url": "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=AAPL&apikey=S0SBNUA265JM6B5I",
+          "url": "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=AAPL&apikey=FROM_ALPHAVANTAGE_API_KEY_ENV",
           "type": "finance",
           "enabled": true
         }
