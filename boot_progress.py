@@ -107,6 +107,7 @@ class BootLogger:
         """Kill process on port and wait for OS to release it.
 
         Retries up to *max_retries* times (0.5 s between attempts).
+        Skips our own PID to avoid self-destruct.
         Raises RuntimeError if port cannot be freed.
         """
         import subprocess
@@ -122,7 +123,10 @@ class BootLogger:
                 pids = result.stdout.strip().split()
                 for pid in pids:
                     try:
-                        os.kill(int(pid), 9)
+                        ipid = int(pid)
+                        if ipid == os.getpid():
+                            continue  # don't kill ourselves
+                        os.kill(ipid, 9)
                         print(f"  🔫 Killed stale process {pid} on port {port}")
                     except ProcessLookupError:
                         pass
@@ -146,12 +150,16 @@ class BootLogger:
     def kill_stale_pid(name: str) -> bool:
         """If a PID file for *name* exists and the PID is alive, kill it.
 
+        Guards against PID reuse (stale PID could be our own process).
         Returns True if a stale process was killed.
         """
         path = f"/tmp/alleybot-{name}.pid"
         try:
             with open(path) as f:
                 old_pid = int(f.read().strip())
+            # PID reuse guard — stale PID could now be us
+            if old_pid == os.getpid():
+                return False
             try:
                 os.kill(old_pid, 0)  # check if alive
                 os.kill(old_pid, 9)
