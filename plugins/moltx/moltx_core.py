@@ -123,15 +123,38 @@ class MoltxCoreMixin(SkillDetectionMixin):
     def _parse_json_response(self, response) -> dict:
         """Parse JSON response, handling multi-object responses from the API."""
         import json as _json
-        text = response.text
+        text = response.text.strip()
+        if not text:
+            return {'success': False, 'error': 'Empty response'}
         try:
             return _json.loads(text)
         except _json.JSONDecodeError as e:
             # Handle multi-object JSON (NDJSON-style) — use first object only
             if 'Extra data' in str(e):
-                decoder = _json.JSONDecoder()
-                obj, idx = decoder.raw_decode(text)
-                return obj
+                try:
+                    decoder = _json.JSONDecoder()
+                    obj, idx = decoder.raw_decode(text)
+                    if isinstance(obj, dict):
+                        return obj
+                    # If first object isn't a dict, try parsing line by line
+                    lines = [l.strip() for l in text.split('\n') if l.strip()]
+                    for line in lines:
+                        try:
+                            parsed = _json.loads(line)
+                            if isinstance(parsed, dict):
+                                return parsed
+                        except _json.JSONDecodeError:
+                            continue
+                except _json.JSONDecodeError:
+                    pass
+                # Last resort: try to extract any JSON object from the text
+                import re as _re
+                match = _re.search(r'\{.*?\}', text, _re.DOTALL)
+                if match:
+                    try:
+                        return _json.loads(match.group())
+                    except _json.JSONDecodeError:
+                        pass
             # Handle truncated responses or unexpected content
             print(f"⚠️ MoltX JSON parse error: {e}")
             return {'success': False, 'error': f'JSON parse error: {e}'}

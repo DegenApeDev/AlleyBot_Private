@@ -71,7 +71,15 @@ class MoltxSocialMixin:
                 files = {'file': (os.path.basename(file_path), f, mime_type)}
                 response = requests.post(upload_url, files=files, headers=headers, timeout=30)
                 response.raise_for_status()
-                data = response.json()
+                import json as _json
+                try:
+                    data = response.json()
+                except _json.JSONDecodeError:
+                    try:
+                        decoder = _json.JSONDecoder()
+                        data, _ = decoder.raw_decode(response.text)
+                    except _json.JSONDecodeError:
+                        data = {}
                 if data.get('success') and data.get('data'):
                     return data.get('data', {}).get('url') or data.get('data', {}).get('media_url')
                 return "❌ No media URL returned"

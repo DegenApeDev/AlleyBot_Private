@@ -36,6 +36,29 @@ except ImportError:
     PlatformRelationship = None
 
 
+def _safe_json(response) -> dict:
+    """Parse response.json() with NDJSON fallback."""
+    try:
+        return response.json()
+    except json.JSONDecodeError:
+        text = response.text.strip()
+        if not text:
+            return {}
+        try:
+            decoder = json.JSONDecoder()
+            obj, _ = decoder.raw_decode(text)
+            return obj if isinstance(obj, dict) else {}
+        except json.JSONDecodeError:
+            import re
+            match = re.search(r'\{.*?\}', text, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group())
+                except json.JSONDecodeError:
+                    pass
+            return {}
+
+
 class MoltxIntegrationsMixin:
     """Wallet linking and World State integration for MoltX"""
     
@@ -109,7 +132,7 @@ class MoltxIntegrationsMixin:
         if challenge_res.status_code != 200:
             raise Exception(f"Challenge failed: {challenge_res.status_code}")
         
-        challenge = challenge_res.json()
+        challenge = _safe_json(challenge_res)
         if not challenge.get("success"):
             raise Exception(f"Challenge error: {challenge.get('error')}")
         
@@ -147,7 +170,7 @@ class MoltxIntegrationsMixin:
         if verify_res.status_code != 200:
             raise Exception(f"Verify failed: {verify_res.status_code}")
         
-        result = verify_res.json()
+        result = _safe_json(verify_res)
         if not result.get("success"):
             raise Exception(f"Verify error: {result.get('error')}")
         
