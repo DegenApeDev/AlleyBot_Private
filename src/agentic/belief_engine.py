@@ -643,8 +643,8 @@ def demote_from_core(belief: Belief) -> Belief:
             if (datetime.now() - last_update).days > 60:
                 belief.is_core = False
                 belief.core_since = None
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Non-critical error: %s", e)
     return belief
 
 

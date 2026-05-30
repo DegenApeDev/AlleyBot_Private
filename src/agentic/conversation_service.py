@@ -514,9 +514,8 @@ CRITICAL RULES:
                 agi_kernel = self.core.agi_kernel
                 if hasattr(agi_kernel, 'autonomous_brain') and agi_kernel.autonomous_brain:
                     brain_running = getattr(agi_kernel.autonomous_brain, '_running', False)
-        except Exception:
-            pass
-        
+        except Exception as e:
+            logger.debug("Non-critical error: %s", e)
         if brain_running:
             return ConversationResponse(
                 response_text="My autonomous brain is already running and cycling. I'm actively monitoring, thinking, and acting on opportunities.",
@@ -902,8 +901,8 @@ CRITICAL RULES:
                     query=request.message_text,
                     k=3,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Non-critical error: %s", e)
         return []
     
     async def _get_world_state_summary(self) -> Optional[str]:
@@ -917,8 +916,8 @@ CRITICAL RULES:
             try:
                 # This would integrate with work item manager
                 return []
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Non-critical error: %s", e)
         return []
     
     def _get_conversation_history(self, conversation_id: str) -> List[Dict]:

@@ -575,9 +575,8 @@ class GoalManager:
                 {"goal_id": goal_id, "outcome": outcome, "goal": goal.to_dict() if goal else None},
                 priority=EventPriority.NORMAL
             )
-        except Exception:
-            pass
-        
+        except Exception as e:
+            logger.debug("Non-critical error: %s", e)
         return True
     
     def record_goal_action_success(self, goal_id: str, note: Optional[str] = None) -> bool:

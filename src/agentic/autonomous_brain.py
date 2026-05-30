@@ -2161,9 +2161,8 @@ class AutonomousBrain(AGISocialMixin):
                     prediction = belief_engine.predict(suggested_action, plugin_name)
                     if prediction.relevant_beliefs:
                         base_confidence = max(base_confidence, prediction.predicted_success * 0.8)
-                except Exception:
-                    pass
-
+                except Exception as e:
+                    logger.debug("Non-critical error: %s", e)
             justification = f"Memory suggests: {'; '.join(content.split('.')[:2])}" if content else f"From similar past {memory_type}"
 
             proposal = SyModActionProposal(
@@ -2325,9 +2324,8 @@ class AutonomousBrain(AGISocialMixin):
                                 'age_days': age_days,
                                 'strength': 'stale'
                             })
-                    except Exception:
-                        pass
-            
+                    except Exception as e:
+                        logger.debug("Non-critical error: %s", e)
             # Check SelfModel for overconfident domains
             try:
                 from src.agentic.self_model import get_self_model
@@ -2339,9 +2337,8 @@ class AutonomousBrain(AGISocialMixin):
                         'challenge': 'SelfModel detects overconfidence - predictions exceed actual success',
                         'strength': 'calibration_error'
                     })
-            except Exception:
-                pass
-            
+            except Exception as e:
+                logger.debug("Non-critical error: %s", e)
         except Exception as e:
             logger.debug(f"Adversarial critique error: {e}")
         
@@ -2411,9 +2408,8 @@ class AutonomousBrain(AGISocialMixin):
                     gaps = curiosity_report.get('knowledge_gaps', [])
                     if gaps:
                         logger.info(f"   📚 Knowledge gaps: {', '.join(g['domain'] + ':' + g['type'] for g in gaps[:3])}")
-                except Exception:
-                    pass
-                
+                except Exception as e:
+                    logger.debug("Non-critical error: %s", e)
                 if hasattr(agi_kernel, 'goal_manager') and self_report.get('learning_priorities'):
                     from src.agentic.goal_manager import Goal, GoalPriority
                     for lp in self_report['learning_priorities'][:2]:
@@ -2433,8 +2429,8 @@ class AutonomousBrain(AGISocialMixin):
                         try:
                             if await agi_kernel.goal_manager.aadd_goal(new_goal):
                                 logger.info(f"   ✅ Learning goal created: {new_goal.id}")
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("Non-critical error: %s", e)
             except Exception as e:
                 logger.debug(f"Deep cognitive review error: {e}")
         
@@ -2465,9 +2461,8 @@ class AutonomousBrain(AGISocialMixin):
                                 evidence=[f"Challenge: {f['challenge']}", f"Strength: {f.get('strength', 'unknown')}"],
                                 source="adversarial_reflection"
                             )
-                except Exception:
-                    pass
-                    
+                except Exception as e:
+                    logger.debug("Non-critical error: %s", e)
             except Exception as e:
                 logger.debug(f"Adversarial self-critique error: {e}")
         
@@ -2966,9 +2961,8 @@ class AutonomousBrain(AGISocialMixin):
                                     for cmd_name, func in plugin.get_commands().items():
                                         doc = (func.__doc__ or f"Execute {cmd_name}").split('\\n')[0].strip()
                                         classifier.register_command(cmd_name, doc)
-                            except Exception:
-                                pass
-
+                            except Exception as e:
+                                logger.debug("Non-critical error: %s", e)
                             # Tell the self-model a new capability was learned
                             if self.cognitive and hasattr(self.cognitive, 'self_model'):
                                 self.cognitive.self_model.record_outcome(
@@ -4314,9 +4308,8 @@ class AutonomousBrain(AGISocialMixin):
                         actual_success=success,
                     )
                     logger.debug(f"Curiosity intrinsic reward: {intrinsic:.3f} for {plan.domain}.{next_step.action}")
-                except Exception:
-                    pass
-
+                except Exception as e:
+                    logger.debug("Non-critical error: %s", e)
                 executed += 1
 
             except Exception as e:

@@ -138,9 +138,8 @@ class SQLiteMemorySystem:
             if self._local.connection:
                 try:
                     self._local.connection.commit()
-                except Exception:
-                    pass
-    
+                except Exception as e:
+                    logger.debug("Non-critical error: %s", e)
     def _init_database(self):
         """Initialize database schema"""
         with self._get_connection() as conn:

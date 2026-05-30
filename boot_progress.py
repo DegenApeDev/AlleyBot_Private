@@ -86,8 +86,9 @@ class BootLogger:
         import socket
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
-                s.bind((host, port))
+                # SO_REUSEADDR must be set BEFORE bind to reuse TIME_WAIT sockets
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind((host, port))
                 return True
             except OSError:
                 return False
@@ -102,21 +103,71 @@ class BootLogger:
         return preferred  # give up, let the caller handle
 
     @staticmethod
-    def kill_process_on_port(port: int):
-        """Try to kill whatever is holding a port (Linux/macOS)."""
+    def ensure_port_free(port: int, max_retries: int = 3) -> None:
+        """Kill process on port and wait for OS to release it.
+
+        Retries up to *max_retries* times (0.5 s between attempts).
+        Raises RuntimeError if port cannot be freed.
+        """
         import subprocess
-        try:
-            result = subprocess.run(
-                ['lsof', '-ti', f'tcp:{port}'],
-                capture_output=True, text=True, timeout=5
-            )
-            if result.stdout.strip():
+        import time
+        for attempt in range(max_retries):
+            try:
+                result = subprocess.run(
+                    ['lsof', '-ti', f'tcp:{port}'],
+                    capture_output=True, text=True, timeout=5
+                )
+                if not result.stdout.strip():
+                    return
                 pids = result.stdout.strip().split()
                 for pid in pids:
-                    os.kill(int(pid), 9)
-                    print(f"  🔫 Killed stale process {pid} on port {port}")
-        except Exception:
-            pass  # best-effort
+                    try:
+                        os.kill(int(pid), 9)
+                        print(f"  🔫 Killed stale process {pid} on port {port}")
+                    except ProcessLookupError:
+                        pass
+                time.sleep(0.5)
+            except Exception:
+                time.sleep(0.5)
+        raise RuntimeError(f"Port {port} still occupied after {max_retries} kill attempts")
+
+    @staticmethod
+    def write_pid_file(name: str) -> str:
+        """Write a PID lock file for the given service name to /tmp/.
+
+        Returns the lock file path.
+        """
+        path = f"/tmp/alleybot-{name}.pid"
+        with open(path, 'w') as f:
+            f.write(str(os.getpid()))
+        return path
+
+    @staticmethod
+    def kill_stale_pid(name: str) -> bool:
+        """If a PID file for *name* exists and the PID is alive, kill it.
+
+        Returns True if a stale process was killed.
+        """
+        path = f"/tmp/alleybot-{name}.pid"
+        try:
+            with open(path) as f:
+                old_pid = int(f.read().strip())
+            try:
+                os.kill(old_pid, 0)  # check if alive
+                os.kill(old_pid, 9)
+                print(f"  🔫 Killed stale {name} instance (PID {old_pid})")
+                return True
+            except ProcessLookupError:
+                return False
+            except PermissionError:
+                return False
+        except (FileNotFoundError, ValueError):
+            return False
+        finally:
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
 
 
 # Global singleton

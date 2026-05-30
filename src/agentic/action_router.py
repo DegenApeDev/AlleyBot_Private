@@ -14,7 +14,6 @@ Every action flows through here to ensure:
 This replaces scattered action execution across plugins.
 """
 
-import asyncio
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 import inspect
@@ -33,12 +32,9 @@ from src.agentic.contracts import (
     ActionOutcome,
     ValidationProfile,
     PredictionRecord,
-    PredictionEvaluation,
     ImpactLevel,
     RiskLevel,
     TrustLevel,
-    action_spec_to_envelope,
-    envelope_to_action_spec,
 )
 
 
@@ -860,8 +856,8 @@ class ActionRouter:
                         context=str(params)[:200],
                         outcome_description=error_msg,
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Non-critical error: %s", e)
             return {
                 'success': False,
                 'error': error_msg,

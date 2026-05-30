@@ -4,6 +4,7 @@ AlleyBot Core - Minimal orchestrator with plugin system
 The heart of AlleyBot - coordinates plugins and manages the agent
 """
 import json
+import os
 import schedule
 import time
 import signal
@@ -459,17 +460,22 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
                     a2a = self.plugin_manager.plugins['a2a']
                     if hasattr(a2a, 'start_a2a_server'):
                         port = getattr(a2a, '_a2a_port', 7002)
-                        if not BootLogger.check_port('0.0.0.0', port):
-                            _log.warn(f"Port {port} in use — killing stale process")
-                            BootLogger.kill_process_on_port(port)
-                            time.sleep(1)
-                            if not BootLogger.check_port('0.0.0.0', port):
-                                fallback = BootLogger.find_available_port('0.0.0.0', port)
-                                _log.info(f"   Using fallback port {fallback} instead")
-                                a2a._a2a_port = fallback
-                        _log.step("A2A Server", str(getattr(a2a, '_a2a_port', port)))
+
+                        # Clean up stale A2A instance
+                        BootLogger.kill_stale_pid('a2a')
+                        try:
+                            BootLogger.ensure_port_free(port)
+                            a2a._a2a_port = port
+                        except RuntimeError:
+                            _log.warn(f"Port {port} still occupied after kill — finding fallback")
+                            fallback = BootLogger.find_available_port('0.0.0.0', port)
+                            a2a._a2a_port = fallback
+                            _log.info(f"   Using fallback port {fallback} instead")
+
+                        _log.step("A2A Server", str(a2a._a2a_port))
+                        BootLogger.write_pid_file('a2a')
                         a2a.start_a2a_server()
-                        _log.ok(f"A2A protocol on port {getattr(a2a, '_a2a_port', port)}")
+                        _log.ok(f"A2A protocol on port {a2a._a2a_port}")
                 else:
                     _log.warn("A2A plugin not found, skipping A2A server")
 
@@ -477,15 +483,18 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
                 if 'analytics' in self.plugin_manager.plugins:
                     analytics = self.plugin_manager.plugins['analytics']
                     port = getattr(analytics, 'dashboard_port', 7001)
-                    if not BootLogger.check_port('0.0.0.0', port):
-                        _log.warn(f"Port {port} in use — killing stale process")
-                        BootLogger.kill_process_on_port(port)
-                        time.sleep(1)
-                        if not BootLogger.check_port('0.0.0.0', port):
-                            fallback = BootLogger.find_available_port('0.0.0.0', port)
-                            _log.info(f"   Using fallback port {fallback} instead")
-                            analytics.dashboard_port = fallback
-                    _log.step("Analytics Dashboard", str(getattr(analytics, 'dashboard_port', port)))
+
+                    BootLogger.kill_stale_pid('analytics')
+                    try:
+                        BootLogger.ensure_port_free(port)
+                        analytics.dashboard_port = port
+                    except RuntimeError:
+                        _log.warn(f"Port {port} still occupied after kill — finding fallback")
+                        fallback = BootLogger.find_available_port('0.0.0.0', port)
+                        analytics.dashboard_port = fallback
+                        _log.info(f"   Using fallback port {fallback} instead")
+
+                    _log.step("Analytics Dashboard", str(analytics.dashboard_port))
                     dashboard_thread = threading.Thread(
                         target=analytics.start_dashboard,
                         daemon=True
@@ -663,6 +672,17 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
             stop_console_logging()
         except Exception as e:
             print(f"⚠️  Error stopping console logging: {e}")
+
+        # Remove PID lock files
+        for name in ('a2a', 'analytics', 'alleybot'):
+            path = f"/tmp/alleybot-{name}.pid"
+            try:
+                with open(path) as f:
+                    pid = int(f.read().strip())
+                    if pid == os.getpid():
+                        os.remove(path)
+            except (FileNotFoundError, ValueError, PermissionError):
+                pass
         
         print("✅ Cleanup complete")
 
