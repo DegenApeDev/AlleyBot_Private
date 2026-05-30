@@ -16,7 +16,7 @@ import uuid
 import time
 import threading
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, List
 from flask import Flask, request, jsonify, Response
 
 
@@ -170,9 +170,21 @@ class A2AServerMixin:
         print(f"🌐 A2A server configured on port {self._a2a_port} (A2A RC v1.0)")
 
     def start_a2a_server(self):
-        """Start the A2A server in a background thread."""
+        """Start the A2A server in a background thread with port conflict resolution."""
+        import logging
+        logging.getLogger('werkzeug').setLevel(logging.WARNING)
+
         if not self._a2a_app:
             self._setup_a2a_server()
+
+        # Check port availability
+        from boot_progress import BootLogger
+        if not BootLogger.check_port(self._a2a_host, self._a2a_port):
+            BootLogger.kill_process_on_port(self._a2a_port)
+            import time
+            time.sleep(1)
+            if not BootLogger.check_port(self._a2a_host, self._a2a_port):
+                self._a2a_port = BootLogger.find_available_port(self._a2a_host, self._a2a_port)
 
         def _run():
             self._a2a_app.run(
@@ -184,7 +196,7 @@ class A2AServerMixin:
 
         self._server_thread = threading.Thread(target=_run, daemon=True, name='a2a-server')
         self._server_thread.start()
-        print(f"🚀 A2A server running at http://{self._a2a_host}:{self._a2a_port}")
+        print(f"🌐 A2A server on http://{self._a2a_host}:{self._a2a_port}")
 
     # ── Agent Card (§8.5) ───────────────────────────────────────────
 
@@ -250,7 +262,7 @@ class A2AServerMixin:
                     "organization": "AlleyBot",
                     "url": base,
                 },
-                "documentationUrl": f"https://www.8004scan.io/agents/ethereum/22899",
+                "documentationUrl": "https://www.8004scan.io/agents/ethereum/22899",
                 "supportedInterfaces": [
                     {
                         "url": base,

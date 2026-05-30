@@ -8,6 +8,7 @@ import schedule
 import time
 import signal
 import atexit
+import logging
 from datetime import datetime
 from pathlib import Path
 from plugin_manager import PluginManager
@@ -21,6 +22,7 @@ except ImportError:
 
 # Import console logging system
 from console_logger import init_console_logging, stop_console_logging
+from boot_progress import get_boot_logger
 
 # Try to import enhanced memory; fall back to None if deps missing
 try:
@@ -41,166 +43,148 @@ try:
     from lib.synergy_gate import get_synergy_gate, validate_action
     from src.agentic.recursive_strategy import RecursiveStrategyEngine
     TIER2_AVAILABLE = True
-    print("🔐 Tier 2 Cryptographic Trust: ENABLED")
-except ImportError as e:
+except ImportError:
     TIER2_AVAILABLE = False
-    print(f"⚠️ Tier 2 framework unavailable: {e}")
 
 # Import AGI Kernel (Quick Win #2)
 try:
     from src.agentic.agi_kernel import AGIKernel
     AGI_KERNEL_AVAILABLE = True
-except ImportError as e:
+except ImportError:
     AGI_KERNEL_AVAILABLE = False
-    print(f"⚠️ AGI Kernel unavailable: {e}")
 
 # Import Service Integration Layer (Phase 8)
 try:
     from src.agentic.service_integration import initialize_services, check_system_health
     SERVICE_INTEGRATION_AVAILABLE = True
-except ImportError as e:
+except ImportError:
     SERVICE_INTEGRATION_AVAILABLE = False
-    print(f"⚠️ Service Integration Layer unavailable: {e}")
 
 class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
     """Minimal core that orchestrates plugins with SQLite memory"""
     
     def __init__(self, config_dir='config'):
+        _log = get_boot_logger()
+
         # Initialize console logging FIRST (before any prints)
         self.console_logger = init_console_logging(max_days=7)
-        
+
+        # Silence third-party chatter to logs/boot.log
+        _log.silence_flask()
+        _log.silence('stockfish', logging.WARNING)
+
         # Register cleanup handlers for graceful shutdown
         self._cleanup_registered = False
         self._register_cleanup_handlers()
-        
-        # Main tagline - show immediately at startup
-        print("🦞 AlleyBot - Extensible AI Agent & Automation Platform")
-        print("=" * 60)
-        
+
+        # Main header
+        print("\n🦞 AlleyBot v2.0.0 — Autonomous AI Agent")
+        print(f"{'─'*48}")
+        _log.debug("Boot sequence started")
+
         self.config_dir = Path(config_dir)
         self.config_dir.mkdir(exist_ok=True)
-        
+
         # Core components
-        self.api = None  # Removed MoltbookAPI support
+        self.api = None
         self.plugin_manager = PluginManager()
 
-        # Initialize SQLite memory system (replaces JSON files)
+        # ── Memory Systems ──────────────────────────────────────
+        _log.step("Memory", "SQLite")
         if SQLITE_MEMORY_AVAILABLE:
             self._init_sqlite_memory('data/memory.db')
+            _log.ok("SQLite memory initialized")
         else:
             self.memory_db = None
-            print("⚠️  SQLite memory unavailable, using JSON fallback")
+            _log.warn("SQLite memory unavailable, using JSON fallback")
 
-        # Legacy: enhanced memory system (optional vector DB)
         self.enhanced_memory = None
         if ENHANCED_MEMORY_AVAILABLE:
             try:
-                self.enhanced_memory = EnhancedMemorySystem(
-                    storage_dir='data/memory'
-                )
-                print("✅ Enhanced memory system initialized (vector DB + goals + encryption)")
+                self.enhanced_memory = EnhancedMemorySystem(storage_dir='data/memory')
+                _log.ok("Vector DB + goals + encryption")
             except Exception as e:
-                print(f"⚠️  Enhanced memory unavailable, using JSON fallback: {e}")
-        else:
-            print("ℹ️  Enhanced memory deps not installed, using JSON fallback")
-        
-        # AGI Kernel - Autonomous decision-making and learning (Quick Win #2)
+                _log.warn(f"Enhanced memory: {e}")
+
+        # ── AGI Kernel ──────────────────────────────────────────
+        _log.step("AGI Kernel")
         self.agi_kernel = None
         if AGI_KERNEL_AVAILABLE:
             try:
                 self.agi_kernel = AGIKernel(core=self)
-                print("✅ AGI Kernel initialized - autonomous thinking enabled")
+                _log.ok()
             except Exception as e:
-                print(f"⚠️ AGI Kernel initialization failed: {e}")
-        
-        # Service Integration Layer - Unified foundation services (Phase 8)
+                _log.warn(f"AGI Kernel init failed: {e}")
+        else:
+            _log.warn("AGI Kernel not available")
+
+        # ── Service Integration Layer ───────────────────────────
+        _log.step("Service Layer")
         self.services = None
         if SERVICE_INTEGRATION_AVAILABLE:
             try:
                 self.services = initialize_services(
                     core=self,
                     plugin_manager=self.plugin_manager,
-                    telegram_plugin=None,  # Will be set after Telegram plugin loads
-                    llm_router=None,  # Will be set after LLM router available
+                    telegram_plugin=None,
+                    llm_router=None,
                 )
-                print("✅ Service Integration Layer initialized")
-                
-                # Health check
                 health = check_system_health()
-                if health['healthy']:
-                    print("   🎯 All foundation services operational")
-                else:
-                    print(f"   ⚠️ Some services unavailable: {health['services']}")
-                    
+                _log.ok("All operational" if health.get('healthy') else "Some services degraded")
             except Exception as e:
-                print(f"⚠️ Service Integration initialization failed: {e}")
+                _log.warn(f"Service init: {e}")
                 import traceback
-                traceback.print_exc()
-        
-        # Load configuration
+                _log.debug(traceback.format_exc())
+
+        # ── Load Config ─────────────────────────────────────────
         self.config = self._load_config()
-        
-        # Initialize plugins
-        self.plugin_manager.load_plugins(
-            'plugin_config.json',
-            self.api,
-            self
-        )
-        
-        # Initialize AGI Kernel decision systems (requires plugin_manager)
+
+        # ── Load Plugins ────────────────────────────────────────
+        _log.step("Plugins")
+        self.plugin_manager.load_plugins('plugin_config.json', self.api, self)
+        _log.ok(f"{len(self.plugin_manager.plugins)} plugins loaded, {len(self.plugin_manager.tasks)} tasks, {len(self.plugin_manager.commands)} commands")
+
+        # ── AGI Decision Systems ────────────────────────────────
         if self.agi_kernel and hasattr(self.agi_kernel, 'initialize_decision_systems'):
+            _log.step("AGI Decision Systems")
             try:
                 self.agi_kernel.initialize_decision_systems(self.plugin_manager)
-                print("✅ AGI Kernel decision systems initialized")
-                
-                # Initialize async components (Hermes tools) only if event loop exists
+                _log.ok()
                 try:
                     import asyncio
                     loop = asyncio.get_running_loop()
                     loop.create_task(self.agi_kernel.initialize_async())
                 except RuntimeError:
-                    # No running event loop - async init will happen later
                     pass
-                
             except Exception as e:
-                print(f"⚠️ AGI Kernel decision systems initialization failed: {e}")
-        
-        # Link Telegram plugin to service integration layer if available
+                _log.warn(f"Decision systems: {e}")
+
+        # ── Link Telegram to service layer ──────────────────────
         if self.services and 'telegram' in self.plugin_manager.plugins:
             try:
                 telegram_plugin = self.plugin_manager.plugins['telegram']
                 self.services.telegram = telegram_plugin
-                
-                # Update notification service with Telegram
                 if self.services.notifications:
                     self.services.notifications.telegram = telegram_plugin
-                    print("   🔗 Telegram linked to notification service")
-                    
-                print("   🔗 Telegram plugin linked to service layer")
             except Exception as e:
-                print(f"   ⚠️ Failed to link Telegram: {e}")
-        
-        # Link LLM router if available
+                _log.warn(f"Telegram link: {e}")
+
+        # ── Link LLM Router ─────────────────────────────────────
         try:
             from src.core.llm_router import get_llm_router
             llm_router = get_llm_router()
             if self.services:
                 self.services.conversation.llm_router = llm_router
-                print("   🔗 LLM Router linked to conversation service")
         except Exception as e:
-            print(f"   ⚠️ LLM Router not linked: {e}")
+            _log.debug(f"LLM Router link: {e}")
 
-        # Add core commands
         self._add_core_commands()
 
-        print(f"\n{'='*60}")
-        print(f"🤖 ALLEYBOT CORE - Extensible AI Agent")
-        print(f"{'='*60}")
-        print(f"📦 Plugins loaded: {len(self.plugin_manager.plugins)}")
-        print(f"🔧 Active tasks: {len(self.plugin_manager.tasks)}")
-        print(f"💬 Available commands: {len(self.plugin_manager.commands)}")
-        print(f"📝 Console logging: ACTIVE (7-day retention)")
-        print(f"{'='*60}\n")
+        # ── Boot Summary ────────────────────────────────────────
+        _log.blank()
+        _log.info(f"🤖 AlleyBot Core — {len(self.plugin_manager.plugins)} plugins, {len(self.plugin_manager.tasks)} tasks")
+        _log.info("   📝 Console logging to logs/console/ (7-day retention)")
+        _log.info("   📋 Boot details logged to logs/boot.log")
     
     def _register_cleanup_handlers(self):
         """Register signal handlers and atexit for proper cleanup"""
@@ -241,13 +225,13 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
         if 'error' in stats:
             return f"❌ Log stats error: {stats['error']}"
         
-        output = [f"📊 Console Logging Statistics:"]
+        output = ["📊 Console Logging Statistics:"]
         output.append(f"  Files: {stats['total_files']}")
         output.append(f"  Total Size: {stats['total_size_mb']:.1f} MB")
         if stats['oldest_date']:
             output.append(f"  Date Range: {stats['oldest_date'].strftime('%Y-%m-%d')} to {stats['newest_date'].strftime('%Y-%m-%d')}")
         
-        output.append(f"\n📁 Recent Log Files:")
+        output.append("\n📁 Recent Log Files:")
         for log_file in stats['files'][:5]:  # Show last 5 files
             output.append(f"  • {log_file['name']} ({log_file['size_mb']} MB)")
         
@@ -459,44 +443,63 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
             print("\n🛑 Stopping production mode...")
     
     def _start_dashboard_background(self):
-        """Start dashboard and A2A server in background threads"""
+        """Start dashboard and A2A server in background threads with port conflict resolution."""
+        from boot_progress import get_boot_logger, BootLogger
+        _log = get_boot_logger()
         try:
             import threading
             import time
-            
+
             def start_services_delayed():
-                # Wait for Telegram bot to be ready
                 time.sleep(3)
-                
-                # Start A2A server
+                _log.info("🌐 Starting background services...")
+
+                # ── A2A Server ─────────────────────────────────
                 if 'a2a' in self.plugin_manager.plugins:
                     a2a = self.plugin_manager.plugins['a2a']
                     if hasattr(a2a, 'start_a2a_server'):
-                        print("🌐 Auto-starting A2A server in background...")
+                        port = getattr(a2a, '_a2a_port', 7002)
+                        if not BootLogger.check_port('0.0.0.0', port):
+                            _log.warn(f"Port {port} in use — killing stale process")
+                            BootLogger.kill_process_on_port(port)
+                            time.sleep(1)
+                            if not BootLogger.check_port('0.0.0.0', port):
+                                fallback = BootLogger.find_available_port('0.0.0.0', port)
+                                _log.info(f"   Using fallback port {fallback} instead")
+                                a2a._a2a_port = fallback
+                        _log.step("A2A Server", str(getattr(a2a, '_a2a_port', port)))
                         a2a.start_a2a_server()
+                        _log.ok(f"A2A protocol on port {getattr(a2a, '_a2a_port', port)}")
                 else:
-                    print("⚠️  A2A plugin not found, skipping A2A server")
-                
-                # Check if analytics plugin exists
+                    _log.warn("A2A plugin not found, skipping A2A server")
+
+                # ── Analytics Dashboard ─────────────────────────
                 if 'analytics' in self.plugin_manager.plugins:
                     analytics = self.plugin_manager.plugins['analytics']
-                    print("📊 Auto-starting dashboard in background...")
-                    
-                    # Start dashboard in separate thread
+                    port = getattr(analytics, 'dashboard_port', 7001)
+                    if not BootLogger.check_port('0.0.0.0', port):
+                        _log.warn(f"Port {port} in use — killing stale process")
+                        BootLogger.kill_process_on_port(port)
+                        time.sleep(1)
+                        if not BootLogger.check_port('0.0.0.0', port):
+                            fallback = BootLogger.find_available_port('0.0.0.0', port)
+                            _log.info(f"   Using fallback port {fallback} instead")
+                            analytics.dashboard_port = fallback
+                    _log.step("Analytics Dashboard", str(getattr(analytics, 'dashboard_port', port)))
                     dashboard_thread = threading.Thread(
                         target=analytics.start_dashboard,
                         daemon=True
                     )
                     dashboard_thread.start()
+                    _log.ok(f"Dashboard on port {getattr(analytics, 'dashboard_port', port)}")
                 else:
-                    print("⚠️  Analytics plugin not found, skipping dashboard")
-            
-            # Start services in background
+                    _log.warn("Analytics plugin not found, skipping dashboard")
+
             thread = threading.Thread(target=start_services_delayed, daemon=True)
             thread.start()
-            
+
         except Exception as e:
-            print(f"⚠️  Failed to auto-start services: {e}")
+            _log.warn(f"Background services: {e}")
     
     def run_standard_autonomous(self):
         """Run standard autonomous mode with scheduled tasks (fallback)"""
@@ -600,7 +603,7 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
                 elif command == 'plugins':
                     self.list_plugins()
                 elif command == 'status':
-                    print(f"\n📊 AlleyBot Status:")
+                    print("\n📊 AlleyBot Status:")
                     print(f"  Agent: {self.config['agent_name']}")
                     print(f"  Plugins: {len(self.plugin_manager.plugins)}")
                     print(f"  Tasks: {len(self.plugin_manager.tasks)}")

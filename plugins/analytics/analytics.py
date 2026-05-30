@@ -5,7 +5,6 @@ Handles web dashboard, statistics, and performance monitoring
 """
 import sys
 import os
-import json
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -668,71 +667,35 @@ class AnalyticsPlugin(AlleyBotPlugin):
             return jsonify({'success': False, 'error': str(e)})
     
     def start_dashboard(self):
-        """Start the dashboard server"""
+        """Start the dashboard server with port conflict resolution."""
+        import logging
+        # Silence Flask/Werkzeug to boot.log
+        logging.getLogger('werkzeug').setLevel(logging.WARNING)
+
         try:
-            print(f"� Starting analytics dashboard on port {self.dashboard_port}...")
-            print(f"📊 Dashboard available at: http://localhost:{self.dashboard_port}")
-            print(f"📊 Dashboard available at: http://0.0.0.0:{self.dashboard_port}")
-            
-            # Test that all required components are available before starting
-            print("🔍 Checking dashboard components...")
-            
-            # Check template directory
-            import os
-            template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'templates')
-            if not os.path.exists(template_dir):
-                raise Exception(f"Template directory not found: {template_dir}")
-            if not os.path.exists(os.path.join(template_dir, 'dashboard_v2.html')):
-                raise Exception("Dashboard template 'dashboard_v2.html' not found")
-            print("✅ Templates available")
-            
-            # Check Flask app
-            if not self.app:
-                raise Exception("Flask app not initialized")
-            print("✅ Flask app initialized")
-            
-            # Check routes
-            if not hasattr(self.app, 'url_map') or len(self.app.url_map._rules) == 0:
-                raise Exception("No routes registered in Flask app")
-            print(f"✅ {len(self.app.url_map._rules)} routes registered")
-            
-            # Test a simple route to ensure everything works
-            print("🔍 Testing dashboard routes...")
-            try:
-                with self.app.test_client() as client:
-                    response = client.get('/')
-                    if response.status_code != 200:
-                        print(f"⚠️  Route test failed with status {response.status_code}")
-                    else:
-                        print("✅ Route test passed")
-            except Exception as route_error:
-                print(f"⚠️  Route test error (may be expected): {route_error}")
-            
-            print("🚀 Starting Flask development server...")
-            
-            # Start the server with error handling
+            boot_port = self.dashboard_port
+            # Check port availability
+            from boot_progress import BootLogger
+            if not BootLogger.check_port('0.0.0.0', boot_port):
+                BootLogger.kill_process_on_port(boot_port)
+                import time
+                time.sleep(1)
+                if not BootLogger.check_port('0.0.0.0', boot_port):
+                    boot_port = BootLogger.find_available_port('0.0.0.0', boot_port)
+                    self.dashboard_port = boot_port
+
+            print(f"📊 Dashboard on http://0.0.0.0:{boot_port}")
+
             self.app.run(
                 debug=False,
                 host='0.0.0.0',
-                port=self.dashboard_port,
+                port=boot_port,
                 use_reloader=False,
-                threaded=True  # Allow multiple requests
+                threaded=True
             )
-            
+
         except Exception as e:
-            import traceback
-            error_msg = f"❌ Dashboard startup failed: {e}"
-            print(error_msg)
-            print("📋 Full traceback:")
-            traceback.print_exc()
-            
-            # Try to provide helpful debugging info
-            print("\n🔍 Debugging information:")
-            print(f"  Port: {self.dashboard_port}")
-            print(f"  Template dir: {template_dir if 'template_dir' in locals() else 'Not set'}")
-            print(f"  Flask app: {'Yes' if self.app else 'No'}")
-            
-            return error_msg
+            print(f"❌ Dashboard startup failed: {e}")
     
     def show_stats(self):
         """Show current statistics"""
@@ -841,7 +804,7 @@ class AnalyticsPlugin(AlleyBotPlugin):
         try:
             status = self.agent_card.get_agent_card_status()
             
-            output = f"🆔 ERC-8004 Agent Card Status\n\n"
+            output = "🆔 ERC-8004 Agent Card Status\n\n"
             output += f"Agent ID: {status['agent_id']}\n"
             output += f"Name: {status['name']}\n"
             output += f"Version: {status['version']}\n"
@@ -881,19 +844,19 @@ class AnalyticsPlugin(AlleyBotPlugin):
         try:
             stats = honeypot_security.get_honeypot_stats()
             
-            output = f"🎯 **Honeypot Security Stats**\n\n"
+            output = "🎯 **Honeypot Security Stats**\n\n"
             output += f"🚫 **Blocked IPs:** {stats['total_blocked_ips']}\n"
             output += f"🎯 **Total Hits:** {stats['total_hits']}\n"
             output += f"📈 **Last 24h:** {stats['recent_24h_hits']} hits\n\n"
             
             if stats['top_attack_patterns']:
-                output += f"🔍 **Top Attack Patterns:**\n"
+                output += "🔍 **Top Attack Patterns:**\n"
                 for pattern, count in list(stats['top_attack_patterns'].items())[:5]:
                     output += f"  • {pattern}: {count}\n"
                 output += "\n"
             
             if stats['most_suspicious_ips']:
-                output += f"⚠️ **Most Suspicious IPs:**\n"
+                output += "⚠️ **Most Suspicious IPs:**\n"
                 for ip_data in stats['most_suspicious_ips'][:3]:
                     output += f"  • {ip_data['ip']} (Score: {ip_data['score']})\n"
                 output += "\n"
