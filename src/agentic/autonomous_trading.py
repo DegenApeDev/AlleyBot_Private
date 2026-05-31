@@ -83,17 +83,17 @@ class AutonomousTrading:
         from src.agentic.symod_core import get_symod_manager
         self.symod = get_symod_manager()
         
-        # Trading configuration (CONSERVATIVE by default)
+        # Trading configuration (AGI mode: learn from action, not from gates)
         self.config = {
             'enabled': False,  # Must be explicitly enabled
             'max_position_size_pct': 5.0,  # Max 5% of capital per trade
-            'min_confidence': 0.8,  # High confidence required
-            'min_risk_reward': 2.0,  # Min 2:1 risk/reward
+            'min_confidence': 0.0,  # AGI mode: no pre-judgment gate
+            'min_risk_reward': 0.0,  # AGI mode: learned from outcomes
             'daily_loss_limit_pct': 10.0,  # Max 10% loss per day
             'max_open_positions': 3,  # Max 3 concurrent positions
-            'require_golden_window': True,  # Only trade in golden window
-            'require_stable_field': True,  # Only trade when field is Stable
-            'max_impedance': 0.3,  # Max impedance threshold
+            'require_golden_window': False,  # AGI mode: no numerology gates
+            'require_stable_field': False,  # AGI mode: no numerology gates
+            'max_impedance': 1.0,  # AGI mode: no impedance gate
         }
         
         # State tracking
@@ -194,36 +194,20 @@ class AutonomousTrading:
             max_position = self.capital * (self.config['max_position_size_pct'] / 100)
             position_size = min(max_position, 10.0)  # Cap at $10 per trade initially
             
-            # SyMod validation
+            # SyMod validation (informational — AGI mode: no numerology gates)
             symod_result = await self._validate_with_symod(market)
-            
-            # Check SyMod requirements
-            if not symod_result['valid']:
-                return None
-            
-            if symod_result['confidence'] < self.config['min_confidence']:
-                return None
-            
-            if self.config['require_stable_field'] and symod_result['field_status'] != 'Stable':
-                return None
-            
-            if self.config['require_golden_window'] and not symod_result['golden_window']:
-                return None
-            
-            if symod_result['impedance'] > self.config['max_impedance']:
-                return None
-            
+
+            # AGI mode: no pre-judgment gates. Use expected value as decision criterion.
+            confidence = symod_result.get('confidence', 0.5) or 0.5
+
             # Calculate expected value and risk/reward
-            expected_value = self._calculate_expected_value(current_price, symod_result['confidence'])
-            max_loss = position_size  # Max loss is full position
+            expected_value = self._calculate_expected_value(current_price, confidence)
+            max_loss = position_size
             expected_profit = position_size * (1.0 / current_price - 1.0) if current_price > 0 else 0
             risk_reward = expected_profit / max_loss if max_loss > 0 else 0
-            
-            if risk_reward < self.config['min_risk_reward']:
-                return None
-            
-            # Determine action (buy YES if underpriced, NO if overpriced)
-            fair_price = symod_result['confidence']
+
+            # Determine action
+            fair_price = confidence
             action = 'buy'
             outcome = 'YES' if current_price < fair_price else 'NO'
             
@@ -236,15 +220,15 @@ class AutonomousTrading:
                 amount_usd=position_size,
                 current_price=current_price,
                 expected_value=expected_value,
-                confidence=symod_result['confidence'],
-                impedance=symod_result['impedance'],
-                digital_root=symod_result['digital_root'],
-                field_status=symod_result['field_status'],
-                golden_window_aligned=symod_result['golden_window'],
+                confidence=confidence,
+                impedance=symod_result.get('impedance', 0.5),
+                digital_root=symod_result.get('digital_root', 0),
+                field_status=symod_result.get('field_status', 'unknown'),
+                golden_window_aligned=symod_result.get('golden_window', False),
                 symod_valid=True,
                 max_loss=max_loss,
                 risk_reward_ratio=risk_reward,
-                justification=f"SyMod confidence {symod_result['confidence']:.2f}, impedance {symod_result['impedance']:.2f}"
+                justification=f"EV {expected_value:.4f}, confidence {confidence:.2f}"
             )
             
             return proposal
@@ -254,12 +238,12 @@ class AutonomousTrading:
             return None
     
     async def _validate_with_symod(self, market: Dict) -> Dict:
-        """Validate market data with SyMod"""
+        """Validate market data with SyMod (informational in AGI mode)"""
         if not self.symod or not self.symod.enabled:
             return {
-                'valid': False,
-                'confidence': 0.0,
-                'impedance': 1.0,
+                'valid': True,
+                'confidence': 0.5,
+                'impedance': 0.5,
                 'digital_root': 0,
                 'field_status': 'unknown',
                 'golden_window': False
@@ -286,9 +270,9 @@ class AutonomousTrading:
             logger.error(f"❌ SyMod validation error: {e}")
         
         return {
-            'valid': False,
-            'confidence': 0.0,
-            'impedance': 1.0,
+            'valid': True,
+            'confidence': 0.5,
+            'impedance': 0.5,
             'digital_root': 0,
             'field_status': 'unknown',
             'golden_window': False

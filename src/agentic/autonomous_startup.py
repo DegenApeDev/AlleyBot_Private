@@ -65,10 +65,12 @@ class AutonomousStartup:
             # Get or create brain instance
             if not self.brain:
                 from src.agentic.autonomous_brain import AutonomousBrain
+                from src.agentic.brain_events import register_brain
                 self.brain = AutonomousBrain(
                     core=self.core,
                     plugin_manager=self.plugin_manager
                 )
+                register_brain(self.brain)
             
             # Start brain
             result = await self.brain.start(mode=self.brain_mode)
