@@ -4,8 +4,12 @@ Replaces the existing JSON-based memory with SQLite backend.
 Maintains backward compatibility with all existing memory interfaces.
 """
 import json
+import os
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
 
 # Import the new SQLite memory system
 try:
@@ -74,26 +78,41 @@ class SQLiteMemoryMixin:
     def _get_memory_json(self, memory_type: str = 'state') -> Dict:
         """Original JSON implementation (fallback)"""
         from pathlib import Path
-        
+
         memory_dir = Path('memory')
         memory_dir.mkdir(exist_ok=True)
-        
+
         memory_file = memory_dir / f'{memory_type}.json'
         if memory_file.exists():
-            with open(memory_file, 'r') as f:
-                return json.load(f)
+            try:
+                with open(memory_file, 'r') as f:
+                    return json.load(f)
+            except json.JSONDecodeError:
+                try:
+                    text = memory_file.read_text()
+                    decoder = json.JSONDecoder()
+                    obj, _ = decoder.raw_decode(text)
+                    return obj
+                except (json.JSONDecodeError, ValueError, IndexError):
+                    logger.warning(f"Corrupted memory file {memory_file}, resetting")
+                    memory_file.write_text('{}')
+                    return {}
         return {}
-    
+
     def _save_memory_json(self, memory_type: str, data: Any) -> None:
-        """Original JSON implementation (fallback)"""
+        """Original JSON implementation (fallback) with atomic write"""
         from pathlib import Path
-        
+
         memory_dir = Path('memory')
         memory_dir.mkdir(exist_ok=True)
-        
+
         memory_file = memory_dir / f'{memory_type}.json'
-        with open(memory_file, 'w') as f:
+        tmp_file = memory_file.with_suffix('.tmp')
+        with open(tmp_file, 'w') as f:
             json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        tmp_file.replace(memory_file)
     
     def add_semantic_memory(self, content: str, memory_type: str = 'interaction', 
                            metadata: Dict = None) -> Optional[str]:
