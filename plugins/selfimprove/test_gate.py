@@ -41,6 +41,18 @@ class TestGateMixin:
         if not test_modules:
             test_modules = ['tests.test_fixes', 'tests.test_phase2', 'tests.test_phase3']
 
+        # Convert dotted module paths to file paths (pytest 9+ drops dotted-path support)
+        converted = []
+        for mod in test_modules:
+            path_candidate = mod.replace('.', '/') + '.py'
+            if os.path.exists(os.path.join(self.project_root, path_candidate)):
+                converted.append(path_candidate)
+            elif os.path.exists(os.path.join(self.project_root, mod)):
+                converted.append(mod)
+            else:
+                converted.append(mod)
+        test_modules = converted
+
         try:
             # Find python executable
             venv_python = os.path.join(self.project_root, 'venv', 'bin', 'python')
@@ -78,20 +90,17 @@ class TestGateMixin:
             failures = 0
             errors = 0
 
+            import re
             for line in output.split('\n'):
-                if ' passed' in line and ' failed' in line and ' error' in line:
-                    # Parse pytest summary line like "31 passed, 1 failed, 2 errors"
-                    try:
-                        parts = line.split()
-                        for part in parts:
-                            if 'passed' in part:
-                                tests_run += int(part.split()[0])
-                            elif 'failed' in part:
-                                failures += int(part.split()[0])
-                            elif 'error' in part:
-                                errors += int(part.split()[0])
-                    except (ValueError, IndexError):
-                        pass
+                m = re.search(r'(\d+)\s+passed', line)
+                if m:
+                    tests_run += int(m.group(1))
+                m = re.search(r'(\d+)\s+failed', line)
+                if m:
+                    failures += int(m.group(1))
+                m = re.search(r'(\d+)\s+error', line)
+                if m:
+                    errors += int(m.group(1))
 
             passed = result.returncode == 0
 

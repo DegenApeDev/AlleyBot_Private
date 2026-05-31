@@ -92,7 +92,8 @@ class TestGrokAPIEndpointFix(unittest.TestCase):
             self.grok._make_api_request(data)
 
             sent_data = mock_post.call_args[1]['json']
-            self.assertEqual(sent_data['max_tokens'], 150)
+            # API converts max_tokens → max_output_tokens for xAI /responses format
+            self.assertEqual(sent_data['max_output_tokens'], 150)
             self.assertEqual(sent_data['temperature'], 0.7)
             self.assertEqual(sent_data['top_p'], 0.95)
 

@@ -247,7 +247,11 @@ class BrainPlugin(ContextGathererMixin, DecisionEngineMixin, SmartReplyMixin, Fe
                 'reason': 'No actions available (all on cooldown or plugins not loaded)',
             }
 
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
         result = loop.run_until_complete(self.execute_action_async(action))
 
         if self.config.get('telegram_notify', False) and result.get('success'):
