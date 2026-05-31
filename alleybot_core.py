@@ -11,6 +11,8 @@ import signal
 import atexit
 import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 from pathlib import Path
 from plugin_manager import PluginManager
 
@@ -271,18 +273,33 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
 
         memory_file = memory_dir / f'{memory_type}.json'
         if memory_file.exists():
-            with open(memory_file, 'r') as f:
-                return json.load(f)
+            try:
+                with open(memory_file, 'r') as f:
+                    return json.load(f)
+            except json.JSONDecodeError:
+                try:
+                    text = memory_file.read_text()
+                    decoder = json.JSONDecoder()
+                    obj, _ = decoder.raw_decode(text)
+                    return obj
+                except (json.JSONDecodeError, ValueError, IndexError):
+                    logger.warning(f"Corrupted memory file {memory_file}, resetting")
+                    memory_file.write_text('{}')
+                    return {}
         return {}
 
     def save_memory(self, memory_type, data):
-        """Save memory storage for plugins (JSON key-value store)"""
+        """Save memory storage for plugins (JSON key-value store) with atomic write"""
         memory_dir = Path('memory')
         memory_dir.mkdir(exist_ok=True)
 
         memory_file = memory_dir / f'{memory_type}.json'
-        with open(memory_file, 'w') as f:
+        tmp_file = memory_file.with_suffix('.tmp')
+        with open(tmp_file, 'w') as f:
             json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        tmp_file.replace(memory_file)
 
     # --- Enhanced memory helpers (semantic search, goals, encryption) ---
 
