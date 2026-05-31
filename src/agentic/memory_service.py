@@ -15,10 +15,9 @@ This replaces scattered memory access across plugins.
 
 import json
 import sqlite3
-import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -572,9 +571,3 @@ def get_memory_service(db_path: str = "data/memory.db") -> MemoryService:
     if _memory_service is None:
         _memory_service = MemoryService(db_path)
     return _memory_service
-
-
-def reset_memory_service() -> None:
-    """Reset singleton."""
-    global _memory_service
-    _memory_service = None

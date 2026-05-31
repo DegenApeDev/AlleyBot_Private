@@ -10,7 +10,7 @@ what they don't want, and how they want it done.
 import json
 import sqlite3
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import logging

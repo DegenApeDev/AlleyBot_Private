@@ -7,7 +7,6 @@ Part of AGI Core - Phase 1: Self-Reflection System
 
 import json
 import sqlite3
-import os
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict

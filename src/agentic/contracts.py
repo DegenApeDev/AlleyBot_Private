@@ -797,11 +797,3 @@ class OwnerNotification:
 
 
 # Legacy compatibility helpers
-def action_spec_to_envelope(action_spec: Dict[str, Any]) -> ActionEnvelope:
-    """Convert legacy action_spec dict to canonical ActionEnvelope."""
-    return ActionEnvelope.from_dict(action_spec)
-
-
-def envelope_to_action_spec(envelope: ActionEnvelope) -> Dict[str, Any]:
-    """Convert canonical ActionEnvelope to legacy dict format."""
-    return envelope.to_dict()

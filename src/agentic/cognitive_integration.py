@@ -15,11 +15,11 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from src.agentic.belief_engine import BeliefEngine, get_belief_engine
-from src.agentic.self_model import SelfModel, get_self_model
-from src.agentic.goal_planner import GoalPlanner, get_goal_planner
+from src.agentic.belief_engine import get_belief_engine
+from src.agentic.self_model import get_self_model
+from src.agentic.goal_planner import get_goal_planner
 from src.agentic.knowledge_graph import get_knowledge_graph
-from src.agentic.curiosity import CuriosityDrive, get_curiosity_drive
+from src.agentic.curiosity import get_curiosity_drive
 
 logger = logging.getLogger(__name__)
 

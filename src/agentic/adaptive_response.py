@@ -21,7 +21,7 @@ Generates:
 """
 
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -265,7 +265,7 @@ class AdaptiveResponse:
         lines = [
             "🎭 Adaptive Response System:",
             f"Personality: {self.personality.traits.helpfulness:.0%} helpful, {self.personality.traits.wit:.0%} witty",
-            f"Emotional Intelligence: Active"
+            "Emotional Intelligence: Active"
         ]
         
         if self.emotional_intelligence.emotion_history:

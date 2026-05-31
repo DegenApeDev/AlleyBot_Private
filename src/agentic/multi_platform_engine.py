@@ -30,12 +30,10 @@ Usage:
     results = engine.execute_campaign(campaign, a2a_coordination=True)
 """
 
-import json
 import logging
-import asyncio
 from typing import Dict, List, Optional, Any, Tuple, Set
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from collections import defaultdict
 from enum import Enum
 
@@ -159,7 +157,7 @@ class MultiPlatformEngine:
         self.active_a2a_sessions: Dict[str, Any] = {}
         self.pending_collaborations: List[Dict] = []
         
-        logger.info(f"🌐 Multi-Platform Engine initialized")
+        logger.info("🌐 Multi-Platform Engine initialized")
         logger.info(f"   Platforms: {[p.value for p, available in self.available_platforms.items() if available]}")
     
     def _check_platform_availability(self) -> None:

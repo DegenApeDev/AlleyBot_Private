@@ -1816,8 +1816,3 @@ def get_agi_kernel(core=None) -> AGIKernel:
     if _agi_kernel_instance is None:
         _agi_kernel_instance = AGIKernel(core)
     return _agi_kernel_instance
-
-def reset_agi_kernel():
-    """Reset AGI kernel (for testing)"""
-    global _agi_kernel_instance
-    _agi_kernel_instance = None

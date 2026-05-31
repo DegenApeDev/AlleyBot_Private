@@ -28,7 +28,7 @@ Integration:
 
 import logging
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
 from collections import deque
@@ -409,7 +409,7 @@ class EmotionalIntelligence:
         recent = list(self.emotion_history)[-5:]
         
         lines = [
-            f"😊 Emotional State Summary:",
+            "😊 Emotional State Summary:",
             f"Current: {self.current_emotion.value} (intensity: {self.emotion_intensity:.0%})"
         ]
         

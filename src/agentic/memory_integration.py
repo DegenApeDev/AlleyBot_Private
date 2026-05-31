@@ -73,7 +73,6 @@ class SQLiteMemoryMixin:
     
     def _get_memory_json(self, memory_type: str = 'state') -> Dict:
         """Original JSON implementation (fallback)"""
-        import json
         from pathlib import Path
         
         memory_dir = Path('memory')
@@ -87,7 +86,6 @@ class SQLiteMemoryMixin:
     
     def _save_memory_json(self, memory_type: str, data: Any) -> None:
         """Original JSON implementation (fallback)"""
-        import json
         from pathlib import Path
         
         memory_dir = Path('memory')

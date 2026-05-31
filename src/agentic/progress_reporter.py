@@ -16,8 +16,7 @@ Constitutional Rules:
 
 import json
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -298,12 +297,4 @@ _progress_reporter_instance: Optional[ProgressReporter] = None
 def get_progress_reporter() -> Optional[ProgressReporter]:
     """Get or create progress reporter singleton"""
     global _progress_reporter_instance
-    return _progress_reporter_instance
-
-
-def create_progress_reporter(goal_manager=None, action_logger=None) -> ProgressReporter:
-    """Factory function to create progress reporter"""
-    global _progress_reporter_instance
-    if _progress_reporter_instance is None:
-        _progress_reporter_instance = ProgressReporter(goal_manager, action_logger)
     return _progress_reporter_instance

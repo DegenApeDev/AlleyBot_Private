@@ -15,7 +15,6 @@ import sys
 import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
-from pathlib import Path
 
 # Add src/autonomy to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'autonomy'))
@@ -68,7 +67,7 @@ class WorldStateBridge:
                 from plugins.moltx.moltx_adapter import MoltxAdapter
                 adapter = MoltxAdapter(moltx)
                 self.adapters.append(adapter)
-                print(f"📡 Registered MoltX adapter")
+                print("📡 Registered MoltX adapter")
             except ImportError:
                 # MoltX adapter module doesn't exist - this is OK, skip silently
                 pass
@@ -82,7 +81,7 @@ class WorldStateBridge:
                 from plugins.clawbr.clawbr_adapter import ClawbrAdapter
                 adapter = ClawbrAdapter(clawbr)
                 self.adapters.append(adapter)
-                print(f"📡 Registered Clawbr adapter")
+                print("📡 Registered Clawbr adapter")
             except Exception as e:
                 print(f"⚠️ Clawbr adapter registration failed: {e}")
     
@@ -562,7 +561,6 @@ class WorldStateBridge:
     
     def _ingest_interaction(self, interaction):
         """Convert PlatformInteraction to world state Event"""
-        from src.autonomy.platform_adapter import PlatformInteraction
         
         event = Event(
             event_type=interaction.type,
@@ -594,7 +592,6 @@ class WorldStateBridge:
     
     def _ingest_entity(self, platform_entity):
         """Convert PlatformEntity to world state Entity"""
-        from src.autonomy.platform_adapter import PlatformEntity
         
         # Check if entity already exists
         existing = self.world_state.get_entity(platform_entity.id)
@@ -615,7 +612,6 @@ class WorldStateBridge:
     
     def _ingest_relationship(self, platform_rel):
         """Convert PlatformRelationship to world state Relationship"""
-        from src.autonomy.platform_adapter import PlatformRelationship
         
         relationship = Relationship(
             from_entity=platform_rel.from_entity,

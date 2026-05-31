@@ -20,7 +20,6 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set
 from datetime import datetime
 from enum import Enum, auto
-import weakref
 
 
 class EventPriority(Enum):
@@ -364,12 +363,6 @@ def get_event_bus() -> CognitiveEventBus:
     if _event_bus is None:
         _event_bus = CognitiveEventBus()
     return _event_bus
-
-
-def reset_event_bus() -> None:
-    """Reset the event bus (mainly for testing)."""
-    global _event_bus
-    _event_bus = None
 
 
 class EventBusMixin:

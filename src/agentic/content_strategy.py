@@ -13,7 +13,7 @@ This system enables autonomous, goal-driven content creation.
 
 import datetime
 import random
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 
 
@@ -580,7 +580,7 @@ class ContentStrategySystem:
                 if profile and profile.get('topic_interests'):
                     topics = profile['topic_interests'][:5]
                     parts.append(f"\nAUDIENCE INTERESTS: {', '.join(topics)}")
-            except Exception as e:
+            except Exception:
                 # Non-fatal, just skip cross-platform enhancement
                 pass
         

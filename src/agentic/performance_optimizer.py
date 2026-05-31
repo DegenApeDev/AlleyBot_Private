@@ -9,8 +9,7 @@ Part of AGI Core - Phase 5: Performance Optimization
 
 import logging
 from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime, timedelta
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from collections import defaultdict
 import statistics
 

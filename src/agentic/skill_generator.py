@@ -595,7 +595,7 @@ result = {skill_name}(...)
                         result = selfimprove.self_update_command(task_desc.split())
                         print(f"📋 Plugin-based self-update result: {result}")
                     else:
-                        print(f"ℹ️  Selfimprove plugin not available, skill registered but not hot-loaded")
+                        print("ℹ️  Selfimprove plugin not available, skill registered but not hot-loaded")
                     
                 except Exception as e:
                     print(f"⚠️  Failed to bridge to plugin system: {e}")

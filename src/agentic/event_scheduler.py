@@ -3,8 +3,6 @@ Event-Driven Scheduler for Proactive Agent Behavior
 Uses APScheduler to poll for on-chain opportunities and trigger autonomous actions
 """
 import os
-import json
-import time
 from typing import Dict, List, Any, Optional, Callable
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -137,7 +135,6 @@ class OnChainOpportunityDetector:
             if not self.web3_provider:
                 return opportunities
             
-            from web3 import Web3
             w3 = self.web3_provider
             
             # Check wallet balance changes

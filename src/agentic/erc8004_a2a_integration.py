@@ -12,10 +12,10 @@ Post-execution validation with:
 import hashlib
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any
 from pathlib import Path
 
 logger = logging.getLogger(__name__)

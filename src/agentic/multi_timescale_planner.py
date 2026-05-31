@@ -4,7 +4,7 @@ Plans and coordinates actions across different time horizons
 Bridges long-term strategic goals with immediate tactical actions
 """
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum

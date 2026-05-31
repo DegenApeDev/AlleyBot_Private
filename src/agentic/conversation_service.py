@@ -989,9 +989,3 @@ def get_conversation_service(
     if _conversation_service is None:
         _conversation_service = ConversationService(core, plugin_manager, llm_router)
     return _conversation_service
-
-
-def reset_conversation_service() -> None:
-    """Reset singleton (mainly for testing)."""
-    global _conversation_service
-    _conversation_service = None

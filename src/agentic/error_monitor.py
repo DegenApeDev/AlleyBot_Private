@@ -20,7 +20,7 @@ SOP Compliance:
 
 import re
 import os
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from collections import deque
 

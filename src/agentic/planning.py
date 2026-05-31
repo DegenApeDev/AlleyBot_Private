@@ -16,11 +16,10 @@ import json
 import sqlite3
 from datetime import datetime, timedelta
 from enum import Enum, auto
-from typing import Dict, List, Optional, Any, Set, Tuple
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
 import logging
-from collections import defaultdict, deque
 
 from src.agentic.action_logger import get_action_logger
 

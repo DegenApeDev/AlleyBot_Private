@@ -9,7 +9,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, Any
 from enum import Enum
-import asyncio
 from datetime import datetime
 
 
@@ -81,7 +80,6 @@ class SkillDefinition:
             return self._files_dir
         
         try:
-            import os
             from pathlib import Path
             
             skill_dir = Path(base_dir) / self.name

@@ -7,7 +7,6 @@ import sys
 import json
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-from pathlib import Path
 
 # Try to import LangChain components, fallback to simple agent if incompatible
 try:
@@ -18,7 +17,7 @@ try:
 except (ImportError, Exception) as e:
     print(f"⚠️  LangChain not available (Python {sys.version_info.major}.{sys.version_info.minor}): {e}")
     print("📦 Using simple agent implementation instead")
-    from src.agentic.simple_agent import SimpleReActAgent, SimpleTool, AgentState
+    from src.agentic.simple_agent import SimpleReActAgent, SimpleTool
     LANGCHAIN_AVAILABLE = False
     Tool = SimpleTool  # Alias for compatibility
     BaseLLM = None
@@ -29,7 +28,7 @@ from src.agentic.skill_generator import DynamicSkillGenerator
 from src.agentic.enhanced_memory import EnhancedMemorySystem
 from src.agentic.security_filter import SecurityFilter
 from src.agentic.approval_dashboard import ApprovalDashboard
-from src.agentic.agi_kernel import AGIKernel, get_agi_kernel
+from src.agentic.agi_kernel import get_agi_kernel
 
 
 class AgenticAlleyBot:
@@ -428,7 +427,7 @@ class AgenticAlleyBot:
                 else:
                     return f"❌ Balance check failed: {result['error']}"
 
-        return f"❌ Web3 not connected. Enable the onchain plugin."
+        return "❌ Web3 not connected. Enable the onchain plugin."
     
     def _get_opportunities_tool(self, platform: str) -> str:
         """Get on-chain opportunities tool"""
@@ -657,7 +656,7 @@ class AgenticAlleyBot:
         
         # 7. Get execution summary
         summary = self.agent.get_execution_summary()
-        print(f"\n📊 Execution Summary:")
+        print("\n📊 Execution Summary:")
         print(f"  Iterations: {summary['total_iterations']}")
         print(f"  Actions: {summary['total_actions']}")
         print(f"  Success Rate: {summary['successful_actions']}/{summary['total_actions']}")

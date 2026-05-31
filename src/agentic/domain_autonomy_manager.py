@@ -7,9 +7,9 @@ once he has demonstrated consistent success and reliability.
 Part of Sovereignty Enhancement - Phase 3: Graduated Domain Autonomy
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 import logging
 
@@ -124,7 +124,7 @@ class DomainAutonomyProfile:
                 reasons.append(f"❌ Days since failure: {days_since_failure} (need {self.max_days_since_failure})")
         else:
             # No failures yet - good sign
-            reasons.append(f"✅ No failures recorded")
+            reasons.append("✅ No failures recorded")
             checks_passed += 1
         
         eligible = checks_passed == total_checks

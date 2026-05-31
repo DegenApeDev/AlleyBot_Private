@@ -19,12 +19,10 @@ Usage:
     response = await bundle.conversation.handle_request(request)
 """
 
-import os
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 
 # Phase 0-7 foundation services
-from src.agentic.contracts import IdentityContext
 from src.agentic.identity_service import get_identity_service, IdentityService
 from src.agentic.conversation_service import get_conversation_service, ConversationService
 from src.agentic.memory_service import get_memory_service, MemoryService
@@ -122,7 +120,7 @@ def initialize_services(
         plugin_manager=plugin_manager,
         llm_router=llm_router,
     )
-    print(f"   ✅ Conversation Service initialized")
+    print("   ✅ Conversation Service initialized")
     
     # 5. Initialize Owner Notification Service
     notifications = get_owner_notification_service(
@@ -275,8 +273,7 @@ async def execute_action_integrated(
     Returns:
         ActionOutcome as dict
     """
-    from src.agentic.action_router import get_action_router
-    from src.agentic.contracts import ActionEnvelope, ImpactLevel, RiskLevel
+    from src.agentic.contracts import ActionEnvelope
     
     bundle = get_service_bundle()
     

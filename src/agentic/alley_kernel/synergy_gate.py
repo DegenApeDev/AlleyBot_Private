@@ -202,7 +202,7 @@ class SynergyGate:
                 return GateDecision(
                     verdict=GateVerdict.DENY,
                     reason=f"Cannot {operation} dangerous file: {dangerous}",
-                    suggestion=f"If intentional, use direct system commands",
+                    suggestion="If intentional, use direct system commands",
                 )
         
         # Check dangerous directories

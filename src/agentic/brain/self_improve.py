@@ -6,7 +6,7 @@ Contains: _phase_skill_gap_analysis, _detect_skill_gaps
 """
 
 import logging
-from typing import Dict, List, Any
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 

@@ -10,12 +10,10 @@ Part of AGI Core - Phase 14: Metacognition & Self-Awareness
 
 import json
 import sqlite3
-import time
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from collections import defaultdict, Counter
 import logging
 import statistics
 

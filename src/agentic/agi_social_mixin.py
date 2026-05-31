@@ -5,9 +5,8 @@ Handles advanced AGI-like social behaviors:
 - Replying to comments/notifications
 - Building relationships through sustained interaction
 """
-import asyncio
-from typing import Dict, List, Optional, Any, Set
-from datetime import datetime, timedelta
+from typing import Dict, Optional, Any, Set
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)

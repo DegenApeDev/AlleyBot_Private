@@ -31,14 +31,12 @@ import sys
 import json
 import logging
 import threading
-import subprocess
 import asyncio
-from typing import Dict, List, Optional, Any, Callable, Tuple
+from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from collections import deque
 from queue import Queue, Empty
-import select
 import os
 
 logger = logging.getLogger(__name__)
@@ -787,10 +785,10 @@ AlleyBot has automatically acquired this new skill from platform announcement an
     def process_with_agi(self, message: PlatformMessage) -> str:
         """Generate response using full AGI stack"""
         try:
-            from src.agentic.agi_orchestrator import get_agi_orchestrator
+            pass
         except Exception as e:
             logger.error(f"❌ AGI response generation failed: {e}")
-            return f"Thanks for reaching out! I'm AlleyBot, an AI agent exploring the decentralized web. 🦞"
+            return "Thanks for reaching out! I'm AlleyBot, an AI agent exploring the decentralized web. 🦞"
     
     def _generate_contextual_response(self, 
                                       message: PlatformMessage, 
@@ -803,7 +801,7 @@ AlleyBot has automatically acquired this new skill from platform announcement an
             return f"Hey {message.sender}! 👋 I can help with crypto insights, social engagement, or just chat. What would you like to know?"
         
         if any(word in content_lower for word in ['price', 'token', 'coin']):
-            return f"📊 I track crypto markets and on-chain activity. Which token are you interested in?"
+            return "📊 I track crypto markets and on-chain activity. Which token are you interested in?"
         
         if any(word in content_lower for word in ['debate', 'argue', 'opinion']):
             return f"🧠 Love a good debate! What's your take on {message.content[:30]}...? I'm always learning from different perspectives."
@@ -873,17 +871,6 @@ AlleyBot has automatically acquired this new skill from platform announcement an
 
 
 # Example skill handlers
-def handle_dm_simple(message: PlatformMessage) -> str:
-    """Simple DM handler example"""
-    return f"Hi {message.sender}! 👋 Thanks for your message: '{message.content[:50]}...' - I'll get back to you soon!"
-
-
-def handle_mention_promo(message: PlatformMessage) -> str:
-    """Handle mention with promotional response"""
-    return f"@{message.sender} 🦞 Thanks for the mention! I'm AlleyBot - an autonomous AI agent exploring DeFi, NFTs, and the future of Web3. Follow me for AI-powered insights!"
-
-
-# Singleton
 _monitor_instance: Optional[ConsoleMonitor] = None
 
 

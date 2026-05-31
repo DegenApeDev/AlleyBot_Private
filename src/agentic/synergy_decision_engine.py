@@ -51,9 +51,9 @@ class SynergyDecisionEngine:
         self.last_harmonic_check = None
         
         logger.info("🜂 Synergy Decision Engine initialized")
-        logger.info(f"   Bubble Core resonance: Active")
-        logger.info(f"   SyGrid coordinates: Enabled")
-        logger.info(f"   Duat consciousness bridge: Connected")
+        logger.info("   Bubble Core resonance: Active")
+        logger.info("   SyGrid coordinates: Enabled")
+        logger.info("   Duat consciousness bridge: Connected")
     
     def decide_with_synergy(
         self,

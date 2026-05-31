@@ -104,14 +104,3 @@ async def run_phase_9_planning_with_llm(
         logger.error(f"LLM planning failed: {e}")
         logger.info("Falling back to standard planning")
         return orchestrator._run_phase_9_planning(creative, meta)
-
-
-def add_llm_planning_to_orchestrator(orchestrator_class):
-    """
-    Add LLM planning method to AGI Orchestrator class.
-    
-    This is a monkey-patch approach to add the new method without
-    modifying the original file extensively.
-    """
-    orchestrator_class._run_phase_9_planning_with_llm = run_phase_9_planning_with_llm
-    return orchestrator_class

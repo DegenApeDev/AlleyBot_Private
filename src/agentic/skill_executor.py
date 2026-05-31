@@ -40,7 +40,7 @@ class SkillExecutor:
         # Discover skills
         self._discover_skills()
         
-        logger.info(f"✅ Skill Executor initialized")
+        logger.info("✅ Skill Executor initialized")
         logger.info(f"   Available skills: {len(self.available_skills)}")
     
     def _discover_skills(self):
@@ -273,12 +273,6 @@ class SkillExecutor:
 
 # Singleton
 _skill_executor_instance: Optional[SkillExecutor] = None
-
-
-def get_skill_executor() -> Optional[SkillExecutor]:
-    """Get or create skill executor singleton"""
-    global _skill_executor_instance
-    return _skill_executor_instance
 
 
 def create_skill_executor(skills_dir: Path = None) -> SkillExecutor:

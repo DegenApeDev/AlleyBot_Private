@@ -3,8 +3,8 @@ Cross-Platform Intelligence Synthesis
 Connects insights across MoltX, Clawbr, Telegram, and onchain data for intelligent decision-making
 """
 import logging
-from typing import List, Dict, Any, Optional, Set
-from datetime import datetime, timedelta
+from typing import List, Dict, Any, Set
+from datetime import datetime
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)

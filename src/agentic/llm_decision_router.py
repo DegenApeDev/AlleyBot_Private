@@ -21,7 +21,7 @@ Supported Reasoning Models:
 
 import json
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 from datetime import datetime
 from dataclasses import dataclass, field
 
@@ -432,12 +432,12 @@ Active Goals ({len(context['goals'])}):
                 prompt += f"{i}. {sug['message']} (Priority: {sug['priority']}/10)\n"
         
         if context['world_state'].get('trending_topics'):
-            prompt += f"\nTrending Topics:\n"
+            prompt += "\nTrending Topics:\n"
             for topic in context['world_state']['trending_topics']:
                 prompt += f"- {topic.get('topic', 'Unknown')} ({topic.get('count', 0)} mentions)\n"
         
         if context['performance']:
-            prompt += f"\nRecent Performance:\n"
+            prompt += "\nRecent Performance:\n"
             prompt += f"- Success Rate: {context['performance']['recent_success_rate']:.0%}\n"
             prompt += f"- Total Actions: {context['performance']['total_actions']}\n"
         

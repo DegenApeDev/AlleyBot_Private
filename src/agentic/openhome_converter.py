@@ -18,9 +18,7 @@ This converter bridges the two formats, allowing AlleyBot to autonomously conver
 his own plugins to OpenHome standard for community sharing.
 """
 
-import os
-import json
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from pathlib import Path
 from datetime import datetime
 import logging
@@ -113,7 +111,7 @@ class OpenHomeConverter:
                 },
                 'next_steps': [
                     f"1. Review {main_path}",
-                    f"2. Test the ability locally",
+                    "2. Test the ability locally",
                     f"3. Zip {ability_dir}",
                     "4. Upload to app.openhome.com → Abilities → Add Custom Ability",
                     f"5. Set trigger words: {', '.join(trigger_words or [])}"

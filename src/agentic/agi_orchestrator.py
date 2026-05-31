@@ -30,12 +30,10 @@ Usage:
     orchestrator.cascade_from_detection(trend_detected)
 """
 
-import json
 import logging
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
 from enum import Enum
 
 # Import all 14 phases

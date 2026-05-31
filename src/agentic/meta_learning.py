@@ -16,9 +16,9 @@ This enables the agent to become a better learner over time.
 
 import json
 import numpy as np
-from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime, timedelta
-from dataclasses import dataclass, asdict
+from typing import Dict, List, Any, Tuple
+from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 from collections import defaultdict
 
@@ -503,9 +503,3 @@ class AdaptiveLearner:
 def create_meta_learning_engine() -> MetaLearningEngine:
     """Create meta-learning engine"""
     return MetaLearningEngine()
-
-def create_adaptive_learner(meta_engine=None, episodic=None, unified=None) -> AdaptiveLearner:
-    """Create adaptive learner with all components"""
-    if meta_engine is None:
-        meta_engine = create_meta_learning_engine()
-    return AdaptiveLearner(meta_engine, episodic, unified)

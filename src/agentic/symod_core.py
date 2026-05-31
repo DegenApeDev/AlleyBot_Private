@@ -511,9 +511,3 @@ def get_symod_manager(core=None) -> SyModCoreManager:
     if _symod_core_manager is None:
         _symod_core_manager = SyModCoreManager(core)
     return _symod_core_manager
-
-
-def reset_symod_manager():
-    """Reset SyMod manager (for testing)"""
-    global _symod_core_manager
-    _symod_core_manager = None

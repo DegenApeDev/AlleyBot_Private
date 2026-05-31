@@ -8,8 +8,8 @@ Part of AGI Core - Phase 6: Meta-Cognition
 """
 
 import logging
-from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+from datetime import datetime
 from dataclasses import dataclass
 import statistics
 

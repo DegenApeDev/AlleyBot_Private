@@ -13,9 +13,9 @@ Generates self-improvement goals based on reflection.
 """
 
 import json
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from datetime import datetime, timedelta
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -510,7 +510,7 @@ class ReflectionScheduler:
                 reflection = self.engine.reflect(hours_back=self.interval/60, depth=2)
                 
                 # Log key findings
-                print(f"\n📝 Self-Reflection Complete:")
+                print("\n📝 Self-Reflection Complete:")
                 print(f"   Mood: {reflection.emotional_state}")
                 if reflection.insights:
                     print(f"   Key Insight: {reflection.insights[0]}")

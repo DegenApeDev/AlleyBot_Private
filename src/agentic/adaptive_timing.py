@@ -22,7 +22,7 @@ Integration:
 
 import logging
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
@@ -328,7 +328,7 @@ class AdaptiveTimingEngine:
         if timing['sample_count'] > 0:
             report += f"\nData Points: {timing['sample_count']} historical actions analyzed"
         else:
-            report += f"\nData Points: No historical data, using defaults"
+            report += "\nData Points: No historical data, using defaults"
         
         return report
 

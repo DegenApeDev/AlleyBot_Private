@@ -11,9 +11,9 @@ Part of AGI Core - Phase 11: Autonomous Research & Discovery
 import json
 import sqlite3
 import re
-from typing import Dict, List, Optional, Any, Set
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from collections import defaultdict, Counter
 import logging

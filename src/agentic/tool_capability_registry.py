@@ -11,9 +11,8 @@ Example:
 """
 
 import json
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Optional
 from pathlib import Path
-from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -49,7 +48,7 @@ class ToolCapabilityRegistry:
         # Build index
         self._build_capability_index()
         
-        logger.info(f"✅ Tool Capability Registry initialized")
+        logger.info("✅ Tool Capability Registry initialized")
         logger.info(f"   Indexed {len(self.capability_map)} capabilities")
         logger.info(f"   Available tools: {len(self.tool_metadata)}")
     

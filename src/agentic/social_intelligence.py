@@ -10,7 +10,7 @@ Part of AGI Core - Phase 12: Theory of Mind & Social Intelligence
 
 import json
 import sqlite3
-from typing import Dict, List, Optional, Any, Set
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path

@@ -25,7 +25,7 @@ Integration:
 """
 
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 from collections import defaultdict
 from dataclasses import dataclass
@@ -379,7 +379,7 @@ class PredictiveSuggestions:
                         suggestion_type='reminder',
                         message=f"Goal '{goal.description}' has {goal.attempts} attempts. Need a different approach?",
                         confidence=0.7,
-                        reasoning=f"Multiple attempts without completion",
+                        reasoning="Multiple attempts without completion",
                         priority=6
                     ))
         

@@ -4,7 +4,7 @@ Combines symbolic (logic) and neural (LLM) reasoning into single coherent system
 Handles all reasoning tasks: logic, math, language, planning, social, trading
 """
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Tuple
 from dataclasses import dataclass
 from enum import Enum
 

@@ -12,8 +12,8 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from .thought_processor import ThoughtProcessor, ProcessorConfig, TurnResult
-from .synergy_gate import SynergyGate, GateDecision, GateVerdict, PermissionDenial
-from .action_registry import ActionRegistry, IntentMatch
+from .synergy_gate import SynergyGate, GateVerdict, PermissionDenial
+from .action_registry import ActionRegistry
 from .session_store import SessionStore
 
 

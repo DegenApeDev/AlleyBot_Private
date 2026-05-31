@@ -501,8 +501,3 @@ def get_capability_registry(plugin_manager=None) -> CapabilityRegistry:
     if _capability_registry is None:
         _capability_registry = CapabilityRegistry(plugin_manager)
     return _capability_registry
-
-
-def create_capability_registry(plugin_manager=None) -> CapabilityRegistry:
-    """Create a new capability registry instance"""
-    return CapabilityRegistry(plugin_manager)

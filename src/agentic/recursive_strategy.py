@@ -12,18 +12,14 @@ Implements the recursive AGI flow with:
 Replaces sequential logic with recursive AGI flow per directive.
 """
 
-import hashlib
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from typing import Dict, List, Optional, Any, Callable, Tuple
-from pathlib import Path
-import json
+from typing import Dict, List, Optional, Any
 
 from lib.synergy_gate import (
     get_synergy_gate, 
-    SyModValidationResult, 
     RCAType,
     ValidationQuote
 )
@@ -232,7 +228,7 @@ class Phase3Strategizing:
         
         if not valid_strategies:
             # No valid strategies - trigger RCA
-            logger.error(f"[Phase 3] No valid strategies - triggering RCA")
+            logger.error("[Phase 3] No valid strategies - triggering RCA")
             return PhaseResult(
                 phase_name="Phase 3: Strategizing",
                 status=PhaseStatus.FAILED,
@@ -489,7 +485,7 @@ class RootCauseAnalysis:
     
     async def _handle_missing_data(self, task: RecursiveTask) -> PhaseResult:
         """Trigger Autonomous Web Search for missing data"""
-        logger.info(f"[RCA] Triggering Autonomous Web Search")
+        logger.info("[RCA] Triggering Autonomous Web Search")
         
         # Would trigger web search here
         # For now, simulate data acquisition
@@ -504,7 +500,7 @@ class RootCauseAnalysis:
     
     async def _handle_logic_error(self, task: RecursiveTask) -> PhaseResult:
         """Trigger Self Code Refactor for logic error"""
-        logger.info(f"[RCA] Triggering Self Code Refactor")
+        logger.info("[RCA] Triggering Self Code Refactor")
         
         # Would trigger code refactoring here
         
@@ -518,7 +514,7 @@ class RootCauseAnalysis:
     
     async def _handle_resource_constraint(self, task: RecursiveTask) -> PhaseResult:
         """Escalate to Tier 3 via A2A"""
-        logger.info(f"[RCA] Escalating to Tier 3 via A2A")
+        logger.info("[RCA] Escalating to Tier 3 via A2A")
         
         return PhaseResult(
             phase_name="RCA: A2A Tier 3 Escalation",
@@ -720,11 +716,3 @@ class RecursiveStrategyEngine:
 
 
 # Convenience function for quick execution
-def run_recursive_task(task_type: str, inputs: Dict[str, Any]) -> RecursiveTask:
-    """
-    Convenience function to run a task through the recursive engine
-    """
-    import asyncio
-    
-    engine = RecursiveStrategyEngine()
-    return asyncio.run(engine.run_task(task_type, inputs))

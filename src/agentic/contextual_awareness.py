@@ -386,7 +386,7 @@ class ContextualAwareness:
         context = self.get_current_context()
         
         lines = [
-            f"📍 Context Summary:",
+            "📍 Context Summary:",
             f"User State: {context.user_state.value}",
             f"Time: {context.time_context['time_of_day']} ({context.time_context['hour']}:00)",
         ]

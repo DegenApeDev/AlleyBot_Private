@@ -20,7 +20,7 @@ from typing import Dict, List, Any, Optional
 # Add src/autonomy to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'autonomy'))
 
-from goal_manager import GoalStackManager, Goal, goal_from_action
+from goal_manager import GoalStackManager, Goal
 
 
 class GoalStackBridge:

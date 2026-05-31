@@ -5,9 +5,9 @@ Tracks long-term patterns, user relationships, and content performance
 import json
 import sqlite3
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 
 @dataclass

@@ -7,7 +7,7 @@ linking consciousness, light, and planetary resonance.
 """
 
 import math
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple
 from dataclasses import dataclass
 
 

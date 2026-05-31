@@ -7,12 +7,9 @@ Runs smoke tests, security checks, and integration tests.
 Part of AGI Core - Phase 4: Self-Extension
 """
 
-import os
 import sys
-import json
 import logging
 import subprocess
-import tempfile
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime

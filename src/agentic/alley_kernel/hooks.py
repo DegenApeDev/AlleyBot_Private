@@ -10,7 +10,7 @@ import asyncio
 import subprocess
 from dataclasses import dataclass, field
 from typing import Callable, Any
-from enum import Enum, auto
+from enum import Enum
 from datetime import datetime
 import os
 from pathlib import Path

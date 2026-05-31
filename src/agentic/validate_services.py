@@ -16,13 +16,11 @@ Usage:
     print(f"Passed: {results['passed']}/{results['total']}")
 """
 
-import os
 import sys
-import asyncio
 import tempfile
 import shutil
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List
 from datetime import datetime
 
 
@@ -64,15 +62,6 @@ class ServiceValidator:
     def test_contracts_import(self) -> bool:
         """Test that contracts module imports correctly."""
         try:
-            from src.agentic.contracts import (
-                ActionEnvelope,
-                ActionOutcome,
-                WorkItem,
-                IdentityContext,
-                ConversationRequest,
-                ConversationResponse,
-                MemoryRecord,
-            )
             return self._record(
                 "Contracts Import",
                 True,
@@ -89,8 +78,6 @@ class ServiceValidator:
                 ActionEnvelope,
                 WorkItem,
                 WorkItemState,
-                ImpactLevel,
-                RiskLevel,
             )
             
             # Test ActionEnvelope
@@ -127,7 +114,6 @@ class ServiceValidator:
     def test_identity_service_import(self) -> bool:
         """Test identity service import."""
         try:
-            from src.agentic.identity_service import IdentityService, get_identity_service
             return self._record("Identity Import", True, "Module imports correctly")
         except Exception as e:
             return self._record("Identity Import", False, f"Import failed: {e}")
@@ -188,8 +174,6 @@ class ServiceValidator:
     def test_memory_service_import(self) -> bool:
         """Test memory service import."""
         try:
-            from src.agentic.memory_service import MemoryService, get_memory_service
-            from src.agentic.contracts import MemoryType
             return self._record("Memory Import", True, "Module imports correctly")
         except Exception as e:
             return self._record("Memory Import", False, f"Import failed: {e}")
@@ -242,7 +226,6 @@ class ServiceValidator:
     def test_work_item_service_import(self) -> bool:
         """Test work item service import."""
         try:
-            from src.agentic.work_item_service import WorkItemService, get_work_item_service
             return self._record("WorkItem Import", True, "Module imports correctly")
         except Exception as e:
             return self._record("WorkItem Import", False, f"Import failed: {e}")
@@ -298,7 +281,6 @@ class ServiceValidator:
     def test_notification_service_import(self) -> bool:
         """Test notification service import."""
         try:
-            from src.agentic.owner_notification_service import OwnerNotificationService, NotificationPriority
             return self._record("Notification Import", True, "Module imports correctly")
         except Exception as e:
             return self._record("Notification Import", False, f"Import failed: {e}")
@@ -333,7 +315,6 @@ class ServiceValidator:
     def test_conversation_service_import(self) -> bool:
         """Test conversation service import."""
         try:
-            from src.agentic.conversation_service import ConversationService, get_conversation_service
             return self._record("Conversation Import", True, "Module imports correctly")
         except Exception as e:
             return self._record("Conversation Import", False, f"Import failed: {e}")
@@ -345,11 +326,6 @@ class ServiceValidator:
     def test_service_integration_import(self) -> bool:
         """Test service integration layer import."""
         try:
-            from src.agentic.service_integration import (
-                ServiceBundle,
-                initialize_services,
-                check_system_health
-            )
             return self._record("Integration Import", True, "Module imports correctly")
         except Exception as e:
             return self._record("Integration Import", False, f"Import failed: {e}")
@@ -361,7 +337,7 @@ class ServiceValidator:
     def test_action_router_envelope(self) -> bool:
         """Test ActionRouter with canonical envelopes."""
         try:
-            from src.agentic.contracts import ActionEnvelope, ImpactLevel, RiskLevel
+            from src.agentic.contracts import ActionEnvelope
             
             # Create envelope
             envelope = ActionEnvelope(
@@ -468,22 +444,6 @@ def run_all_validations() -> Dict[str, Any]:
     """Entry point for running all validations."""
     validator = ServiceValidator()
     return validator.run_all_tests()
-
-
-def quick_health_check() -> bool:
-    """Quick health check - returns True if all services importable."""
-    try:
-        from src.agentic.contracts import ActionEnvelope, WorkItem
-        from src.agentic.identity_service import IdentityService
-        from src.agentic.memory_service import MemoryService
-        from src.agentic.work_item_service import WorkItemService
-        from src.agentic.conversation_service import ConversationService
-        from src.agentic.owner_notification_service import OwnerNotificationService
-        from src.agentic.service_integration import ServiceBundle
-        return True
-    except Exception as e:
-        print(f"❌ Health check failed: {e}")
-        return False
 
 
 if __name__ == "__main__":

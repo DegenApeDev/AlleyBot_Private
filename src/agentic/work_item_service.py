@@ -21,9 +21,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from dataclasses import asdict
 
-from src.agentic.contracts import WorkItem, WorkItemState, CapabilityJudgment
+from src.agentic.contracts import WorkItem, WorkItemState
 
 
 class WorkItemService:
@@ -440,9 +439,3 @@ def get_work_item_service(db_path: str = "data/work_items.db") -> WorkItemServic
     if _work_item_service is None:
         _work_item_service = WorkItemService(db_path)
     return _work_item_service
-
-
-def reset_work_item_service() -> None:
-    """Reset singleton (mainly for testing)."""
-    global _work_item_service
-    _work_item_service = None

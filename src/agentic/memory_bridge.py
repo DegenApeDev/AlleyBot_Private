@@ -17,7 +17,7 @@ Runs once at AGI cycle start (idempotent — skips already-imported rows).
 import json
 import sqlite3
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 

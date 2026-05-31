@@ -20,7 +20,7 @@ SOP Compliance:
 """
 
 import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 
 # SyMod C2V Bridge integration
 try:
@@ -357,7 +357,7 @@ class ReplySystem:
                         print(f"✅ Regenerated reply passed SyMod validation (confidence: {validation2['confidence']:.2%})")
                         return corrected_reply
                     else:
-                        print(f"⚠️ Regenerated reply still failed validation, using original")
+                        print("⚠️ Regenerated reply still failed validation, using original")
             else:
                 print(f"✅ Reply passed SyMod validation (field: {validation['synergy_field_status']}, confidence: {validation['confidence']:.2%})")
                 

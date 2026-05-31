@@ -10,7 +10,7 @@ Examples:
 - "Morning posts (10am-12pm) perform better" → Schedule optimization
 """
 
-from typing import Dict, Any, List
+from typing import Dict, List
 from datetime import datetime
 import logging
 

@@ -6,7 +6,7 @@ Complements neural reasoning with formal symbolic reasoning
 import ast
 import logging
 import operator
-from typing import Dict, Any, List, Optional, Set, Tuple
+from typing import Dict, Any, List, Set
 from dataclasses import dataclass
 from enum import Enum
 
@@ -387,7 +387,7 @@ class SymbolicEngine:
             if isinstance(node.func, ast.Name) and node.func.id in self._SAFE_FUNCS:
                 args = [self._eval_node(a) for a in node.args]
                 return self._SAFE_FUNCS[node.func.id](*args)
-            raise ValueError(f"Unsupported function call")
+            raise ValueError("Unsupported function call")
         raise ValueError(f"Unsupported expression node: {type(node).__name__}")
     
     def verify_consistency(self) -> Dict[str, Any]:
@@ -426,7 +426,7 @@ class SymbolicEngine:
         
         explanation = f"Rule: {rule.id}\n"
         explanation += f"Domain: {rule.domain}\n"
-        explanation += f"If:\n"
+        explanation += "If:\n"
         for premise in rule.premises:
             explanation += f"  - {premise}\n"
         explanation += f"Then: {rule.conclusion}\n"

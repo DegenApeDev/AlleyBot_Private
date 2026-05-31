@@ -12,9 +12,9 @@ import json
 import logging
 import threading
 from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 from collections import defaultdict
 
 

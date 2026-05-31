@@ -6,16 +6,13 @@ research_engine, creative_engine, etc.) with the event bus without
 rewriting them. Uses adapter pattern for clean integration.
 """
 
-import asyncio
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from dataclasses import dataclass
 
 from .event_bus import (
-    CognitiveEventBus,
     EventBusMixin,
     EventType,
     EventPriority,
-    get_event_bus,
     CognitiveEvent,
 )
 

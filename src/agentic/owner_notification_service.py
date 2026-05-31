@@ -19,10 +19,9 @@ import json
 import sqlite3
 import asyncio
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from dataclasses import asdict
 
 from src.agentic.contracts import (
     OwnerNotification,
@@ -97,7 +96,7 @@ class OwnerNotificationService:
         # Start background digest task
         self._digest_task: Optional[asyncio.Task] = None
         
-        print(f"✅ Owner Notification Service initialized")
+        print("✅ Owner Notification Service initialized")
         print(f"   Mode: {'notify-only' if self.notify_only_mode else 'chatty'}")
         print(f"   Enabled: {self.enabled}")
         print(f"   Digest interval: {self.digest_interval}min")
@@ -378,7 +377,7 @@ class OwnerNotificationService:
             return True
         
         if not self.telegram:
-            print(f"⚠️ No Telegram plugin for digest")
+            print("⚠️ No Telegram plugin for digest")
             return False
         
         # Check if enough time has passed
@@ -525,9 +524,3 @@ def get_owner_notification_service(
     if _owner_notification_service is None:
         _owner_notification_service = OwnerNotificationService(telegram_plugin, db_path)
     return _owner_notification_service
-
-
-def reset_owner_notification_service() -> None:
-    """Reset singleton."""
-    global _owner_notification_service
-    _owner_notification_service = None

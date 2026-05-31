@@ -13,7 +13,7 @@ The brain will learn:
 - Market conditions
 """
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -261,38 +261,3 @@ def gather_trading_observations(plugin_manager) -> List[Any]:
         logger.debug("No trading observations gathered (plugins may not be enabled)")
     
     return observations
-
-
-def get_trading_summary(plugin_manager) -> Dict[str, Any]:
-    """
-    Get high-level trading summary for AGI brain context.
-    
-    Returns:
-        Summary of current trading state across all chains
-    """
-    summary = {
-        'timestamp': datetime.now().isoformat(),
-        'chains': {},
-        'total_observations': 0,
-        'trading_enabled': False  # Execution not enabled yet
-    }
-    
-    # Solana summary
-    solana_trading = plugin_manager.get_plugin('solana_trading')
-    if solana_trading and hasattr(solana_trading, 'enabled'):
-        summary['chains']['solana'] = {
-            'enabled': solana_trading.enabled,
-            'wallet_configured': bool(solana_trading.wallet_address),
-            'observation_only': True
-        }
-    
-    # Base summary
-    base_trading = plugin_manager.get_plugin('base_trading')
-    if base_trading and hasattr(base_trading, 'enabled'):
-        summary['chains']['base'] = {
-            'enabled': base_trading.enabled,
-            'wallet_configured': bool(base_trading.wallet_address),
-            'observation_only': True
-        }
-    
-    return summary

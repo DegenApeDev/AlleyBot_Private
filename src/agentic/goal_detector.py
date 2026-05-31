@@ -11,8 +11,7 @@ Analyzes:
 Part of AGI Core - Phase 2: Goal Management
 """
 
-import re
-from typing import Dict, List, Optional, Any, Set
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
@@ -346,11 +345,11 @@ class GoalDetector:
         if gap.gap_type == 'missing_skill':
             return f"Create new skill module to handle: {gap.description}"
         elif gap.gap_type == 'error_pattern':
-            return f"Debug and fix the error pattern in existing code"
+            return "Debug and fix the error pattern in existing code"
         elif gap.gap_type == 'platform_gap':
-            return f"Create new platform plugin with full integration"
+            return "Create new platform plugin with full integration"
         elif gap.gap_type == 'opportunity':
-            return f"Scale successful pattern with automation and monitoring"
+            return "Scale successful pattern with automation and monitoring"
         return "Implement solution to address detected gap"
     
     def _estimate_effort(self, gap: DetectedGap) -> str:

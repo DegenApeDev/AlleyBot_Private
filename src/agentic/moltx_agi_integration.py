@@ -2,7 +2,7 @@
 MoltX AGI Integration
 Connects MoltX service messages to the AGI brain for autonomous decision-making
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from src.agentic.symod_core import SyModObservation
 import logging
 

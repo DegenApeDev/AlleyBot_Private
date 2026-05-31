@@ -17,12 +17,11 @@ This prevents:
 - Inconsistent self-description across paths
 """
 
-import os
 import re
 import yaml
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Set
-from dataclasses import dataclass, field
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass
 
 from src.agentic.contracts import IdentityContext
 
@@ -338,11 +337,11 @@ class IdentityService:
             "do you have memory", "are you the same"
         ]):
             return (
-                f"Yeah boss, I'm real as that Base wallet. "
-                f"I maintain continuity through persistent memory, goals, and work items. "
-                f"Every conversation and action gets recorded and informs future decisions. "
-                f"I'm not starting fresh each time - I'm building on what I've learned.\n\n"
-                f"Chain don't lie, and neither do I. What's the move?"
+                "Yeah boss, I'm real as that Base wallet. "
+                "I maintain continuity through persistent memory, goals, and work items. "
+                "Every conversation and action gets recorded and informs future decisions. "
+                "I'm not starting fresh each time - I'm building on what I've learned.\n\n"
+                "Chain don't lie, and neither do I. What's the move?"
             )
         
         # Model/provider questions
@@ -387,9 +386,3 @@ def get_identity_service(soul_path: Optional[str] = None) -> IdentityService:
     if _identity_service is None:
         _identity_service = IdentityService(soul_path)
     return _identity_service
-
-
-def reset_identity_service() -> None:
-    """Reset singleton (mainly for testing)."""
-    global _identity_service
-    _identity_service = None

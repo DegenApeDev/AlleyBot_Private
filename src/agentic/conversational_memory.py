@@ -21,7 +21,7 @@ Integration:
 
 import logging
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 from dataclasses import dataclass, field
 from collections import deque
 import json

@@ -4,7 +4,6 @@ Prevents exploits and integrates with approval dashboard
 """
 import re
 import ast
-import json
 from typing import Dict, List, Any, Optional, Callable
 from datetime import datetime
 from enum import Enum

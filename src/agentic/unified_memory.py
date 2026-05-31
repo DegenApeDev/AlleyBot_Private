@@ -10,10 +10,8 @@ Consolidates all memory systems into a coherent world model:
 Provides a single API for persistent, queryable, learning memory.
 """
 
-import json
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-from pathlib import Path
 
 class UnifiedMemory:
     """

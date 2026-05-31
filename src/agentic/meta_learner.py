@@ -4,7 +4,7 @@ Learns how to learn better - optimizes learning strategies themselves
 Analyzes what works and adapts learning approach over time
 """
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from collections import defaultdict

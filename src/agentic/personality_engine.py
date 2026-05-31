@@ -20,7 +20,7 @@ Integration:
 """
 
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict
 from enum import Enum
 from dataclasses import dataclass
 

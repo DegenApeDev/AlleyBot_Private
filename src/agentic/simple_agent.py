@@ -4,7 +4,6 @@ For Python 3.14 compatibility when LangChain isn't available
 """
 import json
 from typing import Dict, List, Any, Optional, Callable
-from datetime import datetime
 from dataclasses import dataclass
 
 
@@ -94,7 +93,7 @@ class SimpleReActAgent:
                     'actions': self.state.actions_taken
                 }
         
-        print(f"⚠️  Max iterations reached")
+        print("⚠️  Max iterations reached")
         return {
             'success': False,
             'output': 'Max iterations reached',
@@ -167,7 +166,7 @@ INPUT: <tool input>
                 else:
                     return f"REASONING: API error {response.status_code}\nTOOL: DONE\nINPUT: none"
             else:
-                return f"REASONING: Unsupported LLM interface\nTOOL: DONE\nINPUT: none"
+                return "REASONING: Unsupported LLM interface\nTOOL: DONE\nINPUT: none"
             
         except Exception as e:
             return f"REASONING: Error in reasoning: {e}\nTOOL: DONE\nINPUT: none"

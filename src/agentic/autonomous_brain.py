@@ -640,6 +640,9 @@ class AutonomousBrain(AGISocialMixin):
         # === PLUGIN DISCOVERY: Auto-generate plugins for detected capability gaps ===
         await self._phase_plugin_discovery_and_creation(agi_kernel)
 
+        # === LEARNING ACQUISITION: Turn curiosity gaps + self-model weaknesses into real skills ===
+        await self._phase_learning_goal_acquisition(agi_kernel)
+
         # === PHASE 3.7: Curiosity-driven self-directed goals (BEFORE SyMod/LLM) ===
         curiosity_proposals = await self._phase_curiosity_goals(agi_kernel)
         
@@ -2981,6 +2984,117 @@ class AutonomousBrain(AGISocialMixin):
 
         except Exception as e:
             logger.debug(f"Plugin discovery error: {e}")
+
+    async def _phase_learning_goal_acquisition(self, agi_kernel=None) -> None:
+        """Turn curiosity gaps and self-model weaknesses into concrete skills.
+
+        Runs every 20 cycles. Detects capability gaps, generates SkillSpecifications,
+        delegates to AutonomousCoder, deploys the result, and updates self-model.
+        """
+        if not agi_kernel:
+            return
+        cycle_count = self.stats.get('cycles_completed', 0)
+        if cycle_count < 1 or cycle_count % 20 != 0:
+            return
+
+        try:
+            # 1. Gather signals: self-model learning priorities + curiosity goals
+            learning_priorities = []
+            if hasattr(self.cognitive, 'self_model') and self.cognitive.self_model:
+                learning_priorities = self.cognitive.self_model.what_should_i_learn()
+
+            curiosity_gaps = []
+            if hasattr(self.cognitive, 'curiosity') and self.cognitive.curiosity:
+                curiosity_gaps = self.cognitive.curiosity.detect_knowledge_gaps()
+
+            if not learning_priorities and not curiosity_gaps:
+                return
+
+            logger.info(f"📚 === LEARNING ACQUISITION === "
+                        f"({len(learning_priorities)} self-model gaps, "
+                        f"{len(curiosity_gaps)} curiosity gaps)")
+
+            # 2. Build candidates from self-model weaknesses
+            candidates = []
+            seen = set()
+            for lp in learning_priorities[:3]:
+                domain = lp.get('domain', 'general')
+                if domain in seen:
+                    continue
+                seen.add(domain)
+                candidates.append({
+                    'domain': domain,
+                    'action_type': lp.get('action_type', 'learn'),
+                    'description': f"Build capability in {domain}: {lp.get('reason', 'low data')}",
+                    'source': 'self_model',
+                    'sample_size': lp.get('sample_size', 0),
+                    'success_rate': lp.get('success_rate', 0),
+                })
+
+            for gap in curiosity_gaps[:2]:
+                domain = gap.get('domain', 'general')
+                if domain in seen:
+                    continue
+                seen.add(domain)
+                candidates.append({
+                    'domain': domain,
+                    'action_type': gap.get('type', 'explore'),
+                    'description': f"Explore {domain}: {gap.get('gap_description', 'knowledge gap')}",
+                    'source': 'curiosity',
+                    'sample_size': 0,
+                    'success_rate': 0,
+                })
+
+            if not candidates:
+                return
+
+            # 3. Generate skills for each candidate
+            from src.agentic.autonomous_coder import (
+                SkillSpecification, get_best_coder, get_autonomous_coder
+            )
+
+            coder = get_autonomous_coder()
+            plugin_manager = getattr(agi_kernel, 'plugin_manager', None)
+            ai_coder = get_best_coder(plugin_manager) if plugin_manager else None
+
+            for candidate in candidates:
+                domain = candidate['domain']
+                action = candidate['action_type']
+                logger.info(f"   🎯 Building skill for {domain}.{action} ({candidate['source']})")
+
+                spec = SkillSpecification(
+                    id=f"learn_{domain}_{action}_{int(datetime.now().timestamp())}",
+                    name=f"{domain}_{action}_skill",
+                    description=candidate['description'],
+                    category=domain,
+                    file_structure={},
+                    dependencies=[],
+                    evidence=[f"Source: {candidate['source']}",
+                              f"Sample size: {candidate['sample_size']}",
+                              f"Success rate: {candidate['success_rate']}"],
+                )
+
+                skill = coder.generate_skill(spec)
+                if skill.status == 'generated':
+                    deployed = coder.deploy_skill(skill)
+                    if deployed:
+                        logger.info(f"   ✅ Deployed {skill.skill_name} ({skill.skill_path})")
+                        # Update self-model with new capability
+                        if hasattr(self.cognitive, 'self_model') and self.cognitive.self_model:
+                            self.cognitive.self_model.record_outcome(
+                                domain=domain,
+                                action_type=action,
+                                predicted_confidence=0.5,
+                                actual_success=1.0,
+                                context=f"skill_deployed:{skill.skill_name}",
+                            )
+                    else:
+                        logger.warning(f"   ⚠️  Deploy failed for {skill.skill_name}")
+                else:
+                    logger.warning(f"   ⚠️  Skill generation failed: {skill.errors}")
+
+        except Exception as e:
+            logger.debug(f"Learning acquisition error: {e}")
 
     async def _phase_execute_proposals(self, proposals, agi_kernel, next_action) -> int:
         """ACT phase — execute ranked proposals and record outcomes.

@@ -478,13 +478,13 @@ class TransferLearner:
         """Generate explanation of why transfer makes sense"""
         explanation = f"Transferring '{pattern.name}' from {pattern.domain} to {target_domain}:\n\n"
         explanation += f"Original principle: {pattern.structure.get('principle', 'N/A')}\n\n"
-        explanation += f"Adaptation:\n"
+        explanation += "Adaptation:\n"
         
         for key, value in adapted.items():
             original = pattern.structure.get(key, 'N/A')
             explanation += f"  {key}: {original} → {value}\n"
         
-        explanation += f"\nThis transfer makes sense because the underlying strategic principle remains valid across domains."
+        explanation += "\nThis transfer makes sense because the underlying strategic principle remains valid across domains."
         
         return explanation
     

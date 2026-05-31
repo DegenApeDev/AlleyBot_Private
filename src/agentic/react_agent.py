@@ -2,7 +2,6 @@
 Enhanced ReAct Agent Loop with LangChain Integration
 Implements Reason + Act pattern with security and on-chain awareness
 """
-import os
 import json
 import time
 from typing import Dict, List, Any, Optional, Callable
@@ -221,7 +220,6 @@ Thought: {agent_scratchpad}"""
         """Update on-chain context for agent"""
         try:
             if web3_provider:
-                from web3 import Web3
                 w3 = web3_provider
                 
                 # Get balance

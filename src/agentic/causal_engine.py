@@ -9,8 +9,8 @@ Part of AGI Core - Phase 5: Causal Understanding
 
 import json
 import sqlite3
-from typing import Dict, List, Optional, Any, Tuple, Set
-from dataclasses import dataclass, asdict, field
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from collections import defaultdict

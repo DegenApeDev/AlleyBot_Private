@@ -5,7 +5,7 @@ Tracks results of decisions and actions to learn what works and continuously imp
 import logging
 import json
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
 
@@ -295,7 +295,7 @@ class OutcomeLearner:
         """Get human-readable learning summary"""
         insights = self.get_learning_insights()
         
-        summary = f"📊 Outcome Learning Summary:\n\n"
+        summary = "📊 Outcome Learning Summary:\n\n"
         summary += f"Total Outcomes Tracked: {insights['total_outcomes']}\n"
         summary += f"Overall Success Rate: {insights['overall_success_rate']:.1%}\n\n"
         

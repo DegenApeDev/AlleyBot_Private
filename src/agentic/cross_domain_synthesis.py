@@ -8,9 +8,9 @@ to generate high-value opportunities that combine insights from multiple areas.
 import json
 import sqlite3
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Set, Tuple
+from typing import Dict, List, Optional, Any
 from enum import Enum, auto
 import logging
 
