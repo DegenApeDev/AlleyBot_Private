@@ -295,11 +295,18 @@ class AlleyBotCore(SQLiteMemoryMixin if SQLITE_MEMORY_AVAILABLE else object):
 
         memory_file = memory_dir / f'{memory_type}.json'
         tmp_file = memory_file.with_suffix('.tmp')
-        with open(tmp_file, 'w') as f:
-            json.dump(data, f, indent=2)
-            f.flush()
-            os.fsync(f.fileno())
-        tmp_file.replace(memory_file)
+        try:
+            with open(tmp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            tmp_file.replace(memory_file)
+        except Exception as e:
+            logger.debug(f"Atomic write failed for {memory_type}: {e}")
+            with open(memory_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            if tmp_file.exists():
+                tmp_file.unlink(missing_ok=True)
 
     # --- Enhanced memory helpers (semantic search, goals, encryption) ---
 

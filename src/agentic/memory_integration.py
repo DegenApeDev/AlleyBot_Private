@@ -108,11 +108,20 @@ class SQLiteMemoryMixin:
 
         memory_file = memory_dir / f'{memory_type}.json'
         tmp_file = memory_file.with_suffix('.tmp')
-        with open(tmp_file, 'w') as f:
-            json.dump(data, f, indent=2)
-            f.flush()
-            os.fsync(f.fileno())
-        tmp_file.replace(memory_file)
+        try:
+            with open(tmp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            tmp_file.replace(memory_file)
+        except Exception as e:
+            logger.warning(f"Atomic write failed for {memory_type}, using direct write: {e}")
+            # Fallback: direct write (no atomic rename)
+            with open(memory_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            # Clean up orphaned tmp if it exists
+            if tmp_file.exists():
+                tmp_file.unlink(missing_ok=True)
     
     def add_semantic_memory(self, content: str, memory_type: str = 'interaction', 
                            metadata: Dict = None) -> Optional[str]:
