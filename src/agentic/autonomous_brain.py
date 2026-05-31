@@ -643,6 +643,9 @@ class AutonomousBrain(AGISocialMixin):
         # === LEARNING ACQUISITION: Turn curiosity gaps + self-model weaknesses into real skills ===
         await self._phase_learning_goal_acquisition(agi_kernel)
 
+        # === REVENUE INTELLIGENCE: Scan for profit opportunities, track P&L (HIGH PRIORITY) ===
+        revenue_proposals = await self._phase_revenue_intelligence(agi_kernel)
+
         # === PHASE 3.7: Curiosity-driven self-directed goals (BEFORE SyMod/LLM) ===
         curiosity_proposals = await self._phase_curiosity_goals(agi_kernel)
         
@@ -650,7 +653,7 @@ class AutonomousBrain(AGISocialMixin):
         intent_proposals = await self._phase_maintain_persistent_intents(agi_kernel)
 
         # === THINK: Assemble and rank proposals ===
-        proposals = await self._phase_assemble_proposals(agi_kernel, agi_actions, active_work_items, spine_context, memory_proposals, curiosity_proposals, intent_proposals)
+        proposals = await self._phase_assemble_proposals(agi_kernel, agi_actions, active_work_items, spine_context, memory_proposals, revenue_proposals, curiosity_proposals, intent_proposals)
         
         # === CROSS-DOMAIN SYNTHESIS & STRATEGIC PLANNING (Phase 4.1-4.2) ===
         await self._phase_cross_domain_synthesis_and_planning(agi_kernel, observations, proposals)
@@ -2186,7 +2189,7 @@ class AutonomousBrain(AGISocialMixin):
 
         return memory_proposals
 
-    async def _phase_assemble_proposals(self, agi_kernel, agi_actions, active_work_items, spine_context, memory_proposals=None, curiosity_proposals=None, intent_proposals=None):
+    async def _phase_assemble_proposals(self, agi_kernel, agi_actions, active_work_items, spine_context, memory_proposals=None, revenue_proposals=None, curiosity_proposals=None, intent_proposals=None):
         """THINK phase — assemble, enrich, and rank all action proposals.
         
         Priority order: curiosity > persistent intents > memory-driven > goal-driven > SyMod > AGI
@@ -2234,6 +2237,9 @@ class AutonomousBrain(AGISocialMixin):
         proposals = await self._get_proposals()
         proposals.extend(agi_actions)
 
+        # PREPEND revenue proposals (profit opportunities > everything except curiosity)
+        if revenue_proposals:
+            proposals = revenue_proposals + proposals
         # PREPEND curiosity proposals (self-directed exploration > reactive work)
         if curiosity_proposals:
             proposals = curiosity_proposals + proposals
@@ -2551,6 +2557,81 @@ class AutonomousBrain(AGISocialMixin):
             logger.debug(f"Architecture proposal error: {e}")
 
         return changes
+
+    async def _phase_revenue_intelligence(self, agi_kernel=None) -> List:
+        """Scan for revenue opportunities and generate high-priority proposals.
+
+        Runs every 5 cycles. Identifies trading, content, and service opportunities,
+        scores them by expected value, and generates proposals with elevated confidence.
+        """
+        revenue_proposals = []
+        try:
+            cycle_count = self.stats.get('cycles_completed', 0)
+            if cycle_count < 1 or cycle_count % 5 != 0:
+                return revenue_proposals
+
+            from src.agentic.revenue_intelligence import get_revenue_intelligence
+            ri = get_revenue_intelligence()
+
+            # 1. Gather context from available data sources
+            wallet_balances = None
+            if hasattr(self, 'plugin_manager') and self.plugin_manager:
+                onchain = self.plugin_manager.get_plugin('onchain')
+                if onchain and hasattr(onchain, 'get_wallet_balances'):
+                    try:
+                        wallet_balances = onchain.get_wallet_balances()
+                    except Exception:
+                        pass
+
+            # 2. Scan for opportunities
+            opps = ri.scan_all_opportunities(wallet_balances=wallet_balances)
+            top = ri.get_top_opportunities(limit=3)
+
+            if not top:
+                return revenue_proposals
+
+            logger.info(f"💰 === REVENUE INTELLIGENCE === {len(opps)} opportunities scanned, "
+                        f"top: {top[0].source}.{top[0].action} (${top[0].expected_value:.2f} est)")
+
+            # 3. Generate proposals for top opportunities
+            from src.agentic.symod_core import SyModActionProposal
+            for opp in top:
+                if opp.outcome == 'failed' and opp.last_attempted:
+                    continue  # don't re-attempt failed experiments without new info
+
+                confidence = min(opp.confidence * (1 + 0.1 * opp.seen_count), 0.9)
+                proposal = SyModActionProposal(
+                    action_type=opp.action,
+                    target_id=opp.source,
+                    target_name=opp.description[:60],
+                    confidence=confidence,
+                    justification=f"Revenue opportunity: {opp.description} "
+                                  f"(est ${opp.expected_value:.2f}, risk={opp.risk_level})",
+                    metadata={
+                        'plugin': opp.source,
+                        'revenue_opportunity': True,
+                        'source': opp.source,
+                        'action': opp.action,
+                        'expected_value': opp.expected_value,
+                        'effort': opp.effort_estimate,
+                        'risk': opp.risk_level,
+                    }
+                )
+                revenue_proposals.append(proposal)
+
+            # 4. Log P&L summary
+            pnl = ri.get_pnl_summary()
+            if pnl['total_events'] > 0:
+                logger.info(f"   📊 P&L: ${pnl['total_net']:.4f} across {pnl['total_events']} events")
+                for source, data in pnl['by_source'].items():
+                    logger.info(f"      {source}: ${data['net']:.4f} ({data['count']} events)")
+
+        except Exception as e:
+            logger.debug(f"Revenue intelligence error: {e}")
+
+        if revenue_proposals:
+            logger.info(f"💰 Generated {len(revenue_proposals)} revenue-driven proposals")
+        return revenue_proposals
 
     async def _phase_curiosity_goals(self, agi_kernel) -> List:
         """THINK phase — generate curiosity-driven proposals before SyMod/LLM.
