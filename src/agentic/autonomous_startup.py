@@ -75,6 +75,15 @@ class AutonomousStartup:
             # Start brain
             result = await self.brain.start(mode=self.brain_mode)
             logger.info(f"🧠 {result}")
+
+            # Log core profit goal
+            if hasattr(self.brain, 'narrative_self') and self.brain.narrative_self:
+                goals = self.brain.narrative_self.get_goals('active')
+                core_goal = next((g for g in goals if '10%' in g.description or 'profit' in g.description.lower()), None)
+                if core_goal:
+                    logger.info(f"🎯 Core mission: {core_goal.description}")
+                else:
+                    logger.info("🎯 No profit goal seeded — create via data/narrative_self.json")
             
             # Send Telegram notification
             await self._send_startup_notification()

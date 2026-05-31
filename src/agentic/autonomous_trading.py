@@ -85,11 +85,11 @@ class AutonomousTrading:
         
         # Trading configuration (AGI mode: learn from action, not from gates)
         self.config = {
-            'enabled': False,  # Must be explicitly enabled
+            'enabled': True,  # Enabled by default for revenue compounding
             'max_position_size_pct': 5.0,  # Max 5% of capital per trade
             'min_confidence': 0.0,  # AGI mode: no pre-judgment gate
             'min_risk_reward': 0.0,  # AGI mode: learned from outcomes
-            'daily_loss_limit_pct': 10.0,  # Max 10% loss per day
+            'daily_loss_limit_pct': 15.0,  # Room to operate while limiting downside
             'max_open_positions': 3,  # Max 3 concurrent positions
             'require_golden_window': False,  # AGI mode: no numerology gates
             'require_stable_field': False,  # AGI mode: no numerology gates

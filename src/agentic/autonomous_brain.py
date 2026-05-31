@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 from typing import Dict, List, Optional, Any, Callable
+from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 from dataclasses import dataclass
@@ -861,6 +862,15 @@ class AutonomousBrain(AGISocialMixin):
         # === GOAL QUOTA ENFORCEMENT: Ensure minimum goals per hour ===
         await self._enforce_goal_quota()
         
+        # === CORE GOAL REMINDER: 10% profit compounding ===
+        if self.narrative_self:
+            goals = self.narrative_self.get_goals('active')
+            core_goal = next((g for g in goals if '10%' in g.description or 'profit' in g.description.lower()), None)
+            if core_goal:
+                logger.info(f"🎯 Core goal: {core_goal.description[:80]} (progress: {core_goal.progress:.0%})")
+            elif not goals:
+                logger.info("🎯 No active goals — core profit goal may need seeding")
+
         # === NARRATIVE RECORDING: Log this cycle to persistent identity ===
         self._record_cycle_narrative(executed, len(proposals), len(observations), spine_context)
 
