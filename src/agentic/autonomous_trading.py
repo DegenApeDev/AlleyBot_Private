@@ -305,7 +305,7 @@ class AutonomousTrading:
         return ev
     
     async def execute_trade(self, proposal: TradeProposal) -> Optional[TradeOutcome]:
-        """Execute a validated trade proposal"""
+        """Execute a validated trade proposal via the appropriate swap plugin."""
         try:
             logger.info(f"💰 Executing trade: {proposal.market_name}")
             logger.info(f"   Platform: {proposal.platform}")
@@ -313,20 +313,44 @@ class AutonomousTrading:
             logger.info(f"   Amount: ${proposal.amount_usd:.2f}")
             logger.info(f"   Confidence: {proposal.confidence:.2f}")
             logger.info(f"   Risk/Reward: {proposal.risk_reward_ratio:.2f}")
-            
-            # Execute trade via platform plugin
-            # This would integrate with actual trading execution
-            # For now, we'll simulate and track
-            
+
             trade_id = f"trade_{datetime.now().timestamp()}"
-            
+            actual_entry_price = proposal.current_price
+            swap_success = False
+
+            # Try real execution via swap plugins
+            swap_plugin = None
+            platform = (proposal.platform or '').lower()
+            if 'sol' in platform:
+                swap_plugin = self.plugin_manager.get_plugin('solana_trading')
+            elif 'base' in platform:
+                swap_plugin = self.plugin_manager.get_plugin('base_trading')
+
+            if swap_plugin and hasattr(swap_plugin, 'execute_swap'):
+                parts = (proposal.market_name or '').replace('/', ' ').split()
+                from_token = parts[0] if parts else proposal.outcome
+                to_token = parts[-1] if len(parts) > 1 else 'USDC'
+                try:
+                    result = swap_plugin.execute_swap(
+                        from_token.upper(), to_token.upper(),
+                        abs(proposal.amount_usd), 50
+                    )
+                    swap_success = result.get('success', False)
+                    if swap_success:
+                        actual_entry_price = result.get('price', proposal.current_price)
+                        logger.info(f"   ✅ Real swap executed: {from_token}→{to_token}")
+                    else:
+                        logger.warning(f"   ⚠️ Swap returned failure: {result.get('error', 'unknown')}")
+                except Exception as e:
+                    logger.warning(f"   ⚠️ Swap execution failed, recording simulation: {e}")
+
             outcome = TradeOutcome(
                 trade_id=trade_id,
                 market_id=proposal.market_id,
                 platform=proposal.platform,
                 action=proposal.action,
                 amount_usd=proposal.amount_usd,
-                entry_price=proposal.current_price,
+                entry_price=actual_entry_price,
                 confidence_at_entry=proposal.confidence,
                 symod_metrics={
                     'impedance': proposal.impedance,
@@ -337,17 +361,16 @@ class AutonomousTrading:
                 timestamp=datetime.now(),
                 closed=False
             )
-            
+
             self.open_positions.append(outcome)
             self.total_trades += 1
-            
-            logger.info(f"✅ Trade executed: {trade_id}")
-            
-            # Send Telegram notification
+
+            status = "✅" if swap_success else "💻"
+            logger.info(f"{status} Trade recorded: {trade_id}")
+
             await self._send_trade_notification(proposal, outcome)
-            
             return outcome
-        
+
         except Exception as e:
             logger.error(f"❌ Trade execution error: {e}")
             return None
