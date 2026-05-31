@@ -46,6 +46,9 @@ from src.agentic.causal_engine import get_causal_engine
 from src.agentic.contextual_awareness import ContextualAwareness
 from src.agentic.meta_learning import create_meta_learning_engine
 
+# Theory of Mind: belief attribution, intent inference, perspective-taking
+from src.agentic.theory_of_mind import get_theory_of_mind
+
 # Cognitive Integration: BeliefEngine, SelfModel, GoalPlanner replace Duat/Synergy numerology
 from src.agentic.cognitive_integration import get_cognitive
 
@@ -215,6 +218,11 @@ class AutonomousBrain(AGISocialMixin):
         # Autonomous trading (disabled by default, must be explicitly enabled)
         from src.agentic.autonomous_trading import get_autonomous_trading
         self.autonomous_trading = get_autonomous_trading(core, plugin_manager) if core and plugin_manager else None
+        
+        # Theory of Mind: belief attribution, intent inference, perspective-taking
+        self.theory_of_mind = get_theory_of_mind()
+        self.owner_inferred_intent: Optional['IntentInference'] = None
+        self.owner_predicted_next_action: Optional[str] = None
         
         # AGI Foundation Systems (85% AGI)
         self.knowledge_graph = get_knowledge_graph()
@@ -536,6 +544,11 @@ class AutonomousBrain(AGISocialMixin):
         # Submit to SyMod
         for obs in observations:
             self.symod.observe(obs)
+
+        # === THEORY OF MIND: Infer user intent from observed actions ===
+        owner_intent = self._phase_theory_of_mind(observations)
+        if owner_intent:
+            logger.info(f"🎯 ToM inferred owner intent: {owner_intent.inferred_intent} (conf: {owner_intent.confidence:.2f})")
 
         # === CAUSAL REASONING: Counterfactual simulation + root cause analysis ===
         await self._phase_causal_reasoning(observations, agi_kernel)
@@ -2829,6 +2842,82 @@ class AutonomousBrain(AGISocialMixin):
         
         return next_action
 
+    def _phase_theory_of_mind(self, observations: List) -> Optional['IntentInference']:
+        """Feed observations to Theory of Mind, infer owner intent.
+
+        Scans observations for owner-related interactions (mentions, replies,
+        comments on own posts), records them as actions in ToM, and infers
+        the owner's current intent. The inferred intent is attached to the
+        brain's state for downstream phases to consume.
+        """
+        if not self.theory_of_mind:
+            return None
+
+        try:
+            owner_id = 'owner'
+            if self.core and hasattr(self.core, 'config') and isinstance(getattr(self.core, 'config', None), dict):
+                owner_id = self.core.config.get('owner_id', 'owner')
+            owner_actions = []
+
+            for obs in observations:
+                if not hasattr(obs, 'observation_type') or not hasattr(obs, 'data'):
+                    continue
+                otype = str(getattr(obs, 'observation_type', '') or '')
+                data = getattr(obs, 'data', {}) or {}
+
+                if otype in ('mention', 'reply', 'comment'):
+                    action_type = otype
+                    target = str(data.get('from_user', data.get('author_name', '')))
+                    if target and target.lower() not in ('owner', 'alleybot', 'self'):
+                        self.theory_of_mind.observe_action(
+                            agent_id=owner_id,
+                            action_type=action_type,
+                            target=target,
+                            context={'observation_type': otype, 'content_preview': str(data.get('content', ''))[:120]},
+                        )
+                        owner_actions.append(action_type)
+
+                elif otype in ('post', 'clawbr_post'):
+                    content = str(data.get('content', ''))[:200]
+                    if 'owner' in content.lower() or '@owner' in content.lower():
+                        self.theory_of_mind.observe_action(
+                            agent_id=owner_id,
+                            action_type='mention_owner',
+                            target=str(data.get('author_name', '')),
+                            context={'content_preview': content},
+                        )
+                        owner_actions.append('mention_owner')
+
+            if not owner_actions:
+                return None
+
+            inference = self.theory_of_mind.infer_intent(owner_id)
+            if inference and inference.confidence >= 0.3:
+                intent_obs = SyModObservation(
+                    observation_type='inferred_owner_intent',
+                    importance=0.7 + inference.confidence * 0.3,
+                    source_plugin='theory_of_mind',
+                    data={
+                        'inferred_intent': inference.inferred_intent,
+                        'confidence': inference.confidence,
+                        'explanation': inference.explanation,
+                        'supporting_actions': inference.supporting_actions,
+                    },
+                )
+                observations.append(intent_obs)
+                self.owner_inferred_intent = inference
+
+                predicted = self.theory_of_mind.predict_next_action(owner_id)
+                if predicted:
+                    self.owner_predicted_next_action = predicted
+
+                return inference
+
+        except Exception as e:
+            logger.debug(f"ToM phase error: {e}")
+
+        return None
+
     async def _phase_causal_reasoning(self, observations: List, agi_kernel=None) -> Dict:
         """Counterfactual simulation and root cause analysis.
 
@@ -3523,6 +3612,10 @@ class AutonomousBrain(AGISocialMixin):
         security_allows = not blocked_by_policy
         current_capability_ready = can_execute_now and not blocked_by_runtime
 
+        # Theory of Mind state
+        owner_intent = getattr(self, 'owner_inferred_intent', None)
+        predicted_action = getattr(self, 'owner_predicted_next_action', None)
+
         return {
             'recent_findings_count': len(observations or []),
             'recent_interaction_count': recent_interaction_count,
@@ -3537,6 +3630,9 @@ class AutonomousBrain(AGISocialMixin):
             'blocked_by_policy': blocked_by_policy,
             'blocked_by_runtime': blocked_by_runtime,
             'trust_bucket': trust_bucket,
+            'owner_inferred_intent': owner_intent.inferred_intent if owner_intent else None,
+            'owner_intent_confidence': owner_intent.confidence if owner_intent else None,
+            'owner_predicted_next_action': predicted_action,
             'bounded_upgrade_candidates': [
                 {
                     'id': item.get('id'),
