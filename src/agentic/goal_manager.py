@@ -530,7 +530,29 @@ class GoalManager:
         
         logger.info(f"🚀 Goal started: {goal_id}")
         return True
-    
+
+    def activate_goal(self, goal_id: str) -> bool:
+        """Directly activate a goal (DETECTED/PROPOSED/APPROVED → ACTIVE)."""
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute('SELECT status FROM goals WHERE id = ?', [goal_id]).fetchone()
+            if not row:
+                return False
+            status = row[0]
+            if status in ('ACTIVE', 'COMPLETED', 'FAILED', 'REJECTED'):
+                return False
+            conn.execute('''
+                UPDATE goals 
+                SET status = ?, started_at = ?
+                WHERE id = ?
+            ''', (
+                GoalStatus.ACTIVE.name,
+                datetime.now().isoformat(),
+                goal_id
+            ))
+            conn.commit()
+        logger.info(f"🚀 Goal activated directly: {goal_id}")
+        return True
+
     def complete_goal(self, goal_id: str, outcome: str, actual_effort: Optional[str] = None) -> bool:
         """Mark goal as completed"""
         goal = self.get_goal(goal_id)
@@ -834,6 +856,21 @@ class GoalManager:
                         self.approve_goal(goal.id)
                         logger.info(f"🎯 Auto-approved high-priority goal: {goal.title}")
             
+            # If no performance gaps and no active goals, seed idle exploration goals
+            # This prevents the bot from being stuck in a loop of just playing chess/posting
+            # when nothing is broken — autonomous agents need self-directed exploration
+            if not performance_gaps and not new_goals:
+                active_count = len(self.get_goals(status=GoalStatus.ACTIVE, limit=1))
+                if active_count == 0:
+                    idle_goals = self._generate_idle_exploration_goals()
+                    for goal in idle_goals:
+                        if self.add_goal(goal):
+                            new_goals.append(goal)
+                            # Auto-approve and activate idle goals immediately
+                            self.approve_goal(goal.id)
+                            self.activate_goal(goal.id)
+                            logger.info(f"🧭 Idle exploration goal: {goal.title}")
+            
             if new_goals:
                 logger.info(f"🎯 Generated {len(new_goals)} autonomous goals from observations")
             
@@ -998,7 +1035,83 @@ class GoalManager:
             ]
         
         return plan
-    
+
+    def _generate_idle_exploration_goals(self) -> List[Goal]:
+        """Generate default exploration goals when the system has no active goals.
+        
+        These goals use the expanded ACTION_MAP (brain, web, filesystem, onchain, terminal)
+        so the bot actually does autonomous research and analysis instead of 
+        falling back to the default chess/posting loop.
+        """
+        now = datetime.now()
+        ts = int(now.timestamp())
+        return [
+            Goal(
+                id=f"idle_research_{ts}",
+                title="Research emerging AI agent frameworks and trends",
+                description="Use web.search to find the latest AI agent frameworks, then brain.synthesize to create a summary, and filesystem.write to save insights for future reference.",
+                category='research',
+                priority=GoalPriority.HIGH,
+                impact_score=7.0,
+                effort_estimate='hours',
+                confidence=0.85,
+                trigger_type='idle_exploration',
+                trigger_data={'reason': 'No active goals — autonomous exploration triggered'},
+                evidence=[],
+                status=GoalStatus.PROPOSED,
+                proposed_solution="Research AI agent ecosystem using web search, synthesize findings, post summary on MoltX",
+                implementation_plan=[
+                    {'description': 'web.search: Search for latest AI agent framework releases', 'status': 'pending'},
+                    {'description': 'web.search: Find benchmark data on agent performance', 'status': 'pending'},
+                    {'description': 'brain.synthesize: Cross-reference findings and identify trends', 'status': 'pending'},
+                    {'description': 'filesystem.write: Save research summary to knowledge base', 'status': 'pending'},
+                    {'description': 'moltx.post: Share key insights on MoltX', 'status': 'pending'},
+                ]
+            ),
+            Goal(
+                id=f"idle_markets_{ts}",
+                title="Analyze crypto market conditions and opportunities",
+                description="Monitor on-chain data and market signals for trading opportunities. Use brain.analyze to evaluate risk/reward.",
+                category='analysis',
+                priority=GoalPriority.HIGH,
+                impact_score=6.5,
+                effort_estimate='hours',
+                confidence=0.75,
+                trigger_type='idle_exploration',
+                trigger_data={'reason': 'No active goals — autonomous market analysis triggered'},
+                evidence=[],
+                status=GoalStatus.PROPOSED,
+                proposed_solution="Scan on-chain markets, analyze conditions, generate trading insights",
+                implementation_plan=[
+                    {'description': 'onchain.analyze: Check current market conditions', 'status': 'pending'},
+                    {'description': 'onchain.scan: Scan for new opportunities', 'status': 'pending'},
+                    {'description': 'brain.synthesize: Generate market analysis report', 'status': 'pending'},
+                    {'description': 'moltx.post: Share market insights', 'status': 'pending'},
+                ]
+            ),
+            Goal(
+                id=f"idle_chess_{ts}",
+                title="Improve ClawChess strategy through self-analysis",
+                description="Analyze recent chess games, identify weaknesses, and develop improved opening/endgame strategies.",
+                category='self_improvement',
+                priority=GoalPriority.MEDIUM,
+                impact_score=5.0,
+                effort_estimate='hours',
+                confidence=0.9,
+                trigger_type='idle_exploration',
+                trigger_data={'reason': 'No active goals — self-improvement triggered'},
+                evidence=[],
+                status=GoalStatus.PROPOSED,
+                proposed_solution="Analyze past chess games, identify patterns, refine strategy",
+                implementation_plan=[
+                    {'description': 'clawchess: Fetch recent game history', 'status': 'pending'},
+                    {'description': 'brain.analyze: Identify tactical weaknesses', 'status': 'pending'},
+                    {'description': 'brain.learn: Update chess strategy model', 'status': 'pending'},
+                    {'description': 'filesystem.write: Save strategy improvements', 'status': 'pending'},
+                ]
+            ),
+        ]
+
     def _step_to_action(self, step: Dict, goal: Goal, step_number: int, total_steps: int) -> Optional[Dict]:
         """Convert a plan step to an executable action using intelligent tool selection"""
         
