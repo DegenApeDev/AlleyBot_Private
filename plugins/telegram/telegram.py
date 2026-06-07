@@ -4,6 +4,7 @@ Secure two-way communication with owner DegenApeDev (User ID: 6172568442)
 """
 
 import os
+import time
 import requests
 import json
 import asyncio
@@ -39,6 +40,10 @@ class Telegram(AlleyBotPlugin):
         self._polling_thread = None
         self._polling_loop = None
         self._polling_started_event = None
+
+        # Rate limiting to prevent spam
+        self._last_owner_msg_time = 0.0
+        self._owner_msg_cooldown = 30  # seconds between messages
         
         # Pre-warm shared SentenceTransformer model in background so it's ready before first message
         try:
@@ -1112,12 +1117,18 @@ Just send any message and I'll respond!
         if not self.enabled or not self.bot:
             return False
         
+        # Rate limit: skip if too soon since last message
+        now = time.time()
+        if now - self._last_owner_msg_time < self._owner_msg_cooldown:
+            return False
+        
         try:
             message = self._filter_outbound(message)
             await self.bot.send_message(
                 chat_id=self.owner_user_id,
                 text=message
             )
+            self._last_owner_msg_time = time.time()
             self._log_activity("outbound", {"message": message[:100] + '...' if len(message) > 100 else message})
             return True
         except Exception as e:
@@ -1129,6 +1140,11 @@ Just send any message and I'll respond!
         Uses raw requests instead of python-telegram-bot to avoid
         event loop issues when called from background threads."""
         if not self.enabled or not self.bot_token or not self.owner_user_id:
+            return False
+
+        # Rate limit: skip if too soon since last message
+        now = time.time()
+        if now - self._last_owner_msg_time < self._owner_msg_cooldown:
             return False
 
         try:
@@ -1143,6 +1159,7 @@ Just send any message and I'll respond!
             }, timeout=10)
 
             if resp.status_code == 200:
+                self._last_owner_msg_time = now
                 return True
 
             # Retry without Markdown if parse failed
@@ -1151,6 +1168,9 @@ Just send any message and I'll respond!
                     "chat_id": self.owner_user_id,
                     "text": filtered,
                 }, timeout=10)
+                if resp.status_code == 200:
+                    self._last_owner_msg_time = now
+                    return True
                 return resp.status_code == 200
 
             print(f"⚠️  Telegram send failed ({resp.status_code}): {resp.text[:100]}")
@@ -1165,6 +1185,11 @@ Just send any message and I'll respond!
         if not self.enabled:
             return
         
+        # Rate limit alerts to prevent notification storms
+        now = time.time()
+        if now - self._last_owner_msg_time < self._owner_msg_cooldown:
+            return
+
         priority_emoji = {
             "low": "🟢",
             "normal": "🔵", 
