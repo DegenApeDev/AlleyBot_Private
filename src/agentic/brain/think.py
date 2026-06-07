@@ -419,7 +419,7 @@ class BrainThink:
 
             # Process final action if present
             if cycle_result.final_action and cycle_result.final_action.get('action_taken'):
-                proposal = await self.brain._convert_agi_action_to_proposal(
+                proposal = await self.convert_agi_action_to_proposal(
                     cycle_result.final_action,
                     cycle_result.phases_executed
                 )
@@ -431,7 +431,7 @@ class BrainThink:
                 if (phase_result.phase.value == 'CREATIVE_GENERATION' and
                     phase_result.success and phase_result.output):
 
-                    creative_proposals = await self.brain._extract_creative_proposals(
+                    creative_proposals = await self.extract_creative_proposals(
                         phase_result.output, cycle_result.phases_executed
                     )
                     proposals.extend(creative_proposals)
@@ -1566,8 +1566,106 @@ class BrainThink:
             logger.info(f"📋 Advanced {executed} plan steps this cycle (max: {max_per_cycle})")
         return executed > 0
 
-    # ──────────────────────────────────────────────
-    # WRAPPER METHODS (delegate to original brain stubs)
+    async def convert_agi_action_to_proposal(self, agi_action: Dict, phases_executed) -> Optional[Any]:
+        """Convert AGI orchestrator action to SyMod proposal"""
+        from src.agentic.symod_core import SyModActionProposal
+
+        action_taken = agi_action.get('action_taken', '')
+        content = agi_action.get('content_posted', '')
+
+        # Map AGI actions to SyMod action types
+        action_mapping = {
+            'posted_to_moltx': 'moltx_post',
+            'posted_to_clawbr': 'clawbr_post',
+        }
+
+        symod_action = action_mapping.get(action_taken)
+        if not symod_action:
+            return None
+
+        # Determine confidence based on metacognition phase
+        confidence = 0.6  # Default
+        for phase in phases_executed:
+            if phase.phase.value == 'METACOGNITION' and phase.success:
+                confidence = phase.output.get('confidence', 0.6)
+                break
+
+        # Extract platform from action
+        platform = 'unknown'
+        if 'moltx' in action_taken:
+            platform = 'moltx'
+        elif 'clawbr' in action_taken:
+            platform = 'clawbr'
+
+        return SyModActionProposal(
+            action_type=symod_action,
+            target_id=None,
+            target_name=f"AGI_Content_{datetime.now().strftime('%H%M%S')}",
+            content=content,
+            confidence=confidence,
+            justification="AGI Orchestrator generated content based on multi-phase analysis",
+            metadata={
+                'plugin': platform,
+                'trigger': 'agi_orchestrator',
+                'phases_used': len(phases_executed),
+                'agi_action': action_taken,
+            }
+        )
+
+    async def extract_creative_proposals(self, creative_output: Dict, phases_executed) -> List[Any]:
+        """Extract action proposals from creative generation phase"""
+        from src.agentic.symod_core import SyModActionProposal
+
+        proposals = []
+
+        recommended = creative_output.get('recommended_content')
+        if recommended and isinstance(recommended, dict):
+            concept_title = recommended.get('title', '')
+            if concept_title:
+                content = self.brain._generate_post_from_concept(concept_title)
+                if content:
+                    proposal = SyModActionProposal(
+                        action_type='moltx_post',
+                        target_id=None,
+                        target_name="AGI_Creative_Content",
+                        content=content,
+                        confidence=0.7,
+                        justification="AGI Creative Engine generated engaging content",
+                        metadata={
+                            'plugin': 'moltx',
+                            'trigger': 'agi_creative',
+                            'novelty_score': recommended.get('novelty', 0),
+                            'estimated_impact': recommended.get('estimated_impact', 0),
+                            'concept': concept_title,
+                        }
+                    )
+                    proposals.append(proposal)
+
+        story_arc = creative_output.get('story_arc')
+        if story_arc and isinstance(story_arc, dict):
+            theme = story_arc.get('title', '')
+            if theme:
+                content = self.brain._generate_post_from_concept(theme)
+                if content:
+                    proposal = SyModActionProposal(
+                        action_type='moltx_post',
+                        target_id=None,
+                        target_name="AGI_Story_Arc",
+                        content=content,
+                        confidence=0.6,
+                        justification="AGI Creative Engine generated story concept",
+                        metadata={
+                            'plugin': 'moltx',
+                            'trigger': 'agi_creative',
+                            'novelty_score': story_arc.get('novelty', 0),
+                            'estimated_impact': story_arc.get('estimated_impact', 0),
+                            'theme': theme,
+                        }
+                    )
+                    proposals.append(proposal)
+
+        return proposals
+
     # ──────────────────────────────────────────────
 
     async def think_phase(
