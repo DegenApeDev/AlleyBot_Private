@@ -7,7 +7,6 @@ import re
 import yaml
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from plugin_manager import AlleyBotPlugin
 
 
 class SkillDiscoveryMixin:
