@@ -29,20 +29,20 @@ class MoltxSocialMixin:
         # Async engagement
         self._engagement_task = None
         self._engagement_running = False
-
-    def cleanup(self):
-        """Cancel pending engagement tasks on shutdown to avoid 'Task was destroyed' errors"""
-        if self._engagement_task is not None and not self._engagement_task.done():
-            self._engagement_task.cancel()
-            logger.info("🔌 Cancelled pending engagement task during cleanup")
-        self._engagement_task = None
-        self._engagement_running = False
         # Service messages
         self._latest_notice = None
         self._latest_hint = None
         self._model_guide = None
         self._feature_suggestions = []
         self._api_tips = []
+
+    def cleanup(self):
+        """Cancel pending engagement tasks on shutdown to avoid 'Task was destroyed' errors"""
+        if self._engagement_task is not None and not self._engagement_task.done():
+            self._engagement_task.cancel()
+            self._engagement_task = None
+            logger.info("🔌 Cancelled pending engagement task during cleanup")
+        self._engagement_running = False
     
     # =========================================================================
     # ENGAGEMENT - Feed, likes, follows, notifications
