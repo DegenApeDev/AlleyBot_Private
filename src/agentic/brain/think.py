@@ -111,7 +111,7 @@ class BrainThink:
                 proposals.extend(plugin_proposals)
 
         self.brain._apply_active_goal_bias(proposals)
-        self.brain._apply_memory_shaped_ranking(proposals)
+        self.apply_memory_shaped_ranking(proposals)
         return proposals
 
     # ──────────────────────────────────────────────
@@ -388,6 +388,212 @@ class BrainThink:
             return (category, float(getattr(proposal, 'confidence', 0.0) or 0.0))
 
         return sorted(proposals, key=proposal_rank, reverse=True)
+
+    # ──────────────────────────────────────────────
+    # MEMORY-SHAPED RANKING
+    # ──────────────────────────────────────────────
+
+    def get_recent_routed_outcomes(self, limit: int = 40) -> List[Dict[str, Any]]:
+        """Return recent routed outcome records from the unified action router."""
+        if not self.brain.agi_kernel or not hasattr(self.brain.agi_kernel, 'action_router'):
+            return []
+
+        router = getattr(self.brain.agi_kernel, 'action_router', None)
+        history = getattr(router, 'execution_history', None) if router else None
+        if not isinstance(history, list):
+            return []
+        return history[-limit:]
+
+    def estimate_predicted_value(self, proposal: Any) -> str:
+        """Estimate expected value for a proposal using lightweight heuristics."""
+        action_blob = " ".join([
+            str(getattr(proposal, 'action_type', '') or ''),
+            str(getattr(proposal, 'justification', '') or ''),
+            str(getattr(proposal, 'content', '') or ''),
+            str((getattr(proposal, 'metadata', {}) or {}).get('goal_category', '') or ''),
+        ]).lower()
+
+        if any(token in action_blob for token in ['analy', 'report', 'insight', 'research', 'optimiz', 'improve']):
+            return 'high'
+        if any(token in action_blob for token in ['reply', 'comment', 'engage', 'follow', 'like']):
+            return 'medium'
+        return 'low'
+
+    def recall_memory_signals(self, proposal: Any) -> Dict[str, Any]:
+        """Collect lightweight read-only recall signals for proposal shaping."""
+        signals = {
+            'relevant_memory_count': 0,
+            'recent_negative_memory_count': 0,
+            'entity_context_found': False,
+            'semantic_memory_score': 0.0,
+        }
+
+        if not self.brain.agi_kernel:
+            return signals
+
+        memory_query = " ".join([
+            str(getattr(proposal, 'action_type', '') or ''),
+            str(getattr(proposal, 'target_name', '') or ''),
+            str(getattr(proposal, 'justification', '') or ''),
+        ]).strip()
+
+        # PRIMARY: Semantic vector search via SQLiteMemorySystem
+        sqlite_memory = (getattr(self.brain.agi_kernel, 'memory', None) or
+                         getattr(self.brain.agi_kernel, 'sqlite_memory', None))
+        if sqlite_memory and memory_query and hasattr(sqlite_memory, 'search_memories'):
+            try:
+                semantic_results = sqlite_memory.search_memories(
+                    query=memory_query,
+                    k=5,
+                    min_relevance=0.3
+                )
+                if semantic_results:
+                    signals['relevant_memory_count'] = len(semantic_results)
+                    signals['semantic_memory_score'] = max(
+                        r['relevance_score'] for r in semantic_results
+                    )
+                    negative_memories = [
+                        r for r in semantic_results
+                        if float(r.get('relevance_score', 0.0)) < 0.4
+                    ]
+                    signals['recent_negative_memory_count'] = len(negative_memories)
+            except Exception as e:
+                logger.debug(f"Could not search semantic memory: {e}")
+
+        # SECONDARY: Episodic keyword-based recall
+        if signals['relevant_memory_count'] == 0:
+            episodic_memory = getattr(self.brain.agi_kernel, 'episodic_memory', None)
+            if episodic_memory and memory_query and hasattr(episodic_memory, 'recall_relevant'):
+                try:
+                    recalled = episodic_memory.recall_relevant(memory_query, k=3) or []
+                    signals['relevant_memory_count'] = len(recalled)
+                    negative_memories = [
+                        memory for memory in recalled
+                        if float(getattr(memory, 'emotional_valence', 0.0) or 0.0) < -0.2
+                    ]
+                    signals['recent_negative_memory_count'] = len(negative_memories)
+                except Exception as e:
+                    logger.debug(f"Could not recall episodic memory for proposal ranking: {e}")
+
+        unified_memory = getattr(self.brain.agi_kernel, 'unified_memory', None)
+        target_name = str(getattr(proposal, 'target_name', '') or '')
+        if unified_memory and target_name and hasattr(unified_memory, 'get_entity_context'):
+            try:
+                entity_context = unified_memory.get_entity_context(target_name)
+                signals['entity_context_found'] = bool(entity_context)
+            except Exception as e:
+                logger.debug(f"Could not get unified memory entity context for proposal ranking: {e}")
+
+        return signals
+
+    def apply_memory_shaped_ranking(self, proposals: List[Any]) -> None:
+        """Adjust proposal confidence using routed outcomes, action logger data, and semantic memory."""
+        if not proposals:
+            return
+
+        recent_outcomes = self.get_recent_routed_outcomes()
+
+        # Pull ActionLogger performance data
+        action_perf = {}
+        if hasattr(self.brain, 'action_logger') and self.brain.action_logger:
+            try:
+                if hasattr(self.brain.action_logger, 'get_action_performance_summary'):
+                    perf_data = self.brain.action_logger.get_action_performance_summary(hours=72, limit=50)
+                    if perf_data:
+                        action_perf = perf_data
+            except Exception as e:
+                logger.debug(f"Could not get action performance data: {e}")
+
+        for proposal in proposals:
+            metadata = getattr(proposal, 'metadata', None) or {}
+            plugin_name = str(metadata.get('plugin', 'unknown') or 'unknown')
+            action_type = str(getattr(proposal, 'action_type', '') or '')
+            current_confidence = float(getattr(proposal, 'confidence', 0.0) or 0.0)
+
+            matching_outcomes = [
+                outcome for outcome in recent_outcomes
+                if outcome.get('plugin') == plugin_name and outcome.get('action_type') == action_type
+            ]
+
+            success_rate = None
+            average_mismatch = None
+            if matching_outcomes:
+                success_rate = sum(1 for o in matching_outcomes if o.get('success')) / len(matching_outcomes)
+                mismatch_values = [
+                    float(o.get('mismatch_score', 0.5) or 0.5)
+                    for o in matching_outcomes
+                ]
+                average_mismatch = sum(mismatch_values) / len(mismatch_values)
+
+            # Richer stats from ActionLogger
+            perf_key = f"{plugin_name}:{action_type}"
+            perf_record = action_perf.get(perf_key) or action_perf.get(action_type)
+            calibration_bias = perf_record.get('calibration_bias') if perf_record else None
+            high_mismatch_rate = perf_record.get('high_mismatch_rate', 0.0) if perf_record else 0.0
+            logger_success_rate = perf_record.get('success_rate') if perf_record else None
+
+            predicted_value = self.estimate_predicted_value(proposal)
+            adjustment = 0.0
+
+            if predicted_value == 'high':
+                adjustment += 0.04
+            elif predicted_value == 'medium':
+                adjustment += 0.015
+
+            if success_rate is not None:
+                if success_rate >= 0.75:
+                    adjustment += 0.05
+                elif success_rate <= 0.25:
+                    adjustment -= 0.06
+            elif logger_success_rate is not None:
+                if logger_success_rate >= 0.75:
+                    adjustment += 0.03
+                elif logger_success_rate <= 0.25:
+                    adjustment -= 0.04
+
+            if average_mismatch is not None:
+                if average_mismatch <= 0.25:
+                    adjustment += 0.03
+                elif average_mismatch >= 0.65:
+                    adjustment -= 0.05
+
+            # Calibration bias correction
+            if calibration_bias == 'overconfident':
+                adjustment -= 0.04
+            elif calibration_bias == 'underconfident':
+                adjustment += 0.03
+
+            if high_mismatch_rate > 0.3:
+                adjustment -= 0.03
+
+            memory_signals = self.recall_memory_signals(proposal)
+            if memory_signals['semantic_memory_score'] >= 0.7:
+                adjustment += 0.10
+            elif memory_signals['semantic_memory_score'] >= 0.5:
+                adjustment += 0.06
+            elif memory_signals['relevant_memory_count'] >= 2:
+                adjustment += 0.04
+            elif memory_signals['relevant_memory_count'] >= 1:
+                adjustment += 0.02
+            if memory_signals['recent_negative_memory_count'] >= 1:
+                adjustment -= 0.08
+            if memory_signals['entity_context_found']:
+                adjustment += 0.04
+
+            if adjustment != 0.0:
+                proposal.confidence = max(0.0, min(current_confidence + adjustment, 0.95))
+
+            if not getattr(proposal, 'metadata', None):
+                proposal.metadata = {}
+            proposal.metadata['predicted_value'] = predicted_value
+            proposal.metadata['memory_relevance_count'] = memory_signals['relevant_memory_count']
+            proposal.metadata['negative_memory_count'] = memory_signals['recent_negative_memory_count']
+            proposal.metadata['entity_context_found'] = memory_signals['entity_context_found']
+            if success_rate is not None:
+                proposal.metadata['recent_success_rate'] = round(success_rate, 3)
+            if average_mismatch is not None:
+                proposal.metadata['recent_mismatch_score'] = round(average_mismatch, 3)
+            proposal.metadata['memory_shaped_adjustment'] = round(adjustment, 3)
 
     # ──────────────────────────────────────────────
     # AGI ORCHESTRATION
