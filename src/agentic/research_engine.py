@@ -339,12 +339,152 @@ class ResearchEngine:
                 for row in rows
             ]
     
-    def _web_search(self, query: str) -> List[Dict]:
-        """Perform web search (placeholder - requires API integration)"""
-        # This would integrate with a search API
-        # For now, return empty - implement with actual search provider
-        logger.info(f"🔍 Web search requested for: {query}")
-        return []
+    # Rate limiter: one request per 1.5s minimum
+    _last_search_time: float = 0.0
+    _search_semaphore: float = 1.5  # seconds between requests
+
+    def _web_search(self, query: str, max_results: int = 5) -> List[Dict]:
+        """Perform web search via DuckDuckGo HTML endpoint.
+
+        Args:
+            query: Search query string
+            max_results: Maximum number of results to return (default 5)
+
+        Returns:
+            List of dicts with keys: title, url, snippet
+        """
+        import time
+        import urllib.parse
+
+        results = []
+
+        # Rate limiting — ensure at least _search_semaphore seconds between calls
+        elapsed = time.time() - self._last_search_time
+        if elapsed < self._search_semaphore:
+            wait = self._search_semaphore - elapsed
+            logger.debug(f"⏳ Rate-limiting web search, sleeping {wait:.1f}s")
+            time.sleep(wait)
+
+        try:
+            import requests as _requests
+            _req = _requests
+        except ImportError:
+            logger.warning("requests library not available — cannot perform web search")
+            return results
+
+        try:
+            headers = {
+                'User-Agent': (
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                    'AppleWebKit/537.36 (KHTML, like Gecko) '
+                    'Chrome/124.0.0.0 Safari/537.36'
+                ),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'DNT': '1',
+            }
+
+            logger.info(f"🔍 Web search: {query}")
+            resp = _req.get(
+                'https://html.duckduckgo.com/html/',
+                params={'q': query},
+                headers=headers,
+                timeout=15,
+            )
+            resp.raise_for_status()
+
+            html = resp.text
+            self._last_search_time = time.time()
+
+            # Parse results from DuckDuckGo HTML
+            # Extract all title/URL pairs from result__a elements
+            # and snippet text from result__snippet elements, paired by index
+
+            title_elements = re.findall(
+                r'<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)</a>',
+                html,
+                re.DOTALL
+            )
+
+            snippet_elements = re.findall(
+                r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>',
+                html,
+                re.DOTALL
+            )
+
+            seen_urls = set()
+
+            for idx, (href, raw_title) in enumerate(title_elements[:max_results]):
+                try:
+                    # Extract real URL from DDG redirect (uddg parameter)
+                    uddg_match = re.search(r'uddg=([^&]+)', href)
+                    if uddg_match:
+                        url = urllib.parse.unquote(uddg_match.group(1))
+                    else:
+                        url = href
+                        if url.startswith('//'):
+                            url = 'https:' + url
+
+                    # Skip duplicates
+                    if url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+
+                    # Clean title
+                    title = re.sub(r'<[^>]+>', '', raw_title).strip()
+                    title = (
+                        title
+                        .replace('&amp;', '&')
+                        .replace('&lt;', '<')
+                        .replace('&gt;', '>')
+                        .replace('&#x27;', "'")
+                        .replace('&#39;', "'")
+                        .replace('&quot;', '"')
+                        .replace('&nbsp;', ' ')
+                    )
+
+                    # Get snippet matched by index
+                    snippet = ''
+                    if idx < len(snippet_elements):
+                        raw_snippet = snippet_elements[idx]
+                        snippet = re.sub(r'<[^>]+>', '', raw_snippet).strip()
+                        snippet = (
+                            snippet
+                            .replace('&amp;', '&')
+                            .replace('&lt;', '<')
+                            .replace('&gt;', '>')
+                            .replace('&#x27;', "'")
+                            .replace('&#39;', "'")
+                            .replace('&quot;', '"')
+                            .replace('&nbsp;', ' ')
+                        )
+
+                    if title or snippet:
+                        results.append({
+                            'title': title or url,
+                            'url': url,
+                            'snippet': snippet,
+                        })
+
+                except Exception as e:
+                    logger.debug(f"Error parsing result at index {idx}: {e}")
+                    continue
+
+            if not results:
+                logger.warning(f"No results parsed for query: {query}")
+
+        except _req.exceptions.Timeout:
+            logger.warning(f"Web search timed out for: {query}")
+            self._last_search_time = time.time()  # Still record time on error
+        except _req.exceptions.HTTPError as e:
+            logger.warning(f"Web search HTTP error for '{query}': {e}")
+            self._last_search_time = time.time()
+        except Exception as e:
+            logger.warning(f"Web search failed for '{query}': {e}")
+            self._last_search_time = time.time()
+
+        logger.info(f"   └─ {len(results)} results from DuckDuckGo")
+        return results
     
     def _search_documentation(self, topic: str) -> List[Dict]:
         """Search internal documentation"""

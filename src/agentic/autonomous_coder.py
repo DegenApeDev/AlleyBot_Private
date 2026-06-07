@@ -1384,6 +1384,102 @@ class TestSkill:
             skill.errors.append(f"Deployment error: {str(e)}")
             return False
     
+    def generate_bugfix_patch(self, source_file: str, error_log: str, bug_description: str) -> Dict:
+        """Generate a bugfix patch using LLM reasoning.
+
+        Uses the LLM router to analyze the source file and error log,
+        then produces a unified diff patch. Does NOT apply the patch —
+        generation only for safety (propose, don't apply pattern).
+
+        Args:
+            source_file: Path to the source file that needs fixing
+            error_log: String containing error traceback/logs
+            bug_description: Human-readable description of the bug
+
+        Returns:
+            Dict with keys:
+                - patch: The generated diff/patch text
+                - file: The source file that would be patched
+                - description: Description of the fix
+                - confidence: Float 0.0-1.0 confidence in the fix
+        """
+        result = {
+            'patch': '',
+            'file': source_file,
+            'description': bug_description,
+            'confidence': 0.0,
+        }
+
+        try:
+            # Read the source file
+            src_path = Path(source_file)
+            if not src_path.exists():
+                logger.warning(f"Source file not found: {source_file}")
+                result['description'] = f"Source file not found: {source_file}"
+                return result
+
+            source_code = src_path.read_text()
+
+            # Build LLM prompt for bugfix
+            prompt = (
+                f"You are a Python bug-fixing assistant. Analyze the following source file, error log, "
+                f"and bug description, then generate a precise fix.\n\n"
+                f"SOURCE FILE: {source_file}\n\n"
+                f"```python\n{source_code}\n```\n\n"
+                f"ERROR LOG:\n{error_log}\n\n"
+                f"BUG DESCRIPTION:\n{bug_description}\n\n"
+                f"Generate a unified diff patch that fixes the bug. "
+                f"Output ONLY the unified diff (diff -u format) with the exact changes needed. "
+                f"Be minimal — only change lines that are actually buggy. "
+                f"After the diff, add a line '## CONFIDENCE: <0.0-1.0>' indicating your confidence "
+                f"that this fix is correct, and a line '## DESCRIPTION: <brief explanation>'."
+            )
+
+            from src.core.llm_router import reason
+            response = reason(prompt, max_tokens=2000)
+
+            if not response:
+                logger.warning("LLM returned empty response for bugfix generation")
+                return result
+
+            # Parse the response
+            lines = response.strip().split('\n')
+            patch_lines = []
+            confidence = 0.0
+            description = bug_description
+
+            for line in lines:
+                if line.startswith('## CONFIDENCE:'):
+                    try:
+                        confidence = float(line.split(':', 1)[1].strip())
+                        confidence = max(0.0, min(1.0, confidence))
+                    except (ValueError, IndexError):
+                        confidence = 0.5
+                elif line.startswith('## DESCRIPTION:'):
+                    description = line.split(':', 1)[1].strip()
+                else:
+                    patch_lines.append(line)
+
+            result['patch'] = '\n'.join(patch_lines)
+            result['description'] = description
+            result['confidence'] = confidence
+
+            if result['patch']:
+                logger.info(
+                    f"🔧 Generated bugfix patch for {source_file} "
+                    f"(confidence: {confidence:.2f}, {len(result['patch'])} chars)"
+                )
+            else:
+                logger.warning(f"LLM returned no patch content for {source_file}")
+
+        except Exception as e:
+            logger.error(f"Bugfix patch generation failed: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+            result['description'] = f"Generation error: {str(e)}"
+
+        return result
+
     def get_skill_status(self, spec_id: str) -> Optional[GeneratedSkill]:
         """Get status of generated skill"""
         return self.generated_skills.get(spec_id)

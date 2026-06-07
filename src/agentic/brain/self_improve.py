@@ -9,7 +9,7 @@ Contains: _phase_skill_gap_analysis, _phase_plugin_discovery_and_creation,
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -474,6 +474,322 @@ class BrainSelfImprove:
             logger.debug(f"Architecture proposal error: {e}")
 
         return changes
+
+    async def _phase_self_code_modification(self, agi_kernel=None) -> None:
+        """Detection phase — identify repeated failures and generate bug reports.
+
+        Runs every 50 cycles. Checks error_recovery circuit breaker for patterns
+        of repeated failures. If same action failing repeatedly (3+ times),
+        generates a bug report and saves it to episodic memory.
+
+        This is the "detection" phase only — no files are written.
+        Bug reports are consumed by _phase_review_and_apply_fixes.
+        """
+        cycle_count = self.brain.stats.get('cycles_completed', 0)
+
+        # Only run every 50 cycles
+        if cycle_count <= 0 or cycle_count % 50 != 0:
+            return
+
+        logger.info("🔧 === Self Code Modification Phase (Detection) ===")
+
+        try:
+            from src.agentic.error_recovery import get_error_recovery
+
+            # Get error recovery system
+            plugin_manager = getattr(self.brain, 'plugin_manager', None)
+            error_recovery = get_error_recovery(plugin_manager)
+
+            bug_reports = []
+
+            # Check circuit breakers from error recovery system
+            if error_recovery:
+                error_summary = error_recovery.get_error_summary()
+                circuit_breakers = error_summary.get('circuit_breakers', {})
+
+                for component, is_open in circuit_breakers.items():
+                    if not is_open:
+                        continue
+
+                    failures_count = error_summary.get('component_failures', {}).get(component, 0)
+                    if failures_count < 3:
+                        continue
+
+                    recent_errors = error_summary.get('recent_errors', [])
+                    component_errors = [
+                        e for e in recent_errors if e.get('component') == component
+                    ]
+                    error_patterns = list(set(
+                        e.get('error_type', 'unknown') for e in component_errors
+                    ))
+
+                    bug_reports.append({
+                        'component': component,
+                        'failure_count': failures_count,
+                        'circuit_breaker_tripped': True,
+                        'error_patterns': error_patterns,
+                        'detected_at': datetime.now().isoformat(),
+                        'severity': 'high' if failures_count >= 5 else 'medium',
+                        'description': (
+                            f"Repeated failure pattern detected in {component}: "
+                            f"{failures_count} failures, "
+                            f"patterns: {', '.join(error_patterns[:3])}"
+                        ),
+                    })
+
+            # Check episodic memory for repeated action failures
+            if agi_kernel and hasattr(agi_kernel, 'episodic_memory'):
+                try:
+                    recent_failures = agi_kernel.episodic_memory.get_recent_episodes(
+                        filters={'outcome': 'failure'},
+                        limit=50
+                    )
+
+                    # Group by action type
+                    failure_patterns = {}
+                    for episode in recent_failures:
+                        action_type = (
+                            getattr(episode, 'action', None)
+                            or getattr(episode, 'action_type', 'unknown')
+                        )
+                        if action_type not in failure_patterns:
+                            failure_patterns[action_type] = []
+                        failure_patterns[action_type].append(episode)
+
+                    # 3+ failures of same action = bug
+                    for action_type, episodes in failure_patterns.items():
+                        if len(episodes) >= 3:
+                            error_messages = []
+                            for ep in episodes[:5]:
+                                msg = (
+                                    getattr(ep, 'outcome', '')
+                                    or getattr(ep, 'error', '')
+                                    or ''
+                                )
+                                if msg and msg not in error_messages:
+                                    error_messages.append(msg)
+
+                            bug_reports.append({
+                                'component': f"action:{action_type}",
+                                'failure_count': len(episodes),
+                                'circuit_breaker_tripped': False,
+                                'error_patterns': error_messages,
+                                'detected_at': datetime.now().isoformat(),
+                                'severity': 'medium' if len(episodes) < 5 else 'high',
+                                'description': (
+                                    f"Repeated failure in action '{action_type}': "
+                                    f"{len(episodes)} failures, "
+                                    f"errors: {', '.join(error_messages[:3])}"
+                                ),
+                            })
+                except Exception as e:
+                    logger.debug(f"Episodic memory failure analysis error: {e}")
+
+            if not bug_reports:
+                logger.info("   No bug patterns detected")
+                return
+
+            logger.info(f"   Detected {len(bug_reports)} bug pattern(s)")
+
+            # Save bug reports to episodic memory
+            memory_system = None
+            if agi_kernel and hasattr(agi_kernel, 'episodic_memory'):
+                memory_system = agi_kernel.episodic_memory
+            elif hasattr(self.brain, 'memory') and self.brain.memory:
+                memory_system = self.brain.memory
+
+            if memory_system and hasattr(memory_system, 'record_episode'):
+                for report in bug_reports:
+                    try:
+                        memory_system.record_episode(
+                            action_type='bug_detection',
+                            context={
+                                'component': report['component'],
+                                'severity': report['severity'],
+                            },
+                            outcome={
+                                'detected': True,
+                                'description': report['description'],
+                                'failure_count': report['failure_count'],
+                                'error_patterns': report['error_patterns'],
+                            },
+                            success=False,
+                            emotional_valence=-0.6,
+                            trigger_patterns=[
+                                f"bug:{report['component']}",
+                                f"failure:{report['component']}",
+                            ],
+                        )
+                        logger.info(f"   📝 Bug report saved to memory: {report['component']}")
+                    except Exception as e:
+                        logger.debug(f"Failed to save bug report to memory: {e}")
+            else:
+                logger.info("   No episodic memory system available — bug reports stored on brain only")
+
+            # Store bug reports on brain for review phase to consume
+            if not hasattr(self.brain, '_pending_bug_reports'):
+                self.brain._pending_bug_reports = []
+            self.brain._pending_bug_reports.extend(bug_reports)
+            logger.info(f"   Stored {len(bug_reports)} bug report(s) for review phase")
+
+        except Exception as e:
+            logger.warning(f"⚠️ Self code modification detection error: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+
+    async def _phase_review_and_apply_fixes(self, agi_kernel=None) -> None:
+        """Review phase — generate fix patches for detected bugs (propose, don't apply).
+
+        Runs every 50 cycles, after _phase_self_code_modification.
+        Calls autonomous_coder.generate_bugfix_patch() for each detected bug
+        and logs the generated patches for owner review.
+
+        This is a safety-first "propose, don't apply" pattern.
+        """
+        cycle_count = self.brain.stats.get('cycles_completed', 0)
+
+        # Only run every 50 cycles
+        if cycle_count <= 0 or cycle_count % 50 != 0:
+            return
+
+        # Get pending bug reports from the detection phase
+        pending = getattr(self.brain, '_pending_bug_reports', [])
+        if not pending:
+            return
+
+        logger.info(f"📋 === Review & Apply Fixes Phase ({len(pending)} bug report(s)) ===")
+
+        try:
+            from src.agentic.autonomous_coder import AutonomousCoder
+
+            coder = AutonomousCoder()
+
+            # Initialize container on brain for proposed fixes
+            if not hasattr(self.brain, '_proposed_fixes'):
+                self.brain._proposed_fixes = []
+
+            # Process each bug report
+            for report in pending:
+                component = report.get('component', 'unknown')
+                failure_count = report.get('failure_count', 0)
+                error_patterns = report.get('error_patterns', [])
+                description = report.get('description', 'Unknown bug')
+
+                logger.info(f"   🔍 Analysing bug: {component} ({failure_count} failure(s))")
+
+                # Map component to a source file path
+                source_file = self._map_component_to_source_file(component)
+                if not source_file:
+                    logger.warning(f"   ⚠️  Cannot map component '{component}' to a source file, skipping")
+                    continue
+
+                # Build error log string from patterns
+                error_log = '\n'.join([
+                    f"Failure #{i + 1}: {pattern}"
+                    for i, pattern in enumerate(error_patterns)
+                ])
+
+                # Generate fix patch (propose, don't apply)
+                fix_result = coder.generate_bugfix_patch(
+                    source_file=source_file,
+                    error_log=error_log,
+                    bug_description=description,
+                )
+
+                if fix_result.get('patch'):
+                    logger.info(
+                        f"   ✅ Generated fix for {component}:\n"
+                        f"      File: {fix_result['file']}\n"
+                        f"      Confidence: {fix_result['confidence']:.2f}\n"
+                        f"      Description: {fix_result['description']}\n"
+                        f"      Patch size: {len(fix_result['patch'])} chars"
+                    )
+
+                    # Log the full patch for owner review — safety first, never auto-apply
+                    logger.info(
+                        f"   📝 Proposed patch for {component} (NOT applied — owner review required):\n"
+                        f"{'=' * 60}\n"
+                        f"{fix_result['patch']}\n"
+                        f"{'=' * 60}"
+                    )
+
+                    # Store for owner to review later
+                    self.brain._proposed_fixes.append(fix_result)
+                else:
+                    logger.warning(
+                        f"   ⚠️  Failed to generate fix for {component}: "
+                        f"{fix_result.get('description', 'Unknown error')}"
+                    )
+
+            # Clear pending bug reports after processing
+            self.brain._pending_bug_reports = []
+
+            total_proposed = len(self.brain._proposed_fixes)
+            logger.info(f"   📋 Total proposed fixes stored for owner review: {total_proposed}")
+
+        except Exception as e:
+            logger.warning(f"⚠️ Self code modification review phase error: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+
+    def _map_component_to_source_file(self, component: str) -> Optional[str]:
+        """Map a component/action name to its source file path.
+
+        Args:
+            component: Component name (e.g., 'brain', 'action:process', 'moltx')
+
+        Returns:
+            Absolute path to the source file, or None if unknown
+        """
+        if not component:
+            return None
+
+        # Action-based components: action:<action_type>
+        if component.startswith('action:'):
+            action_name = component.split(':', 1)[1]
+            # Try common locations for action handlers
+            candidates = [
+                f"src/agentic/actions/{action_name}.py",
+                f"src/agentic/handlers/{action_name}.py",
+                f"plugins/{action_name}/{action_name}.py",
+            ]
+            for candidate in candidates:
+                p = Path(candidate)
+                if p.exists():
+                    return str(p.resolve())
+            # Fallback: return a reasonable guess
+            return str(Path(f"src/agentic/actions/{action_name}.py").resolve())
+
+        # Known core components with well-defined source files
+        component_map = {
+            'brain': 'src/agentic/autonomous_brain.py',
+            'moltx': 'plugins/moltx/moltx.py',
+            'telegram': 'plugins/telegram/telegram.py',
+            'self_improve': 'src/agentic/brain/self_improve.py',
+            'cycle_coordinator': 'src/agentic/brain/cycle_coordinator.py',
+            'autonomous_coder': 'src/agentic/autonomous_coder.py',
+            'error_recovery': 'src/agentic/error_recovery.py',
+            'episodic_memory': 'src/agentic/episodic_memory.py',
+            'action_logger': 'src/agentic/action_logger.py',
+            'cognitive_integration': 'src/agentic/cognitive_integration.py',
+            'knowledge_graph': 'src/agentic/knowledge_graph.py',
+            'self_model': 'src/agentic/self_model.py',
+            'belief_engine': 'src/agentic/belief_engine.py',
+            'goal_planner': 'src/agentic/goal_planner.py',
+            'curiosity': 'src/agentic/curiosity.py',
+        }
+
+        if component in component_map:
+            return str(Path(component_map[component]).resolve())
+
+        # Generic fallback: try to find the component as a module path
+        generic_path = f"src/agentic/{component.replace(':', '/').replace('.', '/')}.py"
+        p = Path(generic_path)
+        if p.exists():
+            return str(p.resolve())
+
+        # Last resort: return the best guess
+        return str(Path(generic_path).resolve())
 
     @staticmethod
     def is_action_implemented(plugin: str, action: str) -> bool:

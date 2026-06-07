@@ -164,6 +164,14 @@ class CycleCoordinator:
         """Auto-generate plugins for detected gaps."""
         await self.self_improve.plugin_discovery_and_creation(agi_kernel)
 
+    async def self_code_modification_detection(self, agi_kernel):
+        """Detect repeated failures and generate bug reports for self-code modification."""
+        await self.self_improve._phase_self_code_modification(agi_kernel)
+
+    async def self_code_modification_review(self, agi_kernel):
+        """Review bug reports and generate fix patches (propose, don't apply)."""
+        await self.self_improve._phase_review_and_apply_fixes(agi_kernel)
+
     # ---- TRADING ----
 
     async def revenue_intelligence(self, agi_kernel):

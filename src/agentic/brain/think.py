@@ -889,6 +889,70 @@ class BrainThink:
             if not curiosity_goals:
                 return curiosity_proposals
 
+            # ── Autonomous Web Research ─────────────────────────────────
+            # For applicable domains, do a live web search and store findings
+            RESEARCH_DOMAINS = {'research', 'knowledge', 'learning', 'technology', 'capability'}
+            web_research_goals = [g for g in curiosity_goals if g.domain.lower() in RESEARCH_DOMAINS]
+
+            if web_research_goals:
+                try:
+                    from src.agentic.research_engine import get_research_engine
+                    engine = get_research_engine()
+
+                    # Get sqlite_memory for storing web results as semantic memories
+                    sqlite_memory = None
+                    agi_kernel_ref = agi_kernel or getattr(self.brain, 'agi_kernel', None)
+                    if agi_kernel_ref:
+                        sqlite_memory = (
+                            getattr(agi_kernel_ref, 'memory', None) or
+                            getattr(agi_kernel_ref, 'sqlite_memory', None)
+                        )
+
+                    for wg in web_research_goals:
+                        try:
+                            logger.info(f"🌐 Auto-researching curiosity topic: {wg.title[:60]}")
+                            findings = engine.research_topic(wg.title, source_preference='web')
+
+                            if findings:
+                                logger.info(f"   └─ {len(findings)} findings stored in research knowledge base")
+
+                                # Also store as semantic memories for richer retrieval
+                                if sqlite_memory and hasattr(sqlite_memory, 'add_memory'):
+                                    stored_count = 0
+                                    for finding in findings[:3]:  # Top 3 as memories
+                                        memory_content = (
+                                            f"[Auto-Research] {wg.title}: {finding.content[:300]}"
+                                        )
+                                        try:
+                                            sqlite_memory.add_memory(
+                                                content=memory_content,
+                                                memory_type='research',
+                                                metadata={
+                                                    'source': 'web_search',
+                                                    'topic': wg.title,
+                                                    'domain': wg.domain,
+                                                    'url': getattr(finding, 'source', 'web'),
+                                                    'confidence': finding.confidence,
+                                                    'curiosity_goal_id': wg.goal_id,
+                                                },
+                                                importance_score=0.6,
+                                            )
+                                            stored_count += 1
+                                        except Exception as mem_err:
+                                            logger.debug(f"Memory storage error: {mem_err}")
+
+                                    logger.info(f"   └─ {stored_count} findings stored as semantic memories")
+                            else:
+                                logger.info(f"   └─ No web results found for: {wg.title}")
+
+                        except Exception as wg_err:
+                            logger.debug(f"Web research error for '{wg.title}': {wg_err}")
+
+                except ImportError:
+                    logger.debug("Research engine not available — skipping autonomous web research")
+                except Exception as eng_err:
+                    logger.debug(f"Research engine error: {eng_err}")
+
             for cgoal in curiosity_goals:
                 try:
                     plan = self.brain.cognitive.goal_planner.decompose_goal(

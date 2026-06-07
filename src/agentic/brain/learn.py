@@ -269,6 +269,25 @@ class BrainLearn:
                         )
                         logger.debug(f"   🔧 Adapted params for {d}: {approach.get('exploration_rate', '?')}")
 
+            # Memory consolidation pipeline: consolidate clusters every 25 cycles
+            if self.brain._consolidation_counter % 25 == 0:
+                try:
+                    memory_system = getattr(self.brain, 'memory_system', None)
+                    if memory_system is None and hasattr(self.brain, 'memory'):
+                        memory_system = self.brain.memory
+                    if memory_system and hasattr(memory_system, 'consolidate_memories'):
+                        mem_stats = memory_system.consolidate_memories()
+                        logger.info(f"   🧠 Memory consolidation: {mem_stats['clusters_found']} clusters, "
+                                    f"{mem_stats['consolidated_created']} created, "
+                                    f"{mem_stats['originals_expired']} expired")
+                        # Also prune low-importance stale memories
+                        if hasattr(memory_system, 'prune_by_importance'):
+                            pruned = memory_system.prune_by_importance()
+                            if pruned > 0:
+                                logger.info(f"   🧹 Pruned {pruned} low-importance memories")
+                except Exception as e:
+                    logger.debug(f"Memory consolidation pipeline error: {e}")
+
             logger.info("💤 Consolidation complete")
 
         except Exception as e:

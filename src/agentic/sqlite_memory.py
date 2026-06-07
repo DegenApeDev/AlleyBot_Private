@@ -47,6 +47,7 @@ class Memory:
     timestamp: datetime
     metadata: Dict[str, Any]
     relevance_score: float = 1.0
+    importance: float = 0.5
     embedding: Optional[List[float]] = None
     
     def to_dict(self):
@@ -57,6 +58,7 @@ class Memory:
             'timestamp': self.timestamp.isoformat(),
             'metadata': json.dumps(self.metadata),
             'relevance_score': self.relevance_score,
+            'importance': self.importance,
             'embedding': json.dumps(self.embedding) if self.embedding else None
         }
 
@@ -181,6 +183,7 @@ class SQLiteMemorySystem:
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     metadata TEXT,
                     relevance_score REAL DEFAULT 1.0,
+                    importance REAL DEFAULT 0.5,
                     embedding TEXT,  -- JSON array of floats
                     search_vector BLOB  -- Binary for efficient similarity search
                 )
@@ -242,8 +245,15 @@ class SQLiteMemorySystem:
                     applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-            
+
             conn.commit()
+
+        # Idempotent migration: add importance column if upgrading from older schema
+        try:
+            with self._get_connection() as conn:
+                conn.execute("ALTER TABLE memories ADD COLUMN importance REAL DEFAULT 0.5")
+        except Exception:
+            pass  # Column already exists
     
     # =========================================================================
     # Key-Value Store (replaces JSON files)
@@ -321,7 +331,7 @@ class SQLiteMemorySystem:
     # =========================================================================
     
     def add_memory(self, content: str, memory_type: str = 'interaction', 
-                   metadata: Dict = None) -> str:
+                   metadata: Dict = None, importance_score: float = 0.5) -> str:
         """Add a memory with optional embedding for semantic search"""
         memory_id = str(uuid.uuid4())
         timestamp = datetime.now()
@@ -340,14 +350,15 @@ class SQLiteMemorySystem:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO memories (id, content, memory_type, timestamp, 
-                                    metadata, embedding, search_vector)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                                    metadata, importance, embedding, search_vector)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 memory_id,
                 content,
                 memory_type,
                 timestamp.isoformat(),
                 json.dumps(metadata or {}),
+                importance_score,
                 json.dumps(embedding) if embedding else None,
                 search_vector
             ))
@@ -389,6 +400,9 @@ class SQLiteMemorySystem:
                                 np.linalg.norm(query_embedding) * np.linalg.norm(mem_vector)
                             )
                             if similarity >= min_relevance:
+                                # Combine similarity with importance for ranking
+                                importance = row['importance'] if row['importance'] is not None else 0.5
+                                combined_score = similarity * 0.7 + importance * 0.3
                                 memories.append({
                                     'id': row['id'],
                                     'content': row['content'],
@@ -396,11 +410,13 @@ class SQLiteMemorySystem:
                                     'timestamp': row['timestamp'],
                                     'metadata': json.loads(row['metadata']) if row['metadata'] else {},
                                     'relevance_score': float(similarity),
+                                    'importance': float(importance),
+                                    'combined_score': float(combined_score),
                                     'embedding': json.loads(row['embedding']) if row['embedding'] else None
                                 })
                     
-                    # Sort by similarity and return top k
-                    memories.sort(key=lambda x: x['relevance_score'], reverse=True)
+                    # Sort by combined score and return top k
+                    memories.sort(key=lambda x: x['combined_score'], reverse=True)
                     return memories[:k]
                     
                 except Exception as e:
@@ -425,6 +441,7 @@ class SQLiteMemorySystem:
             
             results = []
             for row in cursor.fetchall():
+                importance = row['importance'] if row['importance'] is not None else 0.5
                 results.append({
                     'id': row['id'],
                     'content': row['content'],
@@ -432,6 +449,7 @@ class SQLiteMemorySystem:
                     'timestamp': row['timestamp'],
                     'metadata': json.loads(row['metadata']) if row['metadata'] else {},
                     'relevance_score': row['relevance_score'],
+                    'importance': float(importance),
                     'embedding': json.loads(row['embedding']) if row['embedding'] else None
                 })
             
@@ -745,7 +763,175 @@ class SQLiteMemorySystem:
                     'size_mb': round(db_size / (1024 * 1024), 2)
                 }
             }
-    
+
+    def consolidate_memories(self, similarity_threshold: float = 0.85) -> Dict[str, int]:
+        """Find clusters of similar memories and consolidate them.
+
+        For each cluster of 3+ items by memory_type + content embedding similarity:
+        - Creates a 'consolidated' memory summarizing the cluster
+        - Sets relevance_score=0 on low-importance originals in the cluster
+
+        Returns stats dict with keys: clusters_found, consolidated_created, originals_expired
+        """
+        stats = {'clusters_found': 0, 'consolidated_created': 0, 'originals_expired': 0}
+
+        if not NUMPY_AVAILABLE:
+            logger.warning("consolidate_memories: NumPy required for clustering, skipping")
+            return stats
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Fetch all memories with embeddings, grouped by type
+            cursor.execute('''
+                SELECT id, content, memory_type, metadata, importance,
+                       relevance_score, embedding, search_vector
+                FROM memories
+                WHERE memory_type != 'consolidated'
+                  AND search_vector IS NOT NULL
+                ORDER BY memory_type, timestamp DESC
+            ''')
+            rows = cursor.fetchall()
+
+        # Group by memory_type
+        type_groups: Dict[str, List[Dict]] = {}
+        for row in rows:
+            mt = row['memory_type']
+            type_groups.setdefault(mt, []).append(dict(row))
+
+        for mem_type, items in type_groups.items():
+            if len(items) < 3:
+                continue
+
+            # Simple greedy clustering: iterate and group by cosine similarity
+            clusters = []
+            assigned = set()
+
+            for i, item in enumerate(items):
+                if item['id'] in assigned:
+                    continue
+                cluster = [item]
+                assigned.add(item['id'])
+
+                vec_i = np.frombuffer(item['search_vector'], dtype=np.float32)
+                norm_i = np.linalg.norm(vec_i)
+                if norm_i == 0:
+                    continue
+
+                for j in range(i + 1, len(items)):
+                    if items[j]['id'] in assigned:
+                        continue
+                    vec_j = np.frombuffer(items[j]['search_vector'], dtype=np.float32)
+                    norm_j = np.linalg.norm(vec_j)
+                    if norm_j == 0:
+                        continue
+                    sim = float(np.dot(vec_i, vec_j) / (norm_i * norm_j))
+                    if sim >= similarity_threshold:
+                        cluster.append(items[j])
+                        assigned.add(items[j]['id'])
+
+                if len(cluster) >= 3:
+                    clusters.append(cluster)
+
+            for cluster in clusters:
+                stats['clusters_found'] += 1
+
+                # Sort by importance (highest first) to pick best summary candidate
+                cluster.sort(key=lambda x: x['importance'] if x['importance'] is not None else 0.5, reverse=True)
+
+                # Build consolidated content from top items
+                top_k = min(3, len(cluster))
+                summary_parts = [c['content'] for c in cluster[:top_k]]
+                consolidated_content = " | ".join(summary_parts)
+                summary = f"[Consolidated] {mem_type}: {consolidated_content[:500]}"
+
+                # Average importance of top items, boosted
+                avg_imp = sum(
+                    c['importance'] if c['importance'] is not None else 0.5
+                    for c in cluster[:top_k]
+                ) / top_k
+                consolidated_importance = min(1.0, avg_imp * 1.2 + 0.1)
+
+                # Generate embedding for consolidated memory
+                consolidated_id = str(uuid.uuid4())
+                embedding = None
+                search_vector = None
+                if self._embedding_model and summary:
+                    try:
+                        embedding = self._embedding_model.encode([summary])[0].tolist()
+                        search_vector = np.array(embedding, dtype=np.float32).tobytes()
+                    except Exception as e:
+                        logger.debug(f"consolidate_memories: embedding failed: {e}")
+
+                metadata = {
+                    'source_ids': [c['id'] for c in cluster],
+                    'cluster_size': len(cluster),
+                    'source_types': [c['memory_type'] for c in cluster],
+                    'avg_importance': round(avg_imp, 3),
+                }
+
+                with self._get_connection() as conn:
+                    cur = conn.cursor()
+                    cur.execute('''
+                        INSERT INTO memories
+                            (id, content, memory_type, timestamp, metadata,
+                             importance, relevance_score, embedding, search_vector)
+                        VALUES (?, ?, 'consolidated', ?, ?, ?, 1.0, ?, ?)
+                    ''', (
+                        consolidated_id,
+                        summary,
+                        datetime.now().isoformat(),
+                        json.dumps(metadata),
+                        consolidated_importance,
+                        json.dumps(embedding) if embedding else None,
+                        search_vector,
+                    ))
+                    conn.commit()
+                stats['consolidated_created'] += 1
+
+                # Expire low-importance originals in the cluster
+                for item in cluster:
+                    imp = item['importance'] if item['importance'] is not None else 0.5
+                    if imp < 0.5:
+                        with self._get_connection() as conn:
+                            cur = conn.cursor()
+                            cur.execute(
+                                'UPDATE memories SET relevance_score = 0 WHERE id = ?',
+                                (item['id'],)
+                            )
+                            conn.commit()
+                        stats['originals_expired'] += 1
+
+        if stats['clusters_found'] > 0:
+            print(f"🧠 Consolidation complete: {stats['clusters_found']} clusters, "
+                  f"{stats['consolidated_created']} consolidated, "
+                  f"{stats['originals_expired']} expired")
+
+        return stats
+
+    def prune_by_importance(self, threshold: float = 0.2, days: int = 7) -> int:
+        """Delete memories with low importance that are older than specified days.
+
+        Default: importance < 0.2 AND older than 7 days.
+        """
+        cutoff = datetime.now() - timedelta(days=days)
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                DELETE FROM memories
+                WHERE importance < ?
+                  AND timestamp < ?
+                  AND memory_type != 'consolidated'
+            ''', (threshold, cutoff.isoformat()))
+
+            conn.commit()
+            deleted = cursor.rowcount
+
+        if deleted > 0:
+            print(f"🧹 Pruned {deleted} low-importance memories (threshold={threshold}, days={days})")
+        return deleted
+
     def prune_old_memories(self, days: int = 30, memory_type: str = None) -> int:
         """Prune memories older than specified days"""
         cutoff = datetime.now() - timedelta(days=days)
@@ -774,9 +960,3 @@ class SQLiteMemorySystem:
         with self._get_connection() as conn:
             conn.execute('VACUUM')
             print("💾 Database vacuumed and optimized")
-    
-    def close(self):
-        """Close database connections"""
-        if hasattr(self._local, 'connection'):
-            self._local.connection.close()
-            del self._local.connection
