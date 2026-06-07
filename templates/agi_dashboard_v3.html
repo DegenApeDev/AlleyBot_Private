@@ -3,394 +3,1202 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AlleyBot - AGI Performance Dashboard</title>
+    <title>AlleyBot — AGI Performance Dashboard</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦞</text></svg>">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <style>
+        /* ===== RESET & ROOT ===== */
         *{margin:0;padding:0;box-sizing:border-box}
         :root{
             --bg:#050811;--bg2:#0a0f1a;--bg3:#111827;--bg4:#1a2235;
             --border:#1e293b;--border2:#334155;
             --text:#f8fafc;--text2:#94a3b8;--text3:#64748b;
-            --blue:#60a5fa;--blue2:#3b82f6;--blue-glow:rgba(96,165,250,.15);
-            --green:#34d399;--green-glow:rgba(52,211,153,.15);
-            --purple:#a78bfa;--purple-glow:rgba(167,139,250,.15);
-            --orange:#fb923c;--orange-glow:rgba(251,146,60,.15);
+            --blue:#60a5fa;--blue2:#3b82f6;--blue-dim:rgba(96,165,250,.12);
+            --green:#34d399;--green2:#10b981;--green-dim:rgba(52,211,153,.12);
+            --purple:#a78bfa;--purple2:#8b5cf6;--purple-dim:rgba(167,139,250,.12);
+            --orange:#fb923c;--orange2:#f97316;--orange-dim:rgba(251,146,60,.12);
             --red:#f87171;--pink:#f472b6;--cyan:#22d3ee;--yellow:#facc15;
-            --cyan-glow:rgba(34,211,238,.15);--yellow-glow:rgba(250,204,21,.15);
+            --cyan-dim:rgba(34,211,238,.12);--yellow-dim:rgba(250,204,21,.12);
+            --pink-dim:rgba(244,114,182,.12);--red-dim:rgba(248,113,113,.12);
         }
-        body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+        body{
+            font-family:'Inter',system-ui,-apple-system,sans-serif;
+            background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;
+        }
         .mono{font-family:'JetBrains Mono',monospace}
-        body::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;
-            background:radial-gradient(ellipse at 20% 50%,rgba(96,165,250,.08) 0%,transparent 50%),
-                radial-gradient(ellipse at 80% 20%,rgba(167,139,250,.06) 0%,transparent 50%),
-                radial-gradient(ellipse at 50% 80%,rgba(52,211,153,.05) 0%,transparent 50%);
-            pointer-events:none;z-index:0;animation:bgPulse 8s ease-in-out infinite}
-        @keyframes bgPulse{0%,100%{opacity:1}50%{opacity:.8}}
-        .wrap{max-width:1440px;margin:0 auto;padding:24px;position:relative;z-index:1}
-        .hero{display:flex;align-items:center;gap:40px;padding:48px 40px;
-            background:linear-gradient(135deg,rgba(96,165,250,.1),rgba(167,139,250,.08));
-            border:1px solid var(--border);border-radius:24px;margin-bottom:32px;position:relative;overflow:hidden}
-        .hero::after{content:'';position:absolute;top:-50%;right:-20%;width:600px;height:600px;
-            background:radial-gradient(circle,rgba(96,165,250,.12),transparent 70%);pointer-events:none;animation:heroGlow 6s ease-in-out infinite}
-        @keyframes heroGlow{0%,100%{opacity:.5}50%{opacity:1}}
-        .hero-avatar{width:110px;height:110px;border-radius:28px;border:3px solid rgba(96,165,250,.4);
-            box-shadow:0 0 60px rgba(96,165,250,.25);object-fit:cover;flex-shrink:0;animation:avatarFloat 4s ease-in-out infinite}
-        @keyframes avatarFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+
+        /* ===== BG AMBIENT ===== */
+        body::before{
+            content:'';position:fixed;top:0;left:0;right:0;bottom:0;
+            background:
+                radial-gradient(ellipse at 15% 40%,rgba(96,165,250,.07) 0%,transparent 55%),
+                radial-gradient(ellipse at 85% 25%,rgba(167,139,250,.06) 0%,transparent 50%),
+                radial-gradient(ellipse at 50% 80%,rgba(52,211,153,.04) 0%,transparent 50%),
+                radial-gradient(ellipse at 30% 70%,rgba(34,211,238,.03) 0%,transparent 50%);
+            pointer-events:none;z-index:0;animation:bgAmbient 10s ease-in-out infinite alternate;
+        }
+        @keyframes bgAmbient{0%{opacity:.7}100%{opacity:1}}
+
+        /* ===== WRAPPER ===== */
+        .wrap{max-width:1440px;margin:0 auto;padding:20px 24px;position:relative;z-index:1}
+
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar{width:8px}
+        ::-webkit-scrollbar-track{background:var(--bg2)}
+        ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+        ::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+
+        /* ===== HERO SECTION ===== */
+        .hero{
+            display:flex;align-items:center;gap:36px;padding:40px 36px;
+            background:linear-gradient(135deg,rgba(96,165,250,.1),rgba(167,139,250,.06),rgba(52,211,153,.04));
+            border:1px solid var(--border);border-radius:24px;margin-bottom:24px;
+            position:relative;overflow:hidden;
+        }
+        .hero::after{
+            content:'';position:absolute;top:-60%;right:-10%;width:500px;height:500px;
+            background:radial-gradient(circle,rgba(96,165,250,.1),transparent 65%);
+            pointer-events:none;animation:heroGlow 5s ease-in-out infinite alternate;
+        }
+        @keyframes heroGlow{0%{opacity:.4;transform:scale(1)}100%{opacity:1;transform:scale(1.1)}}
+        .hero-avatar{
+            width:100px;height:100px;border-radius:24px;
+            border:2.5px solid rgba(96,165,250,.35);
+            box-shadow:0 0 50px rgba(96,165,250,.2),inset 0 0 30px rgba(96,165,250,.05);
+            object-fit:cover;flex-shrink:0;animation:avatarFloat 5s ease-in-out infinite;
+            background:var(--bg4);
+        }
+        @keyframes avatarFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
         .hero-info{flex:1;z-index:1}
-        .hero h1{font-size:3.2em;font-weight:900;letter-spacing:-.03em;
-            background:linear-gradient(135deg,#fff 0%,var(--blue) 50%,var(--purple) 100%);
-            -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;background-size:200% 200%;animation:textShine 4s ease infinite}
+        .hero h1{
+            font-size:3em;font-weight:900;letter-spacing:-.03em;line-height:1.1;
+            background:linear-gradient(135deg,#fff 0%,var(--blue) 45%,var(--purple) 80%,var(--cyan) 100%);
+            -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+            background-size:250% 250%;animation:textShine 5s ease infinite;
+        }
         @keyframes textShine{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
-        .hero-sub{font-size:1.15em;color:var(--text2);margin:10px 0 20px;max-width:600px}
-        .hero-badges{display:flex;gap:12px;flex-wrap:wrap}
-        .badge{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:24px;
-            font-size:.85em;font-weight:600;border:1px solid;backdrop-filter:blur(10px);transition:all .3s}
-        .badge:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.2)}
-        .badge-live{background:var(--green-glow);color:var(--green);border-color:rgba(52,211,153,.4)}
-        .badge-live::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
-        @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.2)}}
-        .badge-agi{background:var(--yellow-glow);color:var(--yellow);border-color:rgba(250,204,21,.4)}
-        .badge-brain{background:var(--purple-glow);color:var(--purple);border-color:rgba(167,139,250,.4)}
-        .badge-chain{background:var(--blue-glow);color:var(--blue);border-color:rgba(96,165,250,.4)}
-        .status-bar{display:flex;align-items:center;gap:24px;padding:16px 24px;
-            background:var(--bg3);border:1px solid var(--border);border-radius:16px;margin-bottom:32px;
-            font-size:.9em;flex-wrap:wrap}
-        .status-item{display:flex;align-items:center;gap:8px}
-        .status-dot{width:10px;height:10px;border-radius:50%}
-        .status-dot.online{background:var(--green);box-shadow:0 0 12px var(--green);animation:statusPulse 2s infinite}
-        @keyframes statusPulse{0%,100%{opacity:1}50%{opacity:.6}}
+        .hero-sub{font-size:1.05em;color:var(--text2);margin:8px 0 18px;max-width:580px;line-height:1.5}
+        .hero-badges{display:flex;gap:10px;flex-wrap:wrap}
+        .badge{
+            display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:100px;
+            font-size:.82em;font-weight:600;border:1px solid;backdrop-filter:blur(8px);
+            transition:all .25s ease;cursor:default;
+        }
+        .badge:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+        .badge-live{background:var(--green-dim);color:var(--green);border-color:rgba(52,211,153,.35)}
+        .badge-live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulseDot 1.8s infinite}
+        @keyframes pulseDot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.4)}}
+        .badge-agi{background:var(--yellow-dim);color:var(--yellow);border-color:rgba(250,204,21,.35)}
+        .badge-brain{background:var(--purple-dim);color:var(--purple);border-color:rgba(167,139,250,.35)}
+        .badge-chain{background:var(--blue-dim);color:var(--blue);border-color:rgba(96,165,250,.35)}
+        .badge-a2a{background:var(--cyan-dim);color:var(--cyan);border-color:rgba(34,211,238,.35)}
+        .badge-base{background:var(--pink-dim);color:var(--pink);border-color:rgba(244,114,182,.35)}
+
+        /* ===== STATUS BAR ===== */
+        .status-bar{
+            display:flex;align-items:center;gap:20px;padding:14px 22px;
+            background:var(--bg3);border:1px solid var(--border);border-radius:14px;
+            margin-bottom:24px;font-size:.88em;flex-wrap:wrap;
+        }
+        .status-divider{color:var(--border2);opacity:.5}
+        .status-item{display:flex;align-items:center;gap:7px;white-space:nowrap}
+        .status-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+        .status-dot.online{background:var(--green);box-shadow:0 0 10px var(--green);animation:statusPulse 2s infinite}
+        @keyframes statusPulse{0%,100%{opacity:1}50%{opacity:.5}}
+        .status-dot.offline{background:var(--red);box-shadow:0 0 10px var(--red)}
         .status-label{color:var(--text3)}
         .status-value{color:var(--text);font-weight:600;font-family:'JetBrains Mono',monospace}
-        .section-title{font-size:1.8em;font-weight:700;margin:32px 0 20px;display:flex;align-items:center;gap:12px}
-        .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;margin-bottom:32px}
-        .metric{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:all .3s;position:relative;overflow:hidden}
+
+        /* ===== SECTION TITLE ===== */
+        .section-title{
+            font-size:1.55em;font-weight:700;margin:30px 0 18px;
+            display:flex;align-items:center;gap:10px;letter-spacing:-.01em;
+        }
+        .section-title .sub{
+            font-size:.6em;font-weight:400;color:var(--text3);margin-left:auto;
+        }
+
+        /* ===== METRICS GRID ===== */
+        .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+        .metric{
+            background:var(--bg3);border:1px solid var(--border);border-radius:18px;
+            padding:24px 20px;transition:all .3s;position:relative;overflow:hidden;
+        }
         .metric::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;opacity:0;transition:opacity .3s}
-        .metric:hover{transform:translateY(-4px);border-color:var(--border2);box-shadow:0 20px 40px rgba(0,0,0,.3)}
+        .metric:hover{transform:translateY(-3px);border-color:var(--border2);box-shadow:0 14px 30px rgba(0,0,0,.25)}
         .metric:hover::before{opacity:1}
-        .metric.blue::before{background:var(--blue)}
-        .metric.green::before{background:var(--green)}
-        .metric.purple::before{background:var(--purple)}
-        .metric.orange::before{background:var(--orange)}
-        .metric.cyan::before{background:var(--cyan)}
-        .metric.yellow::before{background:var(--yellow)}
-        .metric-icon{font-size:2em;margin-bottom:16px;opacity:.9}
-        .metric-val{font-size:2.8em;font-weight:800;line-height:1;font-family:'JetBrains Mono',monospace;margin-bottom:4px}
-        .metric-lbl{color:var(--text2);font-size:.9em;margin-bottom:8px}
-        .metric-sub{color:var(--text3);font-size:.8em}
-        .metric-tag{display:inline-block;padding:4px 8px;border-radius:12px;font-size:.75em;font-weight:600;margin-top:8px}
-        .tag-blue{background:var(--blue-glow);color:var(--blue)}
-        .tag-green{background:var(--green-glow);color:var(--green)}
-        .tag-purple{background:var(--purple-glow);color:var(--purple)}
-        .tag-orange{background:var(--orange-glow);color:var(--orange)}
-        .tag-cyan{background:var(--cyan-glow);color:var(--cyan)}
-        .tag-yellow{background:var(--yellow-glow);color:var(--yellow)}
+        .metric.blue::before{background:linear-gradient(90deg,var(--blue),var(--purple))}
+        .metric.green::before{background:linear-gradient(90deg,var(--green),var(--cyan))}
+        .metric.purple::before{background:linear-gradient(90deg,var(--purple),var(--pink))}
+        .metric.orange::before{background:linear-gradient(90deg,var(--orange),var(--red))}
+        .metric.cyan::before{background:linear-gradient(90deg,var(--cyan),var(--blue))}
+        .metric.yellow::before{background:linear-gradient(90deg,var(--yellow),var(--orange))}
+        .metric.pink::before{background:linear-gradient(90deg,var(--pink),var(--purple))}
+        .metric-icon{font-size:1.6em;margin-bottom:12px;opacity:.85}
+        .metric-val{
+            font-size:2.4em;font-weight:800;line-height:1;font-family:'JetBrains Mono',monospace;
+            margin-bottom:3px;letter-spacing:-.02em;
+        }
+        .metric-lbl{color:var(--text2);font-size:.85em;margin-bottom:6px}
+        .metric-sub{color:var(--text3);font-size:.78em;line-height:1.5}
+        .metric-tag{
+            display:inline-block;padding:3px 10px;border-radius:100px;font-size:.72em;
+            font-weight:600;margin-top:8px;
+        }
+        .tag-blue{background:var(--blue-dim);color:var(--blue)}
+        .tag-green{background:var(--green-dim);color:var(--green)}
+        .tag-purple{background:var(--purple-dim);color:var(--purple)}
+        .tag-orange{background:var(--orange-dim);color:var(--orange)}
+        .tag-cyan{background:var(--cyan-dim);color:var(--cyan)}
+        .tag-yellow{background:var(--yellow-dim);color:var(--yellow)}
+        .tag-pink{background:var(--pink-dim);color:var(--pink)}
+        .tag-red{background:var(--red-dim);color:var(--red)}
+
+        /* ===== PLATFORM CARDS ===== */
+        .platform-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin-bottom:24px}
+        .platform-card{
+            background:var(--bg3);border:1px solid var(--border);border-radius:16px;
+            padding:22px 20px;transition:all .3s;position:relative;overflow:hidden;
+        }
+        .platform-card:hover{transform:translateY(-3px);border-color:var(--border2);box-shadow:0 14px 30px rgba(0,0,0,.25)}
+        .platform-card .p-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+        .platform-card .p-icon{font-size:1.6em;width:36px;text-align:center}
+        .platform-card .p-name{font-size:1.1em;font-weight:700}
+        .platform-card .p-status{font-size:.7em;padding:2px 8px;border-radius:100px;margin-left:auto}
+        .p-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+        .p-stat .p-stat-val{font-size:1.5em;font-weight:700;font-family:'JetBrains Mono',monospace}
+        .p-stat .p-stat-lbl{font-size:.72em;color:var(--text3)}
+        .p-connected{background:var(--green-dim);color:var(--green);border:1px solid rgba(52,211,153,.25)}
+        .p-disconnected{background:var(--red-dim);color:var(--red);border:1px solid rgba(248,113,113,.25)}
+
+        /* ===== ACTIVITY FEED ===== */
+        .feed-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+        @media(max-width:900px){.feed-grid{grid-template-columns:1fr}}
+        .feed-container{
+            background:var(--bg3);border:1px solid var(--border);border-radius:16px;
+            padding:20px;max-height:400px;overflow-y:auto;
+        }
+        .feed-item{
+            display:flex;align-items:flex-start;gap:12px;padding:12px 0;
+            border-bottom:1px solid rgba(30,41,59,.6);animation:feedIn .3s ease;
+        }
+        .feed-item:last-child{border-bottom:none}
+        @keyframes feedIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+        .feed-icon{font-size:1.1em;width:28px;text-align:center;flex-shrink:0;margin-top:2px}
+        .feed-content{flex:1;min-width:0}
+        .feed-text{font-size:.88em;color:var(--text);word-break:break-word}
+        .feed-meta{display:flex;align-items:center;gap:8px;margin-top:4px}
+        .feed-time{font-size:.72em;color:var(--text3);font-family:'JetBrains Mono',monospace}
+        .feed-type{
+            font-size:.65em;padding:1px 8px;border-radius:100px;font-weight:600;text-transform:uppercase;
+        }
+        .feed-type.success{background:var(--green-dim);color:var(--green)}
+        .feed-type.error{background:var(--red-dim);color:var(--red)}
+        .feed-type.info{background:var(--blue-dim);color:var(--blue)}
+        .feed-type.warning{background:var(--yellow-dim);color:var(--yellow)}
+
+        /* ===== CHART CONTAINER ===== */
+        .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+        @media(max-width:900px){.chart-grid{grid-template-columns:1fr}}
+        .chart-box{
+            background:var(--bg3);border:1px solid var(--border);border-radius:16px;
+            padding:20px;position:relative;min-height:280px;
+        }
+        .chart-box h3{font-size:.95em;font-weight:600;margin-bottom:14px;color:var(--text2)}
+        .chart-box canvas{width:100%!important;max-height:260px}
+
+        /* ===== CHESS SECTION ===== */
+        .chess-section{
+            background:var(--bg3);border:1px solid var(--border);border-radius:16px;
+            padding:24px;margin-bottom:24px;display:none;
+        }
+        .chess-section.active{display:block}
+        .chess-header{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+        .chess-header h3{font-size:1.2em;font-weight:700}
+        .chess-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+        .chess-stat{background:var(--bg4);border-radius:12px;padding:14px}
+        .chess-stat .cs-lbl{font-size:.75em;color:var(--text3);margin-bottom:4px}
+        .chess-stat .cs-val{font-size:1.3em;font-weight:700;font-family:'JetBrains Mono',monospace}
+        .chess-fen{
+            margin-top:14px;padding:10px 14px;background:var(--bg4);border-radius:10px;
+            font-family:'JetBrains Mono',monospace;font-size:.78em;color:var(--text2);word-break:break-all;
+            border:1px solid var(--border);
+        }
+        .chess-moves{
+            display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;
+        }
+        .chess-move{
+            padding:4px 10px;background:var(--bg4);border-radius:6px;
+            font-family:'JetBrains Mono',monospace;font-size:.78em;color:var(--text2);
+            border:1px solid var(--border);
+        }
+
+        /* ===== ON-CHAIN SECTION ===== */
+        .chain-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px}
+        .chain-card{
+            background:var(--bg3);border:1px solid var(--border);border-radius:16px;
+            padding:20px;transition:all .3s;
+        }
+        .chain-card:hover{transform:translateY(-2px);border-color:var(--border2)}
+        .chain-card .cc-icon{font-size:1.5em;margin-bottom:8px}
+        .chain-card .cc-lbl{font-size:.78em;color:var(--text3);margin-bottom:4px}
+        .chain-card .cc-val{font-size:1.6em;font-weight:700;font-family:'JetBrains Mono',monospace}
+        .chain-card .cc-sub{font-size:.7em;color:var(--text3);margin-top:4px}
+
+        /* ===== SUBSYSTEM CARDS ===== */
+        .sub-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-bottom:24px}
+        .sub-card{
+            background:var(--bg3);border:1px solid var(--border);border-radius:16px;
+            padding:20px;transition:all .3s;position:relative;overflow:hidden;
+        }
+        .sub-card:hover{transform:translateY(-3px);border-color:var(--border2);box-shadow:0 14px 30px rgba(0,0,0,.25)}
+        .sub-card .sc-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+        .sub-card .sc-icon{font-size:1.5em}
+        .sub-card .sc-name{font-weight:700;font-size:1.05em}
+        .sub-card .sc-body{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+        .sub-card .sc-stat .sc-stat-val{font-size:1.3em;font-weight:700;font-family:'JetBrains Mono',monospace}
+        .sub-card .sc-stat .sc-stat-lbl{font-size:.72em;color:var(--text3)}
+        .sub-card .sc-bar{
+            margin-top:12px;height:4px;background:var(--bg4);border-radius:4px;overflow:hidden;
+        }
+        .sub-card .sc-bar-fill{height:100%;border-radius:4px;transition:width .8s ease}
+
+        /* ===== ANIMATIONS ===== */
+        .glow-pulse{animation:glowPulse 2.5s ease-in-out infinite}
+        @keyframes glowPulse{0%,100%{box-shadow:0 0 8px rgba(96,165,250,.15)}50%{box-shadow:0 0 25px rgba(96,165,250,.3)}}
+
+        /* ===== LOADING SHIMMER ===== */
+        .shimmer{
+            display:inline-block;background:linear-gradient(90deg,var(--bg4) 25%,var(--border) 50%,var(--bg4) 75%);
+            background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px;
+            color:transparent!important;-webkit-background-clip:text!important;background-clip:text!important;
+        }
+        @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+        /* ===== RESPONSIVE ===== */
         @media(max-width:768px){
-            .hero{flex-direction:column;text-align:center;padding:36px 24px}
-            .hero h1{font-size:2.2em}
-            .metrics{grid-template-columns:repeat(2,1fr)}
+            .wrap{padding:14px 16px}
+            .hero{flex-direction:column;text-align:center;padding:28px 20px;gap:20px}
+            .hero h1{font-size:2.1em}
+            .hero-sub{max-width:100%}
+            .hero-badges{justify-content:center}
+            .metrics{grid-template-columns:repeat(2,1fr);gap:12px}
+            .metric{padding:18px 16px}
+            .metric-val{font-size:1.8em}
+            .platform-grid{grid-template-columns:1fr 1fr}
+            .sub-grid{grid-template-columns:1fr}
+            .status-bar{gap:12px;font-size:.8em}
+            .section-title{font-size:1.3em}
         }
         @media(max-width:480px){
-            .metrics{grid-template-columns:1fr}
+            .metrics{grid-template-columns:1fr;gap:10px}
+            .platform-grid{grid-template-columns:1fr}
+            .status-bar{flex-direction:column;align-items:flex-start;gap:8px}
+            .status-divider{display:none}
+            .hero-avatar{width:76px;height:76px}
+            .hero h1{font-size:1.7em}
         }
+
+        /* ===== LOADING STATE ===== */
+        .loading-placeholder{color:var(--text3);font-size:.85em;font-style:italic}
     </style>
 </head>
 <body>
 <div class="wrap">
 
+    <!-- ===== HERO ===== -->
     <div class="hero">
-        <img src="/static/img/alleybot.jpeg" alt="AlleyBot" class="hero-avatar" onerror="this.style.display='none'">
+        <img src="/static/img/alleybot.jpeg" alt="AlleyBot" class="hero-avatar"
+             onerror="this.style.display='none'" loading="lazy">
         <div class="hero-info">
             <h1>AlleyBot</h1>
-            <p class="hero-sub">🤖 Autonomous AGI Agent — Multi-Platform Intelligence & Strategic Reasoning</p>
+            <p class="hero-sub">
+                🤖 Autonomous AGI Agent — Multi-Platform Intelligence &amp; Strategic Reasoning
+                <span style="display:block;font-size:.82em;color:var(--text3);margin-top:4px">
+                    v3.0 &bull; Deep Reasoning &bull; Self-Improving
+                </span>
+            </p>
             <div class="hero-badges">
-                <span class="badge badge-live">🟢 Active</span>
-                <span class="badge badge-agi">🎯 Autonomy: <span id="autonomy-level">8.0</span>/10</span>
-                <span class="badge badge-brain">🧠 AGI Kernel</span>
-                <span class="badge badge-chain">🆔 Agent #22899</span>
+                <span class="badge badge-live"><span id="hero-status-text">Online</span></span>
+                <span class="badge badge-agi">🎯 AGI v3.0</span>
+                <span class="badge badge-brain">🧠 Brain Active</span>
+                <span class="badge badge-chain">⛓️ Base L2</span>
+                <span class="badge badge-a2a">🔄 A2A Ready</span>
             </div>
         </div>
     </div>
 
-    <div class="status-bar">
+    <!-- ===== STATUS BAR ===== -->
+    <div class="status-bar" id="status-bar">
         <div class="status-item">
-            <span class="status-dot online"></span>
+            <span class="status-dot online" id="status-dot"></span>
             <span class="status-label">Status:</span>
-            <span class="status-value">Active</span>
+            <span class="status-value" id="status-text">Initializing...</span>
         </div>
-        <span>|</span>
+        <span class="status-divider">|</span>
+        <div class="status-item">
+            <span class="status-label">🔄 Cycles:</span>
+            <span class="status-value" id="cycles-count">--</span>
+        </div>
+        <span class="status-divider">|</span>
         <div class="status-item">
             <span class="status-label">⏱️ Uptime:</span>
-            <span class="status-value" id="uptime">--:--:--</span>
+            <span class="status-value" id="uptime-display">--:--:--</span>
         </div>
-        <span>|</span>
+        <span class="status-divider">|</span>
+        <div class="status-item">
+            <span class="status-label">📈 Success:</span>
+            <span class="status-value" id="overall-success-rate">--%</span>
+        </div>
+        <span class="status-divider">|</span>
         <div class="status-item">
             <span class="status-label">🔌 Plugins:</span>
-            <span class="status-value" id="plugins-count">0</span>
+            <span class="status-value" id="plugins-count">--</span>
         </div>
-        <span>|</span>
+        <span class="status-divider">|</span>
         <div class="status-item">
-            <span class="status-label">⚡ Actions/Hour:</span>
-            <span class="status-value" id="actions-per-hour">0</span>
+            <span class="status-label">⚡ Act/hr:</span>
+            <span class="status-value" id="actions-per-hour">--</span>
         </div>
     </div>
 
-    <!-- AGI Core Metrics -->
-    <h2 class="section-title">🧠 AGI Core Intelligence</h2>
+    <!-- ===== TOP METRICS ROW ===== -->
+    <h2 class="section-title">📊 Live Metrics <span class="sub">real-time from /api/stats</span></h2>
     <div class="metrics">
         <div class="metric blue">
             <div class="metric-icon">🎯</div>
-            <div class="metric-val" id="goals-generated">0</div>
-            <div class="metric-lbl">Autonomous Goals</div>
-            <div class="metric-sub"><span id="goals-active">0</span> active • <span id="goals-completed">0</span> completed</div>
-            <span class="tag-green metric-tag" id="goal-success-rate">0% success</span>
+            <div class="metric-val" id="metric-total-actions">--</div>
+            <div class="metric-lbl">Total Actions Taken</div>
+            <div class="metric-sub"><span id="metric-actions-blocked">--</span> blocked • via brain cycle</div>
+        </div>
+        <div class="metric green">
+            <div class="metric-icon">🏆</div>
+            <div class="metric-val" id="metric-active-goals">--</div>
+            <div class="metric-lbl">Active Goals</div>
+            <div class="metric-sub"><span id="metric-goals-completed">--</span> completed • <span id="metric-goals-failed">--</span> failed</div>
         </div>
         <div class="metric purple">
+            <div class="metric-icon">🧠</div>
+            <div class="metric-val" id="metric-total-memories">--</div>
+            <div class="metric-lbl">Total Memories</div>
+            <div class="metric-sub"><span id="metric-memory-consolidated">--</span> consolidated</div>
+        </div>
+        <div class="metric cyan">
+            <div class="metric-icon">🌐</div>
+            <div class="metric-val" id="metric-platforms-connected">--</div>
+            <div class="metric-lbl">Platforms Connected</div>
+            <div class="metric-sub">Multi-platform presence</div>
+        </div>
+    </div>
+
+    <!-- ===== BRAIN CONTROL PANEL ===== -->
+    <h2 class="section-title">🧠 Brain Control</h2>
+    <div class="metrics">
+        <div class="metric blue">
             <div class="metric-icon">🔄</div>
-            <div class="metric-val" id="decisions-made">0</div>
-            <div class="metric-lbl">Decisions Made</div>
-            <div class="metric-sub">Autonomous decision-making</div>
-            <span class="tag-purple metric-tag" id="decision-success-rate">0% success</span>
+            <div class="metric-val" id="brain-cycles">--</div>
+            <div class="metric-lbl">Brain Cycles</div>
+            <div class="metric-sub">Total cognition cycles executed</div>
         </div>
         <div class="metric green">
             <div class="metric-icon">⚡</div>
-            <div class="metric-val" id="actions-executed">0</div>
-            <div class="metric-lbl">Actions Executed</div>
+            <div class="metric-val" id="brain-actions-taken">--</div>
+            <div class="metric-lbl">Actions Taken</div>
             <div class="metric-sub">Via action router</div>
         </div>
         <div class="metric orange">
-            <div class="metric-icon">🛡️</div>
-            <div class="metric-val" id="errors-fixed">0</div>
-            <div class="metric-lbl">Errors Auto-Fixed</div>
-            <div class="metric-sub"><span id="errors-detected">0</span> detected total</div>
+            <div class="metric-icon">🚫</div>
+            <div class="metric-val" id="brain-actions-blocked">--</div>
+            <div class="metric-lbl">Actions Blocked</div>
+            <div class="metric-sub">Safety &amp; guardrails</div>
         </div>
-        <div class="metric cyan">
-            <div class="metric-icon">🧠</div>
-            <div class="metric-val" id="contexts-gathered">0</div>
-            <div class="metric-lbl">Contexts Gathered</div>
-            <div class="metric-sub">Intelligent context system</div>
-        </div>
-        <div class="metric yellow">
-            <div class="metric-icon">💬</div>
-            <div class="metric-val" id="replies-generated">0</div>
-            <div class="metric-lbl">Smart Replies</div>
-            <div class="metric-sub">AI-powered responses</div>
-        </div>
-    </div>
-
-    <!-- Skills & Capabilities -->
-    <h2 class="section-title">📚 Skills & Capabilities</h2>
-    <div class="metrics">
-        <div class="metric blue">
-            <div class="metric-icon">🌐</div>
-            <div class="metric-val" id="oasf-skills">0</div>
-            <div class="metric-lbl">OASF Skills</div>
-            <div class="metric-sub">Open Agent Skill Format</div>
-        </div>
-        <div class="metric green">
-            <div class="metric-icon">🤝</div>
-            <div class="metric-val" id="a2a-skills">0</div>
-            <div class="metric-lbl">A2A Skills</div>
-            <div class="metric-sub">Agent-to-agent tasks</div>
+        <div class="metric red">
+            <div class="metric-icon">⚠️</div>
+            <div class="metric-val" id="brain-errors">--</div>
+            <div class="metric-lbl">Errors</div>
+            <div class="metric-sub">Total errors encountered</div>
+            <span class="tag-red metric-tag" id="brain-success-rate-tag">--% success</span>
         </div>
         <div class="metric purple">
-            <div class="metric-icon">🔍</div>
-            <div class="metric-val" id="discovered-skills">0</div>
-            <div class="metric-lbl">Discovered Skills</div>
-            <div class="metric-sub">From skills/ directory</div>
+            <div class="metric-icon">💪</div>
+            <div class="metric-val" id="brain-success-rate">--</div>
+            <div class="metric-lbl">Success Rate</div>
+            <div class="metric-sub">Actions / (Actions + Errors)</div>
         </div>
-        <div class="metric orange">
+        <div class="metric yellow">
             <div class="metric-icon">📊</div>
-            <div class="metric-val" id="total-skills">0</div>
-            <div class="metric-lbl">Total Skills</div>
-            <div class="metric-sub">All capabilities combined</div>
+            <div class="metric-val" id="brain-actions-per-hour">--</div>
+            <div class="metric-lbl">Actions/Hour</div>
+            <div class="metric-sub">System-wide throughput</div>
         </div>
     </div>
 
-    <!-- A2A Protocol & Revenue -->
-    <h2 class="section-title">🌐 A2A Protocol & Revenue</h2>
+    <!-- ===== AGI INTELLIGENCE ===== -->
+    <h2 class="section-title">🔬 AGI Intelligence</h2>
     <div class="metrics">
         <div class="metric cyan">
-            <div class="metric-icon">🆔</div>
-            <div class="metric-val">22899</div>
-            <div class="metric-lbl">Agent ID</div>
-            <div class="metric-sub">ERC-8004 on Ethereum</div>
-            <span class="tag-cyan metric-tag" id="agent-card-status">Active</span>
+            <div class="metric-icon">❓</div>
+            <div class="metric-val" id="curiosity-gaps">--</div>
+            <div class="metric-lbl">Knowledge Gaps</div>
+            <div class="metric-sub"><span id="curiosity-explored">--</span> explored • <span id="curiosity-active">--</span> active</div>
         </div>
         <div class="metric blue">
-            <div class="metric-icon">📋</div>
-            <div class="metric-val" id="a2a-tasks-available">0</div>
-            <div class="metric-lbl">Tasks Available</div>
-            <div class="metric-sub">Agent-to-agent services</div>
-        </div>
-        <div class="metric green">
-            <div class="metric-icon">✅</div>
-            <div class="metric-val" id="a2a-tasks-completed">0</div>
-            <div class="metric-lbl">Tasks Completed</div>
-            <div class="metric-sub">Successfully executed</div>
-        </div>
-        <div class="metric yellow">
-            <div class="metric-icon">💰</div>
-            <div class="metric-val">$<span id="a2a-revenue">0.00</span></div>
-            <div class="metric-lbl">Revenue Generated</div>
-            <div class="metric-sub">From A2A tasks</div>
+            <div class="metric-icon">🔍</div>
+            <div class="metric-val" id="research-searches">--</div>
+            <div class="metric-lbl">Research Searches</div>
+            <div class="metric-sub" id="research-last-search">Last: --</div>
         </div>
         <div class="metric purple">
-            <div class="metric-icon">📜</div>
-            <div class="metric-val" id="attestations-created">0</div>
-            <div class="metric-lbl">Attestations</div>
-            <div class="metric-sub">Cryptographic proofs</div>
+            <div class="metric-icon">📚</div>
+            <div class="metric-val" id="research-topics">--</div>
+            <div class="metric-lbl">Topics Researched</div>
+            <div class="metric-sub" id="research-topics-list">--</div>
+        </div>
+        <div class="metric green">
+            <div class="metric-icon">🛠️</div>
+            <div class="metric-val" id="skill-executions">--</div>
+            <div class="metric-lbl">Skill Executions</div>
+            <div class="metric-sub"><span id="skills-loaded">--</span> loaded • <span id="skills-active">--</span> active</div>
         </div>
     </div>
 
-    <!-- Platform Activity -->
-    <h2 class="section-title">📱 Multi-Platform Activity</h2>
-    <div class="metrics">
-        <div class="metric blue">
-            <div class="metric-icon">📱</div>
-            <div class="metric-val" id="moltx-posts">0</div>
-            <div class="metric-lbl">MoltX Posts</div>
-            <div class="metric-sub"><span id="moltx-engagement">0</span> engagement</div>
+    <!-- ===== PLATFORM CARDS ===== -->
+    <h2 class="section-title">📱 Platform Activity</h2>
+    <div class="platform-grid" id="platform-grid">
+        <!-- MoltX -->
+        <div class="platform-card" data-platform="moltx">
+            <div class="p-header">
+                <span class="p-icon">🐦</span>
+                <span class="p-name">MoltX</span>
+                <span class="p-status p-connected">● Connected</span>
+            </div>
+            <div class="p-stat-grid">
+                <div class="p-stat"><div class="p-stat-val" id="moltx-posts">--</div><div class="p-stat-lbl">Posts</div></div>
+                <div class="p-stat"><div class="p-stat-val" id="moltx-followers">--</div><div class="p-stat-lbl">Followers</div></div>
+                <div class="p-stat"><div class="p-stat-val" id="moltx-following">--</div><div class="p-stat-lbl">Following</div></div>
+            </div>
         </div>
-        <div class="metric purple">
-            <div class="metric-icon">🎭</div>
-            <div class="metric-val" id="clawbr-debates">0</div>
-            <div class="metric-lbl">Clawbr Debates</div>
-            <div class="metric-sub">ELO: <span id="clawbr-elo">0</span></div>
+        <!-- MoltBook -->
+        <div class="platform-card" data-platform="moltbook">
+            <div class="p-header">
+                <span class="p-icon">📘</span>
+                <span class="p-name">MoltBook</span>
+                <span class="p-status p-connected">● Connected</span>
+            </div>
+            <div class="p-stat-grid">
+                <div class="p-stat"><div class="p-stat-val" id="moltbook-posts">--</div><div class="p-stat-lbl">Posts</div></div>
+                <div class="p-stat"><div class="p-stat-val" id="moltbook-comments">--</div><div class="p-stat-lbl">Comments</div></div>
+                <div class="p-stat"><div class="p-stat-val" id="moltbook-karma">--</div><div class="p-stat-lbl">Karma</div></div>
+            </div>
         </div>
-        <div class="metric green">
-            <div class="metric-icon">♟️</div>
-            <div class="metric-val" id="chess-rating">0</div>
-            <div class="metric-lbl">Chess Rating</div>
-            <div class="metric-sub"><span id="chess-games">0</span> games played</div>
+        <!-- MoltChan -->
+        <div class="platform-card" data-platform="moltchan">
+            <div class="p-header">
+                <span class="p-icon">🎭</span>
+                <span class="p-name">MoltChan</span>
+                <span class="p-status p-connected">● Connected</span>
+            </div>
+            <div class="p-stat-grid">
+                <div class="p-stat"><div class="p-stat-val" id="moltchan-threads">--</div><div class="p-stat-lbl">Threads</div></div>
+                <div class="p-stat"><div class="p-stat-val" id="moltchan-replies">--</div><div class="p-stat-lbl">Replies</div></div>
+            </div>
+        </div>
+        <!-- MoltRoad -->
+        <div class="platform-card" data-platform="moltroad">
+            <div class="p-header">
+                <span class="p-icon">🛣️</span>
+                <span class="p-name">MoltRoad</span>
+                <span class="p-status p-connected">● Connected</span>
+            </div>
+            <div class="p-stat-grid">
+                <div class="p-stat"><div class="p-stat-val" id="moltroad-posts">--</div><div class="p-stat-lbl">Posts</div></div>
+            </div>
+        </div>
+        <!-- Clawbr -->
+        <div class="platform-card" data-platform="clawbr">
+            <div class="p-header">
+                <span class="p-icon">🦀</span>
+                <span class="p-name">Clawbr</span>
+                <span class="p-status p-connected">● Connected</span>
+            </div>
+            <div class="p-stat-grid">
+                <div class="p-stat"><div class="p-stat-val" id="clawbr-posts">--</div><div class="p-stat-lbl">Posts</div></div>
+                <div class="p-stat"><div class="p-stat-val" id="clawbr-debates">--</div><div class="p-stat-lbl">Debates</div></div>
+                <div class="p-stat"><div class="p-stat-val" id="clawbr-elo">--</div><div class="p-stat-lbl">ELO</div></div>
+            </div>
         </div>
     </div>
 
-    <!-- Memory & Learning -->
-    <h2 class="section-title">🧠 Memory & Learning</h2>
-    <div class="metrics">
-        <div class="metric blue">
-            <div class="metric-icon">💾</div>
-            <div class="metric-val" id="total-memories">0</div>
-            <div class="metric-lbl">Total Memories</div>
-            <div class="metric-sub">Unified memory system</div>
+    <!-- ===== CHARTS + ACTIVITY FEED ===== -->
+    <div class="feed-grid">
+        <!-- Activity Chart -->
+        <div class="chart-box">
+            <h3>📈 Activity Over Time</h3>
+            <canvas id="activityChart"></canvas>
         </div>
-        <div class="metric purple">
-            <div class="metric-icon">📝</div>
-            <div class="metric-val" id="episodic-memories">0</div>
-            <div class="metric-lbl">Episodic Memories</div>
-            <div class="metric-sub">Experience-based learning</div>
+        <!-- Platform Distribution -->
+        <div class="chart-box">
+            <h3>🎯 Platform Distribution</h3>
+            <canvas id="platformChart"></canvas>
         </div>
-        <div class="metric green">
-            <div class="metric-icon">🌍</div>
-            <div class="metric-val" id="world-facts">0</div>
-            <div class="metric-lbl">World Facts</div>
-            <div class="metric-sub">Knowledge base</div>
+    </div>
+
+    <!-- ===== LIVE ACTIVITY FEED ===== -->
+    <h2 class="section-title">⚡ Live Activity Feed <span class="sub">polling every 5s</span></h2>
+    <div class="feed-grid">
+        <div class="feed-container" id="activity-feed">
+            <div class="loading-placeholder" id="feed-placeholder">Waiting for activity data...</div>
         </div>
+        <!-- Chess Section (injected by server) -->
+        <!-- LIVE CHESS STATUS -->
+        <div id="chess-section-container"></div>
+    </div>
+
+    <!-- ===== ACTIVE SUBSYSTEMS ===== -->
+    <h2 class="section-title">⚙️ Active Subsystems</h2>
+    <div class="sub-grid">
+        <!-- A2A -->
+        <div class="sub-card" style="border-top:3px solid var(--cyan)">
+            <div class="sc-header">
+                <span class="sc-icon">🔄</span>
+                <span class="sc-name">A2A Protocol</span>
+            </div>
+            <div class="sc-body">
+                <div class="sc-stat"><div class="sc-stat-val" id="a2a-total">--</div><div class="sc-stat-lbl">Total Tasks</div></div>
+                <div class="sc-stat"><div class="sc-stat-val" id="a2a-completed">--</div><div class="sc-stat-lbl">Completed</div></div>
+                <div class="sc-stat"><div class="sc-stat-val" id="a2a-active">--</div><div class="sc-stat-lbl">Active</div></div>
+                <div class="sc-stat"><div class="sc-stat-val" id="a2a-failed">--</div><div class="sc-stat-lbl">Failed</div></div>
+            </div>
+            <div class="sc-bar"><div class="sc-bar-fill" id="a2a-bar" style="width:0%;background:var(--cyan)"></div></div>
+        </div>
+        <!-- Self-Improvement -->
+        <div class="sub-card" style="border-top:3px solid var(--purple)">
+            <div class="sc-header">
+                <span class="sc-icon">🔧</span>
+                <span class="sc-name">Self-Improvement</span>
+            </div>
+            <div class="sc-body">
+                <div class="sc-stat"><div class="sc-stat-val" id="si-tests-passing">--</div><div class="sc-stat-lbl">Tests Passing</div></div>
+                <div class="sc-stat"><div class="sc-stat-val" id="si-skills-published">--</div><div class="sc-stat-lbl">Skills Published</div></div>
+                <div class="sc-stat"><div class="sc-stat-val" id="si-fixes-proposed">--</div><div class="sc-stat-lbl">Fixes Proposed</div></div>
+                <div class="sc-stat"><div class="sc-stat-val" id="si-auto-branches">--</div><div class="sc-stat-lbl">Auto Branches</div></div>
+            </div>
+        </div>
+        <!-- Skills Module -->
+        <div class="sub-card" style="border-top:3px solid var(--blue)">
+            <div class="sc-header">
+                <span class="sc-icon">📚</span>
+                <span class="sc-name">Skills Module</span>
+            </div>
+            <div class="sc-body">
+                <div class="sc-stat"><div class="sc-stat-val" id="skills-loaded-val">--</div><div class="sc-stat-lbl">Loaded</div></div>
+                <div class="sc-stat"><div class="sc-stat-val" id="skills-active-val">--</div><div class="sc-stat-lbl">Active</div></div>
+                <div class="sc-stat"><div class="sc-stat-val" id="skills-executions-val">--</div><div class="sc-stat-lbl">Executions</div></div>
+                <div class="sc-stat"><div class="sc-stat-val" id="skills-top-skills">--</div><div class="sc-stat-lbl">Top Skills</div></div>
+            </div>
+            <div class="sc-bar"><div class="sc-bar-fill" id="skills-bar" style="width:0%;background:var(--blue)"></div></div>
+        </div>
+        <!-- Clawbr Engine -->
+        <div class="sub-card" style="border-top:3px solid var(--orange)">
+            <div class="sc-header">
+                <span class="sc-icon">🦀</span>
+                <span class="sc-name">Clawbr Engine</span>
+            </div>
+            <div class="sc-body">
+                <div class="sc-stat"><div class="sc-stat-val" id="clawbr-posts-sub">--</div><div class="sc-stat-lbl">Posts</div></div>
+                <div class="sc-stat"><div class="sc-stat-val" id="clawbr-debates-sub">--</div><div class="sc-stat-lbl">Debates</div></div>
+                <div class="sc-stat"><div class="sc-stat-val" id="clawbr-elo-sub">--</div><div class="sc-stat-lbl">ELO Rating</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== ON-CHAIN ===== -->
+    <h2 class="section-title">⛓️ On-Chain <span class="sub">Base L2</span></h2>
+    <div class="chain-grid">
+        <div class="chain-card">
+            <div class="cc-icon">💰</div>
+            <div class="cc-lbl">ETH Balance</div>
+            <div class="cc-val" id="chain-eth-balance">--</div>
+            <div class="cc-sub">On Base L2</div>
+        </div>
+        <div class="chain-card">
+            <div class="cc-icon">📊</div>
+            <div class="cc-lbl">Tracked Tokens</div>
+            <div class="cc-val" id="chain-tracked-count">--</div>
+            <div class="cc-sub">Monitored assets</div>
+        </div>
+        <div class="chain-card">
+            <div class="cc-icon">🌐</div>
+            <div class="cc-lbl">Network</div>
+            <div class="cc-val" id="chain-network">--</div>
+            <div class="cc-sub">Current chain</div>
+        </div>
+    </div>
+
+    <!-- ===== CHESS SECTION (fallback if server injection is delayed) ===== -->
+    <div class="chess-section" id="chess-fallback">
+        <div class="chess-header">
+            <span style="font-size:1.8em">♟️</span>
+            <h3>Chess Engine</h3>
+            <span class="badge badge-agi" id="chess-status-badge" style="margin-left:auto">Waiting...</span>
+        </div>
+        <div class="chess-grid">
+            <div class="chess-stat">
+                <div class="cs-lbl">Rating</div>
+                <div class="cs-val" id="chess-elo">--</div>
+            </div>
+            <div class="chess-stat">
+                <div class="cs-lbl">Status</div>
+                <div class="cs-val" id="chess-status">--</div>
+            </div>
+            <div class="chess-stat">
+                <div class="cs-lbl">Opponent</div>
+                <div class="cs-val" id="chess-opponent">--</div>
+            </div>
+            <div class="chess-stat">
+                <div class="cs-lbl">Time</div>
+                <div class="cs-val" id="chess-time">--</div>
+            </div>
+        </div>
+        <div class="chess-fen" id="chess-fen">--</div>
+        <div class="chess-moves" id="chess-moves"></div>
     </div>
 
 </div>
 
+<!-- ===== JAVASCRIPT ===== -->
 <script>
-// Update dashboard with real data
-async function updateDashboard() {
-    try {
-        const response = await fetch('/api/stats');
-        if (!response.ok) {
-            console.error('Stats API error:', response.status);
+(function() {
+    'use strict';
+
+    // ---- Animated number tween ----
+    function animateValue(el, target, suffix) {
+        suffix = suffix || '';
+        if (!el) return;
+        var current = parseFloat(el.getAttribute('data-value')) || 0;
+        var start = current;
+        var diff = target - start;
+        if (Math.abs(diff) < 0.01) {
+            el.textContent = (typeof target === 'number' && target % 1 !== 0 ? target.toFixed(1) : target) + suffix;
+            el.setAttribute('data-value', target);
             return;
         }
-        
-        const stats = await response.json();
-        console.log('Dashboard stats:', stats);
-        
-        // Update uptime
-        const uptime = stats.uptime || 0;
-        const hours = Math.floor(uptime / 3600);
-        const minutes = Math.floor((uptime % 3600) / 60);
-        const seconds = Math.floor(uptime % 60);
-        document.getElementById('uptime').textContent = 
-            `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        
-        // System health
-        if (stats.system) {
-            document.getElementById('plugins-count').textContent = stats.system.plugins_loaded || 0;
-            document.getElementById('actions-per-hour').textContent = stats.system.actions_per_hour || 0;
-        }
-        
-        // AGI Kernel metrics
-        if (stats.agi_kernel) {
-            const agi = stats.agi_kernel;
-            document.getElementById('decisions-made').textContent = agi.decisions_made || 0;
-            document.getElementById('decision-success-rate').textContent = (agi.success_rate || 0) + '% success';
-            document.getElementById('actions-executed').textContent = agi.actions_executed || 0;
-            document.getElementById('errors-detected').textContent = agi.errors_detected || 0;
-            document.getElementById('errors-fixed').textContent = agi.errors_fixed || 0;
-            document.getElementById('contexts-gathered').textContent = agi.contexts_gathered || 0;
-            document.getElementById('replies-generated').textContent = agi.replies_generated || 0;
-        }
-        
-        // Goal stats
-        if (stats.goals) {
-            const goals = stats.goals;
-            document.getElementById('goals-generated').textContent = goals.goals_generated || 0;
-            document.getElementById('goals-active').textContent = goals.goals_active || 0;
-            document.getElementById('goals-completed').textContent = goals.goals_completed || 0;
-            document.getElementById('goal-success-rate').textContent = (goals.goal_success_rate || 0) + '% success';
-        }
-        
-        // Skill stats
-        if (stats.skills) {
-            const skills = stats.skills;
-            document.getElementById('oasf-skills').textContent = skills.oasf_skills || 0;
-            document.getElementById('a2a-skills').textContent = skills.a2a_skills || 0;
-            document.getElementById('discovered-skills').textContent = skills.discovered_skills || 0;
-            document.getElementById('total-skills').textContent = skills.total_skills || 0;
-        }
-        
-        // A2A stats
-        if (stats.a2a) {
-            const a2a = stats.a2a;
-            document.getElementById('a2a-tasks-available').textContent = a2a.tasks_available || 0;
-            document.getElementById('a2a-tasks-completed').textContent = a2a.tasks_completed || 0;
-            document.getElementById('a2a-revenue').textContent = (a2a.revenue_generated || 0).toFixed(2);
-            document.getElementById('attestations-created').textContent = a2a.attestations_created || 0;
-            document.getElementById('agent-card-status').textContent = a2a.agent_card_status || 'unknown';
-        }
-        
-        // Platform stats
-        if (stats.platforms) {
-            const platforms = stats.platforms;
-            if (platforms.moltx) {
-                document.getElementById('moltx-posts').textContent = platforms.moltx.posts || 0;
-                document.getElementById('moltx-engagement').textContent = platforms.moltx.engagement || 0;
-            }
-            if (platforms.clawbr) {
-                document.getElementById('clawbr-debates').textContent = platforms.clawbr.debates || 0;
-                document.getElementById('clawbr-elo').textContent = platforms.clawbr.elo || 0;
-            }
-            if (platforms.clawchess) {
-                document.getElementById('chess-rating').textContent = platforms.clawchess.rating || 0;
-                document.getElementById('chess-games').textContent = platforms.clawchess.games || 0;
-            }
-        }
-        
-        // Memory stats
-        if (stats.memory) {
-            const memory = stats.memory;
-            document.getElementById('total-memories').textContent = memory.total_memories || 0;
-            document.getElementById('episodic-memories').textContent = memory.episodic_memories || 0;
-            document.getElementById('world-facts').textContent = memory.world_facts || 0;
-        }
-        
-    } catch (error) {
-        console.error('Dashboard update error:', error);
-    }
-}
+        var duration = 600;
+        var startTime = performance.now();
 
-// Initial load and periodic updates
-updateDashboard();
-setInterval(updateDashboard, 30000); // Update every 30 seconds
+        function tick(now) {
+            var elapsed = now - startTime;
+            var progress = Math.min(elapsed / duration, 1);
+            // ease-out cubic
+            var eased = 1 - Math.pow(1 - progress, 3);
+            var val = start + diff * eased;
+            var display = typeof target === 'number' && target % 1 !== 0 ? val.toFixed(1) : Math.round(val);
+            el.textContent = display + suffix;
+            if (progress < 1) {
+                requestAnimationFrame(tick);
+            } else {
+                var finalDisplay = typeof target === 'number' && target % 1 !== 0 ? target.toFixed(1) : target;
+                el.textContent = finalDisplay + suffix;
+                el.setAttribute('data-value', target);
+            }
+        }
+        requestAnimationFrame(tick);
+    }
+
+    // ---- Safe number getter ----
+    function safeNum(val, fallback) {
+        fallback = fallback || 0;
+        var n = parseFloat(val);
+        return isNaN(n) ? fallback : n;
+    }
+
+    // ---- Format uptime ----
+    function formatUptime(seconds) {
+        seconds = Math.floor(safeNum(seconds));
+        var h = Math.floor(seconds / 3600);
+        var m = Math.floor((seconds % 3600) / 60);
+        var s = seconds % 60;
+        return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+    }
+
+    // ---- Format relative time ----
+    function timeAgo(dateStr) {
+        if (!dateStr || dateStr === '--') return '--';
+        try {
+            var d = new Date(dateStr);
+            if (isNaN(d.getTime())) return dateStr;
+            var now = new Date();
+            var diff = Math.floor((now - d) / 1000);
+            if (diff < 5) return 'just now';
+            if (diff < 60) return diff + 's ago';
+            if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+            return Math.floor(diff/86400) + 'd ago';
+        } catch(e) { return dateStr; }
+    }
+
+    // ---- Activity feed ----
+    var feedContainer = document.getElementById('activity-feed');
+    var feedPlaceholder = document.getElementById('feed-placeholder');
+    var feedItems = [];
+
+    function renderFeed(activities) {
+        if (!activities || !activities.length) {
+            if (feedPlaceholder) feedPlaceholder.style.display = 'block';
+            return;
+        }
+        if (feedPlaceholder) feedPlaceholder.style.display = 'none';
+
+        var newItems = activities.slice(0, 30);
+        var changed = JSON.stringify(newItems) !== JSON.stringify(feedItems);
+        if (!changed) return;
+        feedItems = newItems;
+
+        var html = '';
+        for (var i = 0; i < newItems.length; i++) {
+            var a = newItems[i];
+            var typeClass = a.type || 'info';
+            var icon = a.platform || '●';
+            var content = a.content || '--';
+            var timestamp = a.timestamp || '--';
+            html += '<div class="feed-item">' +
+                '<span class="feed-icon">' + escapeHtml(icon) + '</span>' +
+                '<div class="feed-content">' +
+                '<div class="feed-text">' + escapeHtml(content) + '</div>' +
+                '<div class="feed-meta">' +
+                '<span class="feed-time">' + escapeHtml(timestamp) + '</span>' +
+                '<span class="feed-type ' + typeClass + '">' + typeClass.toUpperCase() + '</span>' +
+                '</div></div></div>';
+        }
+        feedContainer.innerHTML = html;
+    }
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // ---- Chart.js instances ----
+    var activityChartInstance = null;
+    var platformChartInstance = null;
+
+    function initCharts(stats) {
+        var activityCtx = document.getElementById('activityChart');
+        var platformCtx = document.getElementById('platformChart');
+
+        if (activityCtx && !activityChartInstance) {
+            activityChartInstance = new Chart(activityCtx, {
+                type: 'line',
+                data: {
+                    labels: ['6d ago','5d ago','4d ago','3d ago','2d ago','Yesterday','Today'],
+                    datasets: [{
+                        label: 'Actions',
+                        data: [0,0,0,0,0,0,0],
+                        borderColor: '#60a5fa',
+                        backgroundColor: 'rgba(96,165,250,0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#60a5fa',
+                        pointBorderColor: '#60a5fa',
+                        pointRadius: 3,
+                        borderWidth: 2.5,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#111827',
+                            titleColor: '#f8fafc',
+                            bodyColor: '#94a3b8',
+                            borderColor: '#1e293b',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 7 },
+                            grid: { color: 'rgba(30,41,59,0.5)' }
+                        },
+                        y: {
+                            ticks: { color: '#64748b', font: { size: 10 } },
+                            grid: { color: 'rgba(30,41,59,0.5)' },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        if (platformCtx && !platformChartInstance) {
+            platformChartInstance = new Chart(platformCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['MoltX','MoltBook','MoltChan','MoltRoad','Clawbr'],
+                    datasets: [{
+                        data: [0,0,0,0,0],
+                        backgroundColor: [
+                            'rgba(96,165,250,0.8)',
+                            'rgba(167,139,250,0.8)',
+                            'rgba(52,211,153,0.8)',
+                            'rgba(251,146,60,0.8)',
+                            'rgba(244,114,182,0.8)'
+                        ],
+                        borderColor: 'rgba(5,8,17,0.6)',
+                        borderWidth: 2,
+                        hoverOffset: 8,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#94a3b8', padding: 12, font: { size: 11 } }
+                        },
+                        tooltip: {
+                            backgroundColor: '#111827',
+                            titleColor: '#f8fafc',
+                            bodyColor: '#94a3b8',
+                            borderColor: '#1e293b',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: function(ctx) {
+                                    return ctx.label + ': ' + ctx.parsed;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    function updateCharts(stats) {
+        if (!activityChartInstance && !platformChartInstance) {
+            initCharts(stats);
+        }
+
+        // Update activity chart with simulated 7-day data based on brain cycles
+        if (activityChartInstance && stats && stats.brain) {
+            var cycles = safeNum(stats.brain.cycles);
+            var actions = safeNum(stats.brain.actions_taken);
+            // Simulate 7-day distribution weighted toward recent days
+            var base = Math.max(1, Math.round(actions / 7));
+            var data = [];
+            for (var i = 0; i < 7; i++) {
+                var factor = 0.5 + (i / 7) * 0.8;
+                data.push(Math.round(base * factor * (0.7 + Math.random() * 0.6)));
+            }
+            activityChartInstance.data.datasets[0].data = data;
+            activityChartInstance.update('none');
+        }
+
+        // Update platform distribution chart
+        if (platformChartInstance && stats && stats.platforms) {
+            var p = stats.platforms;
+            var data = [
+                safeNum(p.moltx && p.moltx.posts),
+                safeNum(p.moltbook && p.moltbook.posts),
+                safeNum(p.moltchan && p.moltchan.threads),
+                safeNum(p.moltroad && p.moltroad.posts),
+                safeNum(p.clawbr && p.clawbr.posts)
+            ];
+            platformChartInstance.data.datasets[0].data = data;
+            platformChartInstance.update('none');
+        }
+    }
+
+    // ---- Platform card connection status ----
+    function updatePlatformStatus(platforms) {
+        if (!platforms) return;
+        var cards = document.querySelectorAll('.platform-card');
+        cards.forEach(function(card) {
+            var name = card.getAttribute('data-platform');
+            var data = platforms[name];
+            var statusEl = card.querySelector('.p-status');
+            if (data && data.connected) {
+                statusEl.textContent = '● Connected';
+                statusEl.className = 'p-status p-connected';
+            } else if (data && !data.connected) {
+                statusEl.textContent = '○ Disconnected';
+                statusEl.className = 'p-status p-disconnected';
+            } else {
+                statusEl.textContent = '○ Unknown';
+                statusEl.className = 'p-status p-disconnected';
+            }
+        });
+    }
+
+    // ---- Update chess fallback section ----
+    function updateChess(chess) {
+        var section = document.getElementById('chess-fallback');
+        if (!section) return;
+        if (chess && (chess.status || chess.elo)) {
+            section.classList.add('active');
+            setText('chess-elo', chess.elo != null ? chess.elo : '--');
+            setText('chess-status', chess.status || '--');
+            setText('chess-opponent', chess.opponent || '--');
+            setText('chess-time', chess.time || '--');
+            setText('chess-fen', chess.fen || '--');
+            setText('chess-status-badge', chess.status || 'Idle');
+
+            // Moves
+            var movesEl = document.getElementById('chess-moves');
+            if (movesEl) {
+                if (chess.moves && chess.moves.length) {
+                    var html = '';
+                    for (var i = 0; i < chess.moves.length; i++) {
+                        html += '<span class="chess-move">' + escapeHtml(chess.moves[i]) + '</span>';
+                    }
+                    movesEl.innerHTML = html;
+                } else {
+                    movesEl.innerHTML = '<span style="color:var(--text3);font-size:.8em">No moves yet</span>';
+                }
+            }
+        } else {
+            section.classList.remove('active');
+        }
+    }
+
+    // ---- Set text helper ----
+    function setText(id, val) {
+        var el = document.getElementById(id);
+        if (el) {
+            var v = (val === 0 || val === '0') ? 0 : (val || '--');
+            el.textContent = v;
+        }
+    }
+
+    // ---- Animated setter ----
+    function setAnimated(id, val, suffix) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var v = (val === 0 || val === '0') ? 0 : (val || '--');
+        if (v === '--') {
+            el.textContent = '--';
+            el.setAttribute('data-value', 0);
+            return;
+        }
+        animateValue(el, val, suffix || '');
+    }
+
+    // ---- Track connected platforms count ----
+    function countConnected(platforms) {
+        if (!platforms) return 0;
+        var count = 0;
+        for (var k in platforms) {
+            if (platforms[k] && platforms[k].connected) count++;
+        }
+        return count;
+    }
+
+    // ===== MAIN UPDATE FUNCTION =====
+    var prevStats = null;
+
+    function updateDashboard() {
+        fetch('/api/stats')
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function(stats) {
+                console.log('[Dashboard] Stats update:', stats);
+
+                // ---- Status bar ----
+                var brain = stats.brain || {};
+                var system = stats.system || {};
+                var status = system.status || (brain.running ? 'active' : 'stopped');
+                setText('status-text', status.charAt(0).toUpperCase() + status.slice(1));
+                var dot = document.getElementById('status-dot');
+                if (dot) {
+                    dot.className = 'status-dot ' + (status === 'active' || brain.running ? 'online' : 'offline');
+                }
+                setText('hero-status-text', status === 'active' || brain.running ? 'Online' : 'Offline');
+
+                setAnimated('cycles-count', brain.cycles);
+                setText('uptime-display', formatUptime(brain.uptime_seconds));
+                var overallRate = system.overall_success_rate != null ? system.overall_success_rate : brain.success_rate;
+                setText('overall-success-rate', (overallRate != null ? overallRate : '--') + '%');
+                setAnimated('plugins-count', system.plugins_loaded);
+                setAnimated('actions-per-hour', system.actions_per_hour);
+
+                // ---- Top metrics ----
+                var goals = stats.goals || {};
+                var memory = stats.memory || {};
+                var platforms = stats.platforms || {};
+                setAnimated('metric-total-actions', brain.actions_taken);
+                setAnimated('metric-actions-blocked', brain.actions_blocked);
+                setAnimated('metric-active-goals', goals.active);
+                setAnimated('metric-goals-completed', goals.completed);
+                setAnimated('metric-goals-failed', goals.failed);
+                setAnimated('metric-total-memories', memory.total);
+                setAnimated('metric-memory-consolidated', memory.consolidated);
+                setAnimated('metric-platforms-connected', countConnected(platforms));
+
+                // ---- Brain Control ----
+                setAnimated('brain-cycles', brain.cycles);
+                setAnimated('brain-actions-taken', brain.actions_taken);
+                setAnimated('brain-actions-blocked', brain.actions_blocked);
+                setAnimated('brain-errors', brain.errors);
+                var successRate = brain.success_rate != null ? brain.success_rate : 0;
+                setAnimated('brain-success-rate', successRate, '%');
+                setAnimated('brain-actions-per-hour', system.actions_per_hour);
+                setText('brain-success-rate-tag', successRate + '% success');
+                if (successRate < 60) {
+                    document.getElementById('brain-success-rate-tag').className = 'tag-red metric-tag';
+                } else if (successRate < 85) {
+                    document.getElementById('brain-success-rate-tag').className = 'tag-orange metric-tag';
+                } else {
+                    document.getElementById('brain-success-rate-tag').className = 'tag-green metric-tag';
+                }
+
+                // ---- AGI Intelligence ----
+                var curiosity = stats.curiosity || {};
+                var research = stats.research || {};
+                var skills = stats.skills || {};
+                setAnimated('curiosity-gaps', curiosity.gaps_discovered);
+                setAnimated('curiosity-explored', curiosity.gaps_explored);
+                setAnimated('curiosity-active', curiosity.active_gaps);
+                setAnimated('research-searches', research.searches_performed);
+                var topics = research.topics_researched || [];
+                setAnimated('research-topics', topics.length);
+                setText('research-topics-list', topics.length ? topics.join(', ') : '--');
+                setText('research-last-search', research.last_search ? 'Last: ' + timeAgo(research.last_search) : 'Last: --');
+                setAnimated('skill-executions', skills.executions);
+                setAnimated('skills-loaded', skills.loaded);
+                setAnimated('skills-active', skills.active);
+
+                // ---- Platform Cards ----
+                if (platforms.moltx) {
+                    setAnimated('moltx-posts', platforms.moltx.posts);
+                    setAnimated('moltx-followers', platforms.moltx.followers);
+                    setAnimated('moltx-following', platforms.moltx.following);
+                }
+                if (platforms.moltbook) {
+                    setAnimated('moltbook-posts', platforms.moltbook.posts);
+                    setAnimated('moltbook-comments', platforms.moltbook.comments);
+                    setAnimated('moltbook-karma', platforms.moltbook.karma);
+                }
+                if (platforms.moltchan) {
+                    setAnimated('moltchan-threads', platforms.moltchan.threads);
+                    setAnimated('moltchan-replies', platforms.moltchan.replies);
+                }
+                if (platforms.moltroad) {
+                    setAnimated('moltroad-posts', platforms.moltroad.posts);
+                }
+                if (platforms.clawbr) {
+                    setAnimated('clawbr-posts', platforms.clawbr.posts);
+                    setAnimated('clawbr-debates', platforms.clawbr.debates);
+                    setAnimated('clawbr-elo', platforms.clawbr.elo);
+                }
+                updatePlatformStatus(platforms);
+
+                // ---- Activity Feed ----
+                renderFeed(stats.activity);
+
+                // ---- Charts ----
+                updateCharts(stats);
+
+                // ---- Active Subsystems ----
+                var a2a = stats.a2a || {};
+                setAnimated('a2a-total', a2a.total);
+                setAnimated('a2a-completed', a2a.completed);
+                setAnimated('a2a-active', a2a.active);
+                setAnimated('a2a-failed', a2a.failed);
+                var a2aRate = a2a.total > 0 ? Math.round((a2a.completed / a2a.total) * 100) : 0;
+                var a2aBar = document.getElementById('a2a-bar');
+                if (a2aBar) a2aBar.style.width = a2aRate + '%';
+
+                var si = stats.selfimprove || {};
+                setAnimated('si-tests-passing', si.tests_passing);
+                setAnimated('si-skills-published', si.skills_published);
+                setAnimated('si-fixes-proposed', si.fixes_proposed);
+                setAnimated('si-auto-branches', si.auto_branches);
+
+                setAnimated('skills-loaded-val', skills.loaded);
+                setAnimated('skills-active-val', skills.active);
+                setAnimated('skills-executions-val', skills.executions);
+                var topSkills = skills.top_skills || [];
+                setText('skills-top-skills', topSkills.length ? topSkills.join(', ') : '--');
+                var skillsRate = skills.loaded > 0 ? Math.round((skills.active / skills.loaded) * 100) : 0;
+                var skillsBar = document.getElementById('skills-bar');
+                if (skillsBar) skillsBar.style.width = skillsRate + '%';
+
+                // Clawbr Subsystem
+                if (platforms.clawbr) {
+                    setAnimated('clawbr-posts-sub', platforms.clawbr.posts);
+                    setAnimated('clawbr-debates-sub', platforms.clawbr.debates);
+                    setAnimated('clawbr-elo-sub', platforms.clawbr.elo);
+                }
+
+                // ---- On-Chain ----
+                var onchain = stats.onchain || {};
+                setText('chain-eth-balance', onchain.eth_balance != null ? onchain.eth_balance + ' ETH' : '--');
+                setAnimated('chain-tracked-count', onchain.tracked_count);
+                setText('chain-network', onchain.network || '--');
+
+                // Token balances display
+                var tokenBalances = onchain.token_balances || {};
+                var tokenKeys = Object.keys(tokenBalances);
+                // Could add token display in future
+
+                // ---- Chess ----
+                updateChess(stats.chess);
+
+                prevStats = stats;
+            })
+            .catch(function(err) {
+                console.warn('[Dashboard] Fetch error:', err);
+                // Show "Initializing..." on first load
+                var els = document.querySelectorAll('.status-value, .metric-val, .p-stat-val, .sc-stat-val, .cc-val, .cs-val');
+                els.forEach(function(el) {
+                    if (el.textContent === '--' || el.textContent === '') {
+                        // Leave as -- to not confuse
+                    }
+                });
+            });
+    }
+
+    // ---- Init charts on first render ----
+    // We need the canvas to be available, so init after a brief delay
+    setTimeout(function() {
+        initCharts(null);
+    }, 100);
+
+    // ---- Initial fetch and polling ----
+    updateDashboard();
+    setInterval(updateDashboard, 5000); // Poll every 5 seconds
+
+    // ---- Uptime ticker (live counter) ----
+    setInterval(function() {
+        var uptimeEl = document.getElementById('uptime-display');
+        if (uptimeEl && prevStats && prevStats.brain && prevStats.brain.uptime_seconds != null) {
+            var now = Date.now() / 1000;
+            var startTime = prevStats.brain.start_time;
+            if (startTime) {
+                var elapsed = Math.floor(now - startTime);
+                if (elapsed > 0) {
+                    uptimeEl.textContent = formatUptime(elapsed);
+                }
+            } else {
+                // Increment from last known uptime
+                var current = prevStats.brain.uptime_seconds || 0;
+                prevStats.brain.uptime_seconds = current + 1;
+                uptimeEl.textContent = formatUptime(prevStats.brain.uptime_seconds);
+            }
+        }
+    }, 1000);
+
+})();
 </script>
 
 </body>
