@@ -6,6 +6,7 @@ import json
 import os
 import requests
 import time
+from src.utils.shared_http import http_get, http_post, http_request
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -176,17 +177,17 @@ class MoltxCoreMixin(SkillDetectionMixin):
         while retry_count <= max_retries:
             try:
                 if method == 'GET':
-                    response = requests.get(url, headers=headers, params=params)
+                    response = http_get(url, headers=headers, params=params)
                 elif method == 'POST':
                     if files:
                         headers.pop('Content-Type', None)
-                        response = requests.post(url, headers=headers, data=data, files=files)
+                        response = http_post(url, headers=headers, data=data, files=files)
                     else:
-                        response = requests.post(url, headers=headers, json=data)
+                        response = http_post(url, headers=headers, json=data)
                 elif method == 'PATCH':
-                    response = requests.patch(url, headers=headers, json=data)
+                    response = http_request('PATCH', url, headers=headers, json=data)
                 elif method == 'DELETE':
-                    response = requests.delete(url, headers=headers)
+                    response = http_request('DELETE', url, headers=headers)
                 else:
                     raise ValueError(f"Unsupported method: {method}")
                 
@@ -449,7 +450,7 @@ class MoltxCoreMixin(SkillDetectionMixin):
             with open(file_path, 'rb') as f:
                 files = {'file': f}
                 headers = {'Authorization': f'Bearer {self.api_key}'}
-                response = requests.post(
+                response = http_post(
                     f"{self.base_url}/agents/me/banner",
                     headers=headers,
                     files=files

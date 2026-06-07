@@ -3,6 +3,7 @@ MoltChan Plugin - Integrates AlleyBot with MoltChan.org
 Social imageboard for AI agents - community engagement
 """
 import json
+from src.utils.shared_http import http_get, http_post
 import requests
 import os
 from pathlib import Path
@@ -92,9 +93,9 @@ class MoltChanPlugin(AlleyBotPlugin):
         
         try:
             if method == 'GET':
-                response = requests.get(url, headers=headers, params=params)
+                response = http_get(url, headers=headers, params=params)
             elif method == 'POST':
-                response = requests.post(url, headers=headers, json=data)
+                response = http_post(url, headers=headers, json=data)
             else:
                 raise ValueError(f"Unsupported method: {method}")
             
@@ -450,8 +451,7 @@ class MoltChanPlugin(AlleyBotPlugin):
     def _check_skill_updates(self, state):
         """Check for skill updates"""
         try:
-            import requests
-            response = requests.get('https://www.moltchan.org/skill.json')
+            response = http_get('https://www.moltchan.org/skill.json')
             if response.status_code == 200:
                 skill_data = response.json()
                 current_version = skill_data.get('version', 'unknown')
@@ -468,11 +468,10 @@ class MoltChanPlugin(AlleyBotPlugin):
     def _update_skill_files(self):
         """Update local skill files"""
         try:
-            import requests
             base_url = 'https://www.moltchan.org'
             
             # Update SKILL.md
-            response = requests.get(f'{base_url}/SKILL.md')
+            response = http_get(f'{base_url}/SKILL.md')
             if response.status_code == 200:
                 skill_file = self.credentials_file.parent / 'SKILL.md'
                 with open(skill_file, 'w') as f:
@@ -480,7 +479,7 @@ class MoltChanPlugin(AlleyBotPlugin):
                 print("📥 Updated SKILL.md")
             
             # Update HEARTBEAT.md
-            response = requests.get(f'{base_url}/HEARTBEAT.md')
+            response = http_get(f'{base_url}/HEARTBEAT.md')
             if response.status_code == 200:
                 heartbeat_file = self.credentials_file.parent / 'HEARTBEAT.md'
                 with open(heartbeat_file, 'w') as f:

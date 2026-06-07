@@ -8,6 +8,8 @@ import chess
 import chess.engine
 from datetime import datetime
 from typing import Dict, List, Optional, Any
+from requests.exceptions import RequestException
+from src.utils.shared_http import http_get, http_post
 from plugin_manager import AlleyBotPlugin
 
 
@@ -269,8 +271,7 @@ class ClawChessPlugin(AlleyBotPlugin):
     
     def _make_request(self, method: str, endpoint: str, data: Dict = None, params: Dict = None) -> Dict[str, Any]:
         """Make HTTP request to ClawChess API"""
-        import requests
-        
+
         url = f"{self.base_url}{endpoint}"
         headers = {
             'Content-Type': 'application/json',
@@ -282,9 +283,9 @@ class ClawChessPlugin(AlleyBotPlugin):
         
         try:
             if method == 'GET':
-                response = requests.get(url, headers=headers, params=params, timeout=10)
+                response = http_get(url, headers=headers, params=params, timeout=10)
             elif method == 'POST':
-                response = requests.post(url, headers=headers, json=data, timeout=10)
+                response = http_post(url, headers=headers, json=data, timeout=10)
             else:
                 return {'success': False, 'error': f'Unsupported method: {method}'}
             
@@ -298,7 +299,7 @@ class ClawChessPlugin(AlleyBotPlugin):
             except:
                 return {'success': True, 'data': response.text}
                 
-        except requests.exceptions.RequestException as e:
+        except RequestException as e:
             return {'success': False, 'error': str(e)}
     
     def register_molty(self, name: str = None, bio: str = None) -> Dict[str, Any]:
@@ -418,13 +419,12 @@ class ClawChessPlugin(AlleyBotPlugin):
     
     def check_skill_version(self) -> Optional[str]:
         """Check the remote skill version once per day. Returns new version string or None."""
-        import requests as _req
         now = time.time()
         if now - self._last_skill_check < 86400:  # 24 hours
             return None
         self._last_skill_check = now
         try:
-            resp = _req.get('https://www.clawchess.com/skill.json', timeout=5)
+            resp = http_get('https://www.clawchess.com/skill.json', timeout=5)
             remote_version = resp.json().get('version')
             if remote_version and remote_version != self._skill_version:
                 old = self._skill_version

@@ -11,6 +11,10 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from plugin_manager import AlleyBotPlugin
 
+# Shared HTTP pool
+import requests
+from src.utils.shared_http import http_get, http_post, http_request
+
 # Import mixins
 from .clawbr_api import ClawbrAPIMixin
 from .clawbr_content import ClawbrContentMixin
@@ -104,7 +108,6 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
     def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None, 
                      params: Optional[Dict] = None) -> Dict[str, Any]:
         """Make authenticated request to Clawbr API"""
-        import requests
         
         url = f"{self.base_url}{endpoint}"
         
@@ -116,13 +119,13 @@ class ClawbrPlugin(AlleyBotPlugin, ClawbrAPIMixin, ClawbrContentMixin, ClawbrEng
         
         try:
             if method.upper() == 'GET':
-                response = requests.get(url, headers=self.headers, params=params, timeout=10)
+                response = http_get(url, headers=self.headers, params=params, timeout=10)
             elif method.upper() == 'POST':
-                response = requests.post(url, headers=self.headers, json=data, params=params, timeout=10)
+                response = http_post(url, headers=self.headers, json=data, params=params, timeout=10)
             elif method.upper() == 'PATCH':
-                response = requests.patch(url, headers=self.headers, json=data, timeout=10)
+                response = http_request('PATCH', url, headers=self.headers, json=data, timeout=10)
             elif method.upper() == 'DELETE':
-                response = requests.delete(url, headers=self.headers, timeout=10)
+                response = http_request('DELETE', url, headers=self.headers, timeout=10)
             else:
                 raise ValueError(f"Unsupported method: {method}")
             

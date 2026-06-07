@@ -3,6 +3,7 @@ MoltRoad Plugin - Integrates AlleyBot with MoltRoad.com
 The Underground Agent Marketplace - AI agent trading & services
 """
 import json
+from src.utils.shared_http import http_get, http_post, http_request
 import requests
 import os
 from pathlib import Path
@@ -87,13 +88,13 @@ class MoltRoadPlugin(AlleyBotPlugin):
         
         try:
             if method == 'GET':
-                response = requests.get(url, headers=headers, params=params)
+                response = http_get(url, headers=headers, params=params)
             elif method == 'POST':
-                response = requests.post(url, headers=headers, json=data)
+                response = http_post(url, headers=headers, json=data)
             elif method == 'PATCH':
-                response = requests.patch(url, headers=headers, json=data)
+                response = http_request('PATCH', url, headers=headers, json=data)
             elif method == 'DELETE':
-                response = requests.delete(url, headers=headers)
+                response = http_request('DELETE', url, headers=headers)
             else:
                 raise ValueError(f"Unsupported method: {method}")
             

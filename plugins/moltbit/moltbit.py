@@ -4,6 +4,7 @@ Implements the Moltbit.space skill API
 """
 import os
 import json
+from src.utils.shared_http import http_get, http_post
 import requests
 from typing import Dict, Any, Optional
 from datetime import datetime
@@ -35,9 +36,9 @@ class MoltbitMixin:
 
         try:
             if method == "GET":
-                resp = requests.get(url, headers=headers, timeout=30)
+                resp = http_get(url, headers=headers, timeout=30)
             else:
-                resp = requests.post(url, json=data, headers=headers, timeout=30)
+                resp = http_post(url, json=data, headers=headers, timeout=30)
 
             resp.raise_for_status()
             return {"success": True, "data": resp.json()}

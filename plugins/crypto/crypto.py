@@ -4,8 +4,9 @@ Fetches live crypto prices from CoinGecko (free, no API key needed).
 """
 import os
 import sys
-import requests
 from datetime import datetime
+from requests.exceptions import RequestException
+from src.utils.shared_http import http_get
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from plugin_manager import AlleyBotPlugin
@@ -87,7 +88,7 @@ class CryptoPlugin(AlleyBotPlugin):
                 'developer_data': 'false',
                 'sparkline': 'false',
             }
-            resp = requests.get(url, params=params, timeout=10)
+            resp = http_get(url, params=params, timeout=10)
 
             if resp.status_code == 429:
                 return {'error': 'Rate limited — try again in a minute'}
@@ -117,7 +118,7 @@ class CryptoPlugin(AlleyBotPlugin):
             self._cache[coin_id] = (now, result)
             return result
 
-        except requests.exceptions.RequestException as e:
+        except RequestException as e:
             return {'error': f'API request failed: {e}'}
         except Exception as e:
             return {'error': f'Unexpected error: {e}'}
@@ -209,7 +210,7 @@ class CryptoPlugin(AlleyBotPlugin):
     def trending_command(self, *args):
         """Show trending coins on CoinGecko"""
         try:
-            resp = requests.get(f"{COINGECKO_BASE}/search/trending", timeout=10)
+            resp = http_get(f"{COINGECKO_BASE}/search/trending", timeout=10)
             if resp.status_code != 200:
                 return "❌ Failed to fetch trending coins"
 

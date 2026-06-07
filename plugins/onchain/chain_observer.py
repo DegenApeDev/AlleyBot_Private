@@ -8,6 +8,7 @@ import json
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 from collections import defaultdict
+from src.utils.shared_http import http_post
 
 # Chain RPC endpoints
 CHAINS = {
@@ -60,9 +61,8 @@ KNOWN_CONTRACTS: Dict[str, Dict[str, str]] = {
 
 def _rpc_call(url: str, method: str, params: list) -> Optional[dict]:
     """Make a JSON-RPC call to a chain endpoint."""
-    import requests
     try:
-        resp = requests.post(
+        resp = http_post(
             url,
             json={'jsonrpc': '2.0', 'method': method, 'params': params, 'id': 1},
             headers={'Content-Type': 'application/json'},
