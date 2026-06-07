@@ -628,6 +628,9 @@ class AutonomousBrain(AGISocialMixin):
         observations = await self._gather_observations()
         logger.info(f"👁️ Gathered {len(observations)} observations")
         
+        # ⚡ QUICK ACTION CHECKPOINT 1: Fresh data, check for quick plays
+        quick_actions = await self._check_for_quick_profit_actions("after-SENSE")
+        
         # Get AGI Kernel reference early for all AGI features
         agi_kernel = getattr(self.core, 'agi_kernel', None) if self.core else None
         
@@ -743,6 +746,9 @@ class AutonomousBrain(AGISocialMixin):
             except Exception as e:
                 logger.warning(f"⚠️ Autonomous trading error: {e}")
         
+        # ⚡ QUICK ACTION CHECKPOINT 2: Just analyzed markets, check for high-confidence plays
+        quick_actions = await self._check_for_quick_profit_actions("after-trading")
+        
         # === GOAL MANAGEMENT: generation, approval, activation ===
         next_action = self._phase_goal_management(agi_kernel, observations)
 
@@ -787,7 +793,10 @@ class AutonomousBrain(AGISocialMixin):
 
         # === REVENUE INTELLIGENCE: Scan for profit opportunities, track P&L (HIGH PRIORITY) ===
         revenue_proposals = await self._phase_revenue_intelligence(agi_kernel)
-
+        
+        # ⚡ QUICK ACTION CHECKPOINT 3: Revenue opportunities just scanned, execute top plays now
+        quick_actions = await self._check_for_quick_profit_actions("after-revenue")
+        
         # === PHASE 3.7: Curiosity-driven self-directed goals (BEFORE SyMod/LLM) ===
         curiosity_proposals = await self._phase_curiosity_goals(agi_kernel)
         
@@ -4466,6 +4475,49 @@ class AutonomousBrain(AGISocialMixin):
             asyncio.create_task(self.start(mode))
         
         return f"✅ Mode set to {mode.upper()}"
+    
+    async def _check_for_quick_profit_actions(self, checkpoint: str) -> int:
+        """Quick mid-cycle profit check — interleaves action between thinking phases.
+        
+        Runs fast scans (no heavy LLM) and executes immediately if high-confidence
+        opportunities exist. This prevents AlleyBot from overthinking while money
+        sits on the table.
+        
+        Args:
+            checkpoint: Name of the cycle phase this runs after (for logging)
+            
+        Returns:
+            Number of quick actions executed
+        """
+        if self._actions_this_hour >= self.config.max_actions_per_hour:
+            return 0
+        
+        executed = 0
+        
+        # Quick Polymarket scan — check for obvious high-confidence trades
+        if self.autonomous_trading:
+            try:
+                proposals = await asyncio.wait_for(
+                    self.autonomous_trading.analyze_markets(), timeout=5.0
+                )
+                if proposals:
+                    best = max(proposals, key=lambda t: t.confidence)
+                    if best.confidence >= 0.75 and executed == 0:
+                        outcome = await asyncio.wait_for(
+                            self.autonomous_trading.execute_trade(best), timeout=10.0
+                        )
+                        if outcome:
+                            executed += 1
+                            self._actions_this_hour += 1
+                            self.stats['actions_taken'] += 1
+                            logger.info(f"⚡[{checkpoint}] Quick trade executed: {outcome.trade_id}")
+            except asyncio.TimeoutError:
+                logger.debug(f"[{checkpoint}] Quick trade scan timed out")
+            except Exception as e:
+                logger.debug(f"[{checkpoint}] Quick trade check error: {e}")
+        
+        # Don't do two heavy scans in one quick-check — avoid slowing the cycle
+        return executed
     
     async def _enforce_goal_quota(self) -> None:
         """
