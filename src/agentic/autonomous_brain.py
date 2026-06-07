@@ -3690,15 +3690,16 @@ class AutonomousBrain(AGISocialMixin):
                         should_notify = True
                         priority = NotificationPriority.HIGH
                     
-                    # Certain action types are always notable
+                    # Certain action types are always notable (successes only, or high-confidence failures)
                     else:
                         notable_actions = ['post', 'trade', 'executed', 'placed',
                                            'self_improve', 'auto_fix', 'deploy', 'launch']
                         if any(a in action_lower for a in notable_actions):
-                            should_notify = True
                             if success:
+                                should_notify = True
                                 priority = NotificationPriority.NORMAL
-                            else:
+                            elif proposal.confidence >= 0.5:
+                                should_notify = True
                                 priority = NotificationPriority.HIGH
                     
                     if should_notify:
