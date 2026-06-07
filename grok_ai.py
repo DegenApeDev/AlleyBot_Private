@@ -28,6 +28,12 @@ class GrokAI:
         self.base_url = "https://api.x.ai/v1"
         self.model = self.MODELS['default']
         
+        # Check explicit disable flag first (allows override without removing key)
+        grok_enabled = os.getenv('GROK_ENABLED', 'true').lower()
+        if grok_enabled == 'false':
+            self.enabled = False
+            return
+        
         if not self.api_key:
             print("⚠️  XAI_API_KEY not found in environment")
             self.enabled = False
