@@ -3656,34 +3656,61 @@ class AutonomousBrain(AGISocialMixin):
                     action_type = proposal.action_type
                     impact = action_spec['context'].get('impact', 'medium')
                     
+                    # Routine actions that never warrant notification
+                    silent_actions = {'scan', 'check', 'monitor', 'list', 'fetch',
+                                      'observe', 'refresh', 'health', 'ping', 'status'}
+                    
                     # Determine if this is worth notifying about
                     should_notify = False
                     priority = NotificationPriority.LOW
                     
-                    # High-impact successes
-                    if success and impact == 'high':
+                    action_root = action_type.split(':')[-1] if ':' in action_type else action_type
+                    action_lower = action_type.lower()
+                    
+                    # Silent routine maintenance — never notify
+                    if action_root.lower() in silent_actions:
+                        should_notify = False
+                    
+                    # High-impact successes (but not routine scans)
+                    elif success and impact == 'high':
                         should_notify = True
                         priority = NotificationPriority.NORMAL
                         
                     # Failures on high-confidence proposals
-                    if not success and proposal.confidence >= 0.7:
+                    elif not success and proposal.confidence >= 0.7:
                         should_notify = True
                         priority = NotificationPriority.HIGH
                     
                     # Certain action types are always notable
-                    notable_actions = ['post', 'trade', 'debate', 'self_improve', 'auto_fix']
-                    if any(a in action_type.lower() for a in notable_actions):
-                        should_notify = True
-                        if success:
-                            priority = NotificationPriority.NORMAL
-                        else:
-                            priority = NotificationPriority.HIGH
+                    else:
+                        notable_actions = ['post', 'trade', 'executed', 'placed',
+                                           'self_improve', 'auto_fix', 'deploy', 'launch']
+                        if any(a in action_lower for a in notable_actions):
+                            should_notify = True
+                            if success:
+                                priority = NotificationPriority.NORMAL
+                            else:
+                                priority = NotificationPriority.HIGH
                     
                     if should_notify:
+                        # Build a meaningful message from the result
+                        result_summary = result.get('message', result.get('summary', ''))
+                        if not result_summary:
+                            details = result.get('details', result.get('data', {}))
+                            if isinstance(details, dict):
+                                result_summary = ', '.join(f"{k}: {v}" for k, v in list(details.items())[:3])
+                            elif isinstance(details, str):
+                                result_summary = details[:200]
+
+                        title = f"{'✅' if success else '❌'} {action_type}"
+                        msg = f"{'✅' if success else '❌'} {action_type} via {plugin_name}"
+                        if result_summary:
+                            msg += f"\n📊 {result_summary}"
+                        msg += f"\n🎯 Confidence: {proposal.confidence:.0%}"
+
                         await self.notification_service.notify(
-                            title=f"🤖 Autonomous: {action_type}",
-                            message=f"{'✅' if success else '❌'} {action_type} via {plugin_name} "
-                                    f"(confidence: {proposal.confidence:.2f})",
+                            title=title,
+                            message=msg,
                             priority=priority,
                             details={
                                 'action_type': action_type,
@@ -3691,6 +3718,7 @@ class AutonomousBrain(AGISocialMixin):
                                 'success': success,
                                 'confidence': proposal.confidence,
                                 'justification': proposal.justification[:100] if proposal.justification else '',
+                                'result': result_summary[:200] if result_summary else '',
                             },
                             source_action=f"{plugin_name}:{action_type}",
                         )

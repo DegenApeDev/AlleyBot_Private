@@ -230,8 +230,16 @@ class CognitiveIntegration:
 
     # ── Telegram Notifications ───────────────────────────────────────
 
+    # Routine actions that never warrant notification
+    _silent_actions = {'scan', 'check', 'monitor', 'list', 'fetch',
+                       'observe', 'refresh', 'health', 'ping', 'status'}
+
+    def _is_silent_action(self, action: str) -> bool:
+        action_root = action.split(':')[-1] if ':' in action else action
+        return action_root.lower() in self._silent_actions
+
     def notify_completion(self, action: str, domain: str, details: str):
-        if not self.telegram_plugin:
+        if not self.telegram_plugin or self._is_silent_action(action):
             return
         try:
             msg = f"✅ Completed: {domain}/{action}\n{details[:200]}"
