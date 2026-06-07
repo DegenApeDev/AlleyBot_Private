@@ -1385,6 +1385,12 @@ class ActionRouter:
             belief_pred = modulated_action.get('_belief_prediction', {})
             if belief_pred:
                 try:
+                    if isinstance(result, dict):
+                        actual_success = result.get('success', False)
+                        outcome_desc = result.get('data', {}).get('result', '')[:200] if result.get('success') else result.get('error', '')[:200]
+                    else:
+                        actual_success = False
+                        outcome_desc = str(result)[:200]
                     self.cognitive.record_action_outcome(
                         action=f"{action_domain}:{action_type}",
                         domain=action_domain,

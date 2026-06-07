@@ -327,7 +327,32 @@ class PolymarketPlugin(AsyncPluginMixin, AlleyBotPlugin):
         except Exception as e:
             logger.error(f"❌ Failed to fetch markets: {e}")
             return []
-    
+
+    async def scan_opportunities(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Scan Polymarket for trading opportunities.
+        
+        Wraps fetch_markets into the format expected by the action router.
+        This is the method mapped from onchain:scan in ACTION_MAP.
+        """
+        markets = await self.fetch_markets(limit=limit)
+        opportunities = []
+        for m in markets:
+            opportunities.append({
+                'market_id': m.id,
+                'question': m.question,
+                'yes_price': m.yes_price,
+                'no_price': m.no_price,
+                'volume': m.volume,
+                'liquidity': m.liquidity,
+                'category': m.category,
+                'end_date': m.end_date.isoformat() if hasattr(m.end_date, 'isoformat') else str(m.end_date),
+            })
+        return {
+            'success': True,
+            'markets': opportunities,
+            'count': len(opportunities),
+        }
+
     async def analyze_market(self, market: Market) -> PredictionAnalysis:
         """
         Analyze a market using AGI systems
