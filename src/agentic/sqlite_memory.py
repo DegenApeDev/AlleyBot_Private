@@ -5,6 +5,7 @@ Replaces JSON files with SQLite for better performance, querying, and scalabilit
 import sqlite3
 import json
 import pickle
+import logging
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -12,6 +13,8 @@ from dataclasses import dataclass, asdict
 from contextlib import contextmanager
 import threading
 import uuid
+
+logger = logging.getLogger(__name__)
 
 # Optional imports
 try:
@@ -140,10 +143,23 @@ class SQLiteMemorySystem:
                     self._local.connection.commit()
                 except Exception as e:
                     logger.debug("Non-critical error: %s", e)
+
+    def close(self):
+        """Close the thread-local connection to prevent FD leaks"""
+        if hasattr(self._local, 'connection') and self._local.connection:
+            try:
+                self._local.connection.close()
+            except Exception as e:
+                logger.debug(f"Error closing connection: {e}")
+            self._local.connection = None
     def _init_database(self):
         """Initialize database schema"""
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            
+            # Enable WAL mode for concurrent read/write performance
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
             
             # Key-value store (replaces JSON files)
             cursor.execute('''
@@ -279,14 +295,12 @@ class SQLiteMemorySystem:
                     value_type = excluded.value_type,
                     updated_at = CURRENT_TIMESTAMP
             ''', (key, serialized, value_type))
-            conn.commit()
-    
+
     def delete_memory(self, key: str) -> bool:
         """Delete a key from the store"""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM key_value_store WHERE key = ?', (key,))
-            conn.commit()
             return cursor.rowcount > 0
     
     def list_keys(self, prefix: str = None) -> List[str]:
@@ -352,14 +366,20 @@ class SQLiteMemorySystem:
                 try:
                     query_embedding = self._embedding_model.encode([query])[0]
                     
-                    # Get all memories of specified type
+                    # Pre-filter with LIMIT buffer to avoid full-table scan
+                    fetch_limit = max(k * 10, 100)
+                    
+                    # Get memories of specified type (with limit to avoid O(n) scan)
                     if memory_type:
                         cursor.execute(
-                            'SELECT * FROM memories WHERE memory_type = ?',
-                            (memory_type,)
+                            'SELECT * FROM memories WHERE memory_type = ? ORDER BY timestamp DESC LIMIT ?',
+                            (memory_type, fetch_limit)
                         )
                     else:
-                        cursor.execute('SELECT * FROM memories')
+                        cursor.execute(
+                            'SELECT * FROM memories ORDER BY timestamp DESC LIMIT ?',
+                            (fetch_limit,)
+                        )
                     
                     memories = []
                     for row in cursor.fetchall():

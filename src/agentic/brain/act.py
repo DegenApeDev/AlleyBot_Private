@@ -75,8 +75,6 @@ class BrainAct:
             else:
                 self._record_proposal_failure(proposal, agi_kernel)
 
-            await asyncio.sleep(2)
-
         return executed
 
     def _record_proposal_success(self, proposal, result, agi_kernel, next_action):

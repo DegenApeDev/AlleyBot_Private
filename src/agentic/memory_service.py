@@ -98,6 +98,8 @@ class MemoryService:
         )
     """
     
+    conn: sqlite3.Connection
+    
     def __init__(self, db_path: str = "data/memory.db"):
         """
         Initialize memory service.
@@ -107,6 +109,11 @@ class MemoryService:
         """
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Persistent connection with WAL mode
+        self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA synchronous=NORMAL")
         
         self._init_database()
         
@@ -118,57 +125,56 @@ class MemoryService:
     
     def _init_database(self) -> None:
         """Initialize SQLite schema with migration support."""
-        with sqlite3.connect(self.db_path) as conn:
-            # Check if table exists and get current schema
-            cursor = conn.execute(
-                "SELECT sql FROM sqlite_master WHERE type='table' AND name='memories'"
-            )
-            existing = cursor.fetchone()
-            
-            if existing:
-                # Table exists - check if we need to migrate
-                # For now, simple approach: if source_action column missing, recreate
-                try:
-                    conn.execute("SELECT source_action FROM memories LIMIT 1")
-                except sqlite3.OperationalError:
-                    # Column missing - need to recreate
-                    print("🔄 Migrating memory database schema...")
-                    conn.execute("DROP TABLE memories")
-                    conn.execute("DROP TABLE IF EXISTS idx_type")
-                    conn.execute("DROP TABLE IF EXISTS idx_timestamp")
-                    existing = None
-            
-            if not existing:
-                # Create table
-                conn.execute("""
-                    CREATE TABLE memories (
-                        id TEXT PRIMARY KEY,
-                        timestamp TEXT NOT NULL,
-                        memory_type TEXT NOT NULL,
-                        content TEXT NOT NULL,
-                        source_action TEXT,
-                        source_work_item TEXT,
-                        source_plugin TEXT,
-                        tags TEXT,
-                        importance REAL DEFAULT 1.0,
-                        embedding TEXT,
-                        metadata TEXT
-                    )
-                """)
-            
-            # Create indexes (ignore errors if they already exist)
-            for idx_name, idx_sql in [
-                ("idx_type", "CREATE INDEX idx_type ON memories(memory_type)"),
-                ("idx_timestamp", "CREATE INDEX idx_timestamp ON memories(timestamp)"),
-                ("idx_action", "CREATE INDEX idx_action ON memories(source_action)"),
-                ("idx_work", "CREATE INDEX idx_work ON memories(source_work_item)"),
-            ]:
-                try:
-                    conn.execute(idx_sql)
-                except sqlite3.OperationalError:
-                    pass  # Index already exists or column missing
-            
-            conn.commit()
+        # Check if table exists and get current schema
+        cursor = self.conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='memories'"
+        )
+        existing = cursor.fetchone()
+        
+        if existing:
+            # Table exists - check if we need to migrate
+            # For now, simple approach: if source_action column missing, recreate
+            try:
+                self.conn.execute("SELECT source_action FROM memories LIMIT 1")
+            except sqlite3.OperationalError:
+                # Column missing - need to recreate
+                print("🔄 Migrating memory database schema...")
+                self.conn.execute("DROP TABLE memories")
+                self.conn.execute("DROP TABLE IF EXISTS idx_type")
+                self.conn.execute("DROP TABLE IF EXISTS idx_timestamp")
+                existing = None
+        
+        if not existing:
+            # Create table
+            self.conn.execute("""
+                CREATE TABLE memories (
+                    id TEXT PRIMARY KEY,
+                    timestamp TEXT NOT NULL,
+                    memory_type TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    source_action TEXT,
+                    source_work_item TEXT,
+                    source_plugin TEXT,
+                    tags TEXT,
+                    importance REAL DEFAULT 1.0,
+                    embedding TEXT,
+                    metadata TEXT
+                )
+            """)
+        
+        # Create indexes (ignore errors if they already exist)
+        for idx_name, idx_sql in [
+            ("idx_type", "CREATE INDEX idx_type ON memories(memory_type)"),
+            ("idx_timestamp", "CREATE INDEX idx_timestamp ON memories(timestamp)"),
+            ("idx_action", "CREATE INDEX idx_action ON memories(source_action)"),
+            ("idx_work", "CREATE INDEX idx_work ON memories(source_work_item)"),
+        ]:
+            try:
+                self.conn.execute(idx_sql)
+            except sqlite3.OperationalError:
+                pass  # Index already exists or column missing
+        
+        self.conn.commit()
     
     def _row_to_record(self, row: tuple) -> MemoryRecord:
         """Convert DB row to MemoryRecord."""
@@ -256,12 +262,11 @@ class MemoryService:
         )
         
         # Persist
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """INSERT INTO memories VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                self._record_to_row(record)
-            )
-            conn.commit()
+        self.conn.execute(
+            """INSERT INTO memories VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            self._record_to_row(record)
+        )
+        self.conn.commit()
         
         # Cache
         self._recent_cache.append(record)
@@ -359,23 +364,22 @@ class MemoryService:
         Returns:
             List of MemoryRecords, sorted by timestamp desc
         """
-        with sqlite3.connect(self.db_path) as conn:
-            if since:
-                rows = conn.execute(
-                    """SELECT * FROM memories 
-                    WHERE memory_type = ? AND timestamp > ?
-                    ORDER BY timestamp DESC LIMIT ?""",
-                    (memory_type.value, since, limit)
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """SELECT * FROM memories 
-                    WHERE memory_type = ?
-                    ORDER BY timestamp DESC LIMIT ?""",
-                    (memory_type.value, limit)
-                ).fetchall()
-            
-            return [self._row_to_record(row) for row in rows]
+        if since:
+            rows = self.conn.execute(
+                """SELECT * FROM memories 
+                WHERE memory_type = ? AND timestamp > ?
+                ORDER BY timestamp DESC LIMIT ?""",
+                (memory_type.value, since, limit)
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                """SELECT * FROM memories 
+                WHERE memory_type = ?
+                ORDER BY timestamp DESC LIMIT ?""",
+                (memory_type.value, limit)
+            ).fetchall()
+        
+        return [self._row_to_record(row) for row in rows]
     
     def retrieve_relevant(
         self,
@@ -417,8 +421,7 @@ class MemoryService:
         sql += " ORDER BY importance DESC, timestamp DESC LIMIT ?"
         params.append(k * 2)  # Get more for ranking
         
-        with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(sql, params).fetchall()
+        rows = self.conn.execute(sql, params).fetchall()
         
         records = [self._row_to_record(row) for row in rows]
         
@@ -438,15 +441,14 @@ class MemoryService:
         limit: int = 20,
     ) -> List[MemoryRecord]:
         """Retrieve all memories associated with a work item."""
-        with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(
-                """SELECT * FROM memories 
-                WHERE source_work_item = ?
-                ORDER BY timestamp DESC LIMIT ?""",
-                (work_item_id, limit)
-            ).fetchall()
-            
-            return [self._row_to_record(row) for row in rows]
+        rows = self.conn.execute(
+            """SELECT * FROM memories 
+            WHERE source_work_item = ?
+            ORDER BY timestamp DESC LIMIT ?""",
+            (work_item_id, limit)
+        ).fetchall()
+        
+        return [self._row_to_record(row) for row in rows]
     
     def retrieve_by_action(
         self,
@@ -454,15 +456,14 @@ class MemoryService:
         limit: int = 20,
     ) -> List[MemoryRecord]:
         """Retrieve all memories associated with an action."""
-        with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(
-                """SELECT * FROM memories 
-                WHERE source_action = ?
-                ORDER BY timestamp DESC LIMIT ?""",
-                (action_id, limit)
-            ).fetchall()
-            
-            return [self._row_to_record(row) for row in rows]
+        rows = self.conn.execute(
+            """SELECT * FROM memories 
+            WHERE source_action = ?
+            ORDER BY timestamp DESC LIMIT ?""",
+            (action_id, limit)
+        ).fetchall()
+        
+        return [self._row_to_record(row) for row in rows]
     
     def get_recent(
         self,
@@ -477,15 +478,14 @@ class MemoryService:
             return self.retrieve_by_type(memory_type, since=since, limit=100)
         
         # Get all types
-        with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(
-                """SELECT * FROM memories 
-                WHERE timestamp > ?
-                ORDER BY timestamp DESC""",
-                (since,)
-            ).fetchall()
-            
-            return [self._row_to_record(row) for row in rows]
+        rows = self.conn.execute(
+            """SELECT * FROM memories 
+            WHERE timestamp > ?
+            ORDER BY timestamp DESC""",
+            (since,)
+        ).fetchall()
+        
+        return [self._row_to_record(row) for row in rows]
     
     # ------------------------------------------------------------------
     # Summary Methods
@@ -493,17 +493,16 @@ class MemoryService:
     
     def get_stats(self) -> Dict[str, Any]:
         """Get memory statistics."""
-        with sqlite3.connect(self.db_path) as conn:
-            total = conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
-            
-            by_type = conn.execute(
-                "SELECT memory_type, COUNT(*) FROM memories GROUP BY memory_type"
-            ).fetchall()
-            
-            recent_24h = conn.execute(
-                """SELECT COUNT(*) FROM memories 
-                WHERE timestamp > datetime('now', '-1 day')"""
-            ).fetchone()[0]
+        total = self.conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
+        
+        by_type = self.conn.execute(
+            "SELECT memory_type, COUNT(*) FROM memories GROUP BY memory_type"
+        ).fetchall()
+        
+        recent_24h = self.conn.execute(
+            """SELECT COUNT(*) FROM memories 
+            WHERE timestamp > datetime('now', '-1 day')"""
+        ).fetchone()[0]
         
         return {
             "total_records": total,
@@ -556,9 +555,13 @@ class MemoryService:
         sql += " ORDER BY importance DESC, timestamp DESC LIMIT ?"
         params.append(limit)
         
-        with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(sql, params).fetchall()
-            return [self._row_to_record(row) for row in rows]
+        rows = self.conn.execute(sql, params).fetchall()
+        return [self._row_to_record(row) for row in rows]
+
+    def close(self) -> None:
+        """Close the persistent database connection."""
+        if self.conn:
+            self.conn.close()
 
 
 # Singleton instance

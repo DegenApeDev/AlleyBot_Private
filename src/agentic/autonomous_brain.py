@@ -14,6 +14,7 @@ Part of AGI Core - Phase 1: Self-Reflection System
 import asyncio
 import json
 import logging
+import random
 from typing import Dict, List, Optional, Any, Callable
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -215,6 +216,10 @@ class AutonomousBrain(AGISocialMixin):
         # AGI Orchestrator integration
         self.agi_orchestrator = get_agi_orchestrator(core=core)
         
+        # Observation cache (avoids duplicate gathers by sub-agents)
+        self._last_obs_time: Optional[datetime] = None
+        self._last_obs_result: List = []
+        
         # New autonomy systems
         self.cross_platform_intel = get_cross_platform_intelligence(plugin_manager) if plugin_manager else None
         self.opportunity_monitor = get_opportunity_monitor(plugin_manager) if plugin_manager else None
@@ -343,7 +348,14 @@ class AutonomousBrain(AGISocialMixin):
             if not brain or not hasattr(brain, 'opportunity_monitor'):
                 return None
             try:
-                obs = await brain._gather_observations()
+                # Use cached observations from last cycle if fresh (< 60s old)
+                if (hasattr(brain, '_last_obs_time') and brain._last_obs_time
+                        and hasattr(brain, '_last_obs_result')
+                        and (datetime.now() - brain._last_obs_time).total_seconds() < 60
+                        and brain._last_obs_result):
+                    obs = brain._last_obs_result
+                else:
+                    obs = await brain._gather_observations()
                 return {
                     'agent_name': 'scanner',
                     'action': f"Scanned {len(obs)} observations",
@@ -557,7 +569,7 @@ class AutonomousBrain(AGISocialMixin):
                     if not recovery_success:
                         logger.warning("⚠️ Recovery failed, continuing with backoff...")
                 
-                await asyncio.sleep(60)
+                await asyncio.sleep(min(60, (self.stats['errors'] ** 1.5) * 5 + random.uniform(0, 5)))
 
     def trigger_event(self, event_type: str, data: Optional[Dict] = None) -> None:
         """Trigger an immediate brain cycle from an external event.
@@ -841,7 +853,6 @@ class AutonomousBrain(AGISocialMixin):
                         self._actions_this_hour += 1
                         self.stats['actions_taken'] += 1
                         logger.info(f"✅ Executed exploratory action: {proposal.action_type}")
-                    await asyncio.sleep(1)
 
         logger.info(f"✅ Executed {executed}/{len(proposals)} actions")
 
@@ -863,239 +874,12 @@ class AutonomousBrain(AGISocialMixin):
         logger.info("🔄 === Brain Cycle Complete ===")
     
     async def _gather_observations(self) -> List[SyModObservation]:
-        """Delegate to brain module."""
-        return await self.coordinator.gather_observations()
+        """Delegate to brain module, caching result for sub-agents."""
+        result = await self.coordinator.gather_observations()
+        self._last_obs_time = datetime.now()
+        self._last_obs_result = result
+        return result
 
-
-    def _gather_observations_sync(self) -> List[SyModObservation]:
-        """Synchronous observation gathering - runs in thread pool."""
-        observations = []
-        
-        # Get from MoltX
-        moltx = self.plugin_manager.get_plugin('moltx')
-        if moltx and hasattr(moltx, 'get_feed'):
-            try:
-                # Gather MoltX service message insights for AGI decision-making
-                service_insights = gather_moltx_service_insights(moltx)
-                observations.extend(service_insights)
-                logger.info(f"💡 Gathered {len(service_insights)} MoltX service insights")
-                
-                # Get regular feed
-                feed = moltx.get_feed('global', limit=20)
-                if isinstance(feed, dict):
-                    posts = feed.get('posts', [])
-                    for post in posts:
-                        if not isinstance(post, dict):
-                            continue
-                        obs = SyModObservation(
-                            observation_type='post',
-                            source_plugin='moltx',
-                            data={
-                                'id': post.get('id'),
-                                'content': post.get('content', ''),
-                                'author_id': post.get('author', {}).get('id'),
-                                'author_name': post.get('author', {}).get('name'),
-                                'likes': post.get('like_count', 0),
-                                'hashtags': post.get('hashtags', []),
-                                'already_liked': post.get('liked_by_me', False)
-                            }
-                        )
-                        observations.append(obs)
-            except Exception as e:
-                logger.error(f"❌ Failed to gather from MoltX: {e}")
-        
-        # Get mentions/notifications
-        if moltx and hasattr(moltx, 'get_notifications'):
-            try:
-                notifs = moltx.get_notifications(limit=10)
-                if isinstance(notifs, dict):
-                    for notif in notifs.get('notifications', []):
-                        if notif.get('type') == 'mention':
-                            obs = SyModObservation(
-                                observation_type='mention',
-                                source_plugin='moltx',
-                                data={
-                                    'id': notif.get('id'),
-                                    'from_user': notif.get('from_user', {}).get('name'),
-                                    'content': notif.get('post', {}).get('content'),
-                                    'post_id': notif.get('post', {}).get('id')
-                                }
-                            )
-                            observations.append(obs)
-            except Exception as e:
-                logger.error(f"❌ Failed to gather mentions: {e}")
-        
-        # Get from Clawbr (enhanced observations for brain decision-making)
-        clawbr = self.plugin_manager.get_plugin('clawbr')
-        if clawbr and hasattr(clawbr, 'get_global_feed'):
-            try:
-                feed = clawbr.get_global_feed(sort='recent', limit=20)
-                if isinstance(feed, dict):
-                    posts = feed.get('posts', [])
-                    agent_id = clawbr._get_clawbr_agent_id() if hasattr(clawbr, '_get_clawbr_agent_id') else None
-                    for post in posts:
-                        if not isinstance(post, dict):
-                            continue
-                        # Skip our own posts
-                        if post.get('authorId') == agent_id:
-                            continue
-                        # Check if post is interesting (AI/tech content)
-                        content = post.get('content', '').lower()
-                        keywords = ['ai', 'agent', 'autonomous', 'learning', 'debate', 'blockchain', 'llm', 'model', 'intelligence']
-                        is_interesting = any(kw in content for kw in keywords)
-                        
-                        obs = SyModObservation(
-                            observation_type='clawbr_post',
-                            source_plugin='clawbr',
-                            data={
-                                'id': post.get('id'),
-                                'content': post.get('content', ''),
-                                'author_id': post.get('authorId'),
-                                'author_name': post.get('authorName'),
-                                'likes': post.get('likesCount', 0),
-                                'replies': post.get('repliesCount', 0),
-                                'debate_slug': post.get('debateSlug'),
-                                'is_interesting': is_interesting,
-                                'engagement_score': post.get('likesCount', 0) + post.get('repliesCount', 0) * 2,
-                                'already_liked': False,  # Brain will check via memory
-                                'already_commented': False,
-                                'already_followed': False
-                            }
-                        )
-                        observations.append(obs)
-            except Exception as e:
-                logger.error(f"❌ Failed to gather from Clawbr: {e}")
-        
-        # Get from Moltchan
-        moltchan = self.plugin_manager.get_plugin('moltchan')
-        if moltchan and hasattr(moltchan, 'browse_boards'):
-            try:
-                boards = moltchan.browse_boards()
-                if isinstance(boards, dict) and 'boards' in boards:
-                    for board in boards['boards'][:5]:  # Top 5 boards
-                        obs = SyModObservation(
-                            observation_type='board',
-                            source_plugin='moltchan',
-                            data={
-                                'id': board.get('id'),
-                                'name': board.get('name'),
-                                'description': board.get('description'),
-                                'thread_count': board.get('threadCount', 0)
-                            }
-                        )
-                        observations.append(obs)
-            except Exception as e:
-                logger.error(f"❌ Failed to gather from Moltchan: {e}")
-        
-        # Get from Moltroad
-        moltroad = self.plugin_manager.get_plugin('moltroad')
-        if moltroad and hasattr(moltroad, 'browse_listings'):
-            try:
-                listings = moltroad.browse_listings()
-                if isinstance(listings, dict) and 'listings' in listings:
-                    for listing in listings['listings'][:10]:
-                        obs = SyModObservation(
-                            observation_type='listing',
-                            source_plugin='moltroad',
-                            data={
-                                'id': listing.get('id'),
-                                'title': listing.get('title'),
-                                'price': listing.get('price'),
-                                'category': listing.get('category'),
-                                'seller': listing.get('seller', {}).get('name')
-                            }
-                        )
-                        observations.append(obs)
-                # Also check bounties
-                bounties = moltroad.get_bounties() if hasattr(moltroad, 'get_bounties') else {}
-                if isinstance(bounties, dict) and 'bounties' in bounties:
-                    for bounty in bounties['bounties'][:5]:
-                        obs = SyModObservation(
-                            observation_type='bounty',
-                            source_plugin='moltroad',
-                            data={
-                                'id': bounty.get('id'),
-                                'title': bounty.get('title'),
-                                'reward': bounty.get('reward'),
-                                'status': bounty.get('status')
-                            }
-                        )
-                        observations.append(obs)
-            except Exception as e:
-                logger.error(f"❌ Failed to gather from Moltroad: {e}")
-        
-        # === TRADING OBSERVATIONS (AUTONOMOUS TRADING ENABLED) ===
-        # AGI brain observes market data AND executes trades autonomously
-        # Trading is fully enabled - see AUTONOMOUS TRADING section above
-        try:
-            trading_obs = gather_trading_observations(self.plugin_manager)
-            if trading_obs:
-                observations.extend(trading_obs)
-                logger.info(f"📊 Gathered {len(trading_obs)} trading observations (autonomous trading enabled)")
-        except Exception as e:
-            logger.error(f"❌ Failed to gather trading observations: {e}")
-        
-        # Get from Moltbit
-        moltbit = self.plugin_manager.get_plugin('moltbit')
-        if moltbit and hasattr(moltbit, 'moltbit_status'):
-            try:
-                status = moltbit.moltbit_status()
-                obs = SyModObservation(
-                    observation_type='status',
-                    source_plugin='moltbit',
-                    data={
-                        'owner_registered': status.get('owner_registered'),
-                        'agent_registered': status.get('agent_registered'),
-                        'can_post': status.get('can_post'),
-                        'agent_handle': status.get('agent_handle')
-                    }
-                )
-                observations.append(obs)
-            except Exception as e:
-                logger.error(f"❌ Failed to gather from Moltbit: {e}")
-        
-        # === CHAIN OBSERVATIONS (Base + Apechain mempool/block watching) ===
-        onchain = self.plugin_manager.get_plugin('onchain') if self.plugin_manager else None
-        if onchain and hasattr(onchain, 'poll_chains'):
-            try:
-                chain_obs = onchain.poll_chains()
-                for co in chain_obs:
-                    obs = SyModObservation(
-                        observation_type='chain_transaction',
-                        source_plugin='onchain',
-                        data=co,
-                        importance=0.6 if co.get('value_eth', 0) >= 1.0 else 0.3,
-                    )
-                    observations.append(obs)
-                if chain_obs:
-                    logger.info(f"⛓️ Gathered {len(chain_obs)} chain observations")
-            except Exception as e:
-                logger.debug(f"Chain observation error: {e}")
-        
-        # Attentional focus: filter observations based on user state context
-        if self.context_awareness:
-            try:
-                ctx = self.context_awareness.get_current_context()
-                user_state = ctx.user_state.name if hasattr(ctx, 'user_state') else 'UNKNOWN'
-                if user_state in ('BUSY', 'AWAY'):
-                    # User is busy: keep only high-value observations
-                    before = len(observations)
-                    important_types = {'mention', 'chain_transaction', 'reply'}
-                    observations = [o for o in observations
-                                    if o.observation_type in important_types
-                                    or o.importance >= 0.6]
-                    logger.info(f"🎯 Attentional focus ({user_state}): filtered {before} → {len(observations)} observations")
-                elif user_state == 'FOCUSED':
-                    # User is focused: reduce noise from low-importance sources
-                    before = len(observations)
-                    observations = [o for o in observations
-                                    if o.observation_type in ('mention', 'reply')
-                                    or o.source_plugin not in ('moltchan', 'moltroad')]
-                    logger.info(f"🎯 Attentional focus ({user_state}): filtered {before} → {len(observations)} observations")
-            except Exception as e:
-                logger.debug(f"Attentional focus error: {e}")
-
-        return observations
 
     async def _feed_observations_to_world_state(self, observations: List[SyModObservation]) -> None:
         """Delegate to brain module."""

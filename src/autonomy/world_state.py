@@ -227,80 +227,82 @@ class WorldStateManager:
     def __init__(self, db_path: str = "data/world_state.db"):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(self.db_path)
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA synchronous=NORMAL")
         self._init_db()
         print(f"🌍 World State Manager initialized ({self.db_path})")
 
     def _init_db(self):
         """Initialize SQLite schema"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS entities (
-                    id TEXT PRIMARY KEY,
-                    type TEXT NOT NULL,
-                    name TEXT,
-                    display_name TEXT,
-                    attributes TEXT DEFAULT '{}',
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    confidence REAL DEFAULT 1.0,
-                    last_observed_at TEXT
-                )
-            """)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS entities (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                name TEXT,
+                display_name TEXT,
+                attributes TEXT DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                confidence REAL DEFAULT 1.0,
+                last_observed_at TEXT
+            )
+        """)
 
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS facts (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    entity_id TEXT NOT NULL,
-                    attribute TEXT NOT NULL,
-                    value TEXT NOT NULL,
-                    value_type TEXT DEFAULT 'string',
-                    timestamp TEXT NOT NULL,
-                    source TEXT,
-                    confidence REAL DEFAULT 1.0,
-                    expires_at TEXT,
-                    FOREIGN KEY (entity_id) REFERENCES entities(id)
-                )
-            """)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS facts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entity_id TEXT NOT NULL,
+                attribute TEXT NOT NULL,
+                value TEXT NOT NULL,
+                value_type TEXT DEFAULT 'string',
+                timestamp TEXT NOT NULL,
+                source TEXT,
+                confidence REAL DEFAULT 1.0,
+                expires_at TEXT,
+                FOREIGN KEY (entity_id) REFERENCES entities(id)
+            )
+        """)
 
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS relationships (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    from_entity TEXT NOT NULL,
-                    to_entity TEXT NOT NULL,
-                    relation_type TEXT NOT NULL,
-                    strength REAL DEFAULT 0.5,
-                    timestamp TEXT NOT NULL,
-                    context TEXT,
-                    FOREIGN KEY (from_entity) REFERENCES entities(id),
-                    FOREIGN KEY (to_entity) REFERENCES entities(id)
-                )
-            """)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS relationships (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                from_entity TEXT NOT NULL,
+                to_entity TEXT NOT NULL,
+                relation_type TEXT NOT NULL,
+                strength REAL DEFAULT 0.5,
+                timestamp TEXT NOT NULL,
+                context TEXT,
+                FOREIGN KEY (from_entity) REFERENCES entities(id),
+                FOREIGN KEY (to_entity) REFERENCES entities(id)
+            )
+        """)
 
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    event_type TEXT NOT NULL,
-                    actor_id TEXT,
-                    target_id TEXT,
-                    timestamp TEXT NOT NULL,
-                    platform TEXT,
-                    data TEXT,
-                    processed INTEGER DEFAULT 0,
-                    processed_at TEXT,
-                    FOREIGN KEY (actor_id) REFERENCES entities(id),
-                    FOREIGN KEY (target_id) REFERENCES entities(id)
-                )
-            """)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                actor_id TEXT,
+                target_id TEXT,
+                timestamp TEXT NOT NULL,
+                platform TEXT,
+                data TEXT,
+                processed INTEGER DEFAULT 0,
+                processed_at TEXT,
+                FOREIGN KEY (actor_id) REFERENCES entities(id),
+                FOREIGN KEY (target_id) REFERENCES entities(id)
+            )
+        """)
 
-            # Indexes for performance
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_facts_entity ON facts(entity_id, attribute, timestamp DESC)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_facts_expires ON facts(expires_at)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from ON relationships(from_entity, relation_type)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to ON relationships(to_entity, relation_type)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type, processed)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp DESC)")
+        # Indexes for performance
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_facts_entity ON facts(entity_id, attribute, timestamp DESC)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_facts_expires ON facts(expires_at)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from ON relationships(from_entity, relation_type)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to ON relationships(to_entity, relation_type)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type, processed)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp DESC)")
 
-            conn.commit()
+        self.conn.commit()
 
     # =================================================================
     # Entity Operations
@@ -309,27 +311,26 @@ class WorldStateManager:
     def add_entity(self, entity: Entity) -> bool:
         """Add or update an entity"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                data = entity.to_dict()
-                conn.execute("""
-                    INSERT OR REPLACE INTO entities 
-                    (id, type, name, display_name, attributes, created_at, updated_at, confidence, last_observed_at)
-                    VALUES 
-                    (:id, :type, :name, :display_name, :attributes, :created_at, :updated_at, :confidence, :last_observed_at)
-                """, data)
-                conn.commit()
-                return True
+            data = entity.to_dict()
+            self.conn.execute("""
+                INSERT OR REPLACE INTO entities 
+                (id, type, name, display_name, attributes, created_at, updated_at, confidence, last_observed_at)
+                VALUES 
+                (:id, :type, :name, :display_name, :attributes, :created_at, :updated_at, :confidence, :last_observed_at)
+            """, data)
+            self.conn.commit()
+            return True
         except Exception as e:
             print(f"❌ Failed to add entity: {e}")
             return False
 
     def get_entity(self, entity_id: str) -> Optional[Entity]:
         """Get entity by ID with latest facts"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("SELECT * FROM entities WHERE id = ?", (entity_id,))
-            row = cursor.fetchone()
-            return Entity.from_row(row) if row else None
+        conn = self.conn
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute("SELECT * FROM entities WHERE id = ?", (entity_id,))
+        row = cursor.fetchone()
+        return Entity.from_row(row) if row else None
 
     def get_entity_with_facts(self, entity_id: str) -> Optional[Dict]:
         """Get entity with all its facts"""
@@ -348,59 +349,58 @@ class WorldStateManager:
     def update_entity(self, entity_id: str, **kwargs) -> bool:
         """Update entity attributes"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                # Get current entity
-                entity = self.get_entity(entity_id)
-                if not entity:
-                    return False
+            # Get current entity
+            entity = self.get_entity(entity_id)
+            if not entity:
+                return False
 
-                # Update fields
-                for key, value in kwargs.items():
-                    if hasattr(entity, key):
-                        setattr(entity, key, value)
+            # Update fields
+            for key, value in kwargs.items():
+                if hasattr(entity, key):
+                    setattr(entity, key, value)
 
-                entity.updated_at = datetime.now().isoformat()
+            entity.updated_at = datetime.now().isoformat()
 
-                # Save
-                data = entity.to_dict()
-                conn.execute("""
-                    UPDATE entities SET
-                        type = :type,
-                        name = :name,
-                        display_name = :display_name,
-                        attributes = :attributes,
-                        updated_at = :updated_at,
-                        confidence = :confidence,
-                        last_observed_at = :last_observed_at
-                    WHERE id = :id
-                """, data)
-                conn.commit()
-                return True
+            # Save
+            data = entity.to_dict()
+            self.conn.execute("""
+                UPDATE entities SET
+                    type = :type,
+                    name = :name,
+                    display_name = :display_name,
+                    attributes = :attributes,
+                    updated_at = :updated_at,
+                    confidence = :confidence,
+                    last_observed_at = :last_observed_at
+                WHERE id = :id
+            """, data)
+            self.conn.commit()
+            return True
         except Exception as e:
             print(f"❌ Failed to update entity: {e}")
             return False
 
     def search_entities(self, query: str = None, entity_type: str = None, limit: int = 20) -> List[Entity]:
         """Search entities by name or type"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
+        conn = self.conn
+        conn.row_factory = sqlite3.Row
 
-            sql = "SELECT * FROM entities WHERE 1=1"
-            params = []
+        sql = "SELECT * FROM entities WHERE 1=1"
+        params = []
 
-            if query:
-                sql += " AND (name LIKE ? OR display_name LIKE ? OR id LIKE ?)"
-                params.extend([f"%{query}%", f"%{query}%", f"%{query}%"])
+        if query:
+            sql += " AND (name LIKE ? OR display_name LIKE ? OR id LIKE ?)"
+            params.extend([f"%{query}%", f"%{query}%", f"%{query}%"])
 
-            if entity_type:
-                sql += " AND type = ?"
-                params.append(entity_type)
+        if entity_type:
+            sql += " AND type = ?"
+            params.append(entity_type)
 
-            sql += " ORDER BY updated_at DESC LIMIT ?"
-            params.append(limit)
+        sql += " ORDER BY updated_at DESC LIMIT ?"
+        params.append(limit)
 
-            cursor = conn.execute(sql, params)
-            return [Entity.from_row(row) for row in cursor.fetchall()]
+        cursor = conn.execute(sql, params)
+        return [Entity.from_row(row) for row in cursor.fetchall()]
 
     # =================================================================
     # Fact Operations
@@ -409,48 +409,47 @@ class WorldStateManager:
     def add_fact(self, fact: Fact) -> bool:
         """Record a fact about an entity"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                data = fact.to_dict()
-                conn.execute("""
-                    INSERT INTO facts 
-                    (entity_id, attribute, value, value_type, timestamp, source, confidence, expires_at)
-                    VALUES 
-                    (:entity_id, :attribute, :value, :value_type, :timestamp, :source, :confidence, :expires_at)
-                """, data)
-                conn.commit()
+            data = fact.to_dict()
+            self.conn.execute("""
+                INSERT INTO facts 
+                (entity_id, attribute, value, value_type, timestamp, source, confidence, expires_at)
+                VALUES 
+                (:entity_id, :attribute, :value, :value_type, :timestamp, :source, :confidence, :expires_at)
+            """, data)
+            self.conn.commit()
 
-                # Update entity's last_observed_at
-                conn.execute(
-                    "UPDATE entities SET last_observed_at = ? WHERE id = ?",
-                    (fact.timestamp, fact.entity_id)
-                )
-                conn.commit()
-                return True
+            # Update entity's last_observed_at
+            self.conn.execute(
+                "UPDATE entities SET last_observed_at = ? WHERE id = ?",
+                (fact.timestamp, fact.entity_id)
+            )
+            self.conn.commit()
+            return True
         except Exception as e:
             print(f"❌ Failed to add fact: {e}")
             return False
 
     def get_facts(self, entity_id: str, attribute: str = None, since: str = None, limit: int = 100) -> List[Fact]:
         """Get facts about an entity, optionally filtered by attribute and time"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
+        conn = self.conn
+        conn.row_factory = sqlite3.Row
 
-            sql = "SELECT * FROM facts WHERE entity_id = ?"
-            params = [entity_id]
+        sql = "SELECT * FROM facts WHERE entity_id = ?"
+        params = [entity_id]
 
-            if attribute:
-                sql += " AND attribute = ?"
-                params.append(attribute)
+        if attribute:
+            sql += " AND attribute = ?"
+            params.append(attribute)
 
-            if since:
-                sql += " AND timestamp > ?"
-                params.append(since)
+        if since:
+            sql += " AND timestamp > ?"
+            params.append(since)
 
-            sql += " ORDER BY timestamp DESC LIMIT ?"
-            params.append(limit)
+        sql += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
 
-            cursor = conn.execute(sql, params)
-            return [Fact.from_row(row) for row in cursor.fetchall()]
+        cursor = conn.execute(sql, params)
+        return [Fact.from_row(row) for row in cursor.fetchall()]
 
     def get_latest_fact(self, entity_id: str, attribute: str) -> Optional[Fact]:
         """Get most recent fact for an attribute"""
@@ -469,36 +468,35 @@ class WorldStateManager:
     def add_relationship(self, relationship: Relationship) -> bool:
         """Record a relationship between entities"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                # Check if relationship already exists
-                cursor = conn.execute(
-                    """SELECT id FROM relationships 
-                       WHERE from_entity = ? AND to_entity = ? AND relation_type = ?""",
-                    (relationship.from_entity, relationship.to_entity, relationship.relation_type)
+            # Check if relationship already exists
+            cursor = self.conn.execute(
+                """SELECT id FROM relationships 
+                   WHERE from_entity = ? AND to_entity = ? AND relation_type = ?""",
+                (relationship.from_entity, relationship.to_entity, relationship.relation_type)
+            )
+            existing = cursor.fetchone()
+
+            data = relationship.to_dict()
+
+            if existing:
+                # Update existing relationship (existing is a tuple, not dict)
+                existing_id = existing[0]
+                data['id'] = existing_id
+                self.conn.execute(
+                    "UPDATE relationships SET strength = ?, timestamp = ?, context = ? WHERE id = ?",
+                    (data['strength'], data['timestamp'], data['context'], existing_id)
                 )
-                existing = cursor.fetchone()
+            else:
+                # Create new relationship
+                self.conn.execute("""
+                    INSERT INTO relationships 
+                    (from_entity, to_entity, relation_type, strength, timestamp, context)
+                    VALUES 
+                    (:from_entity, :to_entity, :relation_type, :strength, :timestamp, :context)
+                """, data)
 
-                data = relationship.to_dict()
-
-                if existing:
-                    # Update existing relationship (existing is a tuple, not dict)
-                    existing_id = existing[0]
-                    data['id'] = existing_id
-                    conn.execute(
-                        "UPDATE relationships SET strength = ?, timestamp = ?, context = ? WHERE id = ?",
-                        (data['strength'], data['timestamp'], data['context'], existing_id)
-                    )
-                else:
-                    # Create new relationship
-                    conn.execute("""
-                        INSERT INTO relationships 
-                        (from_entity, to_entity, relation_type, strength, timestamp, context)
-                        VALUES 
-                        (:from_entity, :to_entity, :relation_type, :strength, :timestamp, :context)
-                    """, data)
-
-                conn.commit()
-                return True
+            self.conn.commit()
+            return True
         except Exception as e:
             print(f"❌ Failed to add relationship: {e}")
             return False
@@ -508,33 +506,33 @@ class WorldStateManager:
         Get relationships for an entity
         direction: 'outgoing' (from entity), 'incoming' (to entity), 'both'
         """
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            relationships = []
+        conn = self.conn
+        conn.row_factory = sqlite3.Row
+        relationships = []
 
-            if direction in ('outgoing', 'both'):
-                sql = "SELECT * FROM relationships WHERE from_entity = ?"
-                params = [entity_id]
-                if relation_type:
-                    sql += " AND relation_type = ?"
-                    params.append(relation_type)
-                sql += " ORDER BY timestamp DESC"
+        if direction in ('outgoing', 'both'):
+            sql = "SELECT * FROM relationships WHERE from_entity = ?"
+            params = [entity_id]
+            if relation_type:
+                sql += " AND relation_type = ?"
+                params.append(relation_type)
+            sql += " ORDER BY timestamp DESC"
 
-                cursor = conn.execute(sql, params)
-                relationships.extend([Relationship.from_row(row) for row in cursor.fetchall()])
+            cursor = conn.execute(sql, params)
+            relationships.extend([Relationship.from_row(row) for row in cursor.fetchall()])
 
-            if direction in ('incoming', 'both'):
-                sql = "SELECT * FROM relationships WHERE to_entity = ?"
-                params = [entity_id]
-                if relation_type:
-                    sql += " AND relation_type = ?"
-                    params.append(relation_type)
-                sql += " ORDER BY timestamp DESC"
+        if direction in ('incoming', 'both'):
+            sql = "SELECT * FROM relationships WHERE to_entity = ?"
+            params = [entity_id]
+            if relation_type:
+                sql += " AND relation_type = ?"
+                params.append(relation_type)
+            sql += " ORDER BY timestamp DESC"
 
-                cursor = conn.execute(sql, params)
-                relationships.extend([Relationship.from_row(row) for row in cursor.fetchall()])
+            cursor = conn.execute(sql, params)
+            relationships.extend([Relationship.from_row(row) for row in cursor.fetchall()])
 
-            return relationships
+        return relationships
 
     def get_related_entities(self, entity_id: str, relation_type: str = None, min_strength: float = 0.0) -> List[str]:
         """Get IDs of entities related to given entity"""
@@ -555,59 +553,57 @@ class WorldStateManager:
     def add_event(self, event: Event) -> bool:
         """Log an event"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                data = event.to_dict()
-                conn.execute("""
-                    INSERT INTO events 
-                    (event_type, actor_id, target_id, timestamp, platform, data, processed, processed_at)
-                    VALUES 
-                    (:event_type, :actor_id, :target_id, :timestamp, :platform, :data, :processed, :processed_at)
-                """, data)
-                conn.commit()
-                return True
+            data = event.to_dict()
+            self.conn.execute("""
+                INSERT INTO events 
+                (event_type, actor_id, target_id, timestamp, platform, data, processed, processed_at)
+                VALUES 
+                (:event_type, :actor_id, :target_id, :timestamp, :platform, :data, :processed, :processed_at)
+            """, data)
+            self.conn.commit()
+            return True
         except Exception as e:
             print(f"❌ Failed to add event: {e}")
             return False
 
     def get_events(self, event_type: str = None, actor_id: str = None, unprocessed_only: bool = False, since: str = None, limit: int = 100) -> List[Event]:
         """Get events, optionally filtered"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
+        conn = self.conn
+        conn.row_factory = sqlite3.Row
 
-            sql = "SELECT * FROM events WHERE 1=1"
-            params = []
+        sql = "SELECT * FROM events WHERE 1=1"
+        params = []
 
-            if event_type:
-                sql += " AND event_type = ?"
-                params.append(event_type)
-            
-            if actor_id:
-                sql += " AND actor_id = ?"
-                params.append(actor_id)
+        if event_type:
+            sql += " AND event_type = ?"
+            params.append(event_type)
+        
+        if actor_id:
+            sql += " AND actor_id = ?"
+            params.append(actor_id)
 
-            if unprocessed_only:
-                sql += " AND processed = 0"
+        if unprocessed_only:
+            sql += " AND processed = 0"
 
-            if since:
-                sql += " AND timestamp > ?"
-                params.append(since)
+        if since:
+            sql += " AND timestamp > ?"
+            params.append(since)
 
-            sql += " ORDER BY timestamp DESC LIMIT ?"
-            params.append(limit)
+        sql += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
 
-            cursor = conn.execute(sql, params)
-            return [Event.from_row(row) for row in cursor.fetchall()]
+        cursor = conn.execute(sql, params)
+        return [Event.from_row(row) for row in cursor.fetchall()]
 
     def mark_event_processed(self, event_id: int) -> bool:
         """Mark an event as processed"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.execute(
-                    "UPDATE events SET processed = 1, processed_at = ? WHERE id = ?",
-                    (datetime.now().isoformat(), event_id)
-                )
-                conn.commit()
-                return True
+            self.conn.execute(
+                "UPDATE events SET processed = 1, processed_at = ? WHERE id = ?",
+                (datetime.now().isoformat(), event_id)
+            )
+            self.conn.commit()
+            return True
         except Exception as e:
             print(f"❌ Failed to mark event processed: {e}")
             return False
@@ -619,52 +615,55 @@ class WorldStateManager:
     def cleanup_expired_facts(self) -> int:
         """Delete expired facts, return count deleted"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                now = datetime.now().isoformat()
-                cursor = conn.execute(
-                    "DELETE FROM facts WHERE expires_at IS NOT NULL AND expires_at < ?",
-                    (now,)
-                )
-                conn.commit()
-                count = cursor.rowcount
-                if count > 0:
-                    print(f"🧹 Cleaned up {count} expired facts")
-                return count
+            now = datetime.now().isoformat()
+            cursor = self.conn.execute(
+                "DELETE FROM facts WHERE expires_at IS NOT NULL AND expires_at < ?",
+                (now,)
+            )
+            self.conn.commit()
+            count = cursor.rowcount
+            if count > 0:
+                print(f"🧹 Cleaned up {count} expired facts")
+            return count
         except Exception as e:
             print(f"❌ Failed to cleanup facts: {e}")
             return 0
 
     def get_stats(self) -> Dict[str, int]:
         """Get world state statistics"""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute("SELECT COUNT(*) FROM entities")
-            entity_count = cursor.fetchone()[0]
+        cursor = self.conn.execute("SELECT COUNT(*) FROM entities")
+        entity_count = cursor.fetchone()[0]
 
-            cursor = conn.execute("SELECT COUNT(*) FROM facts")
-            fact_count = cursor.fetchone()[0]
+        cursor = self.conn.execute("SELECT COUNT(*) FROM facts")
+        fact_count = cursor.fetchone()[0]
 
-            cursor = conn.execute("SELECT COUNT(*) FROM relationships")
-            relationship_count = cursor.fetchone()[0]
+        cursor = self.conn.execute("SELECT COUNT(*) FROM relationships")
+        relationship_count = cursor.fetchone()[0]
 
-            cursor = conn.execute("SELECT COUNT(*) FROM events")
-            event_count = cursor.fetchone()[0]
+        cursor = self.conn.execute("SELECT COUNT(*) FROM events")
+        event_count = cursor.fetchone()[0]
 
-            cursor = conn.execute("SELECT COUNT(*) FROM events WHERE processed = 0")
-            unprocessed_events = cursor.fetchone()[0]
+        cursor = self.conn.execute("SELECT COUNT(*) FROM events WHERE processed = 0")
+        unprocessed_events = cursor.fetchone()[0]
 
-            return {
-                'entities': entity_count,
-                'facts': fact_count,
-                'relationships': relationship_count,
-                'events': event_count,
-                'unprocessed_events': unprocessed_events
-            }
+        return {
+            'entities': entity_count,
+            'facts': fact_count,
+            'relationships': relationship_count,
+            'events': event_count,
+            'unprocessed_events': unprocessed_events
+        }
 
     def get_entity_type_breakdown(self) -> Dict[str, int]:
         """Get count of entities by type"""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute("SELECT type, COUNT(*) FROM entities GROUP BY type")
-            return dict(cursor.fetchall())
+        cursor = self.conn.execute("SELECT type, COUNT(*) FROM entities GROUP BY type")
+        return dict(cursor.fetchall())
+
+    def close(self):
+        """Close the persistent database connection"""
+        if self.conn:
+            self.conn.close()
+            self.conn = None
 
 
 # Convenience factory
