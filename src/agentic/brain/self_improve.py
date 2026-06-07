@@ -104,24 +104,36 @@ class BrainSelfImprove:
                 if gap.get('error_patterns'):
                     task_desc += f"Must fix these errors: {', '.join(gap['error_patterns'][:3])}"
 
-                if hasattr(selfimprove_plugin, 'self_update_command'):
-                    result = selfimprove_plugin.self_update_command(
-                        ['create', gap['action_type'].replace(':', '_'), task_desc]
+                # Direct AI code generation through selfimprove's LLM-backed coder
+                logger.info(f"🧠 Generating skill code via AI coder...")
+                code = selfimprove_plugin._generate_code_with_ai(task_desc, max_tokens=4000)
+                if code and len(code) > 100:
+                    from src.agentic.autonomous_coder import SkillSpecification, AutonomousCoder
+                    spec = SkillSpecification(
+                        id=f"fix_{gap['action_type'].replace(':', '_')}_{int(datetime.now().timestamp())}",
+                        name=f"Fix {gap['action_type']}",
+                        description=gap['description'],
+                        category='fix',
+                        file_structure={
+                            '__init__.py': 'Package initialization',
+                            'client.py': 'Main skill client',
+                            'actions.py': 'Action handlers'
+                        },
+                        dependencies=[],
+                        evidence=gap.get('error_patterns', []),
                     )
-                    # Handle both string (confirmation needed) and dict (result) returns
-                    if isinstance(result, dict) and result.get('success'):
-                        logger.info(f"🚀 Self-update generated and deployed: {result.get('plan_id', 'unknown')}")
-                        generated = True
-                        if agi_kernel and hasattr(agi_kernel, 'episodic_memory'):
-                            agi_kernel.episodic_memory.record_episode(
-                                action_type='skill_generation',
-                                context={'gap': gap, 'result': result},
-                                outcome={'success': True, 'deployed': True}
-                            )
-                    elif isinstance(result, str) and 'pending confirmation' in result.lower():
-                        logger.info(f"⏸️ Self-update requires confirmation: {result[:100]}...")
-                    else:
-                        logger.warning(f"⚠️ Self-update command returned: {result}")
+                    coder = AutonomousCoder()
+                    coder.save_generated_code(code, spec)
+                    logger.info(f"🚀 AI-generated code saved for gap: {gap['description'][:60]}")
+                    generated = True
+                    if agi_kernel and hasattr(agi_kernel, 'episodic_memory'):
+                        agi_kernel.episodic_memory.record_episode(
+                            action_type='skill_generation',
+                            context={'gap': gap, 'code_length': len(code)},
+                            outcome={'success': True, 'deployed': True}
+                        )
+                else:
+                    logger.warning("⚠️ AI coder returned no valid code, falling back to template")
 
             # Fallback to skeleton autonomous coder if selfimprove is unavailable
             if not generated:

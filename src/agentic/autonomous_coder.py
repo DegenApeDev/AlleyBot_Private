@@ -1295,6 +1295,38 @@ class TestSkill:
         logger.warning(f"⚠️ Skill generated with known test failures: {spec.name}")
         return skill
 
+    def save_generated_code(self, code: str, spec: SkillSpecification) -> Optional[GeneratedSkill]:
+        """Save raw generated code as a GeneratedSkill in draft_skills directory."""
+        import datetime as dt
+        skill_name = spec.name.lower().replace(' ', '_').replace('-', '_')
+        skill_dir = self.SKILLS_DIR / skill_name
+        skill_dir.mkdir(parents=True, exist_ok=True)
+
+        files_created = []
+        for filename, description in spec.file_structure.items():
+            filepath = skill_dir / filename
+            filepath.write_text(code if filename.endswith('.py') else f"# {description}")
+            files_created.append(str(filepath))
+            logger.info(f"  📄 Wrote {filepath}")
+
+        # Also write SKILL.md
+        skill_md = skill_dir / 'SKILL.md'
+        skill_md.write_text(spec.to_skill_md())
+        files_created.append(str(skill_md))
+
+        skill = GeneratedSkill(
+            spec_id=spec.id,
+            skill_name=skill_name,
+            files_created=files_created,
+            skill_path=str(skill_dir),
+            generated_at=dt.datetime.now(),
+            status='generated',
+            errors=[],
+        )
+        self.generated_skills[skill.spec_id] = skill
+        logger.info(f"✅ Saved generated skill '{skill_name}' ({len(code)} chars, {len(files_created)} files)")
+        return skill
+
     def deploy_skill(self, skill: GeneratedSkill, test_results: Optional[Dict] = None) -> bool:
         """
         Deploy a generated skill to production with fall-safe rollback.
