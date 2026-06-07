@@ -785,25 +785,25 @@ class ChessObserver:
             logger.warning("ChessObserver.on_game_over error: %s", exc)
 
     def _post_win_to_moltx(self, move_count: int, elo_change: float) -> None:
-        """Post a chess win announcement to Moltx."""
+        """Queue a chess win announcement — picked up by brain cycle, never called cross-thread."""
         try:
-            import sys
-            # Find moltx plugin via plugin_manager if available
-            for mod_name, mod in sys.modules.items():
-                if 'plugin_manager' in mod_name and hasattr(mod, 'plugins'):
-                    moltx = mod.plugins.get('moltx')
-                    if moltx and hasattr(moltx, 'create_post'):
-                        msg = (
-                            f"Checkmate in {move_count} moves vs "
-                            f"{self._current_opponent} (ELO {self._current_opponent_elo}) "
-                            f"on ClawChess! {elo_change:+.0f} ELO 🦞♟️ "
-                            f"#ClawChess #AIAgents"
-                        )
-                        moltx.create_post(msg)
-                        logger.info("ChessObserver: posted win to Moltx")
-                        return
+            msg = (
+                f"Checkmate in {move_count} moves vs "
+                f"{self._current_opponent} (ELO {self._current_opponent_elo}) "
+                f"on ClawChess! {elo_change:+.0f} ELO 🦞♟️ "
+                f"#ClawChess #AIAgents"
+            )
+            # Write to a temp file for the brain cycle to pick up on next iteration.
+            # This avoids threading issues with direct plugin calls from daemon threads.
+            import tempfile, os
+            win_dir = os.path.join(tempfile.gettempdir(), "alleybot_chess_wins")
+            os.makedirs(win_dir, exist_ok=True)
+            win_file = os.path.join(win_dir, f"win_{self._current_game_id}_{int(time.time())}.txt")
+            with open(win_file, "w") as f:
+                f.write(msg)
+            logger.info("ChessObserver: win queued for posting (%s)", win_file)
         except Exception as exc:
-            logger.debug("ChessObserver: win post failed: %s", exc)
+            logger.debug("ChessObserver: win queue failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Internal helpers

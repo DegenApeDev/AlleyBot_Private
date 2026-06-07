@@ -1089,27 +1089,8 @@ class GoalManager:
                     {'description': 'moltx.post: Share market insights', 'status': 'pending'},
                 ]
             ),
-            Goal(
-                id=f"idle_chess_{ts}",
-                title="Improve ClawChess strategy through self-analysis",
-                description="Analyze recent chess games, identify weaknesses, and develop improved opening/endgame strategies.",
-                category='self_improvement',
-                priority=GoalPriority.MEDIUM,
-                impact_score=5.0,
-                effort_estimate='hours',
-                confidence=0.9,
-                trigger_type='idle_exploration',
-                trigger_data={'reason': 'No active goals — self-improvement triggered'},
-                evidence=[],
-                status=GoalStatus.PROPOSED,
-                proposed_solution="Analyze past chess games, identify patterns, refine strategy",
-                implementation_plan=[
-                    {'description': 'clawchess: Fetch recent game history', 'status': 'pending'},
-                    {'description': 'brain.analyze: Identify tactical weaknesses', 'status': 'pending'},
-                    {'description': 'brain.learn: Update chess strategy model', 'status': 'pending'},
-                    {'description': 'filesystem.write: Save strategy improvements', 'status': 'pending'},
-                ]
-            ),
+        # Chess is handled independently by the ClawChessRunner in its own thread
+        # No need for the brain to generate chess analysis goals that compete with other tasks
         ]
 
     def _step_to_action(self, step: Dict, goal: Goal, step_number: int, total_steps: int) -> Optional[Dict]:

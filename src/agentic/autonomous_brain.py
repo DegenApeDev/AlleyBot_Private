@@ -791,6 +791,9 @@ class AutonomousBrain(AGISocialMixin):
         # === LEARNING ACQUISITION: Turn curiosity gaps + self-model weaknesses into real skills ===
         await self._phase_learning_goal_acquisition(agi_kernel)
 
+        # === CHESS WIN ANNOUNCEMENTS: Post queued wins from the background runner ===
+        await self._phase_chess_win_posts()
+
         # === REVENUE INTELLIGENCE: Scan for profit opportunities, track P&L (HIGH PRIORITY) ===
         revenue_proposals = await self._phase_revenue_intelligence(agi_kernel)
         
@@ -2715,6 +2718,38 @@ class AutonomousBrain(AGISocialMixin):
 
         return changes
 
+    async def _phase_chess_win_posts(self) -> None:
+        """Post queued chess win announcements from the background runner to Moltx.
+
+        The ClawChessRunner's ChessObserver writes win messages to temp files
+        to avoid cross-thread plugin calls. This method picks them up on each
+        brain cycle and posts them safely from the main thread.
+        """
+        import tempfile, os, glob
+        win_dir = os.path.join(tempfile.gettempdir(), "alleybot_chess_wins")
+        if not os.path.isdir(win_dir):
+            return
+
+        moltx = self.plugin_manager.get_plugin('moltx') if self.plugin_manager else None
+        if not moltx or not hasattr(moltx, 'create_post'):
+            return
+
+        posted = 0
+        for win_file in sorted(glob.glob(os.path.join(win_dir, "win_*.txt"))):
+            try:
+                with open(win_file) as f:
+                    msg = f.read().strip()
+                if msg:
+                    moltx.create_post(msg)
+                    posted += 1
+                    logger.info("♟️ Posted chess win to Moltx: %s", msg[:60])
+                os.remove(win_file)
+            except Exception as e:
+                logger.debug("Chess win post error: %s", e)
+
+        if posted:
+            logger.info("♟️ Posted %d chess win announcement(s)", posted)
+
     async def _phase_revenue_intelligence(self, agi_kernel=None) -> List:
         """Scan for revenue opportunities and generate high-priority proposals.
 
@@ -3464,15 +3499,30 @@ class AutonomousBrain(AGISocialMixin):
 
     async def _phase_execute_proposals(self, proposals, agi_kernel, next_action) -> int:
         """ACT phase — execute ranked proposals and record outcomes.
-        
+
         Returns the number of successfully executed actions.
         """
+        # Check if chess runner has an active game — if so, deprioritise chess proposals
+        chess_has_game = False
+        if self.plugin_manager:
+            chess = self.plugin_manager.get_plugin('clawchess')
+            if chess and hasattr(chess, 'current_game') and chess.current_game is not None:
+                chess_has_game = True
+
         executed = 0
         for proposal in proposals:
             if proposal.confidence < self.config.min_confidence:
                 logger.debug(f"⛔ Blocked: confidence {proposal.confidence:.2f} < {self.config.min_confidence}")
                 self.stats['actions_blocked'] += 1
                 continue
+
+            # Skip chess analysis proposals while a game is active — runner handles it independently
+            if chess_has_game:
+                plugin = proposal.metadata.get('plugin', '') if proposal.metadata else ''
+                is_chess = plugin == 'clawchess' or 'chess' in str(proposal.action_type).lower()
+                if is_chess:
+                    logger.debug("♟️ Chess game active — skipping chess proposal: %s", proposal.action_type)
+                    continue
             
             if self._actions_this_hour >= self.config.max_actions_per_hour:
                 logger.info("⏸️ Hourly budget exhausted")

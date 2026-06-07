@@ -98,6 +98,7 @@ class SkillAutonomousExecutorMixin:
             'calendar.read': self._tool_calendar_read,
             'calendar.create': self._tool_calendar_create,
             'search.web': self._tool_web_search,
+            'web.extract': self._tool_web_extract,
             'api.call': self._tool_api_call,
             
             # Crypto/Web3 tools (AlleyBot specialty)
@@ -327,8 +328,100 @@ class SkillAutonomousExecutorMixin:
         return {'success': False, 'error': 'Calendar integration not configured'}
 
     def _tool_web_search(self, query: str, limit: int = 10) -> Dict:
-        """Search the web"""
-        return {'success': False, 'error': 'Web search requires API key (Serper, Brave, etc.)'}
+        """Search the web using DuckDuckGo (no API key needed)"""
+        try:
+            # Try MCP client first if connected
+            try:
+                from mcp_client import get_mcp_client
+                mcp = get_mcp_client()
+                if mcp and mcp.connected:
+                    result = mcp.search_web(query, max_results=limit)
+                    return {'success': True, 'results': result.get('results', []), 'source': 'mcp'}
+            except Exception:
+                pass
+
+            # Fallback: DuckDuckGo Lite search (stdlib only, no deps needed)
+            import urllib.request
+            import urllib.parse
+
+            data = urllib.parse.urlencode({'q': query}).encode()
+            req = urllib.request.Request(
+                'https://lite.duckduckgo.com/lite/',
+                data=data,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            )
+
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html = response.read().decode('utf-8', errors='replace')
+
+            # Parse result links
+            result_links = re.findall(
+                r'<a rel="nofollow" href="(.*?)" class=\'result-link\'>(.*?)</a>',
+                html, re.DOTALL
+            )
+
+            # Parse snippets
+            snippets = re.findall(
+                r'<td class=\'result-snippet\'>(.*?)</td>',
+                html, re.DOTALL
+            )
+
+            results = []
+            for i, (url, title) in enumerate(result_links[:limit]):
+                clean_title = re.sub(r'<[^>]+>', '', title).strip()
+                clean_snippet = ''
+                if i < len(snippets):
+                    clean_snippet = re.sub(r'<[^>]+>', '', snippets[i]).strip()
+                results.append({
+                    'title': clean_title,
+                    'url': url,
+                    'snippet': clean_snippet
+                })
+
+            return {
+                'success': True,
+                'results': results,
+                'count': len(results),
+                'source': 'duckduckgo'
+            }
+
+        except Exception as e:
+            return {'success': False, 'error': str(e), 'results': []}
+
+    def _tool_web_extract(self, url: str) -> Dict:
+        """Extract content from a web page — useful for reading SKILL.md files"""
+        try:
+            import urllib.request
+            req = urllib.request.Request(url, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            })
+
+            with urllib.request.urlopen(req, timeout=15) as response:
+                content = response.read().decode('utf-8', errors='replace')
+
+            # Extract title
+            title = url
+            title_match = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+            if title_match:
+                title = title_match.group(1).strip()
+
+            # Plain text / markdown — return as-is
+            if not content.strip().startswith('<'):
+                return {'success': True, 'title': title, 'content': content[:15000], 'type': 'raw'}
+
+            # Strip HTML for readable text
+            text = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL)
+            text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL)
+            text = re.sub(r'<[^>]+>', ' ', text)
+            text = re.sub(r'\s+', ' ', text).strip()
+
+            return {'success': True, 'title': title, 'content': text[:15000], 'type': 'html'}
+
+        except Exception as e:
+            return {'success': False, 'error': str(e), 'content': ''}
 
     def _tool_api_call(self, method: str, url: str, headers: Optional[Dict] = None, 
                        body: Optional[Dict] = None) -> Dict:
