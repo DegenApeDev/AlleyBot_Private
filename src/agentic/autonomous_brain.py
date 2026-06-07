@@ -2351,41 +2351,36 @@ class AutonomousBrain(AGISocialMixin):
         # Get goal-driven action from active autonomous goals
         goal_driven_action = None
         if agi_kernel and hasattr(agi_kernel, 'goal_manager'):
-            try:
-                goal_manager = agi_kernel.goal_manager
-                from src.agentic.goal_manager import GoalStatus
-                active_goals = await goal_manager.aget_goals(status=GoalStatus.ACTIVE, limit=5)
-                
-                if active_goals:
-                    for goal in sorted(active_goals, key=lambda g: g.impact_score, reverse=True):
-                        na = await goal_manager.aget_next_action_for_goal(goal)
-                        if na:
-                            goal_driven_action = na
-                            logger.info(f"🎯 Goal-driven action: {na['action_type']} for goal '{goal.title}'")
-                            if agi_kernel and hasattr(agi_kernel, 'progress_reporter') and agi_kernel.progress_reporter:
-                                try:
-                                    progress = agi_kernel.progress_reporter.report_goal_progress(goal.id, verify_truth=True)
-                                    if progress.get('honest_assessment'):
-                                        logger.info(f"   {progress['honest_assessment']}")
-                                except Exception as e:
-                                    logger.debug(f"Progress report failed for goal {goal.id}: {e}")
-                            break
-                
-                if not active_goals:
-                    onchain_plugin = self.plugin_manager.get_plugin('onchain') if self.plugin_manager else None
-                    new_goals = goal_manager.scan_and_generate(onchain_plugin=onchain_plugin)
-                    if new_goals:
-                        logger.info(f"🎯 Generated {len(new_goals)} new autonomous goals from observations")
-                        for goal in new_goals:
-                            if goal.status in (GoalStatus.ACTIVE, GoalStatus.APPROVED):
-                                na = goal_manager.get_next_action_for_goal(goal)
-                                if na:
+            goal_manager = agi_kernel.goal_manager
+            
+            # AutonomousGoalManager.get_next_action() pulls from v2 GoalManager
+            # Returns a dict with plugin, action_type, params, etc.
+            if hasattr(goal_manager, 'get_next_action'):
+                try:
+                    na = goal_manager.get_next_action()
+                    if na and isinstance(na, dict):
+                        goal_driven_action = na
+                        logger.info(f"🎯 Goal-driven action: {na.get('action_type', '?')} via {na.get('plugin', '?')}")
+                except Exception as e2:
+                    logger.debug(f"get_next_action failed: {e2}")
+            
+            if not goal_driven_action and hasattr(goal_manager, 'get_active_goals'):
+                # Fallback: iterate active goals and get first actionable one
+                active_goal_dicts = goal_manager.get_active_goals()
+                if active_goal_dicts:
+                    logger.info(f"🎯 Found {len(active_goal_dicts)} active goals (dicts)")
+                    for g in active_goal_dicts[:3]:
+                        gid = g.get('id') or g.get('_id')
+                        if gid and hasattr(goal_manager, 'get_next_action'):
+                            try:
+                                na = goal_manager.get_next_action()
+                                if na and isinstance(na, dict):
                                     goal_driven_action = na
-                                    logger.info(f"🎯 Goal-driven action from new goal: {na['action_type']}")
+                                    logger.info(f"🎯 Goal-driven action from dict goal: {na.get('action_type', '?')}")
                                     break
-            except Exception as e:
-                logger.debug(f"Goal-driven action retrieval error: {e}")
-        
+                            except Exception:
+                                pass
+                
         # Combine SyMod + AGI proposals
         proposals = await self._get_proposals()
         proposals.extend(agi_actions)
@@ -2827,17 +2822,20 @@ class AutonomousBrain(AGISocialMixin):
                     from src.agentic.symod_core import SyModActionProposal
                     next_step = self.cognitive.goal_planner.get_next_step(plan)
                     if next_step:
-                        if not self._is_action_implemented(next_step.plugin, next_step.action):
-                            logger.info(f"⏭️ Skipping curiosity proposal: {next_step.action} on {next_step.plugin} (not implemented)")
-                            if hasattr(self.cognitive, 'curiosity') and hasattr(self.cognitive.curiosity, 'mark_target_blocked'):
-                                self.cognitive.curiosity.mark_target_blocked(cgoal.domain, next_step.action, next_step.plugin)
-                            continue
+                        implemented = self._is_action_implemented(next_step.plugin, next_step.action)
+                        if not implemented:
+                            logger.info(f"⚠️ Action {next_step.plugin}.{next_step.action} not in ACTION_MAP — allowing with reduced confidence")
+                            # Don't skip — let it reach the action router which will fail gracefully
+                            # Lower confidence so it doesn't outrank implemented actions
+                            confidence_mult = 0.4
+                        else:
+                            confidence_mult = 1.0
                         proposal = SyModActionProposal(
                             action_type=next_step.action,
                             target_id=cgoal.domain,
                             target_name=cgoal.title,
-                            confidence=next_step.confidence * cgoal.priority,
-                            justification=f"Curiosity-driven exploration (info_gain={cgoal.information_gain_score:.2f})",
+                            confidence=next_step.confidence * cgoal.priority * confidence_mult,
+                            justification=f"Curiosity-driven exploration (info_gain={cgoal.information_gain_score:.2f}){' — action not yet implemented' if not implemented else ''}",
                             metadata={
                                 'plugin': next_step.plugin,
                                 'curiosity_goal': True,
@@ -2846,6 +2844,7 @@ class AutonomousBrain(AGISocialMixin):
                                 'information_gain': cgoal.information_gain_score,
                                 'novelty': cgoal.novelty_score,
                                 'skill_gap': cgoal.skill_gap_score,
+                                'action_implemented': implemented,
                             }
                         )
                         curiosity_proposals.append(proposal)

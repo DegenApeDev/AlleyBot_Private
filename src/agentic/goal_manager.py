@@ -1145,7 +1145,11 @@ class GoalManager:
             title=get('title', ''),
             description=get('description', ''),
             category=get('category', 'general'),
-            priority=GoalPriority[get('priority', 'MEDIUM')],
+            priority=GoalPriority[get('priority', 'MEDIUM')] if get('priority', 'MEDIUM') in [e.name for e in GoalPriority] else (
+                GoalPriority.HIGH if float(get('priority', 6)) >= 8 else
+                GoalPriority.MEDIUM if float(get('priority', 6)) >= 5 else
+                GoalPriority.LOW
+            ),
             impact_score=get('impact_score', 0.0) or 0.0,
             effort_estimate=get('effort_estimate', 'days'),
             confidence=get('confidence', 0.0) or 0.0,
