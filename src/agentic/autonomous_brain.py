@@ -1730,3 +1730,14 @@ class AutonomousBrain(AGISocialMixin):
         """Delegate to brain module."""
         return await self.coordinator.advance_active_plans(agi_kernel)
 
+
+# Module-level singleton accessor (preserved for external consumers)
+_brain_instance = None
+
+def get_autonomous_brain(core=None, plugin_manager=None, symod=None) -> AutonomousBrain:
+    """Get or create brain singleton"""
+    global _brain_instance
+    if _brain_instance is None:
+        _brain_instance = AutonomousBrain(core, plugin_manager, symod)
+    return _brain_instance
+
