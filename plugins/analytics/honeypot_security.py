@@ -54,6 +54,17 @@ class HoneypotSecurity:
                     self.attack_patterns = Counter(data.get('attack_patterns', {}))
         except Exception as e:
             honeypot_logger.error(f"Failed to load honeypot data: {e}")
+            # Recover from corrupted file - backup and start fresh
+            try:
+                backup = str(self.log_file) + f".corrupted.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                self.log_file.rename(backup)
+                honeypot_logger.warning(f"Backed up corrupted data to {backup}, starting fresh")
+            except Exception as backup_e:
+                honeypot_logger.error(f"Failed to backup corrupted file: {backup_e}")
+            self.suspicious_ips = {}
+            self.blocked_ips = set()
+            self.honeypot_hits = []
+            self.attack_patterns = Counter()
     
     def _save_data(self):
         """Save honeypot data"""
