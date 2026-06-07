@@ -866,7 +866,8 @@ class AutonomousBrain(AGISocialMixin):
             if core_goal:
                 logger.info(f"🎯 Core goal: {core_goal.description[:80]} (progress: {core_goal.progress:.0%})")
             elif not goals:
-                logger.info("🎯 No active goals — core profit goal may need seeding")
+                logger.info("🎯 No active goals — seeding default goals")
+                await self._generate_default_goals()
 
         # === NARRATIVE RECORDING ===
         self._record_cycle_narrative(executed, len(proposals), len(observations), spine_context)

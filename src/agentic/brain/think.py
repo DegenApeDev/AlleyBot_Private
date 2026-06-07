@@ -973,6 +973,14 @@ class BrainThink:
                     from src.agentic.symod_core import SyModActionProposal
                     next_step = self.brain.cognitive.goal_planner.get_next_step(plan)
                     if next_step:
+                        # Check SelfModel for failure rate before proposing
+                        sm = getattr(self.brain.cognitive, 'self_model', None)
+                        if sm and hasattr(sm, 'get_action_failure_rate'):
+                            failure_rate = sm.get_action_failure_rate(next_step.plugin, next_step.action)
+                            if failure_rate > 0.7:
+                                logger.info(f"⏭️ Skipping curiosity {next_step.plugin}.{next_step.action} — {failure_rate:.0%} recent failure rate (SelfModel)")
+                                continue
+
                         implemented = self.brain._is_action_implemented(next_step.plugin, next_step.action)
                         if not implemented:
                             logger.info(f"⚠️ Action {next_step.plugin}.{next_step.action} not in ACTION_MAP — allowing with reduced confidence")

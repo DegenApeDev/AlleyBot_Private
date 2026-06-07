@@ -1232,6 +1232,14 @@ class ActionRouter:
         
         if not belief_prediction.get('should_attempt', True):
             logger.warning(f"⚠️ SelfModel advises against {action_domain}/{action_type}: {belief_prediction.get('attempt_reason', 'unknown')}")
+            # Block the action — SelfModel knows best after 3+ consecutive failures
+            return {
+                'success': False,
+                'reason': f"SelfModel blocked: {belief_prediction.get('attempt_reason', 'no reason given')}",
+                'stage': 'self_model_gate',
+                'action_id': action_id,
+                'validation_trace': validation_trace,
+            }
         
         if belief_prediction.get('should_wait', False):
             wait_reason = belief_prediction.get('wait_reason', 'unknown')
@@ -1395,9 +1403,9 @@ class ActionRouter:
                         action=f"{action_domain}:{action_type}",
                         domain=action_domain,
                         predicted_confidence=belief_pred.get('predicted_success', 0.5),
-                        actual_success=result.get('success', False),
+                        actual_success=actual_success,
                         context=str(action_spec.get('params', {}))[:200],
-                        outcome_description=result.get('data', {}).get('result', '')[:200] if result.get('success') else result.get('error', '')[:200],
+                        outcome_description=outcome_desc,
                     )
                 except Exception as e:
                     logger.warning(f"⚠️ Cognitive outcome recording failed: {e}")

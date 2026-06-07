@@ -169,6 +169,14 @@ class SelfModel:
             return 0.5
         return cap.avg_actual_success
 
+    def get_action_failure_rate(self, domain: str, action_type: str) -> float:
+        """Get recent failure rate for an action (0.0 = perfect, 1.0 = always fails)."""
+        key = f"{domain}:{action_type}"
+        recent = self._get_recent_outcomes(key, count=10)
+        if not recent:
+            return 0.0
+        return 1.0 - (sum(1 for r in recent if r.get('actual', False)) / len(recent))
+
     def should_attempt(self, domain: str, action_type: str) -> Tuple[bool, str]:
         key = f"{domain}:{action_type}"
         cap = self.capabilities.get(key)
