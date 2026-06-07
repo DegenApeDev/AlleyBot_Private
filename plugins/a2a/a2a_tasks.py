@@ -113,6 +113,47 @@ TASK_REGISTRY: Dict[str, Dict[str, Any]] = {
             'required': ['prompt'],
         },
     },
+    'research.deep_dive': {
+        'tier': 'paid',
+        'description': 'Deep research on any topic — web search + synthesis + formatted report',
+        'handler': '_task_deep_dive',
+        'price_usdc': '0.50',
+        'schema': {
+            'properties': {
+                'topic': {'type': 'string'},
+                'depth': {'type': 'string', 'enum': ['quick', 'standard', 'deep']},
+                'include_sources': {'type': 'boolean'},
+            },
+            'required': ['topic'],
+        },
+    },
+    'content.sentiment_analysis': {
+        'tier': 'paid',
+        'description': 'Analyze sentiment of posts/content about a topic, token, or keyword across platforms',
+        'handler': '_task_sentiment_analysis',
+        'price_usdc': '0.15',
+        'schema': {
+            'properties': {
+                'topic': {'type': 'string'},
+                'platform': {'type': 'string'},
+                'sample_size': {'type': 'number'},
+            },
+            'required': ['topic'],
+        },
+    },
+    'blockchain.wallet_analysis': {
+        'tier': 'paid',
+        'description': 'Full wallet portfolio analysis — balances, tokens, recent transactions, gas stats',
+        'handler': '_task_wallet_analysis',
+        'price_usdc': '0.25',
+        'schema': {
+            'properties': {
+                'address': {'type': 'string'},
+                'chain': {'type': 'string', 'enum': ['ethereum', 'base', 'all']},
+            },
+            'required': ['address'],
+        },
+    },
 
     # ── Owner-only (NEVER exposed via A2A) ──────────────────────────
     'wallet.send': {
@@ -465,6 +506,210 @@ class A2ATaskHandlerMixin:
                 
         except Exception as e:
             return {'error': f'Image generation error: {str(e)}'}
+
+    def _task_deep_dive(self, params: Dict, agent_id: str) -> Dict:
+        """Deep research on any topic — web search + synthesis + formatted report ($0.50)."""
+        topic = params.get('topic', '')
+        depth = params.get('depth', 'standard')
+        include_sources = params.get('include_sources', True)
+
+        if not topic:
+            return {'error': 'Topic is required'}
+
+        try:
+            # Use MCP plugin for web search
+            mcp = self.core.plugin_manager.plugins.get('mcp')
+            if mcp and hasattr(mcp, 'research_command'):
+                import asyncio
+                result = asyncio.run(mcp.research_command(topic=topic, depth=depth))
+                return {
+                    'topic': topic,
+                    'depth': depth,
+                    'report': str(result) if result else f"Research on '{topic}' completed.",
+                    'sources_included': include_sources,
+                    'generated_by': 'AlleyBot Research',
+                }
+            # Fallback: use MCP search directly
+            elif mcp and hasattr(mcp, 'search_command'):
+                import asyncio
+                results = asyncio.run(mcp.search_command(query=topic, max_results=8))
+                return {
+                    'topic': topic,
+                    'depth': depth,
+                    'report': str(results) if results else f"Search results for '{topic}'.",
+                    'sources_included': include_sources,
+                    'generated_by': 'AlleyBot Research',
+                }
+            else:
+                return {
+                    'topic': topic,
+                    'report': f"Research capability temporarily unavailable for '{topic}'.",
+                    'note': 'Web search plugin not loaded',
+                }
+        except Exception as e:
+            return {'error': f'Research failed: {str(e)}', 'topic': topic}
+
+    def _task_sentiment_analysis(self, params: Dict, agent_id: str) -> Dict:
+        """Analyze sentiment of posts/content about a topic, token, or keyword ($0.15)."""
+        topic = params.get('topic', '')
+        platform = params.get('platform', 'auto')
+        sample_size = min(int(params.get('sample_size', 20)), 100)
+
+        if not topic:
+            return {'error': 'Topic is required'}
+
+        try:
+            # Try Moltx plugin first (has trending/post data)
+            moltx = self.core.plugin_manager.plugins.get('moltx')
+            if moltx and hasattr(moltx, 'search_posts'):
+                import asyncio
+                posts_data = asyncio.run(moltx.search_posts(query=topic, limit=sample_size))
+            else:
+                posts_data = []
+
+            # Try Clawbr for cross-platform sentiment
+            clawbr = self.core.plugin_manager.plugins.get('clawbr')
+            clawbr_posts = []
+            if clawbr and hasattr(clawbr, 'search_posts'):
+                import asyncio
+                clawbr_posts = asyncio.run(clawbr.search_posts(query=topic, limit=sample_size // 2))
+
+            # Simple sentiment analysis based on keyword matching
+            all_posts = (posts_data or []) + (clawbr_posts or [])
+            positive_keywords = ['bullish', 'moon', 'based', 'wagmi', 'great', 'love', 'amazing', 'gigachad', 'winning']
+            negative_keywords = ['bearish', 'scam', 'rug', 'dump', 'trash', 'shit', 'terrible', 'larp']
+
+            positive_count = 0
+            negative_count = 0
+            neutral_count = 0
+            samples = []
+
+            for post in all_posts[:sample_size]:
+                content = (post.get('content', '') or post.get('text', '') or '').lower()
+                if any(kw in content for kw in positive_keywords):
+                    positive_count += 1
+                elif any(kw in content for kw in negative_keywords):
+                    negative_count += 1
+                else:
+                    neutral_count += 1
+                if len(samples) < 5:
+                    samples.append(content[:100])
+
+            total = positive_count + negative_count + neutral_count
+            if total == 0:
+                return {
+                    'topic': topic,
+                    'platform': platform,
+                    'sentiment': 'neutral',
+                    'score': 0.5,
+                    'note': 'No posts found for analysis',
+                    'samples_analyzed': 0,
+                }
+
+            score = (positive_count + (neutral_count * 0.5)) / total
+            if score > 0.6:
+                sentiment = 'positive'
+            elif score < 0.4:
+                sentiment = 'negative'
+            else:
+                sentiment = 'neutral'
+
+            return {
+                'topic': topic,
+                'platform': platform,
+                'sentiment': sentiment,
+                'score': round(score, 3),
+                'breakdown': {
+                    'positive': positive_count,
+                    'neutral': neutral_count,
+                    'negative': negative_count,
+                    'total': total,
+                },
+                'samples': samples,
+                'generated_by': 'AlleyBot Sentiment',
+            }
+        except Exception as e:
+            return {'error': f'Sentiment analysis failed: {str(e)}', 'topic': topic}
+
+    def _task_wallet_analysis(self, params: Dict, agent_id: str) -> Dict:
+        """Full wallet portfolio analysis — balances, tokens, recent txns, gas ($0.25)."""
+        address = params.get('address', '')
+        chain = params.get('chain', 'ethereum')
+
+        if not address:
+            return {'error': 'Wallet address is required'}
+
+        try:
+            onchain = self.core.plugin_manager.plugins.get('onchain')
+            if not onchain or not hasattr(onchain, 'web3_provider'):
+                return {'error': 'Blockchain service unavailable', 'address': address}
+
+            provider = onchain.web3_provider
+
+            # Get ETH balance
+            eth_balance = provider.get_eth_balance(address)
+            eth_str = str(eth_balance.get('balance_eth', 'N/A')) if isinstance(eth_balance, dict) else 'N/A'
+
+            # Get gas info
+            block_info = provider.get_block_info() if hasattr(provider, 'get_block_info') else {}
+            gas_price_gwei = 'N/A'
+            if isinstance(block_info, dict) and block_info.get('success'):
+                gas_wei = block_info.get('gas_price', 0)
+                gas_price_gwei = round(float(gas_wei) / 1e9, 2) if gas_wei else 'N/A'
+
+            # Try to get token balances from configured tokens
+            token_balances = []
+            try:
+                tracked_tokens = getattr(provider, 'tracked_tokens', [])
+                for token in tracked_tokens[:10]:  # Limit to 10 tracked tokens
+                    token_addr = token.get('address', '')
+                    if token_addr:
+                        bal = provider.get_token_balance(token_addr, address)
+                        if isinstance(bal, dict) and bal.get('success'):
+                            token_balances.append({
+                                'symbol': bal.get('symbol', '?'),
+                                'name': bal.get('name', '?'),
+                                'balance': bal.get('balance', 0),
+                            })
+            except Exception:
+                pass
+
+            # Try to get recent txns
+            recent_tx_count = 0
+            try:
+                from web3 import Web3
+                checksummed = provider.w3.to_checksum_address(address)
+                # Count recent transactions from latest blocks
+                latest = provider.w3.eth.block_number
+                recent_tx_count = 0
+                for bn in range(latest, max(latest - 20, 0), -1):
+                    try:
+                        block = provider.w3.eth.get_block(bn, full_transactions=True)
+                        for tx in block.transactions[:50]:
+                            if hasattr(tx, 'get'):
+                                if tx.get('from', '').lower() == checksummed.lower() or tx.get('to', '').lower() == checksummed.lower():
+                                    recent_tx_count += 1
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+            return {
+                'address': address,
+                'chain': chain,
+                'portfolio': {
+                    'eth_balance': eth_str,
+                    'token_balances': token_balances,
+                    'recent_transactions_20_blocks': recent_tx_count,
+                },
+                'network': {
+                    'gas_price_gwei': gas_price_gwei,
+                    'latest_block': block_info.get('block_number', 'N/A') if isinstance(block_info, dict) else 'N/A',
+                },
+                'generated_by': 'AlleyBot On-Chain',
+            }
+        except Exception as e:
+            return {'error': f'Wallet analysis failed: {str(e)}', 'address': address}
 
     # ── Task Info ───────────────────────────────────────────────────
 
