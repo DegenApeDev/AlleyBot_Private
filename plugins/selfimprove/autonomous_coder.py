@@ -1453,24 +1453,37 @@ Return ONLY valid JSON, no markdown or explanation."""
     # ------------------------------------------------------------------
 
     def _commit_and_push(self, summary: str, files: List[str]) -> Dict[str, Any]:
-        """Commit changes and push to remote"""
+        """Commit changes and push to remote using AlleyBot's own GitHub identity"""
         try:
             # Stage files
             for f in files:
                 subprocess.run(['git', 'add', f], cwd=self.project_root,
                                capture_output=True, timeout=10)
 
-            # Commit
-            msg = f"[auto-coder] {summary}"
+            # Commit as AlleyBot 🤖
+            msg = f"🤖 {summary}"
+            env = os.environ.copy()
+            env['GIT_SSH_COMMAND'] = 'ssh -i ~/.ssh/alleybot'
             result = subprocess.run(
-                ['git', 'commit', '-m', msg],
+                ['git', '-c', 'user.name=AlleyBot 🤖',
+                       '-c', 'user.email=crypto_invests@proton.me',
+                 'commit', '-m', msg],
                 cwd=self.project_root, capture_output=True, text=True, timeout=30,
+                env=env,
             )
             if result.returncode != 0:
                 return {'success': False, 'error': f"Commit failed: {result.stderr}"}
 
-            # Push skipped — commit locally only, push manually when ready
-            return {'success': True}
+            # Push to alleybot remote
+            push = subprocess.run(
+                ['git', 'push', 'alleybot', 'HEAD'],
+                cwd=self.project_root, capture_output=True, text=True, timeout=30,
+                env=env,
+            )
+            if push.returncode != 0:
+                return {'success': True, 'warning': f"Committed but push failed: {push.stderr}"}
+
+            return {'success': True, 'pushed': True}
 
         except Exception as e:
             return {'success': False, 'error': str(e)}
