@@ -1,0 +1,206 @@
+{
+  "suspicious_ips": {
+    "127.0.0.1": {
+      "first_seen": "2026-06-07T09:58:52.818719",
+      "requests": [
+        {
+          "time": "2026-06-07T16:20:08.748499",
+          "path": "/admin",
+          "method": "GET",
+          "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+          "headers": {
+            "Host": "apeshit.fun",
+            "X-Real-Ip": "91.202.233.115",
+            "X-Forwarded-For": "91.202.233.115",
+            "X-Forwarded-Proto": "https",
+            "Connection": "close",
+            "Accept-Encoding": "gzip,deflate",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+            "Referer": "https://apeshit.fun/admin",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-User": "?1"
+          }
+        },
+        {
+          "time": "2026-06-07T16:25:23.568502",
+          "path": "/admin",
+          "method": "GET",
+          "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+          "headers": {
+            "Host": "apeshit.fun",
+            "X-Real-Ip": "91.202.233.115",
+            "X-Forwarded-For": "91.202.233.115",
+            "X-Forwarded-Proto": "https",
+            "Connection": "close",
+            "Accept-Encoding": "gzip,deflate",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+            "Referer": "https://apeshit.fun/admin",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-User": "?1"
+          }
+        },
+        {
+          "time": "2026-06-07T16:30:34.842008",
+          "path": "/admin",
+          "method": "GET",
+          "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+          "headers": {
+            "Host": "apeshit.fun",
+            "X-Real-Ip": "91.202.233.115",
+            "X-Forwarded-For": "91.202.233.115",
+            "X-Forwarded-Proto": "https",
+            "Connection": "close",
+            "Accept-Encoding": "gzip,deflate",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+            "Referer": "https://apeshit.fun/admin",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-User": "?1"
+          }
+        },
+        {
+          "time": "2026-06-07T16:35:53.759946",
+          "path": "/admin",
+          "method": "GET",
+          "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+          "headers": {
+            "Host": "apeshit.fun",
+            "X-Real-Ip": "91.202.233.115",
+            "X-Forwarded-For": "91.202.233.115",
+            "X-Forwarded-Proto": "https",
+            "Connection": "close",
+            "Accept-Encoding": "gzip,deflate",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+            "Referer": "https://apeshit.fun/admin",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-User": "?1"
+          }
+        },
+        {
+          "time": "2026-06-07T16:41:17.966833",
+          "path": "/admin",
+          "method": "GET",
+          "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+          "headers": {
+            "Host": "apeshit.fun",
+            "X-Real-Ip": "91.202.233.115",
+            "X-Forwarded-For": "91.202.233.115",
+            "X-Forwarded-Proto": "https",
+            "Connection": "close",
+            "Accept-Encoding": "gzip,deflate",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+            "Referer": "https://apeshit.fun/admin",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-User": "?1"
+          }
+        },
+        {
+          "time": "2026-06-07T16:46:42.040123",
+          "path": "/admin",
+          "method": "GET",
+          "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/135.0",
+          "headers": {
+            "Host": "apeshit.fun",
+            "X-Real-Ip": "91.202.233.115",
+            "X-Forwarded-For": "91.202.233.115",
+            "X-Forwarded-Proto": "https",
+            "Connection": "close",
+            "Accept-Encoding": "gzip,deflate",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/135.0",
+            "Referer": "https://apeshit.fun/admin",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-User": "?1"
+          }
+        },
+        {
+          "time": "2026-06-07T16:52:04.408508",
+          "path": "/admin",
+          "method": "GET",
+          "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+          "headers": {
+            "Host": "apeshit.fun",
+            "X-Real-Ip": "91.202.233.115",
+            "X-Forwarded-For": "91.202.233.115",
+            "X-Forwarded-Proto": "https",
+            "Connection": "close",
+            "Accept-Encoding": "gzip,deflate",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+            "Referer": "https://apeshit.fun/admin",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-User": "?1"
+          }
+        },
+        {
+          "time": "2026-06-07T16:57:31.003290",
+          "path": "/admin",
+          "method": "GET",
+          "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/135.0",
+          "headers": {
+            "Host": "apeshit.fun",
+            "X-Real-Ip": "91.202.233.115",
+            "X-Forwarded-For": "91.202.233.115",
+            "X-Forwarded-Proto": "https",
+            "Connection": "close",
+            "Accept-Encoding": "gzip,deflate",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/135.0",
+            "Referer": "https://apeshit.fun/admin",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-User": "?1"
+          }
+        },
+        {
+          "time": "2026-06-07T17:02:53.547993",
+          "path": "/admin",
+          "method": "GET",
+          "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/135.0",
+          "headers": {
+            "Host": "apeshit.fun",
+            "X-Real-Ip": "91.202.233.115",
+            "X-Forwarded-For": "91.202.233.115",
+            "X-Forwarded-Proto": "https",
+            "Connection": "close",
+            "Accept-Encoding": "gzip,deflate",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/135.0",
+            "Referer": "https://apeshit.fun/admin",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-User": "?1"
+          }
+        }
+      ],
+      "score": 25,
+      "patterns": 
